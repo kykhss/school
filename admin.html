@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+ <html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard</title>
+  <style>
+  body {
+   font-family: sans-serif;
+   margin: 0;
+   background-color: #f4f6f8;
+   color: #333;
+  }
+
+  .dashboard-container {
+   display: flex;
+   flex-direction: column;
+   min-height: 100vh;
+  }
+
+  .dashboard-header {
+   background-color: #007bff;
+   color: white;
+   padding: 20px;
+   display: flex;
+   justify-content: space-between;
+   align-items: center;
+  }
+
+  .dashboard-header h1 {
+   margin: 0;
+  }
+
+  .user-info {
+   display: flex;
+   align-items: center;
+  }
+
+  .user-info span {
+   margin-right: 10px;
+  }
+
+  .user-info button {
+   padding: 8px 15px;
+   border: none;
+   border-radius: 5px;
+   background-color: #dc3545;
+   color: white;
+   cursor: pointer;
+  }
+
+  .dashboard-main {
+   display: flex;
+   flex-grow: 1;
+   padding: 20px;
+  }
+
+  .grid-container {
+   display: grid;
+   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+   gap: 20px;
+   margin-right: 20px; /* Space between modules and content */
+  }
+
+  .module-container {
+   background-color: white;
+   border-radius: 8px;
+   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+   padding: 20px;
+   text-align: center;
+   cursor: pointer;
+   transition: transform 0.2s ease-in-out;
+  }
+
+  .module-container:hover {
+   transform: scale(1.05);
+   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  }
+
+  .module-icon {
+   font-size: 2.5em;
+   margin-bottom: 10px;
+  }
+
+  .module-title {
+   font-weight: bold;
+  }
+
+  .dashboard-content {
+   flex-grow: 1;
+   background-color: white;
+   border-radius: 8px;
+   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+   padding: 20px;
+  }
+
+  .dashboard-footer {
+   background-color: #343a40;
+   color: white;
+   text-align: center;
+   padding: 10px;
+  }
+
+  /* Basic styling for content areas (you'll likely expand on this) */
+  .module-content {
+   padding: 15px;
+   border-top: 1px solid #eee;
+   margin-top: 15px;
+  }
+  </style>
+ </head>
+ <body>
+  <div class="dashboard-container">
+   <header class="dashboard-header">
+    <h1>Admin Dashboard</h1>
+    <div class="user-info">
+     <span id="loggedInUser"></span> <button id="logoutBtn">Logout</button>
+    </div>
+   </header>
+
+   <main class="dashboard-main">
+    <div class="grid-container">
+     <div class="module-container" id="reports">
+      <div class="module-icon">📊</div>
+      <div class="module-title">Reports</div>
+     </div>
+
+     <div class="module-container" id="students">
+      <div class="module-icon">🧑‍🎓</div>
+      <div class="module-title">Students</div>
+     </div>
+
+     <div class="module-container" id="feeData">
+      <div class="module-icon">💰</div>
+      <div class="module-title">Fee Data</div>
+     </div>
+
+     <div class="module-container" id="academicData">
+      <div class="module-icon">📚</div>
+      <div class="module-title">Academic Data</div>
+     </div>
+
+     <div class="module-container" id="attendanceData">
+      <div class="module-icon">🗓️</div>
+      <div class="module-title">Attendance Data</div>
+     </div>
+
+     </div>
+
+    <div class="dashboard-content" id="dashboardContent">
+     <p>Welcome to the Admin Dashboard! Click on the modules above to view details.</p>
+     </div>
+   </main>
+
+   <footer class="dashboard-footer">
+    <p>&copy; 2025 Your Institution</p>
+   </footer>
+  </div>
+
+  <script>
+  document.addEventListener('DOMContentLoaded', function() {
+   const moduleContainers = document.querySelectorAll('.module-container');
+   const dashboardContent = document.getElementById('dashboardContent');
+   const loggedInUserSpan = document.getElementById('loggedInUser');
+   const logoutBtn = document.getElementById('logoutBtn');
+
+   // Replace with actual user retrieval logic
+   const loggedInUsername = localStorage.getItem('loggedInUser') || 'Admin User';
+   loggedInUserSpan.textContent = loggedInUsername;
+
+   moduleContainers.forEach(container => {
+    container.addEventListener('click', function() {
+     const moduleId = this.id;
+     loadModuleContent(moduleId);
+    });
+   });
+
+   logoutBtn.addEventListener('click', function() {
+    // Implement your logout logic here (e.g., clear localStorage, redirect)
+    localStorage.removeItem('loggedInUser');
+    alert('Logged out!');
+    window.location.href = 'login.html'; // Redirect to login page
+   });
+
+   function loadModuleContent(moduleId) {
+    dashboardContent.innerHTML = `<p>Loading ${moduleId} data...</p>`; // Initial loading message
+
+    // Simulate fetching data based on the module ID (replace with actual API calls)
+    setTimeout(() => {
+     let content = '';
+     switch (moduleId) {
+      case 'reports':
+       content = `
+        <h3>Reports</h3>
+        <div class="module-content">
+         <p>Here you can find various reports and analytics.</p>
+         <ul>
+          <li><a href="#">Sales Report</a></li>
+          <li><a href="#">Student Performance Report</a></li>
+          <li><a href="#">Financial Report</a></li>
+         </ul>
+        </div>
+       `;
+       break;
+      case 'students':
+       content = `
+        <h3>Students</h3>
+        <div class="module-content">
+         <p>Manage student information here.</p>
+         <button>Add New Student</button>
+         <ul>
+          <li><a href="#">View All Students</a></li>
+          <li><a href="#">Search Students</a></li>
+         </ul>
+        </div>
+       `;
+       break;
+      case 'feeData':
+       content = `
+        <h3>Fee Data</h3>
+        <div class="module-content">
+         <p>View and manage student fee information.</p>
+         <ul>
+          <li><a href="#">Outstanding Fees</a></li>
+          <li><a href="#">Fee Payments</a></li>
+          <li><a href="#">Generate Invoices</a></li>
+         </ul>
+        </div>
+       `;
+       break;
+      case 'academicData':
+       content = `
+        <h3>Academic Data</h3>
+        <div class="module-content">
+         <p>Manage academic-related information.</p>
+         <ul>
+          <li><a href="#">Courses</a></li>
+          <li><a href="#">Subjects</a></li>
+          <li><a href="#">Exams</a></li>
+         </ul>
+        </div>
+       `;
+       break;
+      case 'attendanceData':
+       content = `
+        <h3>Attendance Data</h3>
+        <div class="module-content">
+         <p>View and manage student attendance records.</p>
+         <ul>
+          <li><a href="#">View Attendance</a></li>
+          <li><a href="#">Mark Attendance</a></li>
+          <li><a href="#">Attendance Reports</a></li>
+         </ul>
+        </div>
+       `;
+       break;
+      default:
+       content = `<p>No content available for ${moduleId}.</p>`;
+     }
+     dashboardContent.innerHTML = content;
+    }, 500); // Simulate a short delay for data loading
+   }
+
+   // Initially load a default module content (e.g., Reports)
+   loadModuleContent('reports');
+  });
+  </script>
+ </body>
+ </html>
