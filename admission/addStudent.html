@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>KYHSS ATHAVAND</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="common.js"></script>
+    <script src="/schoolproject/db2.js"></script>
+    <script src="/schoolproject/serverDb.js"></script>
+    
+    <!-- Include Cropper.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.js"></script>
+    
+    <script src="addstudent.js"></script>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="mystyle.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.css" />
+    <style>
+.report{
+    justify-content: center;
+    margin: auto;
+}
+.report-table {
+  border:1px;
+  border-radius: 20px;
+  border-color: #007bff;
+  width: 400px; 
+    
+}
+
+.report-table th, .report-table td {
+  border: 1px solid #c91313; 
+  padding: 8px; 
+  text-align: center; 
+}
+
+.report-table th {
+  background-color: #f2f2f2; 
+}
+        .image-container {
+  width: 70px;
+  height: 70px;
+  overflow: hidden;
+  background-color: lightgray;
+  position: relative;
+}
+
+.image-container img {
+  width: 100%;
+  height:100%;
+  object-fit: cover;
+  background-color: #fcfafa;
+}
+
+.refreshButton {
+    margin: auto;
+  display: none;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 50%;
+  background-color: #007BFF;
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.image-container:hover .refreshButton {
+  display: flex;
+}
+canvas{
+    background-color: red;
+}
+
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            gap: 1px 0;
+            background-color: rgb(221, 214, 214);
+        }
+        
+        img {
+            max-width: 100%;
+            display: block; /* Hide image until selected */
+            border: 2px solid #28a745; /* Border for the image */
+            border-radius: 4px; /* Slight rounding for the image */
+        }
+         #upload-btn {
+            display: none; /* Hide buttons until an image is selected */
+            margin-top: 10px;
+        }
+        #student-photo-container{
+            display: none;
+            width: 200px;
+            margin: auto;
+        }
+        #student-photo-container {
+    position: relative; /* Ensures child elements are positioned relative to this container */
+}
+
+#student-photo-container .del {
+    z-index: 1000;
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 50px;
+    flex-direction: column;
+    gap: 10px 0;
+    opacity: 0; /* Hide by default */
+    visibility: hidden; /* Prevents interaction when hidden */
+    transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+}
+
+/* Show .del buttons only when hovering over #student-photo-container */
+#student-photo-container:hover .del {
+    opacity: 1;
+    visibility: visible;
+}
+
+        .icon-button {
+            position: relative;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            border: solid black !important;
+            cursor: pointer;
+            border-radius: 50%;
+            padding: 1px;
+            display: none; /* Hidden by default */
+        }
+        .error {
+            color: red;
+        }
+        .batch {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr); /* 3 equal columns */
+    gap: 5px; /* Spacing between fields */
+    max-width: auto; 
+    margin: 0 auto;
+    background-color: rgb(240, 249, 250);
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+   
+
+
+  
+    .icon-button {
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 18px;
+        color: #007BFF;
+    }
+ #upload-btn {
+        margin-top: 10px;
+        padding: 8px 12px;
+        font-size: 16px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    
+   
+
+    #upload-btn {
+        background-color: #28a745;
+        color: #fff;
+    }
+
+    .error {
+        color: red;
+        font-size: 14px;
+        margin-top: 10px;
+    }
+
+    button[type="submit"] {
+        padding: 10px 20px;
+        font-size: 16px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+        form {
+            margin: auto;
+            background-color: #fff;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            width: 90%;
+        }
+
+        input, button {
+            display: block;
+            width: 100%;
+            margin-bottom: 10px;
+            padding: 8px;
+            border: 1px solid #144917;
+            border-radius: 4px;
+        }
+
+        button {
+            background-color: #28a745;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+        }
+
+        table {
+            margin: auto;
+            width: 100%;
+            margin-top: 2px;
+            border-collapse: collapse;
+            border: 1px solid black;
+            
+
+        }
+        table img{
+            width: 100;
+            height: 100;
+        }
+        #studentTableContainer{
+            margin: auto;
+            border: #0056b3;
+    margin-top: 0;
+    max-height: 600px; /* Set the height of the container */
+    overflow-y: auto;  /* Enable vertical scrolling */
+        }
+        th{
+            position: sticky;
+        }
+        table, th, td {
+            border: 1px solid #8d1a1a; 
+        }
+
+        th, td {
+            padding: 10px;
+            text-align: left;
+            font-weight: bolder;
+
+        }
+
+        th {
+            background-color: #f4f4f9;
+        }
+
+        .action-buttons {
+            display: flex;
+            justify-content: space-evenly;
+        }
+
+        .edit-btn {
+            background-color: #ffc107;
+            color: #fff;
+        }
+
+        .delete-btn {
+            background-color: #dc3545;
+            color: #fff;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        #studentAlert {
+            color: red;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        /* Responsive for desktop - 3 columns layout */
+        @media (max-width: 768px) {
+            body{
+                width:90vb;
+            }
+            .appbars{
+            max-width: 760px;
+
+            }
+            .alert {
+  background-color: #67c37c; /* Green */
+  color: #155724;
+  border: 1px solid #c3e6cb;
+  margin-bottom: 15px;
+  max-width: 300px;
+  height: inherit;
+  z-index: 1000;
+}
+
+            .report{
+                justify-content: center;
+                margin: auto;
+    flex-direction: column;
+}
+.scroll-table{
+    max-width: 90vb;
+    overflow: auto;
+}
+            .batch {
+        grid-template-columns: 1fr; /* On mobile, make it 1 column */
+    }
+
+            .form-group {
+                flex-direction: column;
+                margin-bottom: 15px;
+
+            }
+           
+
+
+            .form-group label,
+            .form-group input {
+                flex: 1;
+                margin-right: 10px;
+            }
+
+            .form-group input {
+                margin-left: 10px;
+            }
+
+            .form-group img {
+                display: inline-block;
+                margin-left: 20px;
+            }
+        }
+
+        /* Mobile - 1 column layout */
+        @media (max-width: 768px) {
+            form {
+                width: 100%;
+            }
+
+            .form-group label {
+                font-size: 14px;
+            }
+
+            .form-group img {
+                max-width: 200px;
+            }
+            #cropModal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #fff;
+    padding: 20px;
+    border: 1px solid #ccc;
+    z-index: 1000;
+    display: none;
+    max-width: 500px;
+    width: 90%;
+    max-height: 90vh;
+    overflow: auto;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Ensures the crop image is centered properly */
+#cropImage {
+    max-width: 100%;
+    display: block;
+    margin: auto;
+}
+
+
+        }
+        #searchInput {
+    width:max-content;
+    margin-right: 20px;
+    padding: 8px;
+    border: 1px solid #a33e3e;
+    border-radius: 4px;
+}
+button[type="submit"]:hover {
+        background-color: #0056b3;
+    }
+    .section-title {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        .form-group {
+                margin-bottom: 15px;
+
+            }
+            .flex-row {
+            display: flex !important;
+            flex-direction: row !important;
+            gap: 10px;
+            min-width: max-content!important;
+        }
+        .radio-group {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0;
+  max-width:auto;
+  border: 1px solid #431010; 
+  border-radius: 20px;
+  padding: 10px; 
+}
+
+.radio-group label {
+  margin-right: 15px; 
+  font-size: 14px; 
+}
+
+.radio-group input[type="radio"] {
+  accent-color: #007bff; 
+  margin-right: 5px; 
+  border-radius: 50%; 
+  width: 20px; 
+  height: 20px; 
+}
+.radio-group input[type="radio"]:hover {
+  transform: scale(1.1); 
+  accent-color: #28a745;
+}
+#cropModal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #fff;
+    padding: 20px;
+    border: 1px solid #ccc;
+    z-index: 1000;
+    display: none;
+    max-width: 600px;
+    width: 90%;
+    max-height: 90vh;
+    overflow: auto;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Ensures the crop image is centered properly */
+#cropImage {
+    max-width: 100%;
+    display: block;
+    margin: auto;
+}
+
+    #cropModal h2 {
+      margin: 0 0 10px;
+    }
+    #cropModal button {
+      margin-top: 10px;
+    }
+    .loader {
+        position: fixed;
+        margin: 50% 43%;
+  border: 16px solid #f3f3f3; /* Light grey */
+  border-top: 16px solid #3498db; /* Blue */
+  border-radius: 50%;
+  width: 80px;
+  height: 80px;
+  animation: spin 1s linear infinite;
+  z-index: 1000;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+</style>
+
+</head>
+    <!-- <div class="loader"></div> -->
+<style>
+.alert {
+  padding: 20px;
+  background-color: #67c37c; /* Green */
+  color: #155724;
+  border: 1px solid #c3e6cb;
+  margin-bottom: 15px;
+  top: 10px;
+  right: 10px;
+  width: 500px;
+  height: inherit;
+  z-index: 1000;
+  position:fixed;
+}
+
+.alert-danger {
+  padding: 20px;
+  background-color: #f8d7da; /* Red */
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+  margin-bottom: 15px;
+  top: 20px;
+  right: 10px;
+  width: 500px;
+  height: inherit;
+  z-index: 1000;
+  position:fixed;
+}
+
+.alert-warning {
+  padding: 20px;
+  background-color: #fff3cd; /* Yellow */
+  color: #856404;
+  border: 1px solid #ffeeba;
+  margin-bottom: 15px;
+}
+
+.closebtn {
+  margin-left: 15px;
+  color: #de1203;
+  font-weight: bold;
+  float: right;
+  font-size: 22px;
+  line-height: 20px;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.closebtn:hover {
+  color: black;
+}
+
+.confirmation-container {
+  display: none;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: #fff;
+  padding: 20px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  z-index: 9999;
+}
+
+.confirmation-buttons {
+    display: flex;
+  text-align: center;
+  margin-top: 15px;
+}
+
+.confirmation-button {
+  padding: 10px 20px;
+  margin: 0 5px;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.confirmation-button-ok {
+  background-color: #4CAF50;
+  color: white;
+}
+
+.confirmation-button-cancel {
+  background-color: #f44336;
+  color: white;
+}
+</style>
+</head>
+<body>
+
+    <div id="successAlert" class="alert" style="display:none;">
+  <span class="closebtn" onclick="this.parentElement.style.display='none';">&times;</span> 
+  <strong>Success!</strong> 
+</div>
+
+<div id="errorAlert" class="alert-danger" style="display:none;">
+  <span class="closebtn" onclick="this.parentElement.style.display='none';">&times;</span> 
+  <strong>Error!</strong> 
+</div>
+
+<div id="confirmationAlert" class="alert-warning confirmation-container">
+  <p id="confirmationMessage"></p>
+  <div class="confirmation-buttons">
+    <button class="confirmation-button confirmation-button-ok">OK</button>
+    <button class="confirmation-button confirmation-button-cancel">Cancel</button>
+  </div>
+</div>
+
+
+    <!-- <div >
+        <iframe src="appbar.html" style="width: 100%; height: 100%; border: none; position: sticky; margin-top: 0;"></iframe>
+    </div> -->
+        <!-- Loading overlay -->
+        <div id="loading" style="display: none;">
+            <div class="loader"></div>
+        </div>
+    
+    <!-- Method 1: Use an <a> tag (Recommended) -->
+
+        <div id="studentAlert" class="alert"></div>
+        <select id="reposrSelect">
+            <option value="All">All</option>
+            <option value="current"  selected>current year</option>
+        </select>
+    <div class="report" style="display: flex; gap: 20px; align-items: flex-start;">
+        <div id="reportContainerkg"></div>
+        <div id="reportContainer"></div>
+    </div>
+    
+    <div style="display: flex;">
+        <button onclick="showForm()" id="addStudentButton"  >Add Student +</button>
+    
+        <span><img id="logo" src="KYHSSLOGO.jpg" width="50" height="50" alt="School Logo" style="border-radius: 50%;">    
+    </span>
+    </div>
+<div id="formcontainer" style="display: none;">
+<form id="addStudentForm" class="addForm" style="display:block;">
+    <div class="section-title" style="display: flex;justify-content: space-between; padding: auto;">Personal Information <span><input type="reset" style=" width:100px;"></span></div>
+    <div class="batch">
+    
+
+    <div class="form-group" style="max-width: 200px;">
+        <label for="studentId">Student ID (Auto-generated):</label>
+        <input type="text" id="studentId" name="studentId" readonly>    
+            <div class="flex-row form-group radio-group" style="margin: 0; max-width: 200px;">
+                <label>Select Sector:</label>
+                <label><input type="radio" name="sector" id="School" value="School" onchange="populateClassOptions('School');generateStudentId();"> School</label>
+                <label><input type="radio" name="sector" id="KG" value="KG" onchange="populateClassOptions('KG');generateStudentId();"> KG</label>
+            </div>
+    </div> 
+    <div class="form-group" style="max-width: 200px;">
+        <label for="adNumber">Admission Number:</label>
+        <input type="text" id="adNumber" name="adNumber" placeholder="Enter Admission Number" required onchange="checkAdNumber()"readonly >
+        <div id="adNumberResult"></div>
+    </div>
+    
+    <div class="form-group">
+        <label for="studentName">Student Name:</label>
+        <input type="text" id="studentName" name="studentName" placeholder="Enter Student Name" required>
+    
+    <div class="flex-row form-group radio-group" style="margin: 0; max-width: 200px;">
+            <label>Gender:</label>
+            <label><input type="radio" name="genderOptions" value="Male" id="genderMale"> Male</label>
+            <label><input type="radio" name="genderOptions" value="Female" id="genderFemale"> Female</label>
+          </div>
+    </div>
+    <div class="form-group">
+        <label for="dob">Date of Birth:</label>
+        <input type="date" id="dob" name="dob" onchange="datetoText(this.value);calculateAge(this.value)" required/>
+        <span style=" margin: 0 0;"><p id="ageResult" ></p>
+    <p id="referenceDate"></p></span>
+    </div>
+    
+
+<div class="form-group">
+    <div class="flex-row form-group radio-group" style="margin: 0; max-width: fit-content;">
+    <label for="adharCheckbox">Adhaar Got?</label>
+    <input type="checkbox" id="adharCheckbox" name="adharCheckbox" checked>
+    </div>
+    <label for="adharNumber">Adhaar Number:</label>
+    <input type="number" id="adharNumber" name="adharNumber" placeholder="Enter Adhaar Number" >
+
+</div>
+    </div>
+        <div class="section-title">Adress Section</div>
+        <div class="batch">
+               <div class="form-group">
+        <label for="houseName">House Name:</label>
+        <input type="text" id="houseName" name="houseName" placeholder="Enter House Name" required>
+    </div>
+    <div class="form-group">
+        <label for="place">Place:</label>
+        <input type="text" id="place" name="place" placeholder="Enter Place" required>
+    </div>
+    <div class="form-group">
+        <label for="postOffice">Post Office:</label>
+        <input type="text" id="postOffice" name="postOffice" placeholder="Enter Post Office" required>
+    </div>
+    <div class="form-group">
+        <label for="postOffice">Pin:</label>
+        <input type="text" id="pin" name="pin" placeholder="Enter Postal Index Number" required>
+    </div>
+        </div>
+        <div class="section-title">Parent Details</div>
+        <div class="batch">
+    <div class="form-group">
+        <label for="fatherName">Father's Name:</label>
+        <input type="text" id="fatherName" name="fatherName" placeholder="Enter Father's Name" required>
+    </div>
+    <div class="form-group">
+        <label for="fatherMobile">Father's Mobile Number:</label>
+        <input type="text" id="fatherMobile" name="fatherMobile" placeholder="Enter Father's Mobile Number" required>
+    </div>
+    <div class="form-group">
+        <label for="motherName">Mother's Name:</label>
+        <input type="text" id="motherName" name="motherName" placeholder="Enter Mother's Name" required>
+    </div>
+    <div class="form-group">
+        <label for="motherMobile">Mother's Mobile Number:</label>
+        <input type="text" id="motherMobile" name="motherMobile" placeholder="Enter Mother's Mobile Number" required>
+    </div>
+    <style>
+        @keyframes blinker {
+          50% {
+            opacity: 0;
+          }
+        }
+        </style>
+        
+    <div class="form-group">
+        <label for="whatsappNo">WhatsApp Number:</label>
+        <input type="text" id="whatsappNo" name="whatsappNo" placeholder="Enter WhatsApp Number" required onchange="getStudentbyMobile();">
+        <span id="siblingloading" style="display: none; color: red; animation: blinker 1s linear infinite;">loading Sibling Details</span>
+
+ </div>
+    <!-- Radio Buttons to Select Guardian -->
+    <div class="form-group">
+    <label>Is Guardian the same as:</label>
+    <div class="flex-row form-group radio-group">
+        <label><input type="radio" name="guardianOption" id="guardianFather" value="father" onclick="setGuardian()"> Father</label>
+        <label><input type="radio" name="guardianOption" id="guardianMother" value="mother" onclick="setGuardian()"> Mother</label>
+        <label><input type="radio" name="guardianOption" id="guardianOther" value="other" onclick="setGuardian()"> Local Guardin</label>
+    </div>
+    </div>
+
+    <div class="form-group">
+        <label for="guardian">Guardian:</label>
+        <input type="text" id="guardian" name="guardian" placeholder="Enter Guardian Name" required>
+    </div>
+    <div class="form-group">
+        <label for="relation">Relation with Guardian:</label>
+        <input type="text" id="relation" name="relation" placeholder="Enter Relation with Guardian" required>
+    </div>
+        </div>
+        <div class="section-title">Academic Details</div>
+        <div class="batch">
+       
+    <div class="form-group">
+        <label for="admissionDate">Admission Date:</label>
+        <input type="date" id="admissionDate" name="admissionDate" required>
+    </div>
+    
+    <div class="form-group">
+        <label for="classSelect">Select Class:</label>
+        <select id="classSelect" name="classSelect" required onchange="updateAdmittedClass()">
+            <!-- Options will be populated based on sector selection -->
+        </select>
+    </div>
+    <div id="currentStrength" style="display: flex;justify-content: space-between;"></div>
+    <div class="form-group">
+        <label for="divisionSelect">Select Division:</label>
+        <select id="divisionSelect" name="divisionSelect" required onchange="updateAdmittedClass()">
+            <!-- Options will be A to E -->
+        </select>
+    </div>
+
+   
+    <div class="form-group">
+        <label for="admittedClass">Admitted Class&Div:</label>
+        <input type="text" id="admittedClass" name="admittedClass" placeholder="Enter Admitted Class" required readonly>
+    </div>
+   
+    <div class="form-group">
+        <label for="currentClass">Current Class:</label>
+        <input type="text" id="currentClass" name="currentClass" placeholder="Enter Current Class" required>
+    </div>
+        </div>
+    <div class="section-title" style="display: flex; justify-content: space-between;">
+        Vehicle Info
+        <span>
+            <div class="flex-row form-group radio-group" style="margin: 0; max-width: 200px;">
+                <label style="width: fit-content;">Vehicle Need</label>
+                <label><input type="radio" id="vehicleNeed" name="vehicleNeed" value="YES" onchange="toggleVehicleInfo(this.value)"> YES</label>
+                <label><input type="radio" id="noVehicle" name="vehicleNeed" value="NO" onchange="toggleVehicleInfo(this.value)"> NO</label>
+            </div>
+        </span>
+    </div>
+    <div class="batch">
+    
+    <div id="vehicleInfo" class="form-group">
+        <div class="form-group">
+            <label for="vehiclePoint">Vehicle Point:</label>
+            <input type="text" id="vehiclePoint" name="vehiclePoint" placeholder="Enter Vehicle point" required >
+        </div>
+        <div class="form-group">
+            <label for="vehicleStage">Vehicle Stage:</label>
+            <input type="text" id="vehicleStage" name="vehicleStage" placeholder="Enter Vehicle stage" required>
+        </div>
+    
+    
+    
+    </div>
+    </div>
+    <div class="section-title" style="display: flex; justify-content: space-between;">
+        Sibling Information
+        <span>
+            <div class="flex-row form-group radio-group" style="margin: 0; max-width: 200px;">
+                <label style="width: fit-content;">Siblings</label>
+                <label><input type="radio" id="siblingYes" name="hasSibling" value="Yes" onchange="toggleSiblingInfo(this.value)"> Yes</label>
+                <label><input type="radio" id="siblingNo" name="hasSibling" value="No" onchange="toggleSiblingInfo(this.value)"> No</label>
+            </div>
+        </span>
+    </div>
+    <div class="batch">
+    
+    <div id="siblingInfo" >
+        <!-- <div class="form-group">
+            <label for="siblingSelect">Select Siblings:</label>
+            <select id="siblingSelect" name="siblingSelect" multiple>
+                <option value="sibling1">Sibling 1</option>
+                <option value="sibling2">Sibling 2</option>
+                <option value="sibling3">Sibling 3</option>
+                <option value="sibling4">Sibling 4</option>
+                Add more options as needed -->
+            <!--</select>
+        </div> -->
+        <div class="form-group">
+            <label for="siblingDetails">Sibling Details:</label>
+            <span><a class="clickable" style="padding:auto; border: 1px solid red ;pointer-events: painted;" onclick="getStudentbyMobile()"> reload sibler</a></span>
+            <input type="text" id="siblingDetails" placeholder="Enter details about siblings" >
+        </div>
+    </div>
+    
+    <div class="form-group">
+        <label for="status">Status:</label>
+        <input type="text" id="status" name="status" placeholder="Enter Status" value="Ongoing" required>
+    </div>
+    <div class="form-group">
+        <label for="studentMobile">Student Mobile Number:</label>
+        <input type="text" id="studentMobile" name="studentMobile" placeholder="Enter Student Mobile Number" >
+    </div>
+    <div class="form-group">
+        <label for="admissionFee">Admisson fee:</label>
+        <input type="text" id="admissionFee" name="admissionFee" placeholder="Enter admissionFee Mobile Number" value=15600 >
+    </div>
+</div>
+<!-- Image Upload Section -->
+<div id="childphoto">
+    <div class="section-title" >Student Image</div>
+          <div class="form-group">
+              <div id="imagepicker">
+              <label for="imgStudent"style="width:200px";>Student Photo:</label>
+              <input id="imgStudent" style=" width:200px;"type="file" accept="image/*" onchange="showCropper(event, 'student-photo')"alt="studentphoto" placeholder="croppedimg" title="croppedimg"> 
+              <!-- Image Preview and Crop Container -->
+              <div id="cropModal">
+                <div>
+                  <h2>Crop Photo</h2>
+                  <img id="cropImage" src="https://i.gifer.com/4V0b.gif" alt="cropimage" style="display: block;"/>
+                  <button type="button" onclick="cropImageto()">Crope Image</button>
+                  <button type="button" onclick="deleteImage()">Delete</button>
+                  <!-- Close Button to hide the modal -->
+                  <button type="button" onclick="closeCropModal()">Close</button>
+                </div>
+              </div>
+              
+              <div id="student-photo-container" style="position: relative; display: none;">
+                <img id="student-photo" src="" alt="Student Photo" style="display: block; margin: auto;">
+                
+                <!-- Edit and Delete buttons overlayed on the image -->
+            
+                <div class="del" >
+                <button type="button" id="edit-btn" class="icon-button overlay-btn" onclick="editImage()" title="Edit Image" style="display: inline-block">✎</button>
+                <button type="button" id="delete-btn" class="icon-button overlay-btn" onclick="deleteImage()" title="Delete Image" style="display: block;">❌</button>
+                </div>
+              </div>
+              <!-- Cropped Image Display -->
+              
+      
+              <!-- Image Crop & Upload Controls -->
+              
+              <input type="button" id="upload-btn" onclick="uploadCroppedImage()" style="display: block;" value="uploadStudentPhoto"/>
+              <div class="error" id="error-message"></div>
+          </div>
+      </div>
+</div>
+
+     <!-- Submit Button -->
+    <button type="button" onclick="saveStudent()">Add/Update Student</button>
+</form>
+
+</div>
+
+    
+    <div id="spinner"></div>
+    <span  style="padding: 0;display:flex; gap: 20px;align-items: center; width: 270px; pointer-events: mo;"><h2 onclick="generateTable('Reload','') ; ">Student List</h2> <input type="text" style="width: 100px;" placeholder="2025" value="2025" id="curruntyear" onchange="generateTable();">
+        <button type="button" onclick="generateTable('new') ; ">reloadData</button>
+        <p id="pload" style="display: none;"> loading....</p>
+    </span>
+<div>
+    
+   <p style="display: flex;justify-content: space-between;"> <input type="text" id="searchInput" placeholder="Search by AD Number, Name, or Class" onkeyup="filterTable()"><span style="padding: auto; border: 1px solid black;background-color: #28a745;" >LastUpdated : <span id="updatedTime"></span></span></p>
+</div>
+<div id="studentTableContainer" class="scroll-table">
+
+
+</div>
+
+</body>
+
+</body>
+</html>
