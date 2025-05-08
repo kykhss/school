@@ -962,7 +962,7 @@ async function loadStudentPhoto(studentId, imgId) {
         }
     }
 }
-
+var userMail = localStorage.getItem("loggedInUser");
 async function generateTable() {
     // const timestamp = await getStoreById("students");
     // document.getElementById('updatedTime').textContent=timestamp.time;
@@ -971,7 +971,7 @@ async function generateTable() {
         const now = Date.now();
         let settings = {
             //"currentClass": className,
-            "userMail":localStorage.getItem("loggedInUser");,
+            "userMail":userMail,
             "type": "new",
             "storeName": "adStudents",
             "indexName": "",
@@ -1115,7 +1115,7 @@ async function filterTable() {
     //let students = storedData ? JSON.parse(storedData).students : [];
     let settings = {
         //"currentClass": className,
-        "userMail":localStorage.getItem("loggedInUser");,
+        "userMail":userMail,//localStorage.getItem("loggedInUser");,
         "type": "new",
         "storeName": "adStudents",
         "indexName": "",
