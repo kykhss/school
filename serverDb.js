@@ -1,5 +1,5 @@
 
-let UserMail = localStorage.getItem('loggedIn')||"office@gmail.com";
+let UserMail = localStorage.getItem('loggedIn')||"";
 //const userMailfor = JSON.parse(UserMail);
 const className2 ="1 A";
 async function createdExams(UserMail,className,type) {
@@ -378,7 +378,7 @@ async function getMaxMarks(selectedClass=null) {
       const conmark = getexamScores('1 A');
       console.log(conmark)
 
-      createdExams(UserMail="office@gmail.com",className="1 A","new");
+      createdExams(UserMail,className="1 A","new");
 
 
       // getClassSubjectMap(myUserMail="office@gmail.com","new");
