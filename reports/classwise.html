@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <script src="school/db2.js"></script>
+    <script src="school/serverDb.js"></script>
+    <script src="school/common.js"></script>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+    
+    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.12.9/dist/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+
+    <title>Hello, world!</title>
+  </head>
+  <link rel="stylesheet" href="school/styles.css">
+  <style >
+    
+</style> 
+  <body>
+    <div class="container-fluid">
+    <h1 class="text-center bg-success">KYHSS ATHAVANAD</h1>
+    
+    <marquee behavior="" direction=""><h3>class Wise Details</h3></marquee>
+    <br></br>
+    <h2>Class Selection</h2>
+    <select id="select" onchange="filterStudentTable()">
+        <option value="" disabled selected>Select Class</option>
+    </select>
+   <div class="search-container no-print">
+           <input type="text" id="searchInput" name="searchInputvhicle" placeholder="Search..." class="search-input" onkeyup="filterStudentTable()">
+           <a href="#" class="search-btn">
+                   <i class="fas fa-search"></i>      
+           </a>
+       </div>
+       <div class="no-print">
+       <label for="toggleColumn">print photo</label>
+       <input type="checkbox" id="toggleColumn" name="imgneed" value="yes" checked>
+       </div>
+   
+  <div id="studentTableContainer" class="table-width">
+      
+  </div>
+  <button class="no-print" type="button" onclick="window.print()">Print</button>
+
+</div>
+<script>
+   async function loadDropdown () {
+    let storedData = localStorage.getItem("students")||"";
+   // let studentsData =await getAllStudents();// storedData ? JSON.parse(storedData).students : [];
+   const now = Date.now(); 
+   let settings = {
+            //"currentClass": className,
+            "userMail":"office@gmail.com",
+            "type": "new",
+            "storeName": "Allstudents",
+            "indexName": "",
+            "query": "",
+            "timestamp":""
+          };
+          //showWaiting("myStudents");
+        let studentsData = await get(settings); // Assumes getAllRecords returns a promise
+                          
+    let uniqueClasses = [...new Set(studentsData.map(student => student.currentClass))];
+    uniqueClasses.sort((a, b) => {
+  return a.localeCompare(b);
+});
+ 
+    //alert(uniqueClasses);
+    const datalist = document.getElementById('classList');
+    datalist.innerHTML = uniqueClasses
+        .map(className => `<option value="${className}">`)
+        .join('');
+    }
+    loadDropdown();
+    
+</script>
+
+  <script>
+   
+   async function fetchDataAndPopulateSelect() {
+    try {
+        const now = Date.now(); 
+   let settings = {
+            //"currentClass": className,
+            "userMail":"office@gmail.com",
+            "type": "new",
+            "storeName": "adStudents",
+            "indexName": "",
+            "query": "",
+            "timestamp":""
+          };
+          //showWaiting("myStudents");
+        let students = await get(settings); // Assumes getAllRecords returns a promise
+                          
+       // const students = await getAllStudents();
+        const uniqueClasses = [...new Set(students.map(student => student.currentClass))];
+        uniqueClasses.sort((a, b) => {
+  return a.localeCompare(b);
+});
+        const select = document.getElementById("select");
+        select.innerHTML = `<option value="" disabled selected>Select Class</option>` +
+        uniqueClasses
+  .map(className => {
+    if (className !== "") {
+      return `<option value="${className}">${className}</option>`;
+    } else {
+      return "";
+    }
+  })
+  .join('');
+
+} catch (error) {
+        console.error(error);
+    }
+}
+
+fetchDataAndPopulateSelect();
+
+
+async function filterStudentTable() {
+    const searchInput = document.getElementById('searchInput').value.toLowerCase();
+    const select = document.getElementById('select').value.toUpperCase();
+
+    const now = Date.now(); 
+   let settings = {
+            //"currentClass": className,
+            "userMail":"office@gmail.com",
+            "type": "new",
+            "storeName": "adStudents",
+            "indexName": "currentClass",
+            "query":select,
+            "timestamp":""
+          };
+          //showWaiting("myStudents");
+        let students = await get(settings); // Assumes getAllRecords returns a promise
+                     
+    const filteredStudents = students.filter(student => {
+        const currentClassLower = (student.currentClass || '').toUpperCase();
+        const nameLower = (student.name || '').toString().toLowerCase();
+        const adNumberLower = (typeof student.adNumber === 'string' ? student.adNumber.toLowerCase() : '');
+
+        if (currentClassLower === select) {
+            return (
+                student['stu-id']?.toLowerCase() !== "" && // Using optional chaining for safety
+                (nameLower.includes(searchInput) || adNumberLower.includes(searchInput))
+            );
+        }
+        return false; // If the class doesn't match the selection, exclude the student
+    });
+
+    renderStudentTable(filteredStudents, 'studentTableContainer'); // Re-render table with filtered results
+}
+
+//filterStudentTable();
+async function filtervehicleTabl() {
+    const searchInput = document.getElementById('searchInput').value.toLowerCase();
+    let storedData = localStorage.getItem("students");
+    const now = Date.now(); 
+   let settings = {
+            //"currentClass": className,
+            "userMail":"office@gmail.com",
+            "type": "new",
+            "storeName": "Allstudents",
+            "indexName": "",
+            "query": "",
+            "timestamp":""
+          };
+          //showWaiting("myStudents");
+        let studentsData = await get(settings); // Assumes getAllRecords returns a promise
+                     
+    let students = await getAllStudents(); //storedData ? JSON.parse(storedData).students : [];
+    const filteredStudents = students.filter(student => {
+        return (
+            (student.vehicleStage && student.vehicleStage.toString().toLowerCase()!=="")
+    
+        );
+    });
+
+    renderStudentTable(filteredStudents,'studentTableContainer'); // Re-render table with filtered results
+}
+//filtervehicleTabl();
+// Function to render the student table
+function renderStudentTable(students,divid) {
+    photoFile=[]; 
+    //const students = JSON.parse(localStorage.getItem("studentsList") || "[]"); // Parse the JSON string
+
+    if (students.length === 0) {
+        document.getElementById(divid).innerHTML = '<p>No students found</p>';
+        return;
+    }
+console.log(students);
+    let table = `<table class='table table-hover  '>
+        <tr>
+            <th scoe='col'>SL</th>
+            
+            <th>Photo</th>
+            <th>AD Number</th>
+            <th>Name</th>
+            <th>Gender</th>
+            <th>Class</th>
+            <th>Father Name</th>
+            <th>Father Mobile</th>
+            <th>House</th>
+            <th>WhatsApp No</th>
+            <th>vehicle Stage</th>
+            <th>vehicle Point</th>
+        </tr>`;
+    
+    students.forEach((student, index) => {
+        const imgId = `pic${index + 1}`; // Create a unique imgId for each student
+        //var divId= "photo" + studentData.adNumber
+        const imageGet = {
+    adNumber: student.stu_id,
+    divId: imgId
+  };
+  photoFile.push(imageGet);
+        table += `<tr class="text-center">
+            <td scoe='row'>${index + 1}</td>
+            <td > 
+  <div class="image-container image-thumbnail">
+  <img id="${imgId}" image-thumbnail img-fluid src="https://drive.google.com/thumbnail?id=${student.image}&sz=800" alt="${student.stu_id}">
+  <!--
+  <button type="button" class="refreshButton" id="refreshButton${imgId}" 
+        onclick="loadStudentPhoto('${student.stu_id}', '${imgId}');">
+    &#x21bb;
+</button> --!>
+
+</div>
+
+</td>
+            <td>${student.adNumber}</td>
+            <td style="color:red;">${student.name}</td>
+            <td>${student.gender}</td>
+            <td>${student.currentClass}</td>
+            <td>${student.fatherName}</td>
+            <td>${student.fatherMobile}</td>
+            <td style="color:red; ">${student.houseName}</td>
+            <td>${student.whatsappNo}</td>
+            <td>${student.vehicleStage}</td>
+            <td>${student.vehiclePoint}</td>
+        </tr>`;
+
+        // Call loadStudentPhoto after setting up the row
+        //loadStudentPhotos(student.stu_id, "pic_"+index + 1);
+    });
+
+    table += '</table>';
+    document.getElementById(divid).innerHTML = table;
+   //  generatestudentPhotos();
+}
+document.getElementById("toggleColumn").addEventListener("change", function() {
+    let table = document.querySelector("table");
+    let cells = table.querySelectorAll("tr td:nth-child(2), tr th:nth-child(2)"); // Select all second-column cells
+
+    if (this.checked) {
+        cells.forEach(cell => cell.classList.remove("hide-column")); // Show Column 2
+    } else {
+        cells.forEach(cell => cell.classList.add("hide-column")); // Hide Column 2
+    }
+});
+
+
+
+
+</script>
+</html>
