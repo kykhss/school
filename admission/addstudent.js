@@ -971,7 +971,7 @@ async function generateTable() {
         const now = Date.now();
         let settings = {
             //"currentClass": className,
-            "userMail":localStorage.getItem("loggedInUser");
+            "userMail":localStorage.getItem("loggedInUser"),
             "type": "new",
             "storeName": "adStudents",
             "indexName": "",
