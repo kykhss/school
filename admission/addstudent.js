@@ -1115,7 +1115,7 @@ async function filterTable() {
     //let students = storedData ? JSON.parse(storedData).students : [];
     let settings = {
         //"currentClass": className,
-        "userMail":userMail,//localStorage.getItem("loggedInUser");,
+        "userMail":userMail,
         "type": "new",
         "storeName": "adStudents",
         "indexName": "",
