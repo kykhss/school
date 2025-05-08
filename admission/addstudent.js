@@ -971,7 +971,7 @@ async function generateTable() {
         const now = Date.now();
         let settings = {
             //"currentClass": className,
-            "userMail":"office@gmail.com",
+            "userMail":localStorage.getItem("loggedInUser");
             "type": "new",
             "storeName": "adStudents",
             "indexName": "",
@@ -1115,7 +1115,7 @@ async function filterTable() {
     //let students = storedData ? JSON.parse(storedData).students : [];
     let settings = {
         //"currentClass": className,
-        "userMail":"office@gmail.com",
+        "userMail":localStorage.getItem("loggedInUser"),
         "type": "new",
         "storeName": "adStudents",
         "indexName": "",
