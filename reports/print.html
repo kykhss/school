@@ -1,0 +1,1179 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <script>
+      
+  // Modify showWaiting to add an ID and store the timeout ID
+
+    </script>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <script src="/schoolproject/db2.js"></script>
+    <script src="/schoolproject/serverDb.js"></script>
+    <script src="/schoolproject/common.js"></script>
+    <script src="common.js"></script>
+
+
+    
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <link rel="stylesheet" href="/schoolproject/styles.css">
+    <link rel="stylesheet" href="mystyle.css">
+
+    <title>Student Print Page</title>
+    
+      <style>
+      /* Add these new styles for better print handling */
+      @media print {
+        body {
+          font-size: 11pt;
+          padding: 0;
+          margin: 0;
+        }
+        
+        .table {
+          width: 100% !important;
+          table-layout: fixed;
+        }
+        
+        .table th, .table td {
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          padding: 4px 8px !important;
+        }
+        
+        .image-container {
+          width: 50px !important;
+          height: 50px !important;
+        }
+        
+        /* Ensure columns don't break across pages */
+        tr {
+          page-break-inside: avoid;
+        }
+        .gender{
+          background-color:green;
+        }
+        
+        /* Print header styling */
+        .page-header {
+          padding: 10px 0 !important;
+          margin-bottom: 10px !important;
+        }
+      }
+      
+      /* Enhanced column resizing for screen */
+      .table th {
+        position: relative;
+        min-width: 50px;
+      }
+      
+      .column-resizer {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 5px;
+        height: 100%;
+        background-color: rgba(0,0,0,0.1);
+        cursor: col-resize;
+        z-index: 10;
+      }
+      
+      .column-resizer:hover, .column-resizer.active {
+        background-color: var(--primary-color);
+      }
+      
+      /* Add this to your existing styles */
+      .print-preview-btn {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 1000;
+      }
+      :root {
+        --primary-color: #3498db;
+        --secondary-color: #2ecc71;
+        --dark-color: #34495e;
+        --light-color: #ecf0f1;
+      }
+      
+      body {
+        background-color: #f8f9fa;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      }
+      
+      .card {
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+        border: none;
+      }
+      
+      .card-header {
+        border-radius: 10px 10px 0 0 !important;
+        font-weight: 600;
+      }
+      
+      .bg-primary {
+        background-color: var(--primary-color) !important;
+      }
+      
+      .bg-success {
+        background-color: var(--secondary-color) !important;
+      }
+      
+      .btn-primary {
+        background-color: var(--primary-color);
+        border-color: var(--primary-color);
+      }
+      
+      .btn-success {
+        background-color: var(--secondary-color);
+        border-color: var(--secondary-color);
+      }
+      
+      .page-header {
+        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+        color: white;
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 30px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      }
+      
+      .header-container {
+        border: 1px solid #ddd;
+        padding: 15px;
+        min-height: 50px;
+        margin-bottom: 15px;
+        border-radius: 8px;
+        background-color: white;
+      }
+      
+      .header-item {
+        padding: 10px 15px;
+        margin: 5px 0;
+        background-color: #f8f9fa;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        cursor: move;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        transition: all 0.2s;
+      }
+      
+      .header-item:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      }
+      
+      .header-item.selected {
+        background-color: #e2f0e2;
+        border-color: var(--secondary-color);
+      }
+      
+      .drag-handle {
+        cursor: move;
+        color: #666;
+        margin-left: 10px;
+      }
+      
+      .table-responsive {
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      }
+      
+      .table {
+        margin-bottom: 0;
+      }
+      
+      .table th {
+        background-color: var(--dark-color);
+        color: white;
+        font-weight: 500;
+        text-align: center;
+      }
+      
+      .image-container {
+        width: 60px;
+        height: 60px;
+        margin: 0 auto;
+        border-radius: 50%;
+        overflow: hidden;
+        border: 2px solid #ddd;
+      }
+      
+      .image-container img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      
+      .no-print {
+        margin-bottom: 20px;
+      }
+      
+      .action-buttons {
+        margin-bottom: 20px;
+      }
+      
+      .action-buttons .btn {
+        margin-right: 10px;
+        min-width: 120px;
+      }
+      
+      .custom-column-input {
+        margin-bottom: 15px;
+      }
+      
+      .column-resizer {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 5px;
+        height: 100%;
+        background-color: #ddd;
+        cursor: col-resize;
+      }
+      
+      .column-resizer:hover {
+        background-color: #aaa;
+      }
+      
+      .hide-column {
+        display: none;
+      }
+      
+      @media print {
+        .no-print {
+          display: none !important;
+        }
+        
+        body {
+          background-color: white !important;
+        }
+        
+        .page-header {
+          box-shadow: none !important;
+        }
+        
+        .table-responsive {
+          box-shadow: none !important;
+        }
+        .table th{
+          color:black;
+          background-color: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="loaderDiv" style="display: block;"></div>
+    <div class="container-fluid">
+      <!-- Page Headers -->
+      <div class="page-header">
+        <h1 class="text-center">KYHSS ATHAVANAD -19094</h1>
+        <div class="no-print">
+          <input type="text" id="secondaryHeader" class="form-control secondary-header-input" placeholder="Enter Report Title" value="Class Wise Details">
+        </div>
+        <h3 id="displaySecondaryHeader" class="text-center">Class Wise Details</h3>
+      </div>
+      
+      <div class="row no-print">
+        <div class="col-md-6">
+          <div class="card mb-3">
+            <div class="card-header bg-primary text-white">
+              <h5 class="mb-0"><i class="fas fa-filter"></i> Filter Options</h5>
+            </div>
+            <div class="card-body">
+              <div class="form-group">
+                <label for="select"><strong><i class="fas fa-graduation-cap"></i> Select Class</strong></label>
+                <select id="select" class="form-control" onchange="filterStudentTable()">
+                  <option value="" disabled selected>Select Class</option>
+                </select>
+              </div>
+              
+              
+              
+              <div class="form-check">
+                <input type="checkbox" id="toggleColumn" class="form-check-input" name="imgneed" value="yes" checked>
+                <label class="form-check-label" for="toggleColumn"><i class="fas fa-image"></i> Show Photos</label>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="col-md-6">
+          <div class="card mb-3">
+            <div class="card-header bg-success text-white">
+              <h5 class="mb-0"><i class="fas fa-columns" style="max-height: 700px; overflow: auto;"></i> Column Management</h5>
+            </div>
+            <div class="card-body">
+              <div class="form-group">
+                <label><strong><i class="fas fa-check-square"></i> Select & Arrange Headers</strong></label>
+                <p class="small text-muted">Check headers to display, drag to reorder</p>
+                <div id="headerItems" class="header-container">
+                  <!-- Header items will be added here by JavaScript -->
+                </div>
+              </div>
+              
+              <div class="form-group">
+                <label for="newColumnName"><strong><i class="fas fa-plus-circle"></i> Add Custom Column</strong></label>
+                <div class="input-group custom-column-input">
+                  <input type="text" id="newColumnName" class="form-control" placeholder="New Column Name">
+                  <div class="input-group-append">
+                    <button class="btn btn-success" onclick="addNewColumn()"><i class="fas fa-plus"></i> Add</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="row no-print mb-3 action-buttons">
+  
+          <div class="col-12">
+            <button class="btn btn-primary" type="button" onclick="window.print()">
+              <i class="fas fa-print"></i> Print Table
+            </button>
+            <button disabled class="btn btn-info" type="button" onclick="showPrintPreview()">
+              <i class="fas fa-eye"></i> Print Preview
+            </button>
+          <button class="btn btn-success" type="button" onclick="applyHeaderSelection()">
+            <i class="fas fa-check"></i> Apply Headers
+          </button>
+          <button class="btn btn-secondary" type="button" onclick="saveColumnSizes()">
+            <i class="fas fa-save"></i> Save Settings
+          </button>
+          <button class="btn btn-info" type="button" onclick="resetToDefaults()">
+            <i class="fas fa-undo"></i> Reset Defaults
+          </button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="searchInput"><strong><i class="fas fa-search"></i> Search Students</strong></label>
+        <div class="input-group">
+          <input type="text" id="searchInput" class="form-control" placeholder="Search by name or AD number..." onkeyup="filterStudentTablebysearch()">
+          <div class="input-group-append">
+            <span class="input-group-text"><i class="fas fa-search"></i></span>
+          </div>
+        </div>
+      </div>
+      <div class="table-responsive" id="studentTableContainer">
+        <!-- Table will be rendered here -->
+      </div>
+    </div>
+<div class="modal fade" id="printPreviewModal" tabindex="-1" role="dialog" aria-hidden="true">
+      <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Print Preview</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body" id="printPreviewContent">
+            <!-- Preview content will be inserted here -->
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            <button type="button" class="btn btn-primary" onclick="window.print()">Print</button>
+          </div>
+        </div>
+      </div>
+    </div>
+<div class="modal fade" id="printPreviewModal" tabindex="-1" role="dialog" aria-hidden="true">
+      <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Print Preview</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body" id="printPreviewContent">
+            <!-- Preview content will be inserted here -->
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            <button type="button" class="btn btn-primary" onclick="window.print()">Print</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+
+    <!-- JavaScript Libraries -->
+    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.12.9/dist/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+    
+    <script>
+      // Global variables
+      let defaultHeaders = [
+        { id: 'slNo', name: 'SL No', field: 'index', visible: true },
+        { id: 'photo', name: 'Photo', field: 'image', visible: true },
+        { id: 'adNumber', name: 'AD Number', field: 'adNumber', visible: true },
+        { id: 'name', name: 'Name', field: 'name', visible: true },
+        { id: 'gender', name: 'Gender', field: 'gender', visible: true },
+        { id: 'currentClass', name: 'Class', field: 'currentClass', visible: true },
+        { id: 'fatherName', name: 'Father Name', field: 'fatherName', visible: false },
+        { id: 'fatherMobile', name: 'Father Mobile', field: 'fatherMobile', visible: false },
+        { id: 'houseName', name: 'House', field: 'houseName', visible: false },
+        { id: 'whatsappNo', name: 'WhatsApp No', field: 'whatsappNo', visible: false },
+        { id: 'vehicleStage', name: 'Vehicle Stage', field: 'vehicleStage', visible: false },
+        { id: 'vehiclePoint', name: 'Vehicle Point', field: 'vehiclePoint', visible: false }
+      ];
+      
+      let customHeaders = [];
+      let selectedHeaders = [];
+      let columnSizes = {};
+      let photoFile = [];
+
+      // Load saved data from localStorage
+      function loadSavedData() {
+        try {
+          // Load column sizes
+          const savedSizes = localStorage.getItem('columnSizes');
+          if (savedSizes) columnSizes = JSON.parse(savedSizes);
+          
+          // Load custom headers
+          const savedCustomHeaders = localStorage.getItem('customHeaders');
+          if (savedCustomHeaders) customHeaders = JSON.parse(savedCustomHeaders);
+          
+          // Load selected headers
+          const savedSelectedHeaders = localStorage.getItem('selectedHeaders');
+          selectedHeaders = savedSelectedHeaders ? JSON.parse(savedSelectedHeaders) : defaultHeaders.filter(h => h.visible);
+          
+          // Load secondary header
+          const savedSecondaryHeader = localStorage.getItem('secondaryHeader');
+          if (savedSecondaryHeader) {
+            document.getElementById('secondaryHeader').value = savedSecondaryHeader;
+            document.getElementById('displaySecondaryHeader').textContent = savedSecondaryHeader;
+          }
+          
+          console.log("Loaded data:", { selectedHeaders, customHeaders, columnSizes });
+        } catch (e) {
+          console.error("Error loading saved data:", e);
+          // Reset to defaults if loading fails
+          selectedHeaders = defaultHeaders.filter(h => h.visible);
+        }
+      }
+      
+      // Save column sizes to localStorage
+      function saveColumnSizes() {
+        try {
+          // Update column sizes from current table
+          updateColumnSizesFromTable();
+          localStorage.setItem('columnSizes', JSON.stringify(columnSizes));
+          localStorage.setItem('selectedHeaders', JSON.stringify(selectedHeaders));
+          localStorage.setItem('customHeaders', JSON.stringify(customHeaders));
+          
+          showAlert('success', 'All settings saved successfully!');
+        } catch (e) {
+          console.error("Error saving column sizes:", e);
+          showAlert('danger', 'Failed to save settings');
+        }
+      }
+      
+      function updateColumnSizesFromTable() {
+        const table = document.querySelector('table');
+        if (!table) return;
+        
+        const headers = table.querySelectorAll('th');
+        headers.forEach(header => {
+          const headerId = header.getAttribute('data-id');
+          if (headerId) {
+            columnSizes[headerId] = header.offsetWidth;
+          }
+        });
+      }
+
+      // Initialize the header items for selection and ordering
+      function initHeaderItems() {
+        const container = document.getElementById('headerItems');
+        if (!container) return;
+        
+        container.innerHTML = '';
+        const allHeaders = [...defaultHeaders, ...customHeaders];
+        
+        // Create items based on current selectedHeaders order
+        selectedHeaders.forEach(selectedHeader => {
+          const header = allHeaders.find(h => h.id === selectedHeader.id);
+          if (header) createHeaderItem(container, header, true);
+        });
+        
+        // Add remaining headers that aren't selected
+        allHeaders.forEach(header => {
+          if (!selectedHeaders.some(h => h.id === header.id)) {
+            createHeaderItem(container, header, false);
+          }
+        });
+      }
+      
+      function createHeaderItem(container, header, isSelected) {
+        const item = document.createElement('div');
+        item.className = 'header-item';
+        item.setAttribute('data-id', header.id);
+        item.draggable = true;
+        
+        if (isSelected) item.classList.add('selected');
+        
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.id = `check_${header.id}`;
+        checkbox.checked = isSelected;
+        checkbox.addEventListener('change', function() {
+          item.classList.toggle('selected');
+        });
+        
+        const label = document.createElement('label');
+        label.htmlFor = `check_${header.id}`;
+        label.textContent = header.name;
+        
+        const dragHandle = document.createElement('i');
+        dragHandle.className = 'fas fa-grip-lines drag-handle';
+        
+        item.appendChild(checkbox);
+        item.appendChild(label);
+        item.appendChild(dragHandle);
+        
+        item.addEventListener('dragstart', handleDragStart);
+        item.addEventListener('dragover', handleDragOver);
+        item.addEventListener('drop', handleDrop);
+        item.addEventListener('dragend', handleDragEnd);
+        
+        container.appendChild(item);
+      }
+
+      // Drag and drop functionality
+      let draggedItem = null;
+      
+      function handleDragStart(e) {
+        draggedItem = this;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/html', this.innerHTML);
+        this.style.opacity = '0.4';
+      }
+      
+      function handleDragOver(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        return false;
+      }
+      
+      function handleDrop(e) {
+        e.stopPropagation();
+        
+        if (draggedItem !== this) {
+          const container = document.getElementById('headerItems');
+          const items = Array.from(container.children);
+          const draggedIndex = items.indexOf(draggedItem);
+          const targetIndex = items.indexOf(this);
+          
+          if (draggedIndex < targetIndex) {
+            container.insertBefore(draggedItem, this.nextSibling);
+          } else {
+            container.insertBefore(draggedItem, this);
+          }
+        }
+        return false;
+      }
+      
+      function handleDragEnd() {
+        this.style.opacity = '1';
+        draggedItem = null;
+      }
+
+      // Add a new column
+      function addNewColumn() {
+        const columnName = document.getElementById('newColumnName').value.trim();
+        if (!columnName) {
+          showAlert('warning', 'Please enter a column name');
+          return;
+        }
+        
+        const columnId = 'custom_' + Date.now();
+        const newHeader = { 
+          id: columnId, 
+          name: columnName, 
+          field: columnId,
+          visible: true,
+          custom: true
+        };
+        
+        customHeaders.push(newHeader);
+        selectedHeaders.push(newHeader);
+        
+        try {
+          localStorage.setItem('customHeaders', JSON.stringify(customHeaders));
+          localStorage.setItem('selectedHeaders', JSON.stringify(selectedHeaders));
+          
+          document.getElementById('newColumnName').value = '';
+          initHeaderItems();
+          filterStudentTable();
+          
+          showAlert('success', 'Column added successfully!');
+        } catch (e) {
+          console.error("Error saving new column:", e);
+          showAlert('danger', 'Failed to add column');
+        }
+      }
+
+      // Apply header selection and order
+      function applyHeaderSelection() {
+        showWaiting();
+        const container = document.getElementById('headerItems');
+        if (!container) return;
+        
+        const items = Array.from(container.children);
+        const allHeaders = [...defaultHeaders, ...customHeaders];
+        selectedHeaders = [];
+        
+        items.forEach(item => {
+          const headerId = item.getAttribute('data-id');
+          const checkbox = item.querySelector('input[type="checkbox"]');
+          
+          if (checkbox.checked) {
+            const header = allHeaders.find(h => h.id === headerId);
+            if (header) {
+              selectedHeaders.push({
+                id: header.id,
+                name: header.name,
+                field: header.field,
+                visible: true
+              });
+            }
+          }
+        });
+        
+        try {
+          localStorage.setItem('selectedHeaders', JSON.stringify(selectedHeaders));
+          
+          const secondaryHeader = document.getElementById('secondaryHeader').value;
+          document.getElementById('displaySecondaryHeader').textContent = secondaryHeader;
+          localStorage.setItem('secondaryHeader', secondaryHeader);
+          
+          //filterStudentTable();
+          hideWaiting();
+          showAlert('success', 'Headers applied successfully!');
+        } catch (e) {
+          hideWaiting();
+          console.error("Error applying header selection:", e);
+          showAlert('danger', 'Failed to apply headers');
+        }
+      }
+
+      // Initialize column resizing
+      function initColumnResizing() {
+        const table = document.querySelector('table');
+        if (!table) return;
+        
+        const headers = table.querySelectorAll('th');
+        
+        headers.forEach((header, index) => {
+          // Remove existing resizer if any
+          const existingResizer = header.querySelector('.column-resizer');
+          if (existingResizer) header.removeChild(existingResizer);
+          
+          // Add new resizer element
+          const resizer = document.createElement('div');
+          resizer.className = 'column-resizer';
+          header.appendChild(resizer);
+          
+          // Set initial width if saved
+          const headerId = header.getAttribute('data-id');
+          if (headerId && columnSizes[headerId]) {
+            header.style.width = columnSizes[headerId] + 'px';
+          }
+          
+          // Add resize event listener
+          let startX, startWidth;
+          
+          resizer.addEventListener('mousedown', function(e) {
+            startX = e.pageX;
+            startWidth = header.offsetWidth;
+            
+            document.addEventListener('mousemove', resizeColumn);
+            document.addEventListener('mouseup', stopResize);
+            
+            e.preventDefault();
+          });
+          
+          function resizeColumn(e) {
+            const width = startWidth + (e.pageX - startX);
+            if (width > 50) { // Minimum width
+              header.style.width = width + 'px';
+              
+              // Store the size
+              const headerId = header.getAttribute('data-id');
+              if (headerId) {
+                columnSizes[headerId] = width;
+              }
+            }
+          }
+          
+          function stopResize() {
+            document.removeEventListener('mousemove', resizeColumn);
+            document.removeEventListener('mouseup', stopResize);
+          }
+        });
+      }
+
+      // Load class dropdown
+      async function loadDropdown() {
+        showWaiting();
+        try {
+          const now = Date.now();
+        let settings = {
+            //"currentClass": className,
+            "userMail":"office@gmail.com",
+            "type": "new",
+            "storeName": "adStudents",
+            "indexName": "",
+            "query": "",
+            "timestamp":""
+          };
+          //showWaiting("myStudents");
+       let studentsData = await get(settings); // Assumes getAllRecords returns a promise
+                          
+          //const studentsList = await getAllStudents();
+          const uniqueClasses = [...new Set(studentsData.map(student => student.currentClass))];
+          uniqueClasses.sort((a, b) => a.localeCompare(b));
+          
+          const select = document.getElementById("select");
+          if (select) {
+            select.innerHTML = `<option value="" disabled selected>Select Class</option>` +
+              uniqueClasses
+                .map(className => className ? `<option value="${className}">${className}</option>` : "")
+                .join('');
+          }
+           hideWaiting();
+        } catch (e) {
+        //  hideWaiting();
+          console.error("Error loading dropdown:", e);
+          showAlert('danger', 'Failed to load class list');
+        }
+      }
+
+      // Filter student table
+      async function filterStudentTable() {
+        
+        showWaiting();
+        try {
+          const searchInput = document.getElementById('searchInput').value.toLowerCase();
+          const select = document.getElementById('select').value.toLowerCase();
+          if(!select||select===""){
+            showAlert("danger","select class first");
+            return
+          }
+          const secondaryHeader = document.getElementById('secondaryHeader').value;
+          
+          var seconhead = document.getElementById('displaySecondaryHeader').textContent = secondaryHeader+" of "+select.toUpperCase();
+    
+          const now = Date.now();
+        let settings = {
+            //"currentClass": className,
+            "userMail":"office@gmail.com",
+            "type": "new",
+            "storeName": "adStudents",
+            "indexName": "currentClass",
+            "query": select.toUpperCase(),
+            "timestamp":""
+          };
+          //showWaiting("myStudents");
+          showWaiting();
+       let students = await get(settings); // Assumes getAllRecords returns a promise
+                
+          //const students = await getAllStudents();
+          
+          if (!students || students.length === 0) {
+            showAlert('info', 'No student data found');
+            return;
+            //hideWaiting();
+          }
+          localStorage.setItem("loadedStudents", JSON.stringify(students));
+
+
+          const filteredStudents = students.filter(student => {
+            const currentClassLower = (student.currentClass || '').toLowerCase();
+            const nameLower = (student.name || '').toString().toLowerCase();
+            const adNumberLower = (typeof student.adNumber === 'string' ? student.adNumber.toLowerCase() : '');
+            
+            const classMatches = select === '' || currentClassLower === select;
+            const searchMatches = searchInput === '' || 
+                                 nameLower.includes(searchInput) || 
+                                 adNumberLower.includes(searchInput);
+            
+            return classMatches && searchMatches;
+          });
+          renderStudentTable(filteredStudents, 'studentTableContainer');
+        } catch (e) {
+          hideWaiting();
+          console.error("Error filtering table:", e);
+          showAlert('danger', 'Failed to filter students');
+        }
+      }
+
+      async function filterStudentTablebysearch() {
+
+        
+        try {
+          const searchInput = document.getElementById('searchInput').value.toLowerCase();
+          const select = document.getElementById('select').value.toLowerCase();
+          
+          const now = Date.now();
+        let settings = {
+            //"currentClass": className,
+            "userMail":"office@gmail.com",
+            "type": "new",
+            "storeName": "adStudents",
+            "indexName": "currentClass",
+            "query": select.toUpperCase(),
+            "timestamp":now
+          };
+          //showWaiting("myStudents");
+          const storedStudentsString = localStorage.getItem("loadedStudents");
+
+if (!storedStudentsString) {
+  console.log("No student data found in localStorage.");
+} 
+const loadedStudents = JSON.parse(storedStudentsString);
+  console.log(loadedStudents); // This will now be your array of student objects
+  // You can now work with the loadedStudents array
+
+       let students = loadedStudents;// await localStorage.getItem("loadesStudents");// await get(settings); // Assumes getAllRecords returns a promise
+                
+          //const students = await getAllStudents();
+          
+          if (!students || students.length === 0) {
+            showAlert('info', 'No student data found');
+            return;
+          }
+          
+          
+          const filteredStudents = students.filter(student => {
+            const currentClassLower = (student.currentClass || '').toLowerCase();
+            const nameLower = (student.name || '').toString().toLowerCase();
+            const adNumberLower = (typeof student.adNumber === 'string' ? student.adNumber.toLowerCase() : '');
+            
+            const classMatches = select === '' || currentClassLower === select;
+            const searchMatches = searchInput === '' || 
+                                 nameLower.includes(searchInput) || 
+                                 adNumberLower.includes(searchInput);
+            
+            return classMatches && searchMatches;
+          });
+          
+          renderStudentTable(filteredStudents, 'studentTableContainer');
+        } catch (e) {
+          console.error("Error filtering table:", e);
+          showAlert('danger', 'Failed to filter students');
+        }
+      }
+
+      // Render student table based on selected headers
+      function renderStudentTable(students, divid) {
+    
+        photoFile = []; 
+        const container = document.getElementById(divid);
+        if (!container) return;
+        
+        if (!students || students.length === 0) {
+          container.innerHTML = '<div class="alert alert-info">No students found matching your criteria</div>';
+          return;
+        }
+        
+        // Create table header based on selected headers
+        let tableHeaders = '';
+        selectedHeaders.forEach(header => {
+          tableHeaders += `<th data-id="${header.id}">${header.name}</th>`;
+        });
+        students.sort((a, b) => {
+  return a.name.localeCompare(b.name);
+});
+        // Create table rows
+        let tableRows = '';
+        students.forEach((student, index) => {
+          let row = `<tr ${ 'class="text-center ' & student.gender === "Female" ? "gender" : ""}">`;
+          
+          selectedHeaders.forEach(header => {
+            let cellContent = '';
+            const field = header.field;
+            
+            if (field === 'index') {
+              cellContent = index + 1;
+            } 
+            else if (field === 'image') {
+              const imgId = `pic${index + 1}`;
+              photoFile.push({ adNumber: student.stu_id, divId: imgId });
+              cellContent = `
+                <div class="image-container image-thumbnail">
+                  <img id="${imgId}" class="image-thumbnail img-fluid" 
+                       src="https://drive.google.com/thumbnail?id=${student.image}&sz=800" 
+                       alt="${student.stu_id}">
+                </div>`;
+            }
+            else {
+              cellContent = student[field] || '';
+            }
+            
+            // Apply special styling for certain fields
+            const specialStyle = field === 'name' || field === 'houseName' ? 'style="color:red;"' : '';
+            row += `<td ${specialStyle}>${cellContent}</td>`;
+          });
+          
+          row += '</tr>';
+          tableRows += row;
+        });
+        
+        const tableHTML = `
+          <table class='table table-hover table-bordered'>
+            <thead>
+              <tr>${tableHeaders}</tr>
+            </thead>
+            <tbody>${tableRows}</tbody>
+          </table>`;
+        
+        container.innerHTML = tableHTML;
+        
+        // Initialize column resizing after table is rendered
+        initColumnResizing();
+        hideWaiting();
+        // Apply photo toggle state
+        const toggleColumn = document.getElementById('toggleColumn');
+        if (toggleColumn) {
+          togglePhotoColumn(toggleColumn.checked);
+        }
+      }
+      
+      // Toggle photo column visibility
+      function togglePhotoColumn(show) {
+        const table = document.querySelector("table");
+        if (!table) return;
+        
+        // Find the index of the photo column
+        const photoIndex = selectedHeaders.findIndex(h => h.field === 'image');
+        if (photoIndex === -1) return;
+        
+        // Select all cells in that column (add 1 because nth-child is 1-based)
+        const cells = table.querySelectorAll(`tr td:nth-child(${photoIndex + 1}), tr th:nth-child(${photoIndex + 1})`);
+        
+        cells.forEach(cell => {
+          if (show) {
+            cell.classList.remove("hide-column");
+          } else {
+            cell.classList.add("hide-column");
+          }
+        });
+      }
+
+      // Show alert message
+      function showAlert(type, message) {
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+        alertDiv.role = 'alert';
+        alertDiv.innerHTML = `
+          ${message}
+          <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        `;
+        
+        // Remove any existing alerts
+        const existingAlerts = document.querySelectorAll('.alert');
+        existingAlerts.forEach(alert => alert.remove());
+        
+        // Add new alert to the top of the container
+        const container = document.querySelector('.container-fluid');
+        if (container) {
+          container.insertBefore(alertDiv, container.firstChild);
+          
+          // Auto dismiss after 3 seconds
+          setTimeout(() => {
+            $(alertDiv).alert('close');
+          }, 3000);
+        }
+      }
+      
+      // Reset to default settings
+      function resetToDefaults() {
+        if (confirm('Are you sure you want to reset all settings to defaults?')) {
+          try {
+            localStorage.removeItem('selectedHeaders');
+            localStorage.removeItem('customHeaders');
+            localStorage.removeItem('columnSizes');
+            
+            selectedHeaders = defaultHeaders.filter(h => h.visible);
+            customHeaders = [];
+            columnSizes = {};
+            
+            document.getElementById('secondaryHeader').value = 'Class Wise Details';
+            document.getElementById('displaySecondaryHeader').textContent = 'Class Wise Details';
+            document.getElementById('toggleColumn').checked = true;
+            
+            initHeaderItems();
+            filterStudentTable();
+            
+            showAlert('success', 'Settings reset to defaults');
+          } catch (e) {
+            console.error("Error resetting settings:", e);
+            showAlert('danger', 'Failed to reset settings');
+          }
+        }
+      }
+
+      function printRuns (){
+        loadSavedData();
+        initHeaderItems();
+        loadDropdown();
+       // filterStudentTable();
+        
+        // Event listeners
+        document.getElementById('secondaryHeader').addEventListener('input', function() {
+          document.getElementById('displaySecondaryHeader').textContent = this.value;
+        });
+        
+        document.getElementById('toggleColumn').addEventListener('change', function() {
+          togglePhotoColumn(this.checked);
+        });
+      }
+      // Initialize the page
+      document.addEventListener('DOMContentLoaded', function() {
+        loadSavedData();
+        initHeaderItems();
+        loadDropdown();
+       // filterStudentTable();
+        
+        // Event listeners
+        document.getElementById('secondaryHeader').addEventListener('input', function() {
+          const select = document.getElementById('select').value;
+          document.getElementById('displaySecondaryHeader').textContent =  this.value+" of "+select;
+        });
+        
+        document.getElementById('toggleColumn').addEventListener('change', function() {
+          togglePhotoColumn(this.checked);
+        });
+      });
+
+      function initColumnResizing() {
+        const table = document.querySelector('table');
+        if (!table) return;
+        
+        const headers = table.querySelectorAll('th');
+        
+        headers.forEach(header => {
+          // Remove existing resizer if any
+          const existingResizer = header.querySelector('.column-resizer');
+          if (existingResizer) header.removeChild(existingResizer);
+          
+          // Add new resizer element
+          const resizer = document.createElement('div');
+          resizer.className = 'column-resizer';
+          header.appendChild(resizer);
+          
+          // Set initial width if saved
+          const headerId = header.getAttribute('data-id');
+          if (headerId && columnSizes[headerId]) {
+            header.style.width = columnSizes[headerId] + 'px';
+          } else {
+            // Set reasonable default widths based on content type
+            const defaultWidths = {
+              'slNo': '60px',
+              'photo': '80px',
+              'adNumber': '100px',
+              'name': '150px',
+              'gender': '80px',
+              'currentClass': '100px',
+              'fatherName': '150px',
+              'fatherMobile': '120px',
+              'houseName': '120px',
+              'whatsappNo': '120px',
+              'vehicleStage': '120px',
+              'vehiclePoint': '120px'
+            };
+            
+            if (defaultWidths[headerId]) {
+              header.style.width = defaultWidths[headerId];
+            }
+          }
+          
+          // Add resize event listener
+          resizer.addEventListener('mousedown', initResize, false);
+        });
+        
+        function initResize(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          const header = e.target.parentElement;
+          const startX = e.clientX;
+          const startWidth = header.offsetWidth;
+          const table = header.closest('table');
+          const tableWidth = table.offsetWidth;
+          
+          e.target.classList.add('active');
+          
+          document.addEventListener('mousemove', doResize);
+          document.addEventListener('mouseup', stopResize);
+          
+          function doResize(e) {
+            let newWidth = startWidth + (e.clientX - startX);
+            
+            // Constrain to min/max widths
+            newWidth = Math.max(50, newWidth);
+            newWidth = Math.min(500, newWidth);
+            
+            header.style.width = newWidth + 'px';
+            
+            // Adjust table width to prevent overflow
+            table.style.width = 'auto';
+          }
+          
+          function stopResize() {
+            document.removeEventListener('mousemove', doResize);
+            document.removeEventListener('mouseup', stopResize);
+            
+            const resizers = document.querySelectorAll('.column-resizer');
+            resizers.forEach(r => r.classList.remove('active'));
+            
+            // Save the new size
+            const headerId = header.getAttribute('data-id');
+            if (headerId) {
+              columnSizes[headerId] = header.offsetWidth;
+            }
+          }
+        }
+      }
+      
+      // Print preview function
+      function showPrintPreview() {
+        const table = document.querySelector('#studentTableContainer').cloneNode(true);
+        
+        // Apply print-specific styles
+        table.querySelectorAll('th, td').forEach(cell => {
+          cell.style.whiteSpace = 'nowrap';
+          cell.style.overflow = 'hidden';
+          cell.style.textOverflow = 'ellipsis';
+        });
+        
+        // Update the preview content
+        const previewContent = document.getElementById('printPreviewContent');
+        previewContent.innerHTML = '';
+        previewContent.appendChild(table);
+        
+        // Show the modal
+        $('#printPreviewModal').modal('show');
+      }
+      
+    
+    </script>
+  </body>
+</html>
