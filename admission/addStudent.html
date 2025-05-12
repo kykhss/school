@@ -1003,7 +1003,8 @@ console.log(loggedStatus);
     if (timeDiff > 30) {
         localStorage.removeItem("logged"); // Clear login status
         localStorage.removeItem("loginTime"); // Clear login time
-        window.location.href = "index.html"; // Redirect to login
+        //window.location.href = "index.html"; // Redirect to login
+        logout();
     }
 }
 </script>
