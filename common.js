@@ -1,3 +1,8 @@
+
+function updateLastUsedTime() {
+    localStorage.setItem("lastUsedTime", new Date().getTime());
+}
+
 function getAcademicYear() {
     const currentDate = new Date();
     const currentYear = currentDate.getFullYear();
