@@ -143,7 +143,7 @@ function showConfirmationMessage(message) {
   function logout() {
     localStorage.removeItem("logged"); // Clear login status
     localStorage.removeItem("lastUsedTime"); // Clear last activity time
-    window.location.href = "index.html"; // Redirect to login page
+    window.location.href = "/school/index.html"; // Redirect to login page
 }
 
 //<script>
