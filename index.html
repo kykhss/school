@@ -196,7 +196,7 @@
                        window.location.href = "teacher_dashboard.html"; // Redirect to teacher dashboard
                         console.log("Teacher");
                     }
-            
+            localStorage.setItem("logged", "success");
                     localStorage.setItem("loggedInUser", email);
       document.getElementById("password").value = "";
       localStorage.setItem("loggedInUser", email);
