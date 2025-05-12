@@ -197,8 +197,9 @@
                         console.log("Teacher");
                     }
             localStorage.setItem("logged", "success");
-                    localStorage.setItem("loggedInUser", email);
-      document.getElementById("password").value = "";
+            localStorage.setItem("loggedInUser", email);
+         updateLastUsedTime();
+         document.getElementById("password").value = "";
       localStorage.setItem("loggedInUser", email);
       // Redirect to dashboard with email as a query parameter
       //window.location.href = `dashboard.html?email=${encodeURIComponent(email)}`;
