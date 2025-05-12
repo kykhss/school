@@ -60,10 +60,7 @@ function showConfirmationMessage(message) {
     cancelButton.addEventListener("click", onCancelClick);
   });
 }
-    function updateLastUsedTime() {
-    localStorage.setItem("lastUsedTime", new Date().getTime());
-}
-
+    
 // Example usage
 // document.addEventListener("DOMContentLoaded", () => {
 //   document.getElementById("testButton").addEventListener("click", async () => {
