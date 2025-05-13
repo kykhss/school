@@ -726,7 +726,7 @@ async function uploadCroppedImage2(event) {
     if (type === "new") {
         timestamp = "";
     } else {
-        timestamp = await getStoreById("adStudents");
+        timestamp = await getsync("adStudents");
     }
     generateTable();
 
@@ -876,7 +876,7 @@ async function loadStudentPhoto(studentId, imgId) {
 }
 var userMail = localStorage.getItem("loggedInUser");
 async function generateTable() {
-    // const timestamp = await getStoreById("students");
+    // const timestamp = await getsync("students");
     // document.getElementById('updatedTime').textContent=timestamp.time;
     var curYear = document.getElementById("curruntyear").value;
     try {
@@ -1900,7 +1900,7 @@ let lastUpdated = null;
             return;
         }
         const newTimestamps = response.times;
-        const lastUpdatedRecord = await getStoreById('students');
+        const lastUpdatedRecord = await getsync('students');
         const dbLastUpdated = lastUpdatedRecord?.time ? new Date(lastUpdatedRecord.time) : null;
 
         const studentUpdate = newTimestamps.find(time => time.sheetName === "Students");
