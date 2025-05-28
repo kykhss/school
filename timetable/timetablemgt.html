@@ -88,7 +88,7 @@
             padding: 0.2rem;
             text-align: center;
             vertical-align: middle;
-            font-size: 0.5rem; /* Slightly smaller font for compactness */
+            font-size: 0.7rem; /* Slightly smaller font for compactness */
             word-wrap: break-word; /* Allow long words to break */
         }
         /* Specific width for the first few columns in full view to ensure they don't shrink too much */
@@ -146,7 +146,9 @@
             z-index: 13; /* Highest z-index for the corner */
         }
 
-
+        .timetable-table.individual-view{
+            font-size:1rem;
+        }
         /* Styles for individual teacher/class view specific sticky columns */
         .timetable-table.individual-view th:nth-child(1) { /* Sticky for the first column (Day) */
             position: sticky;
