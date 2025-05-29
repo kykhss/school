@@ -4048,36 +4048,36 @@ function printClassReport() {
                     loadedSuccessfully = true;
                 } else {
                     console.log('No saved data found in cloud, attempting to load from local storage...');
-                    const savedTimetable = localStorage.getItem(LOCAL_STORAGE_KEY_TIMETABLE);
-                    const savedUnassigned = localStorage.getItem(LOCAL_STORAGE_KEY_UNASSIGNED);
-                    const savedSlots = localStorage.getItem(LOCAL_STORAGE_KEY_SLOTS);
-                    const savedteach =localStorage.getItem(LOCAL_STORAGE_KEY_TEACHERS);
-                    const savedTeachers =savedteach;
-                            console.log(
-                                "locale stor teachers :",savedTeachers);
-                    if (savedTimetable && savedUnassigned && savedTeachers && savedSlots) {
-                        currentTimetableData = JSON.parse(savedTimetable);
-                        // Ensure uniqueness when loading from local storage as well
-                        const loadedUnassigned = JSON.parse(savedUnassigned);
-                        currentUnassignedSlots = []; // Reset
-                        loadedUnassigned.forEach(slot => addUniqueUnassignedSlot(slot));
+                    // const savedTimetable = localStorage.getItem(LOCAL_STORAGE_KEY_TIMETABLE);
+                    // const savedUnassigned = localStorage.getItem(LOCAL_STORAGE_KEY_UNASSIGNED);
+                    // const savedSlots = localStorage.getItem(LOCAL_STORAGE_KEY_SLOTS);
+                    // const savedteach =localStorage.getItem(LOCAL_STORAGE_KEY_TEACHERS);
+                    // const savedTeachers =savedteach;
+                    //         console.log(
+                    //             "locale stor teachers :",savedTeachers);
+                    // if (savedTimetable && savedUnassigned && savedTeachers && savedSlots) {
+                    //     currentTimetableData = JSON.parse(savedTimetable);
+                    //     // Ensure uniqueness when loading from local storage as well
+                    //     const loadedUnassigned = JSON.parse(savedUnassigned);
+                    //     currentUnassignedSlots = []; // Reset
+                    //     loadedUnassigned.forEach(slot => addUniqueUnassignedSlot(slot));
 
-                        requiredSlots = JSON.parse(savedSlots);
+                    //     requiredSlots = JSON.parse(savedSlots);
                         
-                        const loadedTeachers = JSON.parse(savedTeachers);
-                        teachers = {}; // Reset global teachers object
-                        for (const id in loadedTeachers) {
-                            teachers[id] = {
-                                ...loadedTeachers[id],
-                                unavailable_slots: new Set(loadedTeachers[id].unavailable_slots), // Convert back to Set
-                            };
-                        }
+                    //     const loadedTeachers = JSON.parse(savedTeachers);
+                    //     teachers = {}; // Reset global teachers object
+                    //     for (const id in loadedTeachers) {
+                    //         teachers[id] = {
+                    //             ...loadedTeachers[id],
+                    //             unavailable_slots: new Set(loadedTeachers[id].unavailable_slots), // Convert back to Set
+                    //         };
+                    //     }
                         
-                        isDataImported = true;
-                        areSlotsCreated = true;
-                        showMessage('Timetable and data loaded from previous local session!', 'success');
-                        console.log('Loaded from local storage. requiredSlots length:', requiredSlots.length, 'currentUnassignedSlots length:', currentUnassignedSlots.length);
-                        loadedSuccessfully = true;
+                    //     isDataImported = true;
+                    //     areSlotsCreated = true;
+                    //     showMessage('Timetable and data loaded from previous local session!', 'success');
+                    //     console.log('Loaded from local storage. requiredSlots length:', requiredSlots.length, 'currentUnassignedSlots length:', currentUnassignedSlots.length);
+                    //     loadedSuccessfully = true;
                     } else {
                         console.log('No saved data found in local storage either.');
                         isDataImported = false; // Ensure these are false if no data
