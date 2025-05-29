@@ -4071,13 +4071,13 @@ function printClassReport() {
                     //             ...loadedTeachers[id],
                     //             unavailable_slots: new Set(loadedTeachers[id].unavailable_slots), // Convert back to Set
                     //         };
-                    //     }
+                      }
                         
-                    //     isDataImported = true;
-                    //     areSlotsCreated = true;
-                    //     showMessage('Timetable and data loaded from previous local session!', 'success');
-                    //     console.log('Loaded from local storage. requiredSlots length:', requiredSlots.length, 'currentUnassignedSlots length:', currentUnassignedSlots.length);
-                    //     loadedSuccessfully = true;
+                        isDataImported = true;
+                        areSlotsCreated = true;
+                        showMessage('Timetable and data loaded from previous local session!', 'success');
+                        console.log('Loaded from local storage. requiredSlots length:', requiredSlots.length, 'currentUnassignedSlots length:', currentUnassignedSlots.length);
+                        loadedSuccessfully = true;
                     } else {
                         console.log('No saved data found in local storage either.');
                         isDataImported = false; // Ensure these are false if no data
