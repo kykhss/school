@@ -2815,7 +2815,28 @@
                 //var localTime = new Date(localTime);
                 console.log(fireBaseTime,"local",localTime);
                 
-                if (fireBaseTime < localTime) {
+                if (fireBaseTime > localTime) {
+                    const loadedTimetable = {};
+                const data = timetableDocSnap.data();
+                for (const key in data) {
+                    loadedTimetable[key.replace(/_/g, '.')] = data[key]; // Deserialize keys
+                }
+                currentTimetableData = loadedTimetable;
+
+                // Load unassigned slots
+                const unassignedSlotsDocRef = doc(db, `${basePath}/${FIRESTORE_COLLECTION_UNASSIGNED_SLOTS_FIREBASE}`, 'allUnassignedSlots');
+                const unassignedSnap = await getDoc(unassignedSlotsDocRef);
+                if (unassignedSnap.exists()) {
+                    // Ensure uniqueness when loading from Firestore as well
+                    const loadedUnassigned = JSON.parse(unassignedSnap.data().unassignedSlots);
+                    currentUnassignedSlots = []; // Reset
+                    loadedUnassigned.forEach(slot => addUniqueUnassignedSlot(slot));
+                } else {
+                    currentUnassignedSlots = [];
+                }
+
+                console.log('Timetable and unassigned slots loaded from Firestore.');
+                return true;
                     console.log('Loaded main timetable from local.');
                     } else {
                         console.log('No need to update the timetable.');
