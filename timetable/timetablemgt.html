@@ -1185,6 +1185,14 @@
                 s.slotNumber === slot.slotNumber
             );
         }
+        function isSlotInRequired(slot) {
+            return requiredSlots.some(s =>
+                s.class_name === slot.class_name &&
+                s.subject === slot.subject &&
+                s.teacher_id === slot.teacher_id &&
+                s.slotNumber === slot.slotNumber
+            );
+        }
 
         /**
          * Adds a slot to the currentUnassignedSlots array, ensuring no duplicates based on unique slot properties.
@@ -1192,7 +1200,7 @@
          * @param {Object} slot - The slot object to add.
          */
         function addUniqueUnassignedSlot(slot) {
-            if (!isSlotInUnassigned(slot)) {
+            if (!isSlotInUnassigned(slot) && isSlotInRequired(slot) ) {
                 currentUnassignedSlots.push({ ...slot, isLocked: false }); // Ensure it's unlocked when unassigned
             }
         }
