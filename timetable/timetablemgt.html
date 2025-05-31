@@ -603,6 +603,43 @@
                 line-height: 1.4;
             }
         }
+        .side-panel {
+  position: fixed;
+  top: 1px;
+  left: 20px;
+  width: 80%;
+  background: #f9f9f9;
+  border: 2px solid #ccc;
+  border-radius: 8px;
+  padding: 1px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  z-index: 1000;
+  max-height: 45vh;
+  overflow: auto;
+  
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+.mini-timetable {
+  font-size: 6px;
+  width: 100%;
+  text-wrap:auto;
+}
+.mini-timetable table{
+    border: 1px solid black;
+}
+.mini-timetable td{
+    border: 1px solid black;
+    max-width: fit-content;
+    padding: 2px;
+    height: fit-content;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
     </style>
 </head>
 <body class="bg-gray-100 font-inter">
@@ -768,31 +805,17 @@
                     </div>
                 </div>
 
-                <div id="timetable-modal" class="hidden fixed inset-0 z-10 overflow-y-auto">
-                    <div id="individual-timetable-display" class="hidden bg-white shadow-md rounded-lg p-4 mt-6">
-                    <h2 id="individual-timetable-title" class="text-2xl font-semibold text-gray-800 text-center mb-4">Selected Timetable</h2>
-                    <div class="table-container">
-                      <table id="individual-timetable-table-teacher" class="timetable-table">
-                          <thead>
-                              </thead>
-                          <tbody>
-                          </tbody>
-                      </table>
-                    </div>
-                </div>
-                <div id="individual-timetable-display" class="hidden bg-white shadow-md rounded-lg p-4 mt-6">
-                    <h2 id="individual-timetable-title" class="text-2xl font-semibold text-gray-800 text-center mb-4">Selected Timetable</h2>
-                    <div class="table-container">
-                      <table id="individual-timetable-table-class" class="timetable-table">
-                          <thead>
-                              </thead>
-                          <tbody>
-                          </tbody>
-                      </table>
-                    </div>
-                </div>
+                <!-- This container will display the side view (teacher/class timetable when viewing class/teacher respectively) -->
+<div id="secondary-timetable-display" class="side-panel hidden">
+  <h3 id="secondary-timetable-title" class="table-container"></h3>
+  <div class="timetable-table">
+  <table id="secondary-timetable-table" class=" mini-timetable">
+    <thead></thead>
+    <tbody></tbody>
+  </table>
+  </div>
+</div>
 
-                </div>
 
             </div>
         </div>
@@ -1291,6 +1314,34 @@
          * @param {HTMLElement} targetContainer - The container div to show/hide
          * @param {boolean} isEditable - True if cells should have click/contextmenu listeners, false for read-only.
          */
+        function renderSecondaryMiniTimetable(type, id) {
+  const secondaryTable = document.getElementById('secondary-timetable-table');
+  const secondaryTitle = document.getElementById('secondary-timetable-title');
+  const secondaryContainer = document.getElementById('secondary-timetable-display');
+
+  const dataToUse = {};
+  for (const slotKey in currentTimetableData) {
+    const assignments = currentTimetableData[slotKey] || [];
+    const filtered = assignments.filter(a => a && a[type] === id);
+    if (filtered.length > 0) {
+      dataToUse[slotKey] = filtered;
+    }
+  }
+
+  if (type === 'teacher_id') {
+    const teacher = teachers[id];
+    console.log(teachers);
+    if (!teacher) return;
+    secondaryTitle.textContent = `Mini View: ${teacher.teacherName}'s Timetable`;
+    renderTimetable(dataToUse, 'teacher', id, secondaryTable, secondaryTitle, secondaryContainer, false);
+  } else if (type === 'class') {
+    secondaryTitle.textContent = `Mini View: Class ${id} Timetable`;
+    renderTimetable(dataToUse, 'class', id, secondaryTable, secondaryTitle, secondaryContainer, false);
+  }
+
+  secondaryContainer.classList.remove('hidden');
+}
+
         function renderTimetable(assignedData, viewType, viewId, targetTable, targetTitle, targetContainer, isEditable = true) {
             targetContainer.classList.remove('hidden'); // Ensure container is visible
 
@@ -1406,11 +1457,15 @@
                         
                         if (isEditable) {
                             cell.addEventListener('click', (e) => {
+                                console.log(cell.dataset);
+                                // renderSecondaryMiniTimetable('class', cell.data.class);
                                 if (activeMovingSlot) {
                                     attemptPlaceSlot(cell, e); // Pass the event
                                 } else {
                                     const assignmentInCell = currentTimetableData[slotKey]?.find(a => a && a.teacher_id === viewId);
+                                   console.log(assignmentInCell);
                                     if (assignmentInCell) {
+                                        renderSecondaryMiniTimetable('class',assignmentInCell?.class);
                                         selectSlotForMove(assignmentInCell, { type: 'timetable-cell', element: cell, slotKey: slotKey, teacherId: viewId, class: assignmentInCell?.class, subject: assignmentInCell?.subject, slotNumber: assignmentInCell?.slotNumber }, e);
                                     }
                                 }
@@ -1470,8 +1525,11 @@
                                     attemptPlaceSlot(cell, e); // Pass the event
                                 } else {
                                     const assignmentInCell = currentTimetableData[slotKey]?.find(a => a && a.class === viewId);
+                                    //console.log(assignmentInCell);
                                     if (assignmentInCell) {
+                                        
                                         selectSlotForMove(assignmentInCell, { type: 'timetable-cell', element: cell, slotKey: slotKey, class: viewId, teacherId: assignmentInCell?.teacher_id, subject: assignmentInCell?.subject, slotNumber: assignmentInCell?.slotNumber }, e);
+                                        renderSecondaryMiniTimetable('teacher_id', assignmentInCell.teacher_id);
                                     }
                                 }
                             });
@@ -1536,6 +1594,7 @@
             }
             currentMainTimetableDisplay.type = 'teacher';
             currentMainTimetableDisplay.id = teacherId;
+           
             renderTimetable(filteredTimetableData, 'teacher', teacherId, individualTimetableTable, individualTimetableTitle, individualTimetableDisplay, true);
             // Hide full timetable and unassigned slots for this view
              displayUnassignedSlots(currentUnassignedSlots, filterUnassignedClassDropdown.value, filterUnassignedTeacherDropdown.value); // Show unassigned slots for manual assignment
@@ -1556,6 +1615,8 @@
                 const assignments = currentTimetableData[slotKey] || [];
                 // Filter the assignments for the selected class
                 const classAssignments = assignments.filter(a => a && a.class === className);
+                console.log(classAssignments); 
+
                 if (classAssignments.length > 0) {
                     filteredTimetableData[slotKey] = classAssignments;
                 }
@@ -1563,7 +1624,6 @@
             currentMainTimetableDisplay.type = 'class';
             currentMainTimetableDisplay.id = className;
             renderTimetable(filteredTimetableData, 'class', className, individualTimetableTable, individualTimetableTitle, individualTimetableDisplay, true);
-            // Hide full timetable and unassigned slots for this view
             
              displayUnassignedSlots(currentUnassignedSlots, filterUnassignedClassDropdown.value , filterUnassignedTeacherDropdown.value); // Show unassigned slots for manual assignment
            
