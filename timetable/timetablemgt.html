@@ -1564,6 +1564,7 @@
         function displayFullTimetable() {
             currentMainTimetableDisplay.type = 'full';
             currentMainTimetableDisplay.id = null;
+            document.getElementById('secondary-timetable-display').classList.add('hidden');
             renderTimetable(currentTimetableData, 'full', null, timetableTable, timetableTitle, timetableContainer, true);
             displayUnassignedSlots(currentUnassignedSlots, filterUnassignedClassDropdown.value, filterUnassignedTeacherDropdown.value); // Show unassigned slots for manual assignment
             clearHighlights(); // Clear highlights when switching view
