@@ -1598,7 +1598,7 @@
 
             // Conflict 4: Max daily hours for teacher (e.g., 6 periods per day)
             // Count existing assignments for the teacher on this day, considering all periods for that teacher
-            const maxDailyHours = 6; // Example constraint
+            const maxDailyHours = 7; // Example constraint
             let currentDailyAssignmentsCount = 0;
             for (let p = 1; p <= NUM_PERIODS_PER_DAY; p++) {
                 const currentSlotKey = `${day}${p}`;
