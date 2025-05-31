@@ -1504,6 +1504,8 @@
             currentMainTimetableDisplay.id = teacherId;
             renderTimetable(filteredTimetableData, 'teacher', teacherId, individualTimetableTable, individualTimetableTitle, individualTimetableDisplay, true);
             // Hide full timetable and unassigned slots for this view
+             displayUnassignedSlots(currentUnassignedSlots, filterUnassignedClassDropdown.value, filterUnassignedTeacherDropdown.value); // Show unassigned slots for manual assignment
+           
             timetableContainer.classList.add('hidden');
             availableSlotsContainer.classList.add('hidden');
             clearHighlights();
@@ -1528,6 +1530,8 @@
             currentMainTimetableDisplay.id = className;
             renderTimetable(filteredTimetableData, 'class', className, individualTimetableTable, individualTimetableTitle, individualTimetableDisplay, true);
             // Hide full timetable and unassigned slots for this view
+             displayUnassignedSlots(currentUnassignedSlots, filterUnassignedClassDropdown.value, filterUnassignedTeacherDropdown.value); // Show unassigned slots for manual assignment
+           
             timetableContainer.classList.add('hidden');
             availableSlotsContainer.classList.add('hidden');
             clearHighlights();
@@ -1817,6 +1821,8 @@
                     sourceInfo.element.textContent = '';
                     sourceInfo.element.classList.remove('locked-cell');
                     saveTimetable(); // Save the state after picking up
+                    displayUnassignedSlots(currentUnassignedSlots, filterUnassignedClassDropdown.value, filterUnassignedTeacherDropdown.value);
+           
                 }
 
                 // Create the moving visual element
@@ -2203,6 +2209,81 @@
                             subject: subjectName,
                             teacher_id: teacherData.teacherId,
                             isClassCharge: className === teachers[teacherData.teacherId].classInCharge,
+                            slotNumber: i + 1 // Assign a unique number for each hour of the subject
+                        });
+                    }
+                });
+            });
+
+            // Populate the teacher and class dropdowns
+            populateDropdowns();
+            populateUnassignedFilterDropdowns();
+            
+            // Store processed teachers data to local storage for persistence
+            saveTeachersToLocalStorage();
+            // Save teachers and class data to Firebase
+            if (db && userId) { // Only attempt to save to Firestore if Firebase is initialized and user is authenticated
+                saveTeachersDataToFirestore();
+                saveClassDataToFirestore();
+            }
+
+            areSlotsCreated = true;
+            currentUnassignedSlots = []; // Initialize empty, then add unique slots
+            requiredSlots.forEach(slot => addUniqueUnassignedSlot(slot)); // Add all required slots as unassigned initially
+
+            // NEW: Filter currentUnassignedSlots to ensure they are all in requiredSlots (redundant here, but good as a safeguard)
+            currentUnassignedSlots = currentUnassignedSlots.filter(unassignedSlot => {
+                return requiredSlots.some(reqSlot =>
+                    reqSlot.class_name === unassignedSlot.class_name &&
+                    reqSlot.subject === unassignedSlot.subject &&
+                    reqSlot.teacher_id === unassignedSlot.teacher_id &&
+                    reqSlot.slotNumber === unassignedSlot.slotNumber
+                );
+            });
+
+            localStorage.setItem(LOCAL_STORAGE_KEY_SLOTS, JSON.stringify(currentUnassignedSlots));
+
+            displayUnassignedSlots(currentUnassignedSlots, filterUnassignedClassDropdown.value, filterUnassignedTeacherDropdown.value);
+            showMessage('Slots created successfully. Generating timetable...', 'success');
+            updateButtonStates();
+            // NEW: Automatically generate timetable
+            // generateTimetable();
+        }
+        function createSlotsfromlocal(teachersDataToProcess) {
+            if (!teachersDataToProcess || teachersDataToProcess.length === 0) {
+                showMessage('No teacher data available to create slots. Please import data or use demo data.', 'error');
+                areSlotsCreated = false;
+                updateButtonStates();
+                return;
+            }
+
+            // Save state before generating new slots
+            saveStateForUndo();
+
+            teachers = {}; // Reset global teachers object
+            requiredSlots = []; // Reset global required slots
+
+            teachersDataToProcess.forEach(teacherData => {
+                // Initialize teacher object with base properties
+                teachers[teacherData.teacher_id] = {
+                    teacher_id: teacherData.teacher_id,
+                    teacherName: teacherData.teacherName,
+                    classInCharge: teacherData.classInCharge||"",
+                    subjects: teacherData.subjects,
+                    unavailable_slots: new Set(teacherData.unavailable_slots),
+                };
+            });
+
+            // Generate a 'required slot' for each subject hour with a unique slotNumber
+            teachersDataToProcess.forEach(teacherData => {
+                teacherData.subjects.forEach(subjectData => {
+                    const { name: subjectName, hours, class: className } = subjectData;
+                    for (let i = 0; i < hours; i++) {
+                        requiredSlots.push({
+                            class_name: className,
+                            subject: subjectName,
+                            teacher_id: teacherData.teacher_id,
+                            isClassCharge: className === teachers[teacherData.teacher_id].classInCharge,
                             slotNumber: i + 1 // Assign a unique number for each hour of the subject
                         });
                     }
@@ -2647,6 +2728,16 @@
                 }
 
                 teachers = loadedTeachers;
+                let teachersArray = Object.values(loadedTeachers);
+
+                // var loadedteachers = loadedTeachers.forEach(data=>{
+                //     console.log(teachersArray);
+                //     });
+                
+                
+
+                 console.log(teachersArray);
+                createSlotsfromlocal(teachersArray);
                 saveTeachersToLocalStorage();
                 console.log('Teacher data loaded from Firestore.');
                 return true;
@@ -4039,7 +4130,7 @@ function printClassReport() {
                     currentUnassignedSlots = currentUnassignedSlots; // Already populated by loadTimetableFromFirestore
                     teachers = teachers; // Already populated by loadTeachersDataFromFirestore
                     console.log(teachers);
-                    requiredSlots = requiredSlots; // Already populated by loadClassDataFromFirestore
+                    //requiredSlots = requiredSlots; // Already populated by loadClassDataFromFirestore
 
                     isDataImported = true;
                     areSlotsCreated = true;
@@ -4048,41 +4139,41 @@ function printClassReport() {
                     loadedSuccessfully = true;
                 } else {
                     console.log('No saved data found in cloud, attempting to load from local storage...');
-                    const savedTimetable = localStorage.getItem(LOCAL_STORAGE_KEY_TIMETABLE);
-                    const savedUnassigned = localStorage.getItem(LOCAL_STORAGE_KEY_UNASSIGNED);
-                    const savedSlots = localStorage.getItem(LOCAL_STORAGE_KEY_SLOTS);
-                    const savedteach =localStorage.getItem(LOCAL_STORAGE_KEY_TEACHERS);
-                    const savedTeachers =savedteach;
-                            console.log(
-                                "locale stor teachers :",savedTeachers);
-                    if (savedTimetable && savedUnassigned && savedTeachers && savedSlots) {
-                        currentTimetableData = JSON.parse(savedTimetable);
-                        // Ensure uniqueness when loading from local storage as well
-                        const loadedUnassigned = JSON.parse(savedUnassigned);
-                        currentUnassignedSlots = []; // Reset
-                        loadedUnassigned.forEach(slot => addUniqueUnassignedSlot(slot));
+                    // const savedTimetable = localStorage.getItem(LOCAL_STORAGE_KEY_TIMETABLE);
+                    // const savedUnassigned = localStorage.getItem(LOCAL_STORAGE_KEY_UNASSIGNED);
+                    // const savedSlots = localStorage.getItem(LOCAL_STORAGE_KEY_SLOTS);
+                    // const savedteach =localStorage.getItem(LOCAL_STORAGE_KEY_TEACHERS);
+                    // const savedTeachers =savedteach;
+                    //         console.log(
+                    //             "locale stor teachers :",savedTeachers);
+                    // if (savedTimetable && savedUnassigned && savedTeachers && savedSlots) {
+                    //     currentTimetableData = JSON.parse(savedTimetable);
+                    //     // Ensure uniqueness when loading from local storage as well
+                    //     const loadedUnassigned = JSON.parse(savedUnassigned);
+                    //     currentUnassignedSlots = []; // Reset
+                    //     loadedUnassigned.forEach(slot => addUniqueUnassignedSlot(slot));
 
-                        requiredSlots = JSON.parse(savedSlots);
+                    //     requiredSlots = JSON.parse(savedSlots);
                         
-                        const loadedTeachers = JSON.parse(savedTeachers);
-                        teachers = {}; // Reset global teachers object
-                        for (const id in loadedTeachers) {
-                            teachers[id] = {
-                                ...loadedTeachers[id],
-                                unavailable_slots: new Set(loadedTeachers[id].unavailable_slots), // Convert back to Set
-                            };
-                      }
+                    //     const loadedTeachers = JSON.parse(savedTeachers);
+                    //     teachers = {}; // Reset global teachers object
+                    //     for (const id in loadedTeachers) {
+                    //         teachers[id] = {
+                    //             ...loadedTeachers[id],
+                    //             unavailable_slots: new Set(loadedTeachers[id].unavailable_slots), // Convert back to Set
+                    //         };
+                    //   }
                         
-                        isDataImported = true;
-                        areSlotsCreated = true;
-                        showMessage('Timetable and data loaded from previous local session!', 'success');
-                        console.log('Loaded from local storage. requiredSlots length:', requiredSlots.length, 'currentUnassignedSlots length:', currentUnassignedSlots.length);
-                        loadedSuccessfully = true;
-                    } else {
-                        console.log('No saved data found in local storage either.');
-                        isDataImported = false; // Ensure these are false if no data
-                        areSlotsCreated = false;
-                    }
+                    //     isDataImported = true;
+                    //     areSlotsCreated = true;
+                    //     showMessage('Timetable and data loaded from previous local session!', 'success');
+                    //     console.log('Loaded from local storage. requiredSlots length:', requiredSlots.length, 'currentUnassignedSlots length:', currentUnassignedSlots.length);
+                    //     loadedSuccessfully = true;
+                    // } else {
+                    //     console.log('No saved data found in local storage either.');
+                    //     isDataImported = false; // Ensure these are false if no data
+                    //     areSlotsCreated = false;
+                    // }
                 }
             } catch (e) {
                 console.error('Error during data loading process:', e);
