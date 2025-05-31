@@ -2311,8 +2311,8 @@
             }
 
             areSlotsCreated = true;
-            // currentUnassignedSlots = []; // Initialize empty, then add unique slots
-            // requiredSlots.forEach(slot => addUniqueUnassignedSlot(slot)); // Add all required slots as unassigned initially
+            currentUnassignedSlots = []; // Initialize empty, then add unique slots
+            requiredSlots.forEach(slot => addUniqueUnassignedSlot(slot)); // Add all required slots as unassigned initially
 
             // localStorage.setItem(LOCAL_STORAGE_KEY_SLOTS, JSON.stringify(currentUnassignedSlots));
 
