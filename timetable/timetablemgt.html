@@ -768,6 +768,32 @@
                     </div>
                 </div>
 
+                <div id="timetable-modal" class="hidden fixed inset-0 z-10 overflow-y-auto">
+                    <div id="individual-timetable-display" class="hidden bg-white shadow-md rounded-lg p-4 mt-6">
+                    <h2 id="individual-timetable-title" class="text-2xl font-semibold text-gray-800 text-center mb-4">Selected Timetable</h2>
+                    <div class="table-container">
+                      <table id="individual-timetable-table-teacher" class="timetable-table">
+                          <thead>
+                              </thead>
+                          <tbody>
+                          </tbody>
+                      </table>
+                    </div>
+                </div>
+                <div id="individual-timetable-display" class="hidden bg-white shadow-md rounded-lg p-4 mt-6">
+                    <h2 id="individual-timetable-title" class="text-2xl font-semibold text-gray-800 text-center mb-4">Selected Timetable</h2>
+                    <div class="table-container">
+                      <table id="individual-timetable-table-class" class="timetable-table">
+                          <thead>
+                              </thead>
+                          <tbody>
+                          </tbody>
+                      </table>
+                    </div>
+                </div>
+
+                </div>
+
             </div>
         </div>
         
@@ -1014,8 +1040,8 @@
 
 
         // Unassigned slot filter elements
-        const filterUnassignedClassDropdown = document.getElementById('filter-unassigned-class-dropdown');
-        const filterUnassignedTeacherDropdown = document.getElementById('filter-unassigned-teacher-dropdown');
+        const filterUnassignedClassDropdown = classDropdownEditable;// document.getElementById('filter-unassigned-class-dropdown');
+        const filterUnassignedTeacherDropdown = teacherDropdownEditable; //document.getElementById('filter-unassigned-teacher-dropdown');
         const clearUnassignedFiltersButton = document.getElementById('clear-unassigned-filters-button');
 
 
@@ -1538,7 +1564,8 @@
             currentMainTimetableDisplay.id = className;
             renderTimetable(filteredTimetableData, 'class', className, individualTimetableTable, individualTimetableTitle, individualTimetableDisplay, true);
             // Hide full timetable and unassigned slots for this view
-             displayUnassignedSlots(currentUnassignedSlots, filterUnassignedClassDropdown.value, filterUnassignedTeacherDropdown.value); // Show unassigned slots for manual assignment
+            
+             displayUnassignedSlots(currentUnassignedSlots, filterUnassignedClassDropdown.value , filterUnassignedTeacherDropdown.value); // Show unassigned slots for manual assignment
            
             timetableContainer.classList.add('hidden');
             availableSlotsContainer.classList.add('hidden');
@@ -2311,9 +2338,20 @@
             }
 
             areSlotsCreated = true;
-            currentUnassignedSlots = []; // Initialize empty, then add unique slots
-            requiredSlots.forEach(slot => addUniqueUnassignedSlot(slot)); // Add all required slots as unassigned initially
+            // currentUnassignedSlots = []; // Initialize empty, then add unique slots
+            // requiredSlots.forEach(slot => addUniqueUnassignedSlot(slot)); // Add all required slots as unassigned initially
+            //  // NEW: Filter currentUnassignedSlots to ensure they are all in requiredSlots (redundant here, but good as a safeguard)
+            currentUnassignedSlots = currentUnassignedSlots.filter(unassignedSlot => {
+                return requiredSlots.some(reqSlot =>
+                    reqSlot.class_name === unassignedSlot.class_name &&
+                    reqSlot.subject === unassignedSlot.subject &&
+                    reqSlot.teacher_id === unassignedSlot.teacher_id &&
+                    reqSlot.slotNumber === unassignedSlot.slotNumber
+                );
+            });
 
+//             localStorage.setItem(LOCAL_STORAGE_KEY_SLOTS, JSON.stringify(currentUnassignedSlots));
+// // NEW: Save currentUnassignedSlots to Firestore
             // localStorage.setItem(LOCAL_STORAGE_KEY_SLOTS, JSON.stringify(currentUnassignedSlots));
 
             displayUnassignedSlots(currentUnassignedSlots, filterUnassignedClassDropdown.value, filterUnassignedTeacherDropdown.value);
@@ -2831,6 +2869,19 @@
                 }
                 currentTimetableData = loadedTimetable;
 
+                  for (const slotKey in currentTimetableData) {
+                        currentTimetableData[slotKey].forEach(assignment => {
+                            addUniqueUnassignedSlot({ // Use addUniqueUnassignedSlot
+                                class_name: assignment.class,
+                                subject: assignment.subject,
+                                teacher_id: assignment.teacher_id,
+                                isClassCharge: teachers[assignment.teacher_id]?.classInCharge === assignment.class,
+                                isLocked: false, // Unlocked when unassigned
+                                slotNumber: assignment.slotNumber // Ensure slotNumber is carried over
+                            });
+                        });
+                    }
+
                 // Load unassigned slots
                 const unassignedSlotsDocRef = doc(db, `${basePath}/${FIRESTORE_COLLECTION_UNASSIGNED_SLOTS_FIREBASE}`, 'allUnassignedSlots');
                 const unassignedSnap = await getDoc(unassignedSlotsDocRef);
@@ -2839,6 +2890,15 @@
                     const loadedUnassigned = JSON.parse(unassignedSnap.data().unassignedSlots);
                    // currentUnassignedSlots = []; // Reset
                     loadedUnassigned.forEach(slot => addUniqueUnassignedSlot(slot));
+                currentUnassignedSlots = currentUnassignedSlots.filter(unassignedSlot => {
+                return requiredSlots.some(reqSlot =>
+                    reqSlot.class_name === unassignedSlot.class_name &&
+                    reqSlot.subject === unassignedSlot.subject &&
+                    reqSlot.teacher_id === unassignedSlot.teacher_id &&
+                    reqSlot.slotNumber === unassignedSlot.slotNumber
+                );
+            });
+
                 } else {
                     currentUnassignedSlots = [];
                 }
@@ -2881,8 +2941,43 @@
                 if (unassignedSnap.exists()) {
                     // Ensure uniqueness when loading from Firestore as well
                     const loadedUnassigned = JSON.parse(unassignedSnap.data().unassignedSlots);
-                    currentUnassignedSlots = []; // Reset
+                    //currentUnassignedSlots = []; // Reset
                     loadedUnassigned.forEach(slot => addUniqueUnassignedSlot(slot));
+                    // Ensure all requiredSlots exist in either timetable or currentUnassignedSlots
+                    requiredSlots.forEach(reqSlot => {
+                        const isInTimetable = Object.values(currentTimetableData).some(slotList =>
+                            slotList.some(slot =>
+                                slot.class === reqSlot.class_name &&
+                                slot.subject === reqSlot.subject &&
+                                slot.teacher_id === reqSlot.teacher_id &&
+                                slot.slotNumber === reqSlot.slotNumber
+                            )
+                        );
+
+                        const isInUnassigned = currentUnassignedSlots.some(slot =>
+                            slot.class_name === reqSlot.class_name &&
+                            slot.subject === reqSlot.subject &&
+                            slot.teacher_id === reqSlot.teacher_id &&
+                            slot.slotNumber === reqSlot.slotNumber
+                        );
+
+                        if (!isInTimetable && !isInUnassigned) {
+                            addUniqueUnassignedSlot(reqSlot);
+                        }
+                    });
+
+                        // NEW: Filter currentUnassignedSlots to ensure they are all in requiredSlots (redundant here, but good as a safeguard)
+                    currentUnassignedSlots = currentUnassignedSlots.filter(unassignedSlot => {
+                        return requiredSlots.some(reqSlot =>
+                            reqSlot.class_name === unassignedSlot.class_name &&
+                            reqSlot.subject === unassignedSlot.subject &&
+                            reqSlot.teacher_id === unassignedSlot.teacher_id &&
+                            reqSlot.slotNumber === unassignedSlot.slotNumber
+                        );
+                    });
+
+            localStorage.setItem(LOCAL_STORAGE_KEY_SLOTS, JSON.stringify(currentUnassignedSlots));
+
                 } else {
                     currentUnassignedSlots = [];
                 }
