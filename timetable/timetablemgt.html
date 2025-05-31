@@ -1675,7 +1675,7 @@
                 } else {
                     consecutiveCount = 1;
                 }
-                if (consecutiveCount > 4) { // Max 3 consecutive, so >3 (i.e., 4 or more) is a conflict
+                if (consecutiveCount > 6) { // Max 3 consecutive, so >3 (i.e., 4 or more) is a conflict
                     return { isHardConflict: true, isSoftConflict: false, conflictingAssignment: null };
                 }
             }
