@@ -639,6 +639,58 @@
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
+.mini-popup {
+    background: #fff;
+    border: 1px solid #ccc;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    border-radius: 8px;
+    padding: 0;
+    transition: opacity 0.3s ease;
+}
+
+.mini-popup-header {
+    background: #f5f5f5;
+    cursor: move;
+    padding: 8px 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: bold;
+    border-bottom: 1px solid #ddd;
+}
+
+.popup-actions button {
+    background: none;
+    border: none;
+    font-size: 16px;
+    cursor: pointer;
+    margin-left: 6px;
+}
+
+.mini-popup-body {
+    padding: 10px;
+    overflow-x: auto;
+}
+
+.resize-handle {
+    position: absolute;
+    width: 15px;
+    height: 15px;
+    bottom: 0;
+    right: 0;
+    cursor: se-resize;
+    background: #ccc;
+    border-bottom-right-radius: 6px;
+}
+.mini-popup {
+    opacity: 0;
+    animation: fadeIn 0.3s forwards;
+}
+
+@keyframes fadeIn {
+    to { opacity: 1; }
+}
+
 
     </style>
 </head>
@@ -650,8 +702,11 @@
 
     <div class="container mx-auto p-4">
         <h1 class="text-3xl font-semibold text-gray-800 text-center mb-6">Advanced Timetable Generator</h1>
-        <p class="text-center text-gray-600 mb-4">Your User ID: <span id="user-id-display" class="font-bold text-blue-700">Loading...</span></p>
-
+        <p class="text-center text-gray-600 mb-4">Your User ID: <span id="user-id-display" class="font-bold text-blue-700">Loading...</span><span><button id="loadFromFirebaseBtn" class="btn btn-primary">
+  🔄 Load from Firebase
+</button></span>
+</p>
+        
         <div id="message-box" class="hidden"></div>
 
         <div class="tab-buttons">
@@ -815,6 +870,9 @@
   </table>
   </div>
 </div>
+
+
+
 
 
             </div>
@@ -1341,9 +1399,187 @@
 
   secondaryContainer.classList.remove('hidden');
 }
+let pinneds =0;
+function renderMiniTimetablePopup(type, id) {
+    // Close only unpinned popups
+    if(pinneds>2){
+    closeUnpinnedPopups();
+    pinneds=0;
+    }else{
+        pinneds++;
+    }
+    const popupId = `mini-popup-${type}-${id}`;
+    let popup = document.getElementById(popupId);
+
+    if (!popup) {
+        popup = document.createElement('div');
+        popup.id = popupId;
+        popup.className = 'mini-popup';
+        popup.dataset.pinned = 'true';
+
+        popup.innerHTML = `
+            <div class="mini-popup-header" style="cursor: move; background: #eee; padding: 5px;">
+                <strong>${type === "teacher_id" ? "Teacher" : "Class"}: ${id}</strong>
+                <button class="pin-btn" title="Pin" style="float:right;margin-left:4px;">📌</button>
+                <button class="close-mini-popup" title="Close" style="float:right;">&times;</button>
+            </div>
+            <div class="mini-popup-body">${renderMiniTimetableContent(type, id)}</div>
+            <div class="resize-handle" style="position:absolute;right:0;bottom:0;width:15px;height:15px;cursor:se-resize;"></div>
+        `;
+        document.body.appendChild(popup);
+
+        makeDraggable(popup);
+        makeResizable(popup);
+
+        // Handle close button
+        popup.querySelector('.close-mini-popup').addEventListener('click', () => popup.remove());
+
+        // Handle pin toggle
+        popup.querySelector('.pin-btn').addEventListener('click', () => {
+            const isPinned = popup.dataset.pinned === 'true';
+            popup.dataset.pinned = (!isPinned).toString();
+            popup.classList.toggle('pinned', !isPinned);
+        });
+    }
+
+    // Position to top area (e.g. centered horizontally at top of screen)
+    popup.style.position = 'fixed';
+    popup.style.top = '6px';
+    if(pinneds===1){
+        popup.style.left = '100px';
+    }else{
+        popup.style.right = `${100}px`;
+    }
+    
+    //popup.style.left = `${(window.innerWidth / 2) - 200}px`;
+    popup.style.width = '400px';
+    popup.style.zIndex = 1000;
+    popup.style.display = 'block';
+}
+
+
+// Optional: Call this periodically or on mouse leave to close popups
+function closeUnpinnedPopups() {
+    document.querySelectorAll('.mini-popup').forEach(popup => {
+        if (popup.dataset.pinned !== 'true') {
+            setTimeout(() => popup.remove(), 300);
+        }
+    });
+}
+
+
+function makeDraggable(popup) {
+    const header = popup.querySelector('.mini-popup-header');
+    let offsetX = 0, offsetY = 0, isDragging = false, hasMoved = false;
+
+    header.addEventListener('mousedown', (e) => {
+        const rect = popup.getBoundingClientRect();
+        offsetX = e.clientX - rect.left;
+        offsetY = e.clientY - rect.top;
+        isDragging = true;
+        hasMoved = false;
+
+        function onMouseMove(e) {
+            if (!isDragging) return;
+            hasMoved = true;
+            popup.style.left = `${e.clientX - offsetX}px`;
+            popup.style.top = `${e.clientY - offsetY}px`;
+            popup.style.position = 'fixed';
+        }
+
+        function onMouseUp() {
+            if (isDragging && hasMoved) {
+                popup.dataset.pinned = 'true';
+                popup.classList.add('pinned');
+            }
+            isDragging = false;
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        }
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    });
+}
+
+
+
+// Helper to make popup resizable
+function makeResizable(popup) {
+    const handle = popup.querySelector('.resize-handle');
+    let isResizing = false;
+
+    handle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        isResizing = true;
+
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const startWidth = popup.offsetWidth;
+        const startHeight = popup.offsetHeight;
+
+        function doDrag(e) {
+            if (!isResizing) return;
+            popup.style.width = `${startWidth + e.clientX - startX}px`;
+            popup.style.height = `${startHeight + e.clientY - startY}px`;
+        }
+
+        function stopDrag() {
+            isResizing = false;
+            document.removeEventListener('mousemove', doDrag);
+            document.removeEventListener('mouseup', stopDrag);
+        }
+
+        document.addEventListener('mousemove', doDrag);
+        document.addEventListener('mouseup', stopDrag);
+    });
+}
+
+function renderMiniTimetableContent(type, id) {
+  const dataToUse = {};
+
+  // Filter relevant slots for the teacher/subject/class etc.
+  for (const slotKey in currentTimetableData) {
+    const assignments = currentTimetableData[slotKey] || [];
+    const matches = assignments.filter(a => a && a[type] === id);
+    if (matches.length > 0) {
+      dataToUse[slotKey] = matches[0]; // Assuming only one per slot
+    }
+  }
+
+  // Start building the timetable HTML
+  let html = `<div style="margin-bottom:5px;"><strong>${type.toUpperCase()}: ${id}</strong></div>`;
+  html += `<table style="border-collapse: collapse; width: 100%; font-size: 13px;">
+            <thead>
+              <tr>
+                <th style="border: 1px solid #ccc; padding: 4px;">Day</th>`;
+
+  // Period headers
+  for (let p = 1; p <= NUM_PERIODS_PER_DAY; p++) {
+    html += `<th style="border: 1px solid #ccc; padding: 4px;">P${p}</th>`;
+  }
+  html += `</tr></thead><tbody>`;
+
+  // Rows per day
+  DAYS.forEach(day => {
+    html += `<tr><td style="border: 1px solid #ccc; padding: 4px;"><strong>${day}</strong></td>`;
+    for (let p = 1; p <= NUM_PERIODS_PER_DAY; p++) {
+      const slotKey = `${day}${p}`;
+      const assignment = dataToUse[slotKey];
+      html += `<td style="border: 1px solid #ccc; padding: 4px; text-align: center;">${assignment ? assignment.class : '-'}</td>`;
+    }
+    html += '</tr>';
+  });
+
+  html += `</tbody></table>`;
+  return html;
+}
+
+
 
         function renderTimetable(assignedData, viewType, viewId, targetTable, targetTitle, targetContainer, isEditable = true) {
             targetContainer.classList.remove('hidden'); // Ensure container is visible
+            document.getElementById('secondary-timetable-display').classList.add('hidden');
 
             const thead = targetTable.querySelector('thead');
             const tbody = targetTable.querySelector('tbody');
@@ -1432,7 +1668,7 @@
                 });
 
             } else if (viewType === 'teacher') {
-                targetTable.classList.add('individual-view');
+               targetTable.classList.add('individual-view');
                 const teacher = teachers[viewId];
                 console.log(teacher);
                 targetTitle.textContent = `Timetable for ${teacher?.teacherName || 'N/A'}-${teacher?.classInCharge} (${viewId}) ${isEditable ? '(Editable)' : '(Read-Only)'}`;
@@ -1465,12 +1701,30 @@
                                     const assignmentInCell = currentTimetableData[slotKey]?.find(a => a && a.teacher_id === viewId);
                                    console.log(assignmentInCell);
                                     if (assignmentInCell) {
-                                        renderSecondaryMiniTimetable('class',assignmentInCell?.class);
+                                       // renderSecondaryMiniTimetable('class',assignmentInCell?.class);
                                         selectSlotForMove(assignmentInCell, { type: 'timetable-cell', element: cell, slotKey: slotKey, teacherId: viewId, class: assignmentInCell?.class, subject: assignmentInCell?.subject, slotNumber: assignmentInCell?.slotNumber }, e);
                                     }
                                 }
                             });
                             cell.addEventListener('contextmenu', handleContextMenu); // Add context menu listener
+                            // 👉 Show mini timetable on hover
+                       let hoverTimer;
+
+                        cell.addEventListener('mouseenter', (e) => {
+                            hoverTimer = setTimeout(() => {
+                                
+                                const assignment = currentTimetableData[slotKey]?.find(a => a && a.teacher_id === viewId);
+                                if (assignment && assignment.class) {
+                                    renderMiniTimetablePopup("class", assignment.class , e.target);
+                                    renderMiniTimetablePopup("teacher_id", assignment.teacher_id, e.target);
+                                }
+                            }, 1000); // 1 second delay
+                        });
+
+                        cell.addEventListener('mouseleave', () => {
+                            clearTimeout(hoverTimer); // Cancel if mouse leaves early
+                        });
+                        
                         }
 
                         const assignmentsInThisPeriod = assignedData[slotKey] || [];
@@ -1496,6 +1750,7 @@
                         }
                     }
                 });
+
 
             } else if (viewType === 'class') {
                 targetTable.classList.add('individual-view');
@@ -1529,11 +1784,33 @@
                                     if (assignmentInCell) {
                                         
                                         selectSlotForMove(assignmentInCell, { type: 'timetable-cell', element: cell, slotKey: slotKey, class: viewId, teacherId: assignmentInCell?.teacher_id, subject: assignmentInCell?.subject, slotNumber: assignmentInCell?.slotNumber }, e);
-                                        renderSecondaryMiniTimetable('teacher_id', assignmentInCell.teacher_id);
+                                        //renderSecondaryMiniTimetable('teacher_id', assignmentInCell.teacher_id);
+                                        
                                     }
                                 }
                             });
                             cell.addEventListener('contextmenu', handleContextMenu); // Add context menu listener
+                        
+                            // 👉 Show mini timetable on hover
+                       let hoverTimer;
+
+                        cell.addEventListener('mouseenter', (e) => {
+                            hoverTimer = setTimeout(() => {
+                                
+                                const assignment = currentTimetableData[slotKey]?.find(a => a && a.class === viewId);
+                                if (assignment && assignment.teacher_id) {
+                                    renderMiniTimetablePopup("teacher_id", assignment.teacher_id, e.target);
+                                    renderMiniTimetablePopup("class", assignment.class , e.target);
+                                
+                                }
+                            }, 1000); // 1 second delay
+                        });
+
+                        cell.addEventListener('mouseleave', () => {
+                            clearTimeout(hoverTimer); // Cancel if mouse leaves early
+                        });
+                        
+                        
                         }
 
                         const assignmentsInThisPeriod = assignedData[slotKey] || [];
@@ -1564,7 +1841,6 @@
         function displayFullTimetable() {
             currentMainTimetableDisplay.type = 'full';
             currentMainTimetableDisplay.id = null;
-            document.getElementById('secondary-timetable-display').classList.add('hidden');
             renderTimetable(currentTimetableData, 'full', null, timetableTable, timetableTitle, timetableContainer, true);
             displayUnassignedSlots(currentUnassignedSlots, filterUnassignedClassDropdown.value, filterUnassignedTeacherDropdown.value); // Show unassigned slots for manual assignment
             clearHighlights(); // Clear highlights when switching view
@@ -4294,108 +4570,119 @@ function printClassReport() {
         /**
          * Loads saved data from Local Storage or Firebase on page load.
          */
-        async function loadSavedData() {
-            showLoading('Loading saved data...');
-            // await firebaseReadyPromise; // Ensure Firebase is ready
-            var localTime = localStorage.getItem("timetableupdated");
-            let loadedSuccessfully = false;
-            try {
-                let loadedFromCloud = false;
-                if (db && userId) { // Only attempt cloud load if Firebase is ready and user is authenticated
-                    // Load all necessary data from cloud
-                    const teachersLoaded = await loadTeachersDataFromFirestore();
-                    const classesLoaded = await loadClassDataFromFirestore();
-                    const timetableLoaded = await loadTimetableFromFirestore();
+        async function loadDataFromFirebaseIfNewer(localTime) {
+    let cloudTime;
+    let loaded = false;
 
-                    loadedFromCloud = teachersLoaded && classesLoaded && timetableLoaded;
-                }
+    try {
+        const timetableTimeDocRef = doc( db,`${basePath}/${FIRESTORE_COLLECTION_UNASSIGNED_SLOTS_FIREBASE}`,'updatedtime');
+                //const querySnapshot = await getDoc(timetableTimeDocRef);
+                const timetabletimeDocSnap = await getDoc(timetableTimeDocRef);
+                var fireBaseTime = timetabletimeDocSnap.data();
+                var localTime = localStorage.getItem("timetableupdated");
+                cloudTime=fireBaseTime.timestamp;
 
-                if (loadedFromCloud) {
-                    currentTimetableData = currentTimetableData; // Already populated by loadTimetableFromFirestore
-                    currentUnassignedSlots = currentUnassignedSlots; // Already populated by loadTimetableFromFirestore
-                    teachers = teachers; // Already populated by loadTeachersDataFromFirestore
-                    console.log(teachers);
-                    //requiredSlots = requiredSlots; // Already populated by loadClassDataFromFirestore
+        
+        if (!cloudTime || !localTime || new Date(cloudTime) > new Date(localTime)) {
+            const teachersLoaded = await loadTeachersDataFromFirestore();
+            const classesLoaded = await loadClassDataFromFirestore();
+            const timetableLoaded = await loadTimetableFromFirestore();
 
-                    isDataImported = true;
-                    areSlotsCreated = true;
-                    showMessage('Timetable and data loaded from cloud!', 'success');
-                    console.log('Loaded from Firebase. requiredSlots length:', requiredSlots.length, 'currentUnassignedSlots length:', currentUnassignedSlots.length);
-                    loadedSuccessfully = true;
-                } else {
-                    console.log('No saved data found in cloud, attempting to load from local storage...');
-                    // const savedTimetable = localStorage.getItem(LOCAL_STORAGE_KEY_TIMETABLE);
-                    // const savedUnassigned = localStorage.getItem(LOCAL_STORAGE_KEY_UNASSIGNED);
-                    // const savedSlots = localStorage.getItem(LOCAL_STORAGE_KEY_SLOTS);
-                    // const savedteach =localStorage.getItem(LOCAL_STORAGE_KEY_TEACHERS);
-                    // const savedTeachers =savedteach;
-                    //         console.log(
-                    //             "locale stor teachers :",savedTeachers);
-                    // if (savedTimetable && savedUnassigned && savedTeachers && savedSlots) {
-                    //     currentTimetableData = JSON.parse(savedTimetable);
-                    //     // Ensure uniqueness when loading from local storage as well
-                    //     const loadedUnassigned = JSON.parse(savedUnassigned);
-                    //     currentUnassignedSlots = []; // Reset
-                    //     loadedUnassigned.forEach(slot => addUniqueUnassignedSlot(slot));
-
-                    //     requiredSlots = JSON.parse(savedSlots);
-                        
-                    //     const loadedTeachers = JSON.parse(savedTeachers);
-                    //     teachers = {}; // Reset global teachers object
-                    //     for (const id in loadedTeachers) {
-                    //         teachers[id] = {
-                    //             ...loadedTeachers[id],
-                    //             unavailable_slots: new Set(loadedTeachers[id].unavailable_slots), // Convert back to Set
-                    //         };
-                    //   }
-                        
-                    //     isDataImported = true;
-                    //     areSlotsCreated = true;
-                    //     showMessage('Timetable and data loaded from previous local session!', 'success');
-                    //     console.log('Loaded from local storage. requiredSlots length:', requiredSlots.length, 'currentUnassignedSlots length:', currentUnassignedSlots.length);
-                    //     loadedSuccessfully = true;
-                    // } else {
-                    //     console.log('No saved data found in local storage either.');
-                    //     isDataImported = false; // Ensure these are false if no data
-                    //     areSlotsCreated = false;
-                    // }
-                }
-            } catch (e) {
-                console.error('Error during data loading process:', e);
-                showMessage('Failed to load timetable. Data might be corrupted or inaccessible.', 'error');
-                // Clear any potentially corrupted local data
-                localStorage.removeItem(LOCAL_STORAGE_KEY_TIMETABLE);
-                localStorage.removeItem(LOCAL_STORAGE_KEY_UNASSIGNED);
-                localStorage.removeItem(LOCAL_STORAGE_KEY_TEACHERS);
-                localStorage.removeItem(LOCAL_STORAGE_KEY_SLOTS);
-                loadedSuccessfully = false;
-                isDataImported = false;
-                areSlotsCreated = false;
-            } finally {
-                // Common UI updates after data is loaded (from either source or failed)
-                if (loadedSuccessfully) {
-                    populateDropdowns();
-                    populateUnassignedFilterDropdowns();
-                    if (Object.keys(currentTimetableData).length > 0) {
-                        // Automatically switch to management tab and display full timetable if data exists
-                        document.querySelector('.tab-button[data-tab="timetable-management-tab"]').click();
-                        displayFullTimetable();
-                    }
-                    // Initial save of state after loading, so undo/redo are correctly initialized
-                    saveStateForUndo();
-                } else {
-                    // If no data loaded at all, ensure UI is clean
-                    timetableContainer.classList.add('hidden');
-                    individualTimetableDisplay.classList.add('hidden');
-                    availableSlotsContainer.classList.add('hidden');
-                    // Ensure dropdowns are cleared if no data
-                    //populateDropdowns();
-                    populateUnassignedFilterDropdowns();
-                }
-                hideLoading();
-                updateButtonStates(); // Crucial to update button states based on final `areSlotsCreated`
+            if (teachersLoaded && classesLoaded && timetableLoaded) {
+                isDataImported = true;
+                areSlotsCreated = true;
+                showMessage('Timetable and data loaded from cloud!', 'success');
+                console.log('Loaded from Firebase');
+                loaded = true;
             }
         }
+    } catch (e) {
+        console.error('Error checking Firebase timestamp or loading data:', e);
+    }
+
+    return loaded;
+}
+
+function loadDataFromLocalStorage() {
+    const savedTimetable = localStorage.getItem(LOCAL_STORAGE_KEY_TIMETABLE);
+    const savedUnassigned = localStorage.getItem(LOCAL_STORAGE_KEY_UNASSIGNED);
+    const savedSlots = localStorage.getItem(LOCAL_STORAGE_KEY_SLOTS);
+    const savedTeachers = localStorage.getItem(LOCAL_STORAGE_KEY_TEACHERS);
+
+    if (savedTimetable && savedUnassigned && savedTeachers && savedSlots) {
+        currentTimetableData = JSON.parse(savedTimetable);
+        currentUnassignedSlots = [];
+        JSON.parse(savedUnassigned).forEach(slot => addUniqueUnassignedSlot(slot));
+
+        requiredSlots = JSON.parse(savedSlots);
+
+        const loadedTeachers = JSON.parse(savedTeachers);
+        teachers = {};
+        for (const id in loadedTeachers) {
+            teachers[id] = {
+                ...loadedTeachers[id],
+                unavailable_slots: new Set(loadedTeachers[id].unavailable_slots),
+            };
+        }
+
+        isDataImported = true;
+        areSlotsCreated = true;
+        showMessage('Timetable and data loaded from local storage.', 'success');
+        console.log('Loaded from Local Storage');
+        return true;
+    }
+    return false;
+}
+
+async function loadSavedData() {
+    showLoading('Loading saved data...');
+    const localTime = localStorage.getItem("timetableupdated");
+    let loadedSuccessfully = false;
+
+    try {
+        if (db && userId) {
+            loadedSuccessfully = await loadDataFromFirebaseIfNewer(localTime);
+        }
+
+        if (!loadedSuccessfully) {
+            loadedSuccessfully = loadDataFromLocalStorage();
+        }
+
+        if (!loadedSuccessfully) {
+            isDataImported = false;
+            areSlotsCreated = false;
+            showMessage('No saved timetable found in cloud or local.', 'info');
+        }
+    } catch (e) {
+        console.error('Error during loadSavedData():', e);
+        showMessage('Failed to load timetable. Data might be corrupted or inaccessible.', 'error');
+        localStorage.removeItem(LOCAL_STORAGE_KEY_TIMETABLE);
+        localStorage.removeItem(LOCAL_STORAGE_KEY_UNASSIGNED);
+        localStorage.removeItem(LOCAL_STORAGE_KEY_TEACHERS);
+        localStorage.removeItem(LOCAL_STORAGE_KEY_SLOTS);
+        isDataImported = false;
+        areSlotsCreated = false;
+    } finally {
+        if (loadedSuccessfully) {
+            populateDropdowns();
+            populateUnassignedFilterDropdowns();
+            if (Object.keys(currentTimetableData).length > 0) {
+                document.querySelector('.tab-button[data-tab="timetable-management-tab"]').click();
+                displayFullTimetable();
+            }
+            saveStateForUndo();
+        } else {
+            timetableContainer.classList.add('hidden');
+            individualTimetableDisplay.classList.add('hidden');
+            availableSlotsContainer.classList.add('hidden');
+            populateUnassignedFilterDropdowns();
+        }
+
+        hideLoading();
+        updateButtonStates();
+    }
+}
+
 
 
         // --- Demo Data ---
@@ -4478,6 +4765,33 @@ function printClassReport() {
             // Removed the direct click here as loadSavedData now handles it for loaded states.
             // If no data is loaded, the tab will default to 'timetable-management-tab' due to initial HTML class.
         });
+
+        document.getElementById("loadFromFirebaseBtn").addEventListener("click", async () => {
+    showLoading("Loading data from Firebase...");
+
+    try {
+        const teachersLoaded = await loadTeachersDataFromFirestore();
+        const classesLoaded = await loadClassDataFromFirestore();
+        const timetableLoaded = await loadTimetableFromFirestore();
+
+        if (teachersLoaded && classesLoaded && timetableLoaded) {
+            showMessage("Timetable loaded successfully from Firebase!", "success");
+            displayFullTimetable();
+            populateDropdowns();
+            populateUnassignedFilterDropdowns();
+            saveStateForUndo();
+        } else {
+            showMessage("Some data failed to load from Firebase.", "warning");
+        }
+    } catch (err) {
+        console.error("Error loading from Firebase:", err);
+        showMessage("Failed to load from Firebase.", "error");
+    } finally {
+        hideLoading();
+        updateButtonStates();
+    }
+});
+
 
     </script>
 </body>
