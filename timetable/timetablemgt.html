@@ -1399,42 +1399,42 @@
 
   secondaryContainer.classList.remove('hidden');
 }
-let pinneds =0;
-function renderMiniTimetablePopup(type, id) {
-    // Close only unpinned popups
-    if(pinneds>2){
-    closeUnpinnedPopups();
-    pinneds=0;
-    }else{
-        pinneds++;
-    }
+
+function renderMiniTimetablePopup(type, id,name) {
     const popupId = `mini-popup-${type}-${id}`;
     let popup = document.getElementById(popupId);
+
+    // Close older unpinned popups if more than 2 are open
+    const unpinnedPopups = Array.from(document.querySelectorAll('.mini-popup'))
+        .filter(p => p.dataset.pinned !== 'true');
+    
+    if (unpinnedPopups.length >= 2) {
+        unpinnedPopups.forEach(p => p.remove());
+    }
 
     if (!popup) {
         popup = document.createElement('div');
         popup.id = popupId;
         popup.className = 'mini-popup';
-        popup.dataset.pinned = 'true';
+        popup.dataset.pinned = 'false';
 
         popup.innerHTML = `
             <div class="mini-popup-header" style="cursor: move; background: #eee; padding: 5px;">
-                <strong>${type === "teacher_id" ? "Teacher" : "Class"}: ${id}</strong>
+                <strong>${type === "teacher_id" ? "Teacher"+name : "Class"+id}</strong>
                 <button class="pin-btn" title="Pin" style="float:right;margin-left:4px;">📌</button>
                 <button class="close-mini-popup" title="Close" style="float:right;">&times;</button>
             </div>
-            <div class="mini-popup-body">${renderMiniTimetableContent(type, id)}</div>
+            <div class="mini-popup-body">${renderMiniTimetableContent(type, id,name)}</div>
             <div class="resize-handle" style="position:absolute;right:0;bottom:0;width:15px;height:15px;cursor:se-resize;"></div>
         `;
+
         document.body.appendChild(popup);
 
         makeDraggable(popup);
         makeResizable(popup);
 
-        // Handle close button
         popup.querySelector('.close-mini-popup').addEventListener('click', () => popup.remove());
 
-        // Handle pin toggle
         popup.querySelector('.pin-btn').addEventListener('click', () => {
             const isPinned = popup.dataset.pinned === 'true';
             popup.dataset.pinned = (!isPinned).toString();
@@ -1442,16 +1442,12 @@ function renderMiniTimetablePopup(type, id) {
         });
     }
 
-    // Position to top area (e.g. centered horizontally at top of screen)
+    // Position left/right based on current unpinned count
+    const positionOffset = document.querySelectorAll('.mini-popup').length % 2 === 0 ? '100px' : '';
     popup.style.position = 'fixed';
     popup.style.top = '6px';
-    if(pinneds===1){
-        popup.style.left = '100px';
-    }else{
-        popup.style.right = `${100}px`;
-    }
-    
-    //popup.style.left = `${(window.innerWidth / 2) - 200}px`;
+    popup.style.left = positionOffset;
+    popup.style.right = positionOffset === '' ? '100px' : '';
     popup.style.width = '400px';
     popup.style.zIndex = 1000;
     popup.style.display = 'block';
@@ -1535,7 +1531,7 @@ function makeResizable(popup) {
     });
 }
 
-function renderMiniTimetableContent(type, id) {
+function renderMiniTimetableContent(type, id,name) {
   const dataToUse = {};
 
   // Filter relevant slots for the teacher/subject/class etc.
@@ -1548,7 +1544,7 @@ function renderMiniTimetableContent(type, id) {
   }
 
   // Start building the timetable HTML
-  let html = `<div style="margin-bottom:5px;"><strong>${type.toUpperCase()}: ${id}</strong></div>`;
+  let html = ``;//<div style="margin-bottom:5px;"><strong>${type.toUpperCase()}: ${type==="class"? id:name}</strong></div>
   html += `<table style="border-collapse: collapse; width: 100%; font-size: 13px;">
             <thead>
               <tr>
@@ -1566,7 +1562,7 @@ function renderMiniTimetableContent(type, id) {
     for (let p = 1; p <= NUM_PERIODS_PER_DAY; p++) {
       const slotKey = `${day}${p}`;
       const assignment = dataToUse[slotKey];
-      html += `<td style="border: 1px solid #ccc; padding: 4px; text-align: center;">${assignment ? assignment.class : '-'}</td>`;
+      html += `<td style="border: 1px solid #ccc; padding: 4px; text-align: center;">   ${type==="class"? assignment ?  assignment.teacherName : '-':assignment ?  assignment.class : '-'}</td>`;
     }
     html += '</tr>';
   });
@@ -1701,7 +1697,7 @@ function renderMiniTimetableContent(type, id) {
                                     const assignmentInCell = currentTimetableData[slotKey]?.find(a => a && a.teacher_id === viewId);
                                    console.log(assignmentInCell);
                                     if (assignmentInCell) {
-                                       // renderSecondaryMiniTimetable('class',assignmentInCell?.class);
+                                        renderSecondaryMiniTimetable('class',assignmentInCell?.class);
                                         selectSlotForMove(assignmentInCell, { type: 'timetable-cell', element: cell, slotKey: slotKey, teacherId: viewId, class: assignmentInCell?.class, subject: assignmentInCell?.subject, slotNumber: assignmentInCell?.slotNumber }, e);
                                     }
                                 }
@@ -1716,7 +1712,7 @@ function renderMiniTimetableContent(type, id) {
                                 const assignment = currentTimetableData[slotKey]?.find(a => a && a.teacher_id === viewId);
                                 if (assignment && assignment.class) {
                                     renderMiniTimetablePopup("class", assignment.class , e.target);
-                                    renderMiniTimetablePopup("teacher_id", assignment.teacher_id, e.target);
+                                    renderMiniTimetablePopup("teacher_id", assignment.teacher_id, assignment.teacherName,e.target);
                                 }
                             }, 1000); // 1 second delay
                         });
@@ -1784,7 +1780,7 @@ function renderMiniTimetableContent(type, id) {
                                     if (assignmentInCell) {
                                         
                                         selectSlotForMove(assignmentInCell, { type: 'timetable-cell', element: cell, slotKey: slotKey, class: viewId, teacherId: assignmentInCell?.teacher_id, subject: assignmentInCell?.subject, slotNumber: assignmentInCell?.slotNumber }, e);
-                                        //renderSecondaryMiniTimetable('teacher_id', assignmentInCell.teacher_id);
+                                        renderSecondaryMiniTimetable('teacher_id', assignmentInCell.teacher_id);
                                         
                                     }
                                 }
@@ -1799,7 +1795,7 @@ function renderMiniTimetableContent(type, id) {
                                 
                                 const assignment = currentTimetableData[slotKey]?.find(a => a && a.class === viewId);
                                 if (assignment && assignment.teacher_id) {
-                                    renderMiniTimetablePopup("teacher_id", assignment.teacher_id, e.target);
+                                    renderMiniTimetablePopup("teacher_id", assignment.teacher_id,assignment.teacherName, e.target);
                                     renderMiniTimetablePopup("class", assignment.class , e.target);
                                 
                                 }
@@ -4231,12 +4227,10 @@ printWindow.document.write(`</body></html>`);
                             background-color: #f0f0f0;
                         }
                         @media print {
-                            body { margin: 0; }
-                            .timetable-table { page-break-after: always; } /* Each table on a new page */
-                            .timetable-table:last-of-type { page-break-after: auto; } /* No page break after last table */
-                            .timetable-table th, .timetable-table td { font-size: 8pt; } /* Even smaller for print */
-                            h1 { font-size: 14pt; }
-                            h2 { font-size: 12pt; }
+                           .page-block { page-break-after: always; }
+                h1 { font-size: 14pt; }
+                h2 { font-size: 12pt; }
+                .timetable-table th, .timetable-table td { font-size: 8pt; }
                         }
                     </style>
                 </head>
@@ -4246,9 +4240,21 @@ printWindow.document.write(`</body></html>`);
 
             // Add all class timetables
             const uniqueClasses = Array.from(new Set(requiredSlots.map(s => s.class_name))).sort();
-            uniqueClasses.forEach(className => {
-                printWindow.document.write(getClassTimetableHtml(className, currentTimetableData));
-            });
+            
+            // Write 2 timetables per block
+for (let i = 0; i < uniqueClasses.length; i += 2) {
+    printWindow.document.write(`<div class="page-block">`);
+
+    for (let j = i; j < i + 2 && j < uniqueClasses.length; j++) {
+        const className = uniqueClasses[j];
+        printWindow.document.write(`<div class="teacher-container">`);
+        printWindow.document.write(getClassTimetableHtml(className, currentTimetableData));
+        printWindow.document.write(`</div>`);
+    }
+
+    printWindow.document.write(`</div>`);
+}
+
 
             printWindow.document.write(`</body></html>`);
             printWindow.document.close();
