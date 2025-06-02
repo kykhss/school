@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voting Machine</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <style>
+        /* Custom styles for Inter font and general body layout */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8f9fa; /* Light background */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow-x: hidden; /* Prevent horizontal scroll */
+        }
+        /* Ensure the main container takes full width on small screens */
+        .container {
+            max-width: 800px;
+            width: 100%;
+            padding: 1rem; /* Add some padding on smaller screens */
+        }
+        /* Custom styles for candidate cards and selection */
+        .candidate-card {
+            cursor: pointer;
+            transition: all 0.3s ease-in-out;
+            @apply rounded-xl shadow-md hover:shadow-lg hover:-translate-y-1;
+        }
+        .candidate-card.selected {
+            @apply border-4 border-blue-600 bg-blue-50 shadow-xl;
+        }
+        .candidate-photo {
+            @apply w-24 h-24 object-cover rounded-full mx-auto block mb-3;
+        }
+        /* Custom styles for the modal backdrop blur */
+        #passwordModal.modal {
+            backdrop-filter: blur(5px);
+        }
+        /* Alert message styling */
+        .alert-message {
+            @apply rounded-lg shadow-md p-4 mb-2 flex items-center;
+        }
+        .alert-message .icon {
+            @apply mr-3 text-lg;
+        }
+        /* Loading overlay styling */
+        .loading-overlay {
+            @apply fixed inset-0 bg-white bg-opacity-80 flex flex-col justify-center items-center z-[9999];
+        }
+        .spinner-border {
+            @apply w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin;
+        }
+        .loading-text {
+            @apply mt-4 text-lg text-gray-700;
+        }
+        /* Progress bar styling */
+        .progress-bar-container {
+            @apply w-full bg-gray-200 rounded-full h-3 mb-6 overflow-hidden;
+        }
+        .progress-bar {
+            @apply bg-blue-500 h-full rounded-full transition-all duration-500 ease-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+        <div class="spinner-border" role="status">
+            <span class="sr-only">Loading...</span>
+        </div>
+        <p class="loading-text" id="loadingText">Initializing Firebase...</p>
+    </div>
+
+    <div class="fixed top-4 right-4 z-50 space-y-2" id="alertContainer"></div>
+
+    <div class="container bg-white p-6 rounded-xl shadow-lg">
+        <h1 class="text-center text-3xl font-bold text-blue-600 mb-4">Voting Machine</h1>
+        <p class="text-center text-gray-600 mb-6">Current User ID: <span id="currentUserId" class="font-mono text-sm bg-gray-200 px-2 py-1 rounded">Loading...</span></p>
+
+        <div class="progress-bar-container" id="progressBarContainer" style="display: none;">
+            <div class="progress-bar" id="progressBar" style="width: 0%;"></div>
+        </div>
+
+        <div id="machineLoginView" class="space-y-4">
+            <div class="bg-blue-600 text-white p-4 rounded-t-xl font-bold text-lg">Machine Login</div>
+            <div class="p-4 space-y-4">
+                <div>
+                    <label for="machineId" class="block text-gray-700 text-sm font-bold mb-2">Voting Machine ID</label>
+                    <input type="text" class="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" id="machineId" placeholder="Enter machine ID">
+                    <p class="text-red-500 text-xs italic mt-1" id="machineIdError"></p>
+                </div>
+                <div>
+                    <label for="machinePassword" class="block text-gray-700 text-sm font-bold mb-2">Password</label>
+                    <input type="password" class="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 mb-3 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" id="machinePassword" placeholder="Enter password">
+                    <p class="text-red-500 text-xs italic mt-1" id="machinePasswordError"></p>
+                </div>
+                <button type="button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg w-full transition duration-300" id="machineLoginBtn">Login</button>
+            </div>
+        </div>
+
+        <div id="waitingForReadyView" class="text-center mt-8" style="display: none;">
+            <div class="bg-white p-6 rounded-xl shadow-md">
+                <h1 class="text-3xl font-bold text-blue-500 mb-4">Waiting for Booth Invigilator...</h1>
+                <p class="text-gray-700 mb-4">This machine is currently <span class="inline-block bg-gray-500 text-white text-sm font-semibold px-3 py-1 rounded-full" id="machineStatusText">Inactive</span>.</p>
+                <p class="text-gray-600 mb-6" id="readyInstructionText">Please wait for the booth invigilator to set this machine to "Ready".</p>
+                <div class="spinner-border mx-auto mb-6" id="waitingSpinner">
+                    <span class="sr-only">Loading...</span>
+                </div>
+                <button type="button" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg text-lg transition duration-300 hidden" id="startVotingButton">
+                    <i class="fas fa-play-circle mr-2"></i> Click here to Vote
+                </button>
+            </div>
+        </div>
+
+        <div id="postCandidateSelectionView" class="space-y-6" style="display: none;">
+            <div class="bg-blue-600 text-white p-4 rounded-xl text-center">
+                <h2 class="text-2xl font-bold" id="currentPostTitle"></h2>
+                <p class="text-blue-100 mt-1" id="currentPostDescription"></p>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4" id="candidatesContainer">
+                </div>
+
+            <div class="flex flex-col sm:flex-row justify-center items-center gap-4 mt-6">
+                <button id="notaButton" class="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-lg text-lg transition duration-300 w-full sm:w-auto">
+                    Vote for NOTA (None of the Above)
+                </button>
+            </div>
+        </div>
+
+        <div id="completionView" class="text-center mt-8" style="display: none;">
+            <div class="bg-white p-6 rounded-xl shadow-md">
+                <h1 class="text-3xl font-bold text-green-600 mb-4">Thank You!</h1>
+                <p class="text-gray-700 mb-6">You have completed your vote for this session.</p>
+                <div class="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 rounded-lg mb-6" role="alert">
+                    <p class="font-bold">Important:</p>
+                    <p>Please inform the invigilator that you have finished voting.</p>
+                </div>
+                <button type="button" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg text-lg transition duration-300" id="invigilatorAuthBtn">
+                    <i class="fas fa-user-shield mr-2"></i> Invigilator Authentication
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="fixed inset-0 bg-gray-900 bg-opacity-50 flex justify-center items-center hidden" id="passwordModal" style="z-index: 1000;">
+        <div class="bg-white p-6 rounded-xl shadow-xl w-11/12 max-w-md">
+            <div class="flex justify-between items-center mb-4">
+                <h5 class="text-xl font-bold">Invigilator Authentication</h5>
+                <button type="button" class="text-gray-400 hover:text-gray-600" onclick="document.getElementById('passwordModal').classList.add('hidden')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="mb-4">
+                <p class="text-gray-700 mb-2">Please enter the invigilator password to proceed:</p>
+                <input type="password" class="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" id="invigilatorPassword" placeholder="Password">
+                <p class="text-red-500 text-xs italic mt-1" id="passwordError"></p>
+            </div>
+            <div class="flex justify-end">
+                <button type="button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300" id="submitPassword">Submit</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="voting_machine.js"></script>
+</body>
+</html>
