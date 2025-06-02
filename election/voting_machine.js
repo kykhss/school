@@ -174,10 +174,11 @@ function updateViewBasedOnStatus() {
 
     switch (status) {
         case 'inactive':
-            waitingForReadyView.style.display = 'block';
-            readyInstructionText.textContent = 'Please wait for the booth invigilator to set this machine to "Ready".';
-            machineStatusText.classList.remove('bg-green-500'); // Ensure correct badge color
-            machineStatusText.classList.add('bg-gray-500');
+            // waitingForReadyView.style.display = 'block';
+            // readyInstructionText.textContent = 'Please wait for the booth invigilator to set this machine to "Ready".';
+            // machineStatusText.classList.remove('bg-green-500'); // Ensure correct badge color
+            // machineStatusText.classList.add('bg-gray-500');
+            machineLoginView.style.display = 'block'; // Fallback
             break;
         case 'ready':
             passwordModal.classList.add('hidden'); // Hide the modal
@@ -311,7 +312,7 @@ machineLoginBtn.addEventListener('click', async () => {
             const machineData = machineDoc.data();
 
             // --- Session Management: Prevent duplicate logins ---
-            const newSessionId = "iouytressdfghj";//crypto.randomUUID()||"jchfvhbjnklm";
+            const newSessionId = crypto.randomUUID()||"jchfvhbjnklm";
             if (machineData.currentSessionId && machineData.currentSessionId !== newSessionId && machineData.status !== 'inactive' && machineData.status !== 'completed') {
                 showAlert('This machine is already active elsewhere. Please contact invigilator.', 'danger');
                 showLoading(false);
