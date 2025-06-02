@@ -180,6 +180,7 @@ function updateViewBasedOnStatus() {
             machineStatusText.classList.add('bg-gray-500');
             break;
         case 'ready':
+            passwordModal.classList.add('hidden'); // Hide the modal
             waitingForReadyView.style.display = 'block';
             readyInstructionText.textContent = 'This machine is ready for voting.';
             waitingSpinner.style.display = 'none'; // Hide spinner
@@ -203,11 +204,25 @@ function updateViewBasedOnStatus() {
 // --- Firebase Initialization and Authentication ---
 
 window.onload = async function() {
+    
     showLoading(true, 'Initializing Firebase...');
     try {
         app = initializeApp(firebaseConfig);
         db = getFirestore(app); // Initialize db immediately
         auth = getAuth(app);
+        const storedMachineData = localStorage.getItem('votingMachineSession');
+                if (storedMachineData) {
+                    loggedInMachineData = JSON.parse(storedMachineData);
+                    currentSessionId = localStorage.getItem('currentSessionId');
+                    if (loggedInMachineData && loggedInMachineData.docId) {
+                        listenToMachineStatus(loggedInMachineData.docId);
+                        // Also re-verify session, which will trigger updateViewBasedOnStatus
+                        await verifyMachineSession(loggedInMachineData.docId, currentSessionId);
+                    } else {
+                        // If stored data is incomplete, force login
+                        forceLogout();
+                    }
+                }
         // Fetch posts and candidates only AFTER auth state is settled and db is confirmed
                 await fetchAllPostsAndCandidates();
         // Perform initial sign-in (anonymous or custom token) to establish user context
@@ -242,12 +257,12 @@ window.onload = async function() {
                 await fetchAllPostsAndCandidates();
 
             } else {
-                userId = 'Not Authenticated';
-                currentUserIdSpan.textContent = userId;
-                localStorage.removeItem('votingMachineSession');
-                localStorage.removeItem('currentSessionId');
-                loggedInMachineData = null;
-                currentSessionId = null;
+                // userId = 'Not Authenticated';
+                // currentUserIdSpan.textContent = userId;
+                // localStorage.removeItem('votingMachineSession');
+                // localStorage.removeItem('currentSessionId');
+                // loggedInMachineData = null;
+                // currentSessionId = null;
                 updateViewBasedOnStatus();
             }
             showLoading(false);
@@ -296,7 +311,7 @@ machineLoginBtn.addEventListener('click', async () => {
             const machineData = machineDoc.data();
 
             // --- Session Management: Prevent duplicate logins ---
-            const newSessionId = crypto.randomUUID();
+            const newSessionId = "iouytressdfghj";//crypto.randomUUID()||"jchfvhbjnklm";
             if (machineData.currentSessionId && machineData.currentSessionId !== newSessionId && machineData.status !== 'inactive' && machineData.status !== 'completed') {
                 showAlert('This machine is already active elsewhere. Please contact invigilator.', 'danger');
                 showLoading(false);
@@ -485,23 +500,28 @@ function renderCurrentPost() {
     const filteredCandidates = candidates.filter(c => c.postId === currentPost.id);
 
     if (filteredCandidates.length === 0) {
-        candidatesContainer.innerHTML = '<div class="col-span-full text-center text-gray-500 p-4">No candidates for this post yet.</div>';
+        candidatesContainer.innerHTML = '<div class="col-span-full text-center text-gray-500 p-1">No candidates for this post yet.</div>';
     } else {
         filteredCandidates.forEach(candidate => {
             const candidateCard = document.createElement('div');
             candidateCard.className = 'col-span-1'; // Tailwind for single column on small, adjust for larger
             candidateCard.innerHTML = `
-                <div class="candidate-card bg-white p-4 rounded-xl shadow-md flex flex-col items-center">
-                    <img src="${candidate.photoUrl || 'https://placehold.co/120x120/cccccc/333333?text=No+Photo'}"
-                         alt="${candidate.name}" class="candidate-photo mb-3"
-                         onerror="this.onerror=null;this.src='https://placehold.co/120x120/cccccc/333333?text=No+Photo';">
-                    <h5 class="text-lg font-semibold text-gray-800 text-center mb-3">${candidate.name}</h5>
-                    <button type="button" data-candidate-id="${candidate.id}"
-                            class="vote-button bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg w-full transition duration-300">
-                        <i class="fas fa-check-circle mr-2"></i> Vote
-                    </button>
-                </div>
-            `;
+  <div class="candidate-card bg-white p-2 rounded-xl shadow-md flex flex-row sm:flex-col items-center gap-2">
+    <img src="${candidate.photoUrl || 'https://placehold.co/120x120/cccccc/333333?text=No+Photo'}"
+         alt="${candidate.name}"
+         class="candidate-photo w-24 h-24 object-cover rounded-full" style="z-index:700;"
+         onerror="this.onerror=null;this.src='https://placehold.co/120x120/cccccc/333333?text=No+Photo';">
+
+    <div class="flex-1 text-center sm:text-left">
+      <h5 class="text-lg font-semibold text-gray-800 mb-2">${candidate.name}</h5>
+      <button type="button" data-candidate-id="${candidate.id}"
+              class="vote-button bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg w-full sm:w-auto transition duration-300">
+          <i class="fas fa-check-circle mr-2"></i> Vote
+      </button>
+    </div>
+  </div>
+`;
+
             candidatesContainer.appendChild(candidateCard);
         });
     }
@@ -509,6 +529,7 @@ function renderCurrentPost() {
     // Attach event listeners to the new vote buttons
     document.querySelectorAll('.vote-button').forEach(button => {
         button.addEventListener('click', (e) => {
+            playBeep();
             const candidateId = e.currentTarget.dataset.candidateId;
             handleVoteSubmission(currentPost.id, candidateId);
         });
@@ -665,3 +686,18 @@ submitPasswordBtn.addEventListener('click', async () => {
     }
 });
 
+function playBeep() {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+
+    oscillator.type = 'sine';      // you can use 'square', 'triangle', etc.
+    oscillator.frequency.setValueAtTime(800, ctx.currentTime); // frequency in Hz
+    gainNode.gain.setValueAtTime(7, ctx.currentTime); // volume
+
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+
+    oscillator.start();
+    oscillator.stop(ctx.currentTime + 0.5); // beep duration: 0.2s
+}
