@@ -210,19 +210,19 @@ window.onload = async function() {
         app = initializeApp(firebaseConfig);
         db = getFirestore(app); // Initialize db immediately
         auth = getAuth(app);
-        const storedMachineData = localStorage.getItem('votingMachineSession');
-                if (storedMachineData) {
-                    loggedInMachineData = JSON.parse(storedMachineData);
-                    currentSessionId = localStorage.getItem('currentSessionId');
-                    if (loggedInMachineData && loggedInMachineData.docId) {
-                        listenToMachineStatus(loggedInMachineData.docId);
-                        // Also re-verify session, which will trigger updateViewBasedOnStatus
-                        await verifyMachineSession(loggedInMachineData.docId, currentSessionId);
-                    } else {
-                        // If stored data is incomplete, force login
-                        forceLogout();
-                    }
-                }
+        // const storedMachineData = localStorage.getItem('votingMachineSession');
+        //         if (storedMachineData) {
+        //             loggedInMachineData = JSON.parse(storedMachineData);
+        //             currentSessionId = localStorage.getItem('currentSessionId');
+        //             if (loggedInMachineData && loggedInMachineData.docId) {
+        //                 listenToMachineStatus(loggedInMachineData.docId);
+        //                 // Also re-verify session, which will trigger updateViewBasedOnStatus
+        //                 await verifyMachineSession(loggedInMachineData.docId, currentSessionId);
+        //             } else {
+        //                 // If stored data is incomplete, force login
+        //                 forceLogout();
+        //             }
+        //         }
         // Fetch posts and candidates only AFTER auth state is settled and db is confirmed
                 await fetchAllPostsAndCandidates();
         // Perform initial sign-in (anonymous or custom token) to establish user context
@@ -257,12 +257,12 @@ window.onload = async function() {
                 await fetchAllPostsAndCandidates();
 
             } else {
-                // userId = 'Not Authenticated';
-                // currentUserIdSpan.textContent = userId;
-                // localStorage.removeItem('votingMachineSession');
-                // localStorage.removeItem('currentSessionId');
-                // loggedInMachineData = null;
-                // currentSessionId = null;
+                userId = 'Not Authenticated';
+                currentUserIdSpan.textContent = userId;
+                localStorage.removeItem('votingMachineSession');
+                localStorage.removeItem('currentSessionId');
+                loggedInMachineData = null;
+                currentSessionId = null;
                 updateViewBasedOnStatus();
             }
             showLoading(false);
