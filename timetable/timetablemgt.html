@@ -1020,19 +1020,27 @@
        
 
         // --- Constants and Global Variables ---
-        let DAYS = [];
+       let DAYS = [];
 let FULL_DAYS = [];
 let NUM_PERIODS_PER_DAY = 7;
 
 const SHORT_DAY_CODES = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const FULL_DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-function updateScheduleSettings() {
+function saveToLocalStorage(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
+function getFromLocalStorage(key, fallback) {
+  const stored = localStorage.getItem(key);
+  return stored ? JSON.parse(stored) : fallback;
+}
+
+function updateScheduleSettings(save = true) {
   try {
     const daysInput = parseInt(document.getElementById("weeklyDays").value);
     const periodsInput = parseInt(document.getElementById("periodsPerDay").value);
 
-    // Error handling
     if (isNaN(daysInput) || daysInput < 1 || daysInput > 6) {
       throw new Error("Working days must be between 1 and 6.");
     }
@@ -1040,14 +1048,19 @@ function updateScheduleSettings() {
       throw new Error("Periods per day must be between 1 and 10.");
     }
 
-    // Animate fields
+    // Animate inputs
     animateInput("weeklyDays");
     animateInput("periodsPerDay");
 
-    // Set values
+    // Update values
     DAYS = SHORT_DAY_CODES.slice(0, daysInput);
     FULL_DAYS = FULL_DAY_NAMES.slice(0, daysInput);
     NUM_PERIODS_PER_DAY = periodsInput;
+
+    if (save) {
+      saveToLocalStorage(userId+"weeklyDays", daysInput);
+      saveToLocalStorage(userId+"periodsPerDay", periodsInput);
+    }
 
     console.log("DAYS:", DAYS);
     console.log("FULL_DAYS:", FULL_DAYS);
@@ -1061,18 +1074,30 @@ function updateScheduleSettings() {
 function animateInput(id) {
   const el = document.getElementById(id);
   el.style.transition = "box-shadow 0.3s ease";
-  el.style.boxShadow = "0 0 10px rgba(33, 150, 243, 0.6)";
+  el.style.boxShadow = "0 0 10px rgba(76, 175, 80, 0.6)";
   setTimeout(() => {
     el.style.boxShadow = "none";
   }, 400);
 }
 
-// Attach listeners
-document.getElementById("weeklyDays").addEventListener("input", updateScheduleSettings);
-document.getElementById("periodsPerDay").addEventListener("input", updateScheduleSettings);
+// Initialize from localStorage or defaults
+function initializeSettings() {
+  const storedDays = getFromLocalStorage(userId+"weeklyDays", 6);
+  const storedPeriods = getFromLocalStorage(userId+"periodsPerDay", 7);
 
-// Initial setup
-updateScheduleSettings();
+  document.getElementById("weeklyDays").value = storedDays;
+  document.getElementById("periodsPerDay").value = storedPeriods;
+
+  updateScheduleSettings(false); // initialize without re-saving
+}
+
+// Attach listeners
+document.getElementById("weeklyDays").addEventListener("input", () => updateScheduleSettings());
+document.getElementById("periodsPerDay").addEventListener("input", () => updateScheduleSettings());
+
+// Run on load
+initializeSettings();
+
 
         
         // Firestore Collection Paths (relative to user's base path)
