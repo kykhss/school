@@ -739,7 +739,15 @@
                     <button id="download-template" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50 transition ease-in-out duration-150">
                         Download Template
                     </button>
+                    
                 </div>
+               <label for="weeklyDays">Working Days (1–6):</label>
+                <input type="number" id="weeklyDays" min="1" max="6" value="6" />
+
+                <label for="periodsPerDay">Periods Per Day:</label>
+                <input type="number" id="periodsPerDay" min="1" max="10" value="7" />
+
+
                 <p class="text-gray-600 mt-2 text-sm">First, import data or select "Use Demo Data", then click "Create Slots & Generate".</p>
 
                 <div id="header-modal" class="modal">
@@ -1012,9 +1020,60 @@
        
 
         // --- Constants and Global Variables ---
-        const NUM_PERIODS_PER_DAY = 7;
-        const DAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']; // Working days (short codes)
-        const FULL_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']; // Full names
+        let DAYS = [];
+let FULL_DAYS = [];
+let NUM_PERIODS_PER_DAY = 7;
+
+const SHORT_DAY_CODES = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+const FULL_DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+function updateScheduleSettings() {
+  try {
+    const daysInput = parseInt(document.getElementById("weeklyDays").value);
+    const periodsInput = parseInt(document.getElementById("periodsPerDay").value);
+
+    // Error handling
+    if (isNaN(daysInput) || daysInput < 1 || daysInput > 6) {
+      throw new Error("Working days must be between 1 and 6.");
+    }
+    if (isNaN(periodsInput) || periodsInput < 1 || periodsInput > 10) {
+      throw new Error("Periods per day must be between 1 and 10.");
+    }
+
+    // Animate fields
+    animateInput("weeklyDays");
+    animateInput("periodsPerDay");
+
+    // Set values
+    DAYS = SHORT_DAY_CODES.slice(0, daysInput);
+    FULL_DAYS = FULL_DAY_NAMES.slice(0, daysInput);
+    NUM_PERIODS_PER_DAY = periodsInput;
+
+    console.log("DAYS:", DAYS);
+    console.log("FULL_DAYS:", FULL_DAYS);
+    console.log("NUM_PERIODS_PER_DAY:", NUM_PERIODS_PER_DAY);
+
+  } catch (err) {
+    alert("Error: " + err.message);
+  }
+}
+
+function animateInput(id) {
+  const el = document.getElementById(id);
+  el.style.transition = "box-shadow 0.3s ease";
+  el.style.boxShadow = "0 0 10px rgba(33, 150, 243, 0.6)";
+  setTimeout(() => {
+    el.style.boxShadow = "none";
+  }, 400);
+}
+
+// Attach listeners
+document.getElementById("weeklyDays").addEventListener("input", updateScheduleSettings);
+document.getElementById("periodsPerDay").addEventListener("input", updateScheduleSettings);
+
+// Initial setup
+updateScheduleSettings();
+
         
         // Firestore Collection Paths (relative to user's base path)
         const FIRESTORE_COLLECTION_TIMETABLES = 'timetables';
