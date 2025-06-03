@@ -979,14 +979,14 @@
                     localStorage.getItem('userId') || 'defaultUser';
             }
 
-            setBase64ParamsInUrl('iqu478');
+            //setBase64ParamsInUrl('kyhssKg');
             let appId = "timetableData"
             // Later in your app, decode from URL or localStorage
             const currentUserId= loadParamsFromBase64Url();
             const basePath = `${appId}/${currentUserId}`;
         
 
-            console.log(basePath);
+           // console.log(basePath);
 
         // Import Firebase modules directly
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -1023,10 +1023,10 @@
         const FIRESTORE_COLLECTION_UNASSIGNED_SLOTS_FIREBASE = 'unassignedSlots';
         
         // Local Storage Keys
-        const LOCAL_STORAGE_KEY_TIMETABLE = 'timetableGenerator_timetable';
-        const LOCAL_STORAGE_KEY_TEACHERS = 'timetableGenerator_teachersData'; 
-        const LOCAL_STORAGE_KEY_UNASSIGNED = 'timetableGenerator_unassignedSlots';
-        const LOCAL_STORAGE_KEY_SLOTS = 'timetableGenerator_Slots';
+        const LOCAL_STORAGE_KEY_TIMETABLE = userId+'timetableGenerator_timetable';
+        const LOCAL_STORAGE_KEY_TEACHERS = userId+'timetableGenerator_teachersData'; 
+        const LOCAL_STORAGE_KEY_UNASSIGNED = userId+'timetableGenerator_unassignedSlots';
+        const LOCAL_STORAGE_KEY_SLOTS = userId+'timetableGenerator_Slots';
         
         // --- Global State Variables ---
         let teachers = {}; // Stores processed teacher data: { teacherId: { ...teacher_info, unavailable_slots: Set, daily_assignments: {day: []} } }
