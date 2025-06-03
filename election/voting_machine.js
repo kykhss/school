@@ -312,7 +312,7 @@ machineLoginBtn.addEventListener('click', async () => {
             const machineData = machineDoc.data();
 
             // --- Session Management: Prevent duplicate logins ---
-            const newSessionId = crypto.randomUUID()||"jchfvhbjnklm";
+            const newSessionId = "jchfvhbjnklm"// crypto.randomUUID()||"jchfvhbjnklm";
             if (machineData.currentSessionId && machineData.currentSessionId !== newSessionId && machineData.status !== 'inactive' && machineData.status !== 'completed') {
                 showAlert('This machine is already active elsewhere. Please contact invigilator.', 'danger');
                 showLoading(false);
