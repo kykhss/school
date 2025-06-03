@@ -747,6 +747,9 @@
                 <label for="periodsPerDay">Periods Per Day:</label>
                 <input type="number" id="periodsPerDay" min="1" max="10" value="7" />
 
+                <label for="relaxiationPerDay">Relaxiation:</label>
+                <input type="number" id="relaxiationPerDay" min="2" max="10" value="4" />
+
 
                 <p class="text-gray-600 mt-2 text-sm">First, import data or select "Use Demo Data", then click "Create Slots & Generate".</p>
 
@@ -1051,6 +1054,8 @@ function updateScheduleSettings(save = true) {
     // Animate inputs
     animateInput("weeklyDays");
     animateInput("periodsPerDay");
+    animateInput("relaxiationPerDay");
+      
 
     // Update values
     DAYS = SHORT_DAY_CODES.slice(0, daysInput);
@@ -1140,6 +1145,8 @@ initializeSettings();
         const MAX_UNDO_STACK_SIZE = 20; // Limit the number of undoable actions
 
         // --- DOM Elements ---
+        
+        const relaxiation = document.getElementById('relaxiationPerDay');
         const fileInput = document.getElementById('file-input');
         const importButton = document.getElementById('import-button');
         const exportButton = document.getElementById('export-button');
@@ -2092,7 +2099,7 @@ function renderMiniTimetableContent(type, id,name) {
                 } else {
                     consecutiveCount = 1;
                 }
-                if (consecutiveCount > 6) { // Max 3 consecutive, so >3 (i.e., 4 or more) is a conflict
+                if (consecutiveCount > relaxiation ||6) { // Max 3 consecutive, so >3 (i.e., 4 or more) is a conflict
                     return { isHardConflict: true, isSoftConflict: false, conflictingAssignment: null };
                 }
             }
