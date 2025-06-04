@@ -746,9 +746,9 @@
 
                 <label for="periodsPerDay">Periods Per Day:</label>
                 <input type="number" id="periodsPerDay" min="1" max="10" value="7" />
-
-                <label for="relaxiationPerDay">Relaxiation:</label>
-                <input type="number" id="relaxiationPerDay" min="2" max="10" value="4" />
+                
+                <label for="relaxiationPerDay">Periods Per Day:</label>
+                <input type="number" id="relaxiationPerDay" min="1" max="10" value="5" />
 
 
                 <p class="text-gray-600 mt-2 text-sm">First, import data or select "Use Demo Data", then click "Create Slots & Generate".</p>
@@ -959,17 +959,23 @@
 
         function setBase64ParamsInUrl(userId) {
                 const encoded = base64Encode(userId);
-                const newUrl = `${window.location.pathname}?wxev=${encodeURIComponent(encoded)}`;
+                const newUrl = `${window.location.pathname}?xyz=${encodeURIComponent(encoded)}`;
                 window.history.replaceState({}, '', newUrl);
             }
 
         function base64Decode(str) {
-                return decodeURIComponent(escape(atob(str)));
-            }
+    try {
+        return decodeURIComponent(escape(atob(str)));
+    } catch (e) {
+        console.warn('Base64 decode failed, returning original string:', e);
+        return str;
+    }
+}
+
 
         function loadParamsFromBase64Url() {
                 const urlParams = new URLSearchParams(window.location.search);
-                const dataParam = urlParams.get('wxev');
+                const dataParam = urlParams.get('xyz');
 
                 if (dataParam) {
                     try {
@@ -990,14 +996,15 @@
                     localStorage.getItem('userId') || 'defaultUser';
             }
 
-            //setBase64ParamsInUrl('kyhssKg');
+            
             let appId = "timetableData"
             // Later in your app, decode from URL or localStorage
             const currentUserId= loadParamsFromBase64Url();
             const basePath = `${appId}/${currentUserId}`;
+            setBase64ParamsInUrl(currentUserId);
         
 
-           // console.log(basePath);
+            console.log(basePath);
 
         // Import Firebase modules directly
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -1054,8 +1061,6 @@ function updateScheduleSettings(save = true) {
     // Animate inputs
     animateInput("weeklyDays");
     animateInput("periodsPerDay");
-    animateInput("relaxiationPerDay");
-      
 
     // Update values
     DAYS = SHORT_DAY_CODES.slice(0, daysInput);
@@ -1145,14 +1150,13 @@ initializeSettings();
         const MAX_UNDO_STACK_SIZE = 20; // Limit the number of undoable actions
 
         // --- DOM Elements ---
-        
-        const relaxiation = document.getElementById('relaxiationPerDay');
+        const relaxiationPerDay = parseInt(document.getElementById("relaxiationPerDay").value);
         const fileInput = document.getElementById('file-input');
         const importButton = document.getElementById('import-button');
         const exportButton = document.getElementById('export-button');
         const exportToFirestoreButton = document.getElementById('export-to-firestore-button');
         const createSlotsButton = document.getElementById('create-slots-button');
-        // const generateTimetableButton = document.getElementById('generate-timetable-button'); // Removed
+        const generateTimetableButton = document.getElementById('generate-timetable-button'); // Removed
         const downloadTemplateButton = document.getElementById('download-template');
         const regenerateButton = document.getElementById('regenerate-button');
         const clearSavedDataButton = document.getElementById('clear-saved-data-button');
@@ -1257,7 +1261,15 @@ initializeSettings();
          * Uses __firebase_config and __initial_auth_token from the environment.
          */
         async function initializeFirebaseAndAuth() {
-            
+                if(!currentUserId){
+                    // If no user is logged in, redirect to login page
+                   // resolve(false); // Firebase ready, but auth failed
+                    userIdDisplay.textContent = userId + " (Anonymous/Local)";
+                    return ;
+                   // window.location.href = '/login';
+
+                }
+                userIdDisplay.textContent = userId + " (Anonymous/Local)";
                 console.log("Firebase Config being used:", firebaseConfig); 
                 //console.log(getApp().firebaseConfig.projectId);
 
@@ -2099,7 +2111,7 @@ function renderMiniTimetableContent(type, id,name) {
                 } else {
                     consecutiveCount = 1;
                 }
-                if (consecutiveCount > relaxiation ||6) { // Max 3 consecutive, so >3 (i.e., 4 or more) is a conflict
+                if (consecutiveCount > 4) { // Max 3 consecutive, so >3 (i.e., 4 or more) is a conflict
                     return { isHardConflict: true, isSoftConflict: false, conflictingAssignment: null };
                 }
             }
