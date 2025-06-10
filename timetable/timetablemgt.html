@@ -2769,14 +2769,15 @@ function renderMiniTimetableContent(type, id,name) {
             saveTeachersToLocalStorage();
             // Save teachers and class data to Firebase
             if (db && userId) { // Only attempt to save to Firestore if Firebase is initialized and user is authenticated
-                saveTeachersDataToFirestore();
-                saveClassDataToFirestore();
+                // saveTeachersDataToFirestore();
+                // saveClassDataToFirestore();
             }
 
             areSlotsCreated = true;
+            console.log("required", requiredSlots);
             // currentUnassignedSlots = []; // Initialize empty, then add unique slots
-            // requiredSlots.forEach(slot => addUniqueUnassignedSlot(slot)); // Add all required slots as unassigned initially
-            //  // NEW: Filter currentUnassignedSlots to ensure they are all in requiredSlots (redundant here, but good as a safeguard)
+             //requiredSlots.forEach(slot => addUniqueUnassignedSlot(slot)); // Add all required slots as unassigned initially
+             // NEW: Filter currentUnassignedSlots to ensure they are all in requiredSlots (redundant here, but good as a safeguard)
             currentUnassignedSlots = currentUnassignedSlots.filter(unassignedSlot => {
                 return requiredSlots.some(reqSlot =>
                     reqSlot.class_name === unassignedSlot.class_name &&
@@ -4717,12 +4718,13 @@ function loadDataFromLocalStorage() {
     const savedUnassigned = localStorage.getItem(LOCAL_STORAGE_KEY_UNASSIGNED);
     const savedSlots = localStorage.getItem(LOCAL_STORAGE_KEY_SLOTS);
     const savedTeachers = localStorage.getItem(LOCAL_STORAGE_KEY_TEACHERS);
+    console.log(JSON.parse(savedUnassigned));
 
     if (savedTimetable && savedUnassigned && savedTeachers && savedSlots) {
         currentTimetableData = JSON.parse(savedTimetable);
-        currentUnassignedSlots = [];
-        JSON.parse(savedUnassigned).forEach(slot => addUniqueUnassignedSlot(slot));
+        console.log(currentTimetableData);
 
+        
         requiredSlots = JSON.parse(savedSlots);
 
         const loadedTeachers = JSON.parse(savedTeachers);
@@ -4733,9 +4735,13 @@ function loadDataFromLocalStorage() {
                 unavailable_slots: new Set(loadedTeachers[id].unavailable_slots),
             };
         }
+        let teachersArray = Object.values(teachers);
+        createSlotsfromlocal(teachersArray); 
 
         isDataImported = true;
         areSlotsCreated = true;
+        JSON.parse(savedUnassigned).forEach(slot => addUniqueUnassignedSlot(slot));
+
         showMessage('Timetable and data loaded from local storage.', 'success');
         console.log('Loaded from Local Storage');
         return true;
