@@ -3248,7 +3248,7 @@ function renderMiniTimetableContent(type, id,name) {
                 const docSnap = await getDoc(classDataDocRef);
                 if (docSnap.exists()) {
                     const data = docSnap.data();
-                    requiredSlots = JSON.parse(data.classes); // Parse back from string
+                    //requiredSlots = JSON.parse(data.classes); // Parse back from string
                     console.log('Class data loaded from Firestore.');
                     return true;
                 } else {
