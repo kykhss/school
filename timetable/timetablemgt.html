@@ -747,8 +747,10 @@
                 <label for="periodsPerDay">Periods Per Day:</label>
                 <input type="number" id="periodsPerDay" min="1" max="10" value="7" />
                 
-                <label for="relaxiationPerDay">Periods Per Day:</label>
+                <label for="relaxiationPerDay">RELAXIATION Per Day:</label>
                 <input type="number" id="relaxiationPerDay" min="1" max="10" value="5" />
+                <label for="relaxiationPerDay">TIMETABLE NAME:</label>
+                <input type="text" id="currentTimetable"  value="mainTimetable" />
 
 
                 <p class="text-gray-600 mt-2 text-sm">First, import data or select "Use Demo Data", then click "Create Slots & Generate".</p>
@@ -1150,6 +1152,7 @@ initializeSettings();
         const MAX_UNDO_STACK_SIZE = 20; // Limit the number of undoable actions
 
         // --- DOM Elements ---
+        const currentTimetable = document.getElementById("currentTimetable").value;
         const relaxiationPerDay = parseInt(document.getElementById("relaxiationPerDay").value);
         const fileInput = document.getElementById('file-input');
         const importButton = document.getElementById('import-button');
@@ -3152,7 +3155,7 @@ function renderMiniTimetableContent(type, id,name) {
                 const basePath = getFirestoreBasePath();
 
                 // Save main timetable data (currentTimetableData)
-                const timetableDocRef = doc(db, `${basePath}/${FIRESTORE_COLLECTION_TIMETABLES}`, 'mainTimetable');
+                const timetableDocRef = doc(db, `${basePath}/${FIRESTORE_COLLECTION_TIMETABLES}`, currentTimetable);
                 // Firestore doesn't allow direct storage of keys with '.', so we serialize
                 const serializedTimetableData = {};
                 for (const key in currentTimetableData) {
@@ -3276,7 +3279,7 @@ function renderMiniTimetableContent(type, id,name) {
                 const basePath = getFirestoreBasePath();
                 
                 // Load main timetable data
-                const timetableDocRef = doc(db, `${basePath}/${FIRESTORE_COLLECTION_TIMETABLES}`, 'mainTimetable');
+                const timetableDocRef = doc(db, `${basePath}/${FIRESTORE_COLLECTION_TIMETABLES}`, currentTimetable);
                 const timetableTimeDocRef = doc(db, `${basePath}/${FIRESTORE_COLLECTION_UNASSIGNED_SLOTS_FIREBASE}`, 'updatedtime');
 
                 const timetableDocSnap = await getDoc(timetableDocRef);
