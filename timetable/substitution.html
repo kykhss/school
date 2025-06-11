@@ -833,7 +833,7 @@
             previouslyAbsentTeachersForDate.clear(); 
             
             // Clear all absent teacher checkboxes first, then re-check based on loaded plan
-            Array.from(absentTeacherCheckboxesDiv.querySelectorAll('input[type="checkbox"]')).forEach(cb => cb.checked = false);
+           // Array.from(absentTeacherCheckboxesDiv.querySelectorAll('input[type="checkbox"]')).forEach(cb => cb.checked = false);
 
             try {
                 const docSnap = await getDoc(docRef);
