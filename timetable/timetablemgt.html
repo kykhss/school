@@ -212,6 +212,13 @@
             border: 2px solid #8bbec0 !important; /* Orange border */
             transition: background-color 0.1s, border-color 0.1s;
         }
+         .highlight-sameSub {
+            background-color: #709df1 !important; /* Light yellow */
+            cursor: pointer; /* Indicate it's clickable to here */
+            border: 2px solid #8bbec0 !important; /* Orange border */
+            transition: background-color 0.1s, border-color 0.1s;
+        }
+        
         .highlight-swappable:hover {
             background-color: #fde68a !important; /* Lighter yellow on hover */
         }
@@ -789,6 +796,8 @@ td[data-slot-key] {
                 <input type="number" id="relaxiationPerDay" min="1" max="10" value="5" />
                 <label for="relaxiationPerDay">TIMETABLE NAME:</label>
                 <input type="text" id="currentTimetableName"  value="lastTimetable" />
+                <label for="showminitable">TIMETABLE NAME:</label>
+                <input type="checkbox" id="showminitable" checked />
 
 
                 <p class="text-gray-600 mt-2 text-sm">First, import data or select "Use Demo Data", then click "Create Slots & Generate".</p>
@@ -1190,8 +1199,10 @@ initializeSettings();
         const MAX_UNDO_STACK_SIZE = 20; // Limit the number of undoable actions
 
         // --- DOM Elements ---
+        showminitable
         const currentTimetableName = document.getElementById("currentTimetableName");
-        const relaxiationPerDay = parseInt(document.getElementById("relaxiationPerDay").value);
+        const isShowminitable = document.getElementById("showminitable");
+        const relaxiationPerDay = document.getElementById("relaxiationPerDay");
         const fileInput = document.getElementById('file-input');
         const importButton = document.getElementById('import-button');
         const exportButton = document.getElementById('export-button');
@@ -1532,7 +1543,7 @@ initializeSettings();
 
   if (type === 'teacher_id') {
     const teacher = teachers[id];
-    console.log(teachers);
+    //console.log(teachers);
     if (!teacher) return;
     secondaryTitle.textContent = `Mini View: ${teacher.teacherName}'s Timetable`;
     renderTimetable(dataToUse, 'teacher', id, secondaryTable, secondaryTitle, secondaryContainer, false);
@@ -1545,6 +1556,9 @@ initializeSettings();
 }
 
 function renderMiniTimetablePopup(type, id,name) {
+    if(isShowminitable.checked){
+        return null
+    }
     const popupId = `mini-popup-${type}-${id}`;
     let popup = document.getElementById(popupId);
 
@@ -1810,7 +1824,7 @@ function renderMiniTimetableContent(type, id,name) {
             } else if (viewType === 'teacher') {
                targetTable.classList.add('individual-view');
                 const teacher = teachers[viewId];
-                console.log(teacher);
+               // console.log("teacher",teacher);
                 targetTitle.textContent = `Timetable for ${teacher?.teacherName || 'N/A'}-${teacher?.classInCharge} (${viewId}) ${isEditable ? '(Editable)' : '(Read-Only)'}`;
 
                 // Teacher View Headers: Day, P1, P2, ... P7
@@ -1830,20 +1844,21 @@ function renderMiniTimetableContent(type, id,name) {
                         const cell = row.insertCell();
                         cell.dataset.slotKey = slotKey;
                         cell.dataset.teacherId = viewId; // Explicitly set teacherId for the cell
+                        cell.dataset.subject = teacher.subject; // Explicitly set teacherId for the cell
                         
                         if (isEditable) {
                             cell.addEventListener('click', (e) => {
-                                console.log(cell.dataset);
+                                //console.log( "celldatas3", cell.dataset);
                                 // renderSecondaryMiniTimetable('class', cell.data.class);
                                 if (activeMovingSlot) {
                                     attemptPlaceSlot(cell, e); // Pass the event
                                 } else {
                                     const assignmentInCell = currentTimetableData[slotKey]?.find(a => a && a.teacher_id === viewId);
-                                   console.log(assignmentInCell);
+                                   //console.log(assignmentInCell);
                                     if (assignmentInCell) {
                                         //renderSecondaryMiniTimetable('class',assignmentInCell?.class);
                                         renderMiniTimetablePopup("class", assignmentInCell.class , e.target);
-                                    renderMiniTimetablePopup("teacher_id", assignmentInCell.teacher_id, assignmentInCell.teacherName,e.target);
+                                    //renderMiniTimetablePopup("teacher_id", assignmentInCell.teacher_id, assignmentInCell.teacherName,e.target);
                                 
                                         selectSlotForMove(assignmentInCell, { type: 'timetable-cell', element: cell, slotKey: slotKey, teacherId: viewId, class: assignmentInCell?.class, subject: assignmentInCell?.subject, slotNumber: assignmentInCell?.slotNumber }, e);
                                     }
@@ -1917,6 +1932,7 @@ function renderMiniTimetableContent(type, id,name) {
                         cell.dataset.slotKey = slotKey;
                         cell.dataset.className = viewId; // Explicitly set className for the cell
                         
+                        
                         if (isEditable) {
                             cell.addEventListener('click', (e) => {
                                 if (activeMovingSlot) {
@@ -1926,7 +1942,7 @@ function renderMiniTimetableContent(type, id,name) {
                                     //console.log(assignmentInCell);
                                     if (assignmentInCell) {
                                         renderMiniTimetablePopup("teacher_id", assignmentInCell.teacher_id,assignmentInCell.teacherName, e.target);
-                                        renderMiniTimetablePopup("class", assignmentInCell.class , e.target);
+                                       // renderMiniTimetablePopup("class", assignmentInCell.class , e.target);
                                  
                                         selectSlotForMove(assignmentInCell, { type: 'timetable-cell', element: cell, slotKey: slotKey, class: viewId, teacherId: assignmentInCell?.teacher_id, subject: assignmentInCell?.subject, slotNumber: assignmentInCell?.slotNumber }, e);
                                        // renderSecondaryMiniTimetable('teacher_id', assignmentInCell.teacher_id);
@@ -1962,7 +1978,7 @@ function renderMiniTimetableContent(type, id,name) {
                         const assignmentForThisClass = assignmentsInThisPeriod.find(a => a && a.class === viewId);
 
                         if (assignmentForThisClass) {
-                            cell.textContent = `${assignmentForThisClass.subject}${assignmentForThisClass.slotNumber ? '-' + assignmentForThisClass.slotNumber : ''} (Teacher: ${assignmentForThisClass.teacherName})`;
+                            cell.textContent = `${assignmentForThisClass.subject}${assignmentForThisClass.slotNumber ? '-' + assignmentForThisClass.slotNumber : ''} (Teacher: ${teachers[assignmentForThisClass.teacher_id].teacherName})`;
                             if (assignmentForThisClass.isLocked) {
                                 cell.classList.add('locked-cell');
                                 cell.innerHTML += ' &#128274;'; // Unicode lock emoji
@@ -2037,7 +2053,7 @@ function renderMiniTimetableContent(type, id,name) {
                 const assignments = currentTimetableData[slotKey] || [];
                 // Filter the assignments for the selected class
                 const classAssignments = assignments.filter(a => a && a.class === className);
-                console.log(classAssignments); 
+                //console.log(classAssignments); 
 
                 if (classAssignments.length > 0) {
                     filteredTimetableData[slotKey] = classAssignments;
@@ -2088,6 +2104,7 @@ function renderMiniTimetableContent(type, id,name) {
                   assignment.slotNumber === slotBeingMoved.slotNumber)
             );
 
+
             // Hard Conflict 1: Teacher unavailable for this slot
             if (teacher.unavailable_slots.has(slotKey)) {
                 return { isHardConflict: true, isSoftConflict: false, conflictingAssignment: null };
@@ -2104,7 +2121,7 @@ function renderMiniTimetableContent(type, id,name) {
                 
 
                 if (assignment.teacher_id === teacherId) {
-                    return { isHardConflict: true,isSoftConflictsame:true, isSoftConflict: true, conflictingAssignment: assignment,result: assignment.class };
+                    return { isHardConflict: true,isSoftConflicttcr:true, isSoftConflictsame:true, isSoftConflict: true, conflictingAssignment: assignment,result: assignment.class };
                 }
 
                 // SOFT CONFLICT: The class (className) is already assigned to this slot by a different teacher.
@@ -2124,6 +2141,7 @@ function renderMiniTimetableContent(type, id,name) {
                 const assignments = currentTimetable[currentSlotKey] || [];
                 // Filter out the slot being moved from this count as well
                 const teacherAssignments = assignments.filter(a => a && a.teacher_id === teacherId && !(slotBeingMoved && a.slotNumber === slotBeingMoved.slotNumber && a.teacher_id === slotBeingMoved.teacher_id));
+                console.log("teacherAsiignments",teacherAssignments);
                 currentDailyAssignmentsCount += teacherAssignments.length;
             }
             // If adding this new slot would exceed the daily limit
@@ -2138,6 +2156,7 @@ function renderMiniTimetableContent(type, id,name) {
             for (let p = 1; p <= NUM_PERIODS_PER_DAY; p++) {
                 const currentSlotKey = `${day}${p}`;
                 const assignments = currentTimetable[currentSlotKey] || [];
+                console.log("assinments",assignments);
                 // Filter out the slot being moved from this check
                 const assignedToTeacher = assignments.find(a => a && a.teacher_id === teacherId && !(slotBeingMoved && a.slotNumber === slotBeingMoved.slotNumber && a.teacher_id === slotBeingMoved.teacher_id));
 
@@ -2159,14 +2178,14 @@ function renderMiniTimetableContent(type, id,name) {
                 } else {
                     consecutiveCount = 1;
                 }
-                if (consecutiveCount > 4) { // Max 3 consecutive, so >3 (i.e., 4 or more) is a conflict
-                    return { isHardConflict: true, isSoftConflict: false, conflictingAssignment: null,result:"5periods" };
+                if (consecutiveCount > relaxiationPerDay.value ) { // Max 3 consecutive, so >3 (i.e., 4 or more) is a conflict
+                    return { isHardConflict: true, isSoftConflict: false, conflictingAssignment: null,result:consecutiveCount };
                 }
             }
 
             // If there's a class conflict, it's a soft conflict. Otherwise, no conflicts.
             if (isClassConflict) {
-                return { isHardConflict: false, isSoftConflict: true,isSoftConflictclass:true, conflictingAssignment: conflictingAssignment,result: conflictingAssignment?.teacher_id||null};
+                return { isHardConflict: false, isSoftConflict: true,isSoftConflictclass:true, conflictingAssignment: conflictingAssignment,result: teachers[conflictingAssignment?.teacher_id].teacherName ||null};
             }
 
             return { isHardConflict: false, isSoftConflict: false, conflictingAssignment: null }; // No conflicts found
@@ -2225,8 +2244,35 @@ function renderMiniTimetableContent(type, id,name) {
                 if (isRelevantCell) {
                     // Pass the activeMovingSlot to checkConflicts to exclude it from conflict detection
                     const conflictResult = checkConflicts(slot.teacher_id, day, period_num, slot.class || slot.class_name, currentTimetableData, slot);
+                    console.log("celldata", cell.dataset);
+                    console.log("slotedta", slot);
+                    if(cell.dataset.subject === slot.subject){
+                        cell.classList.add('highlight-sameSub');
+                        const existingBadge = cell.querySelector('.conflict-badge');
+                        if (existingBadge) existingBadge.remove();
 
-                    if (conflictResult.isHardConflict) {
+                        // Create a small badge
+                        const badge = document.createElement('div');
+                        badge.className = 'conflict-badge';
+                        
+                        badge.textContent = "me ";
+                        cell.appendChild(badge);
+                    }
+                    if (conflictResult.isHardConflict&&conflictResult.isSoftConflictsame) {
+                        cell.classList.add('highlight-swappable');
+                        cell.classList.add('class');
+                         // Optional: Clear previous label if any
+                        const existingBadge = cell.querySelector('.conflict-badgel');
+                        if (existingBadge) existingBadge.remove();
+
+                        // Create a small badge
+                        const badge = document.createElement('div');
+                        badge.className = 'conflict-badgel';
+                        
+                        badge.textContent = conflictResult?.result  || '-';
+                        cell.appendChild(badge);
+                    }
+                    else if(conflictResult.isHardConflict) {
                         cell.classList.add('highlight-conflict');
                          // Optional: Clear previous label if any
                         const existingBadge = cell.querySelector('.conflict-badgel');
@@ -2469,7 +2515,7 @@ function renderMiniTimetableContent(type, id,name) {
             // 2. Handle existing conflicting assignment in the target cell (if any)
             if (conflictResult.isSoftConflict && conflictResult.conflictingAssignment) {
                 const existingAssignment = conflictResult.conflictingAssignment;
-                console.log(existingAssignment); 
+               // console.log(existingAssignment); 
                 
                 // Remove the existing conflicting assignment from the target cell
                 currentTimetableData[slotKey] = (currentTimetableData[slotKey] || []).filter(
@@ -2864,7 +2910,7 @@ function renderMiniTimetableContent(type, id,name) {
             }
 
             areSlotsCreated = true;
-            console.log("required", requiredSlots);
+            //console.log("required", requiredSlots);
             // currentUnassignedSlots = []; // Initialize empty, then add unique slots
              //requiredSlots.forEach(slot => addUniqueUnassignedSlot(slot)); // Add all required slots as unassigned initially
              // NEW: Filter currentUnassignedSlots to ensure they are all in requiredSlots (redundant here, but good as a safeguard)
@@ -3309,7 +3355,7 @@ function renderMiniTimetableContent(type, id,name) {
                 
                 
 
-                 console.log(teachersArray);
+                 //console.log(teachersArray);
                 createSlotsfromlocal(teachersArray);
                 saveTeachersToLocalStorage();
                 console.log('Teacher data loaded from Firestore.');
@@ -3356,7 +3402,7 @@ function renderMiniTimetableContent(type, id,name) {
          * @returns {boolean} True if data was loaded, false otherwise.
          */
         async function loadTimetableFromFirestore() {
-            console.log(currentTimetableName);
+            // console.log(currentTimetableName);
             await firebaseReadyPromise; // Ensure Firebase is ready
             if (!db || !userId) {
                 console.warn('Firestore db not initialized or user not authenticated. Skipping timetable data load.');
