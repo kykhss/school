@@ -3568,7 +3568,7 @@ function renderMiniTimetableContent(type, id,name) {
                 if (unassignedSnap.exists()) {
                     // Ensure uniqueness when loading from Firestore as well
                     const loadedUnassigned = JSON.parse(unassignedSnap.data().unassignedSlots);
-                   // currentUnassignedSlots = []; // Reset
+                   currentUnassignedSlots = []; // Reset
                     loadedUnassigned.forEach(slot => addUniqueUnassignedSlot(slot));
                 currentUnassignedSlots = currentUnassignedSlots.filter(unassignedSlot => {
                 return requiredSlots.some(reqSlot =>
