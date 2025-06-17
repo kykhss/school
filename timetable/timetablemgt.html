@@ -1756,295 +1756,308 @@ function renderMiniTimetableContent(type, id,name) {
 
 
         function renderTimetable(assignedData, viewType, viewId, targetTable, targetTitle, targetContainer, isEditable = true) {
-            targetContainer.classList.remove('hidden'); // Ensure container is visible
-            document.getElementById('secondary-timetable-display').classList.add('hidden');
+    targetContainer.classList.remove('hidden');
+    document.getElementById('secondary-timetable-display').classList.add('hidden');
 
-            const thead = targetTable.querySelector('thead');
-            const tbody = targetTable.querySelector('tbody');
-            thead.innerHTML = ''; // Clear previous headers
-            tbody.innerHTML = ''; // Clear the table body first
+    const thead = targetTable.querySelector('thead');
+    const tbody = targetTable.querySelector('tbody');
+    thead.innerHTML = '';
+    tbody.innerHTML = '';
 
-            // Clear all view-specific classes
-            targetTable.classList.remove('all-view', 'individual-view');
+    targetTable.classList.remove('all-view', 'individual-view');
 
-            let headersRow;
+    let headersRow;
 
-            // --- Determine View Type and Set Table Class ---
-            if (viewType === 'full') {
-                targetTable.classList.add('all-view');
-                targetTitle.textContent = 'Full School Timetable (Editable)';
+    if (viewType === 'full') {
+        targetTable.classList.add('all-view');
+        targetTitle.textContent = 'Full School Timetable (Editable)';
 
-                // Full View Headers
-                headersRow = thead.insertRow();
-                headersRow.insertCell().textContent = 'Teacher ID';
-                headersRow.insertCell().textContent = 'Teacher Name';
-                headersRow.insertCell().textContent = 'Class In Charge';
-                for (const day of DAYS) {
-                    for (let period = 1; period <= NUM_PERIODS_PER_DAY; period++) {
-                        headersRow.insertCell().textContent = `${day}${period}`;
-                    }
-                }
-
-                // Full View Rows: Each teacher gets a row, sorted by teacher name
-                const sortedTeachers = Object.values(teachers).sort((a,b) => a.teacherName.localeCompare(b.teacherName));
-
-                sortedTeachers.forEach(teacher => {
-                    let row = tbody.insertRow(); // Create a new row in the tbody
-                    row.dataset.teacherId = teacher.teacher_id;
-
-                    row.insertCell().textContent = teacher.teacher_id;
-                    row.insertCell().textContent = teacher.teacherName;
-                    row.insertCell().textContent = teacher.classInCharge;
-
-                    for (const day of DAYS) {
-                        for (let period = 1; period <= NUM_PERIODS_PER_DAY; period++) {
-                            const slotKey = `${day}${period}`;
-                            const cell = row.insertCell();
-                            cell.dataset.slotKey = slotKey;
-                            cell.dataset.teacherId = teacher.teacher_id; // Add teacherId to cell for easier lookup
-                            
-                            if (isEditable) {
-                                cell.addEventListener('click', (e) => {
-                                    if (activeMovingSlot) {
-                                        // If a slot is currently being moved, attempt to place it here
-                                        attemptPlaceSlot(cell, e); // Pass the event
-                                    } else {
-                                        // If no slot is being moved, select this one to move
-                                        const assignmentInCell = currentTimetableData[slotKey]?.find(a => a && a.teacher_id === teacher.teacher_id);
-                                        // Only select if there's an actual assignment or if it's an unassigned card
-                                        if (assignmentInCell) {
-                                            selectSlotForMove(assignmentInCell, { type: 'timetable-cell', element: cell, slotKey: slotKey, teacherId: teacher.teacher_id, class: assignmentInCell?.class, subject: assignmentInCell?.subject, slotNumber: assignmentInCell?.slotNumber }, e);
-                                        }
-                                    }
-                                });
-                                cell.addEventListener('contextmenu', handleContextMenu); // Add context menu listener
-                            }
-
-                            const assignmentsInThisPeriod = assignedData[slotKey] || [];
-                            const assignmentForThisTeacher = assignmentsInThisPeriod.find(a => a && a.teacher_id === teacher.teacher_id);
-                            const isTeacherUnavailable = teacher.unavailable_slots.has(slotKey);
-
-                            if (assignmentForThisTeacher) {
-                                // Ensure class is displayed if available, otherwise just subject
-                                const classDisplay = assignmentForThisTeacher.class ? `${assignmentForThisTeacher.class} - ` : '';
-                                cell.textContent = `${classDisplay}${assignmentForThisTeacher.subject}${assignmentForThisTeacher.slotNumber ? '-' + assignmentForThisTeacher.slotNumber : ''}`;
-                            const subject = assignmentForThisTeacher.subject;
-                            const bgColor = subjectColorMap[subject] || '#f0f0f0'; // default color
-
-                            cell.style.backgroundColor = bgColor;
-                            cell.style.color = '#000'; // Optional: ensure good contrast
-
-                            if (assignmentForThisTeacher.isLocked) {
-                                    cell.classList.add('locked-cell');
-                                    cell.innerHTML += ' &#128274;'; // Unicode lock emoji
-                                } else {
-                                    cell.classList.remove('locked-cell');
-                                }
-                            } else if (isTeacherUnavailable) {
-                                cell.textContent = 'Unavailable';
-                                cell.classList.remove('locked-cell'); // Ensure no lock on unavailable
-                            } else {
-                                cell.textContent = ''; // Clear content if empty
-                                cell.classList.remove('locked-cell');
-                            }
-                        }
-                    }
-                });
-
-            } else if (viewType === 'teacher') {
-               targetTable.classList.add('individual-view');
-                const teacher = teachers[viewId];
-               // console.log("teacher",teacher);
-                targetTitle.textContent = `Timetable for ${teacher?.teacherName || 'N/A'}-${teacher?.classInCharge} (${viewId}) ${isEditable ? '(Editable)' : '(Read-Only)'}`;
-
-                // Teacher View Headers: Day, P1, P2, ... P7
-                headersRow = thead.insertRow();
-                headersRow.insertCell().textContent = 'Day';
-                for (let period = 1; period <= NUM_PERIODS_PER_DAY; period++) {
-                    headersRow.insertCell().textContent = `P${period}`;
-                }
-
-                // Teacher View Rows: Each day gets a row
-                DAYS.forEach((day, index) => {
-                    const row = tbody.insertRow();
-                    row.insertCell().textContent = FULL_DAYS[index]; // Full day name
-
-                    for (let period = 1; period <= NUM_PERIODS_PER_DAY; period++) { // Corrected loop condition
-                        const slotKey = `${day}${period}`;
-                        const cell = row.insertCell();
-                        cell.dataset.slotKey = slotKey;
-                        cell.dataset.teacherId = viewId; // Explicitly set teacherId for the cell
-                        cell.dataset.subject = teacher.subject; // Explicitly set teacherId for the cell
-                        
-                        if (isEditable) {
-                            cell.addEventListener('click', (e) => {
-                                //console.log( "celldatas3", cell.dataset);
-                                // renderSecondaryMiniTimetable('class', cell.data.class);
-                                if (activeMovingSlot) {
-                                    attemptPlaceSlot(cell, e); // Pass the event
-                                } else {
-                                    const assignmentInCell = currentTimetableData[slotKey]?.find(a => a && a.teacher_id === viewId);
-                                   //console.log(assignmentInCell);
-                                    if (assignmentInCell) {
-                                        //renderSecondaryMiniTimetable('class',assignmentInCell?.class);
-                                        renderMiniTimetablePopup("class", assignmentInCell.class , e.target);
-                                    //renderMiniTimetablePopup("teacher_id", assignmentInCell.teacher_id, assignmentInCell.teacherName,e.target);
-                                
-                                        selectSlotForMove(assignmentInCell, { type: 'timetable-cell', element: cell, slotKey: slotKey, teacherId: viewId, class: assignmentInCell?.class, subject: assignmentInCell?.subject, slotNumber: assignmentInCell?.slotNumber }, e);
-                                    }
-                                }
-                            });
-                            cell.addEventListener('contextmenu', handleContextMenu); // Add context menu listener
-                            // 👉 Show mini timetable on hover
-                       let hoverTimer;
-
-                        // cell.addEventListener('mouseenter', (e) => {
-                        //     hoverTimer = setTimeout(() => {
-                                
-                        //         const assignment = currentTimetableData[slotKey]?.find(a => a && a.teacher_id === viewId);
-                        //         if (assignment && assignment.class) {
-                        //             renderMiniTimetablePopup("class", assignment.class , e.target);
-                        //             renderMiniTimetablePopup("teacher_id", assignment.teacher_id, assignment.teacherName,e.target);
-                        //         }
-                        //     }, 1000); // 1 second delay
-                        // });
-
-                        cell.addEventListener('mouseleave', () => {
-                            clearTimeout(hoverTimer); // Cancel if mouse leaves early
-                        });
-                        
-                        }
-
-                        const assignmentsInThisPeriod = assignedData[slotKey] || [];
-                        const assignmentForThisTeacher = assignmentsInThisPeriod.find(a => a && a.teacher_id === viewId);
-                        const isTeacherUnavailable = teacher.unavailable_slots.has(slotKey);
-
-                        if (assignmentForThisTeacher) {
-                             // Ensure class is displayed if available, otherwise just subject
-                            const classDisplay = assignmentForThisTeacher.class ? `${assignmentForThisTeacher.class} - ` : '';
-                            cell.textContent = `${classDisplay}${assignmentForThisTeacher.subject}${assignmentForThisTeacher.slotNumber ? '-' + assignmentForThisTeacher.slotNumber : ''}`;
-                            
-                            
-                            const subject = assignmentForThisTeacher.subject;
-                            const bgColor = subjectColorMap[subject] || '#f0f0f0'; // default color
-
-                            cell.style.backgroundColor = bgColor;
-                            cell.style.color = '#000'; // Optional: ensure good contrast
-
-                            
-                            if (assignmentForThisTeacher.isLocked) {
-                                cell.classList.add('locked-cell');
-                                cell.innerHTML += ' &#128274;'; // Unicode lock emoji
-                            } else {
-                                cell.classList.remove('locked-cell');
-                            }
-                        } else if (isTeacherUnavailable) {
-                            cell.textContent = 'Unavailable';
-                            cell.classList.remove('locked-cell');
-                        } else {
-                            cell.textContent = '';
-                            cell.classList.remove('locked-cell');
-                        }
-                    }
-                });
-
-
-            } else if (viewType === 'class') {
-                targetTable.classList.add('individual-view');
-                targetTitle.textContent = `Timetable for Class ${viewId} ${isEditable ? '(Editable)' : '(Read-Only)'}`;
-
-                // Class View Headers: Day, P1, P2, ... P7
-                headersRow = thead.insertRow(); // Corrected: Use insertRow() on thead
-                headersRow.insertCell().textContent = 'Day';
-                for (let period = 1; period <= NUM_PERIODS_PER_DAY; period++) {
-                    headersRow.insertCell().textContent = `P${period}`;
-                }
-
-                // Class View Rows: Each day gets a row
-                DAYS.forEach((day, index) => {
-                    const row = tbody.insertRow(); // Corrected: Use insertRow() on tbody
-                    row.insertCell().textContent = FULL_DAYS[index]; // Full day name
-
-                    for (let period = 1; period <= NUM_PERIODS_PER_DAY; period++) { // Corrected loop condition
-                        const slotKey = `${day}${period}`;
-                        const cell = row.insertCell();
-                        cell.dataset.slotKey = slotKey;
-                        cell.dataset.className = viewId; // Explicitly set className for the cell
-                        
-                        
-                        if (isEditable) {
-                            cell.addEventListener('click', (e) => {
-                                if (activeMovingSlot) {
-                                    attemptPlaceSlot(cell, e); // Pass the event
-                                } else {
-                                    const assignmentInCell = currentTimetableData[slotKey]?.find(a => a && a.class === viewId);
-                                    //console.log(assignmentInCell);
-                                    if (assignmentInCell) {
-                                        renderMiniTimetablePopup("teacher_id", assignmentInCell.teacher_id,assignmentInCell.teacherName, e.target);
-                                       // renderMiniTimetablePopup("class", assignmentInCell.class , e.target);
-                                 
-                                        selectSlotForMove(assignmentInCell, { type: 'timetable-cell', element: cell, slotKey: slotKey, class: viewId, teacherId: assignmentInCell?.teacher_id, subject: assignmentInCell?.subject, slotNumber: assignmentInCell?.slotNumber }, e);
-                                       // renderSecondaryMiniTimetable('teacher_id', assignmentInCell.teacher_id);
-                                       
-                                    }
-                                }
-                            });
-                            cell.addEventListener('contextmenu', handleContextMenu); // Add context menu listener
-                        
-                            // 👉 Show mini timetable on hover
-                       let hoverTimer;
-
-                        // cell.addEventListener('mouseenter', (e) => {
-                        //     hoverTimer = setTimeout(() => {
-                                
-                        //         const assignment = currentTimetableData[slotKey]?.find(a => a && a.class === viewId);
-                        //         if (assignment && assignment.teacher_id) {
-                        //             renderMiniTimetablePopup("teacher_id", assignment.teacher_id,assignment.teacherName, e.target);
-                        //             renderMiniTimetablePopup("class", assignment.class , e.target);
-                                
-                        //         }
-                        //     }, 2000); // 1 second delay
-                        // });
-
-                        cell.addEventListener('mouseleave', () => {
-                            clearTimeout(hoverTimer); // Cancel if mouse leaves early
-                        });
-                        
-                        
-                        }
-
-                        const assignmentsInThisPeriod = assignedData[slotKey] || [];
-                        const assignmentForThisClass = assignmentsInThisPeriod.find(a => a && a.class === viewId);
-
-                        if (assignmentForThisClass) {
-                            cell.textContent = `${assignmentForThisClass.subject}${assignmentForThisClass.slotNumber ? '-' + assignmentForThisClass.slotNumber : ''} (Teacher: ${teachers[assignmentForThisClass.teacher_id].teacherName})`;
-                            
-                            // Add color based on subject
-                            
-
-                            const subject = assignmentForThisClass.subject;
-                            const bgColor = subjectColorMap[subject] || '#f0f0f0'; // default color
-
-                            cell.style.backgroundColor = bgColor;
-                            cell.style.color = '#000'; // Optional: ensure good contrast
-
-                            if (assignmentForThisClass.isLocked) {
-                                cell.classList.add('locked-cell');
-                                cell.innerHTML += ' &#128274;'; // Unicode lock emoji
-                            } else {
-                                cell.classList.remove('locked-cell');
-                            }
-                        } else {
-                            cell.textContent = '';
-                            cell.classList.remove('locked-cell');
-                        }
-                    }
-                });
+        headersRow = thead.insertRow();
+        headersRow.insertCell().textContent = 'Teacher ID';
+        headersRow.insertCell().textContent = 'Teacher Name';
+        headersRow.insertCell().textContent = 'Class In Charge';
+        for (const day of DAYS) {
+            for (let period = 1; period <= NUM_PERIODS_PER_DAY; period++) {
+                headersRow.insertCell().textContent = `${day}${period}`;
             }
-            
-            updateButtonStates();
         }
 
+        const sortedTeachers = Object.values(teachers).sort((a, b) => a.teacherName.localeCompare(b.teacherName));
+
+        sortedTeachers.forEach(teacher => {
+            let row = tbody.insertRow();
+            row.dataset.teacherId = teacher.teacher_id;
+
+            row.insertCell().textContent = teacher.teacher_id;
+            row.insertCell().textContent = teacher.teacherName;
+            row.insertCell().textContent = teacher.classInCharge;
+
+            for (const day of DAYS) {
+                for (let period = 1; period <= NUM_PERIODS_PER_DAY; period++) {
+                    const slotKey = `${day}${period}`;
+                    const cell = row.insertCell();
+                    cell.dataset.slotKey = slotKey;
+                    cell.dataset.teacherId = teacher.teacher_id;
+
+                    if (isEditable) {
+                        cell.addEventListener('click', (e) => {
+                            if (activeMovingSlot) {
+                                attemptPlaceSlot(cell, e);
+                            } else {
+                                const assignmentInCell = currentTimetableData[slotKey]?.find(a => a && a.teacher_id === teacher.teacher_id);
+                                if (assignmentInCell) {
+                                    selectSlotForMove(assignmentInCell, { type: 'timetable-cell', element: cell, slotKey: slotKey, teacherId: teacher.teacher_id, class: assignmentInCell?.class, subject: assignmentInCell?.subject, slotNumber: assignmentInCell?.slotNumber }, e);
+                                }
+                            }
+                        });
+                        cell.addEventListener('contextmenu', handleContextMenu);
+                    }
+
+                    // --- Cell Rendering Logic for Full View (Teacher's perspective) ---
+                    const assignmentsInThisPeriod = assignedData[slotKey] || [];
+                    const assignmentsForThisTeacherInFullView = assignmentsInThisPeriod.filter(a => a && a.teacher_id === teacher.teacher_id);
+                    const isTeacherUnavailable = teacher.unavailable_slots.has(slotKey);
+
+                    // Clear previous styles and content
+                    cell.textContent = '';
+                    cell.style.backgroundColor = '';
+                    cell.style.color = '';
+                    cell.title = '';
+                    cell.classList.remove('locked-cell');
+
+                    if (assignmentsForThisTeacherInFullView.length > 0) {
+                        let cellContent = [];
+                        assignmentsForThisTeacherInFullView.forEach(assignment => {
+                            const classDisplay = assignment.class ? `${assignment.class} - ` : '';
+                            cellContent.push(`${classDisplay}${assignment.subject}${assignment.slotNumber ? '-' + assignment.slotNumber : ''}`);
+                        });
+
+                        cell.textContent = cellContent.join(', ');
+
+                        if (assignmentsForThisTeacherInFullView.length > 1) {
+                            // Teacher teaching multiple classes at once - A Hard Conflict
+                            cell.style.backgroundColor = '#FF6666'; // Brighter red for hard conflict
+                            cell.style.color = '#FFF'; // White text for better contrast
+                            cell.title = "HARD CONFLICT: Teacher teaching multiple classes!";
+                        } else {
+                            const singleAssignment = assignmentsForThisTeacherInFullView[0];
+                            const subject = singleAssignment.subject;
+                            const bgColor = subjectColorMap[subject] || '#f0f0f0';
+                            cell.style.backgroundColor = bgColor;
+                            cell.style.color = '#000';
+                            cell.title = "";
+                        }
+
+                        if (assignmentsForThisTeacherInFullView[0].isLocked) {
+                            cell.classList.add('locked-cell');
+                            cell.innerHTML += ' &#128274;';
+                        }
+                    } else if (isTeacherUnavailable) {
+                        cell.textContent = 'UNAVAILABLE';
+                        cell.style.backgroundColor = '#e0e0e0';
+                        cell.style.color = '#777';
+                        cell.title = "Teacher is unavailable for this slot.";
+                    } else {
+                        cell.textContent = '';
+                    }
+                }
+            }
+        });
+
+    } else if (viewType === 'teacher') {
+        targetTable.classList.add('individual-view');
+        const teacher = teachers[viewId];
+        targetTitle.textContent = `Timetable for ${teacher?.teacherName || 'N/A'}-${teacher?.classInCharge} (${viewId}) ${isEditable ? '(Editable)' : '(Read-Only)'}`;
+
+        headersRow = thead.insertRow();
+        headersRow.insertCell().textContent = 'Day';
+        for (let period = 1; period <= NUM_PERIODS_PER_DAY; period++) {
+            headersRow.insertCell().textContent = `P${period}`;
+        }
+
+        DAYS.forEach((day, index) => {
+            const row = tbody.insertRow();
+            row.insertCell().textContent = FULL_DAYS[index];
+
+            for (let period = 1; period <= NUM_PERIODS_PER_DAY; period++) {
+                const slotKey = `${day}${period}`;
+                const cell = row.insertCell();
+                cell.dataset.slotKey = slotKey;
+                cell.dataset.teacherId = viewId;
+
+                if (isEditable) {
+                    cell.addEventListener('click', (e) => {
+                        if (activeMovingSlot) {
+                            attemptPlaceSlot(cell, e);
+                        } else {
+                            const assignmentInCell = currentTimetableData[slotKey]?.find(a => a && a.teacher_id === viewId);
+                            if (assignmentInCell) {
+                                renderMiniTimetablePopup("class", assignmentInCell.class, e.target);
+                                selectSlotForMove(assignmentInCell, { type: 'timetable-cell', element: cell, slotKey: slotKey, teacherId: viewId, class: assignmentInCell?.class, subject: assignmentInCell?.subject, slotNumber: assignmentInCell?.slotNumber }, e);
+                            }
+                        }
+                    });
+                    cell.addEventListener('contextmenu', handleContextMenu);
+
+                    let hoverTimer;
+                    cell.addEventListener('mouseenter', (e) => {
+                        hoverTimer = setTimeout(() => {
+                            const assignment = currentTimetableData[slotKey]?.find(a => a && a.teacher_id === viewId);
+                            if (assignment && assignment.class) {
+                                renderMiniTimetablePopup("class", assignment.class, e.target);
+                            }
+                        }, 500);
+                    });
+                    cell.addEventListener('mouseleave', () => {
+                        clearTimeout(hoverTimer);
+                    });
+                }
+
+                // --- Cell Rendering Logic for Teacher View ---
+                const assignmentsInThisPeriod = assignedData[slotKey] || [];
+                const assignmentsForThisTeacher = assignmentsInThisPeriod.filter(a => a && a.teacher_id === viewId);
+                const isTeacherUnavailable = teacher.unavailable_slots.has(slotKey);
+
+                // Clear previous styles and content
+                cell.textContent = '';
+                cell.style.backgroundColor = '';
+                cell.style.color = '';
+                cell.title = '';
+                cell.classList.remove('locked-cell');
+
+                if (assignmentsForThisTeacher.length > 0) {
+                    let cellContent = [];
+                    assignmentsForThisTeacher.forEach(assignment => {
+                        const classDisplay = assignment.class ? `${assignment.class} - ` : '';
+                        cellContent.push(`${classDisplay}${assignment.subject}${assignment.slotNumber ? '-' + assignment.slotNumber : ''}`);
+                    });
+
+                    cell.textContent = cellContent.join(', ');
+
+                    if (assignmentsForThisTeacher.length > 1) {
+                        // Teacher teaching multiple classes at once - A Hard Conflict
+                        cell.style.backgroundColor = '#FF6666'; // Brighter red for hard conflict
+                        cell.style.color = '#FFF'; // White text for better contrast
+                        cell.title = "HARD CONFLICT: Teacher teaching multiple classes!";
+                    } else {
+                        const singleAssignment = assignmentsForThisTeacher[0];
+                        const subject = singleAssignment.subject;
+                        const bgColor = subjectColorMap[subject] || '#f0f0f0';
+                        cell.style.backgroundColor = bgColor;
+                        cell.style.color = '#000';
+                        cell.title = "";
+                    }
+
+                    if (assignmentsForThisTeacher[0].isLocked) {
+                        cell.classList.add('locked-cell');
+                        cell.innerHTML += ' &#128274;';
+                    }
+
+                } else if (isTeacherUnavailable) {
+                    cell.textContent = 'UNAVAILABLE';
+                    cell.style.backgroundColor = '#e0e0e0';
+                    cell.style.color = '#777';
+                    cell.title = "Teacher is unavailable for this slot.";
+                } else {
+                    cell.textContent = '';
+                }
+            }
+        });
+
+    } else if (viewType === 'class') {
+        targetTable.classList.add('individual-view');
+        targetTitle.textContent = `Timetable for Class ${viewId} ${isEditable ? '(Editable)' : '(Read-Only)'}`;
+
+        headersRow = thead.insertRow();
+        headersRow.insertCell().textContent = 'Day';
+        for (let period = 1; period <= NUM_PERIODS_PER_DAY; period++) {
+            headersRow.insertCell().textContent = `P${period}`;
+        }
+
+        DAYS.forEach((day, index) => {
+            const row = tbody.insertRow();
+            row.insertCell().textContent = FULL_DAYS[index];
+
+            for (let period = 1; period <= NUM_PERIODS_PER_DAY; period++) {
+                const slotKey = `${day}${period}`;
+                const cell = row.insertCell();
+                cell.dataset.slotKey = slotKey;
+                cell.dataset.className = viewId;
+
+                if (isEditable) {
+                    cell.addEventListener('click', (e) => {
+                        if (activeMovingSlot) {
+                            attemptPlaceSlot(cell, e);
+                        } else {
+                            const assignmentInCell = currentTimetableData[slotKey]?.find(a => a && a.class === viewId);
+                            if (assignmentInCell) {
+                                renderMiniTimetablePopup("teacher_id", assignmentInCell.teacher_id, teachers[assignmentInCell.teacher_id]?.teacherName, e.target);
+                                selectSlotForMove(assignmentInCell, { type: 'timetable-cell', element: cell, slotKey: slotKey, class: viewId, teacherId: assignmentInCell?.teacher_id, subject: assignmentInCell?.subject, slotNumber: assignmentInCell?.slotNumber }, e);
+                            }
+                        }
+                    });
+                    cell.addEventListener('contextmenu', handleContextMenu);
+
+                    let hoverTimer;
+                    cell.addEventListener('mouseenter', (e) => {
+                        hoverTimer = setTimeout(() => {
+                            const assignment = currentTimetableData[slotKey]?.find(a => a && a.class === viewId);
+                            if (assignment && assignment.teacher_id) {
+                                renderMiniTimetablePopup("teacher_id", assignment.teacher_id, teachers[assignment.teacher_id]?.teacherName, e.target);
+                            }
+                        }, 500);
+                    });
+                    cell.addEventListener('mouseleave', () => {
+                        clearTimeout(hoverTimer);
+                    });
+                }
+
+                // --- Cell Rendering Logic for Class View ---
+                const assignmentsInThisPeriod = assignedData[slotKey] || [];
+                const assignmentsForThisClass = assignmentsInThisPeriod.filter(a => a && a.class === viewId);
+
+                // Clear previous styles and content
+                cell.textContent = '';
+                cell.style.backgroundColor = '';
+                cell.style.color = '';
+                cell.title = '';
+                cell.classList.remove('locked-cell');
+
+                if (assignmentsForThisClass.length > 0) {
+                    let cellContent = [];
+                    assignmentsForThisClass.forEach(assignment => {
+                        cellContent.push(`${assignment.subject}${assignment.slotNumber ? '-' + assignment.slotNumber : ''} (Teacher: ${teachers[assignment.teacher_id]?.teacherName || 'N/A'})`);
+                    });
+
+                    cell.textContent = cellContent.join(', ');
+
+                    if (assignmentsForThisClass.length > 1) {
+                        // Multiple teachers assigned to the same class in this slot - A Hard Conflict
+                        cell.style.backgroundColor = '#FF6666'; // Brighter red for hard conflict
+                        cell.style.color = '#FFF'; // White text for better contrast
+                        cell.title = "HARD CONFLICT: Multiple teachers for this class!";
+                    } else {
+                        const singleAssignment = assignmentsForThisClass[0];
+                        const subject = singleAssignment.subject;
+                        const bgColor = subjectColorMap[subject] || '#f0f0f0';
+                        cell.style.backgroundColor = bgColor;
+                        cell.style.color = '#000';
+                        cell.title = "";
+                    }
+
+                    if (assignmentsForThisClass[0].isLocked) {
+                        cell.classList.add('locked-cell');
+                        cell.innerHTML += ' &#128274;';
+                    }
+                } else {
+                    cell.textContent = '';
+                }
+            }
+        });
+    }
+
+    updateButtonStates();
+}
         /**
          * Displays the full timetable (editable).
          */
@@ -2197,8 +2210,8 @@ function renderMiniTimetableContent(type, id,name) {
     // If a teacher is already in this period, it's a hard conflict.
     if (isHardConflictTeacherInPeriod) {
         return {
-            isHardConflict: false,
-            isSoftConflict: isClassConflict,
+            isTeacherConflict: true,
+            isSoftConflict: true,// isClassConflict,
             isSoftConflicttcr: true,
             isSoftConflictsame: true,
             conflictingAssignments: conflictingAssignments,
@@ -2572,14 +2585,19 @@ function renderMiniTimetableContent(type, id,name) {
 
     if (conflictResult.isSoftConflict && conflictResult.conflictingAssignments && conflictResult.conflictingAssignments.length > 0) {
         let pickUpIndex;
+        if (conflictResult.isSoftConflict && conflictResult.conflictingAssignments && conflictResult.conflictingAssignments.length > 1) {
         if (currentMainTimetableDisplay.type === 'teacher') {
             pickUpIndex = 1; // Pick the first slot for 'teacher' display
         } else {
             pickUpIndex = 0; // Pick the second slot for other displays (e.g., 'class')
         }
+        }else{
+            pickUpIndex = 0;
+        } 
+            
 
         // Ensure the chosen index is valid
-        if (pickUpIndex < conflictResult.conflictingAssignments.length) {
+        if (pickUpIndex <= conflictResult.conflictingAssignments.length) {
             newSlotToPickUp = conflictResult.conflictingAssignments[pickUpIndex];
 
             // Create a new array that excludes the picked-up slot
