@@ -3382,7 +3382,8 @@ function renderMiniTimetableContent(type, id,name) {
                 showMessage('Cannot export to cloud. Firebase not initialized or user not authenticated.', 'error');
                 return;
             }
-
+            saveTeachersDataToFirestore();
+                saveClassDataToFirestore();
             if (Object.keys(currentTimetableData).length === 0) {
                 showMessage('No timetable to export. Please generate one first.', 'error');
                 return;
@@ -3541,7 +3542,7 @@ function renderMiniTimetableContent(type, id,name) {
                 //var localTime = new Date(localTime);
                 console.log(fireBaseTime,"local",localTime);
                 
-                if (fireBaseTime > localTime) {
+                if (fireBaseTime !== localTime) {
                     const loadedTimetable = {};
                 const data = timetableDocSnap.data();
                 for (const key in data) {
@@ -3568,17 +3569,19 @@ function renderMiniTimetableContent(type, id,name) {
                 if (unassignedSnap.exists()) {
                     // Ensure uniqueness when loading from Firestore as well
                     const loadedUnassigned = JSON.parse(unassignedSnap.data().unassignedSlots);
-                   currentUnassignedSlots = []; // Reset
+                   console.log("unassignedloaded", loadedUnassigned); 
+                    currentUnassignedSlots = []; // Reset
                     loadedUnassigned.forEach(slot => addUniqueUnassignedSlot(slot));
-                currentUnassignedSlots = currentUnassignedSlots.filter(unassignedSlot => {
-                return requiredSlots.some(reqSlot =>
+                    currentUnassignedSlots = currentUnassignedSlots.filter(unassignedSlot => {
+                    return requiredSlots.some(reqSlot =>
                     reqSlot.class_name === unassignedSlot.class_name &&
                     reqSlot.subject === unassignedSlot.subject &&
                     reqSlot.teacher_id === unassignedSlot.teacher_id &&
                     reqSlot.slotNumber === unassignedSlot.slotNumber
-                );
-            });
-
+                 );
+                  localStorage.setItem(LOCAL_STORAGE_KEY_UNASSIGNED, JSON.stringify(currentUnassignedSlots));
+                     displayUnassignedSlots(currentUnassignedSlots);  
+                 });
                 } else {
                     currentUnassignedSlots = [];
                 }
