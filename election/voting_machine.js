@@ -573,9 +573,11 @@ function renderCurrentPost() {
       </div>
 
       <!-- Name -->
-      <div class="d-flex align-items-center justify-content-start flex-grow-1 text-start">
-        <h5 class="mb-0 fw-semibold text-dark">${candidate.name}</h5>
-      </div>
+     <div class="d-flex align-items-center justify-content-start flex-grow-1 text-start">
+  <h5 class="mb-0 fw-semibold text-dark text-break text-wrap">
+    ${candidate.name}
+  </h5>
+</div>
 </div>
       <!-- Vote Button -->
       <div class="d-flex align-items-center justify-content-start flex-shrink-0" style="min-width: 60px; min-height:80px">
