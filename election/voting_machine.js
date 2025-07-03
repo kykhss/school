@@ -3,7 +3,36 @@ import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged }
 import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, query, where, addDoc, getDocs, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 // Global Firebase variables (provided by the environment)
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'kyhss';
+function loadParamsFromBase64Url() {
+                const urlParams = new URLSearchParams(window.location.search);
+                const dataParam = urlParams.get('wxev');
+
+                if (dataParam) {
+                    try {
+                        console.log("dataparam",dataParam);
+                        const decoded = dataParam;// base64Decode(dataParam);
+                        const userId = decoded;
+                        if (userId) {
+                            localStorage.setItem('userId', userId);
+                            //localStorage.setItem('appId', appId);
+                            return userId ;
+                        }
+                    } catch (e) {
+                        console.error('Invalid Base64 data:', e);
+                    }
+                }
+
+                // fallback
+                return 
+                    localStorage.getItem('userId') || 'defaultUser';
+            }
+
+           // setBase64ParamsInUrl('kyhss');
+           // let appId = "timetableData"
+            // Later in your app, decode from URL or localStorage
+            const currentUserId= loadParamsFromBase64Url();
+            const appId = typeof __app_id !== 'undefined' ? __app_id :currentUserId
+            
 const firebaseConfig = {
     apiKey: "AIzaSyAu5TDMWepJX7naoG5H3WpGJ1yxAu01whg",
     authDomain: "timetables-470dd.firebaseapp.com",
@@ -28,9 +57,9 @@ let currentPostIndex = 0; // Tracks the index of the currently displayed post
 let votedPosts = new Set(); // Stores IDs of posts already voted on in the current session
 
 // --- Persistent Storage Keys ---
-const MACHINE_SESSION_KEY = 'votingMachineSession';
-const CURRENT_SESSION_ID_KEY = 'currentSessionId';
-const VOTING_PROGRESS_KEY = 'votingProgress'; // New key for progress
+const MACHINE_SESSION_KEY = `${appId+'_votingMachineSession'}`;
+const CURRENT_SESSION_ID_KEY = `${appId+'_currentSessionId'}`;
+const VOTING_PROGRESS_KEY = `${appId+'_votingProgress'}`; // New key for progress
 
 // DOM Elements
 const machineLoginView = document.getElementById('machineLoginView');
@@ -565,7 +594,7 @@ function renderCurrentPost() {
 
       <!-- Image -->
       <div class="d-flex align-items-center justify-content-center flex-shrink-0 bg-light border rounded" style="width: 80px; height: 100px;">
-        <img src="${candidate.photoUrl ? 'https://drive.google.com/thumbnail?id=' + candidate.photoUrl : 'https://placehold.co/80x100/cccccc/333333?text=No+Photo'}"
+        <img src="${candidate.photoUrl ? candidate.photoUrl : 'https://placehold.co/80x100/cccccc/333333?text=No+Photo'}"
              alt="${candidate.name}"
              class="img-fluid"
              style="max-width: 100%; max-height: 100%; object-fit: cover;"
@@ -578,6 +607,7 @@ function renderCurrentPost() {
     ${candidate.name}
   </h5>
 </div>
+
 </div>
       <!-- Vote Button -->
       <div class="d-flex align-items-center justify-content-start flex-shrink-0" style="min-width: 60px; min-height:80px">
