@@ -33,15 +33,14 @@ function loadParamsFromBase64Url() {
             const currentUserId= loadParamsFromBase64Url();
             const appId = typeof __app_id !== 'undefined' ? __app_id :currentUserId
             
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyABrgqY0EpBVJF_jQ6Zpvo7whtxbaYB_b8",
-  authDomain: "kyhss-athavanad.firebaseapp.com",
-  projectId: "kyhss-athavanad",
-  storageBucket: "kyhss-athavanad.firebasestorage.app",
-  messagingSenderId: "471650360488",
-  appId: "1:471650360488:web:88483d99ac63075addb69d",
-  measurementId: "G-ETE3YCBXVD"
+    apiKey: "AIzaSyAu5TDMWepJX7naoG5H3WpGJ1yxAu01whg",
+    authDomain: "timetables-470dd.firebaseapp.com",
+    projectId: "timetables-470dd",
+    storageBucket: "timetables-470dd.firebaseapp.com",
+    messagingSenderId: "925422681424",
+    appId: "1:925422681424:web:df91ce9de4dfef9c5ec055",
+    measurementId: "G-N7ND4LPL9W"
 };
 
 let app;
@@ -61,6 +60,13 @@ let votedPosts = new Set(); // Stores IDs of posts already voted on in the curre
 const MACHINE_SESSION_KEY = `${appId+'_votingMachineSession'}`;
 const CURRENT_SESSION_ID_KEY = `${appId+'_currentSessionId'}`;
 const VOTING_PROGRESS_KEY = `${appId+'_votingProgress'}`; // New key for progress
+
+// Add this new variable near the top
+let sessionVotes = {}; // Will store votes for the current session, e.g., { postId: candidateId }
+
+// Also, define a new key for localStorage
+const VOTING_SESSION_VOTES_KEY = `${appId+'_votingSessionVotes'}`;
+
 
 // DOM Elements
 const machineLoginView = document.getElementById('machineLoginView');
@@ -711,81 +717,84 @@ function handleNotaClick() {
  * @param {string} postId - The ID of the post being voted for.
  * @param {string} candidateId - The ID of the selected candidate, or 'NOTA'.
  */
+// In voting_machine.js
+
 async function handleVoteSubmission(postId, candidateId) {
     if (votedPosts.has(postId)) {
         showAlert('You have already voted for this post.', 'warning');
         return;
     }
 
-    showLoading(true, 'Submitting Vote...');
-    try {
-        // Record the vote
-        await addDoc(collection(db, `artifacts/${appId}/public/data/votes`), {
-            postId: postId,
-            candidateId: candidateId,
-            votingMachineDocId: loggedInMachineData.docId,
-            boothDocId: loggedInMachineData.boothDocId,
-            sessionId: currentSessionId, // Link vote to the specific session
-            timestamp: Timestamp.now()
-        });
+    showLoading(true, 'Recording Vote...');
 
-        votedPosts.add(postId); // Mark post as voted
+    // --- ENTIRE LOGIC IS REPLACED ---
+    
+    // 1. Record the vote locally instead of to Firestore
+    sessionVotes[postId] = candidateId;
+    votedPosts.add(postId); // Mark post as voted for UI tracking
 
-        // --- Store current progress after a successful vote ---
-        const votingProgress = {
-            currentPostIndex: currentPostIndex + 1, // Store the NEXT post index
-            votedPosts: Array.from(votedPosts) // Convert Set to Array for storage
-        };
-        localStorage.setItem(VOTING_PROGRESS_KEY, JSON.stringify(votingProgress));
+    // 2. Store current progress and the cast votes in localStorage for recovery
+    const votingProgress = {
+        currentPostIndex: currentPostIndex + 1,
+        votedPosts: Array.from(votedPosts)
+    };
+    localStorage.setItem(VOTING_PROGRESS_KEY, JSON.stringify(votingProgress));
+    localStorage.setItem(VOTING_SESSION_VOTES_KEY, JSON.stringify(sessionVotes)); // Save the actual votes
 
-        showAlert('Vote submitted successfully!', 'success');
-
-        // Move to the next post or complete the session
-        currentPostIndex++;
-        if (currentPostIndex < posts.length) {
-            renderCurrentPost(); // Render the next post
-        } else {
-            // All posts have been voted on
-            handleAllPostsVoted();
-        }
-
-    } catch (error) {
-        console.error("Error submitting vote:", error);
-        showAlert(`Failed to submit vote: ${error.message}`, "danger");
-    } finally {
-        showLoading(false);
+    showAlert('Vote recorded!', 'success');
+    
+    // 3. Move to the next post
+    currentPostIndex++;
+    if (currentPostIndex < posts.length) {
+        renderCurrentPost();
+    } else {
+        await handleAllPostsVoted(); // Note the 'await'
     }
+
+    showLoading(false);
+    // --- REPLACEMENT ENDS ---
 }
 
 /**
  * Handles the state when all posts have been voted on.
  */
 async function handleAllPostsVoted() {
-    showLoading(true, 'Finalizing session...');
+    showLoading(true, 'Finalizing and Submitting All Votes...');
     try {
-        // Update voting machine status to 'completed'
+        // 1. Create a single document with all votes from the session
+        const finalBallot = {
+            boothDocId: loggedInMachineData.boothDocId,
+            votingMachineDocId: loggedInMachineData.docId,
+            sessionId: currentSessionId,
+            timestamp: Timestamp.now(),
+            votes: sessionVotes, // The object containing all cast votes
+        };
+
+        // 2. Add this single document to a NEW collection e.g., 'voteBallots'
+        await addDoc(collection(db, `artifacts/${appId}/public/data/voteBallots`), finalBallot);
+
+        // 3. Update the machine status to 'completed'
         await updateDoc(doc(db, `artifacts/${appId}/public/data/votingMachines`, loggedInMachineData.docId), {
             status: 'completed'
         });
 
-        // Clear voting progress from localStorage as the session is completed
+        // 4. Clean up localStorage for the completed session
         localStorage.removeItem(VOTING_PROGRESS_KEY);
+        localStorage.removeItem(VOTING_SESSION_VOTES_KEY);
+        sessionVotes = {}; // Clear the local object
 
-        // The status listener will handle showing the completion view
         if (invigilatorPasswordModal) {
-            invigilatorPasswordModal.hide(); // Hide the modal if it's open
+            invigilatorPasswordModal.hide();
         }
-        // These resets are now handled by forceLogout or by the invigilator authentication path
-        // currentPostIndex = 0;
-        // votedPosts.clear();
 
     } catch (error) {
-        console.error("Error setting machine to completed:", error);
-        showAlert("Failed to finalize voting session.", "danger");
+        console.error("Error submitting final ballot:", error);
+        showAlert("A critical error occurred while submitting votes. Please contact the invigilator.", "danger");
     } finally {
         showLoading(false);
     }
 }
+
 
 // --- "Click here to Vote" button listener ---
 startVotingButton.addEventListener('click', async () => {
