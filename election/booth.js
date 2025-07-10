@@ -33,15 +33,16 @@ function loadParamsFromBase64Url() {
             const currentUserId= loadParamsFromBase64Url();
             const appId = typeof __app_id !== 'undefined' ? __app_id :currentUserId
             
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-    apiKey: "AIzaSyAu5TDMWepJX7naoG5H3WpGJ1yxAu01whg",
-    authDomain: "timetables-470dd.firebaseapp.com",
-    projectId: "timetables-470dd",
-    storageBucket: "timetables-470dd.firebasestorage.app",
-    messagingSenderId: "925422681424",
-    appId: "1:925422681424:web:df91ce9de4dfef9c5ec055",
-    measurementId: "G-N7ND4LPL9W"
-    };  
+  apiKey: "AIzaSyABrgqY0EpBVJF_jQ6Zpvo7whtxbaYB_b8",
+  authDomain: "kyhss-athavanad.firebaseapp.com",
+  projectId: "kyhss-athavanad",
+  storageBucket: "kyhss-athavanad.firebasestorage.app",
+  messagingSenderId: "471650360488",
+  appId: "1:471650360488:web:88483d99ac63075addb69d",
+  measurementId: "G-ETE3YCBXVD"
+}; 
 //const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
 const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
