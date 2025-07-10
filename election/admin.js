@@ -977,20 +977,21 @@ async function deleteVotingMachine(vmDocId) {
 async function fetchAllElectionData() {
     showLoading(true, 'Fetching election data for reports...');
     try {
-        const [postsSnapshot, candidatesSnapshot, boothsSnapshot, votesSnapshot] = await Promise.all([
+        const [postsSnapshot, candidatesSnapshot, boothsSnapshot, voteBallotsSnapshot] = await Promise.all([
             getDocs(collection(db, `artifacts/${appId}/public/data/posts`)),
             getDocs(collection(db, `artifacts/${appId}/public/data/candidates`)),
             getDocs(collection(db, `artifacts/${appId}/public/data/booths`)),
-            getDocs(collection(db, `artifacts/${appId}/public/data/votes`))
+            getDocs(collection(db, `artifacts/${appId}/public/data/voteBallots`)) // Fetch from the new collection
         ]);
+
 
         const postsMap = new Map(postsSnapshot.docs.map(doc => [doc.id, doc.data()]));
         const candidatesMap = new Map(candidatesSnapshot.docs.map(doc => [doc.id, doc.data()]));
         const boothsMap = new Map(boothsSnapshot.docs.map(doc => [doc.id, doc.data()]));
-        const votes = votesSnapshot.docs.map(doc => doc.data());
+        const votes = voteBallotsSnapshot.docs.map(doc => doc.data()); // This is now an array of ballot documents
 
         showLoading(false);
-        return { postsMap, candidatesMap, boothsMap, votes };
+        return { postsMap, candidatesMap, boothsMap, votes }; // 'votes' now contains ballots
     } catch (error) {
         console.error("Error fetching election data:", error);
         showAlert(`Failed to fetch election data: ${error.message}`, "danger");
@@ -1009,35 +1010,51 @@ async function fetchAllElectionData() {
  * Structure: Map<boothDocId, Map<postId, Map<candidateId, count>>>
  */
 function aggregateVotes(votes, postsMap, candidatesMap, boothsMap) {
-    const aggregatedData = new Map(); // Map<boothDocId, Map<postId, Map<candidateId, count>>>
+    // The 'votes' parameter is now an array of ballot documents.
+    const aggregatedData = new Map(); // Structure: Map<boothDocId, Map<postId, Map<candidateId, count>>>
 
+    // Initialize the data structure for all booths and posts
     boothsMap.forEach((boothData, boothDocId) => {
-        aggregatedData.set(boothDocId, new Map()); // Initialize for each booth
+        const boothVoteMap = new Map();
         postsMap.forEach((postData, postId) => {
-            aggregatedData.get(boothDocId).set(postId, new Map()); // Initialize for each post within booth
-            // Initialize candidates for this post
+            const postVoteMap = new Map();
+            // Initialize all candidates for this post with 0 votes
             candidatesMap.forEach((candidateData, candidateId) => {
                 if (candidateData.postId === postId) {
-                    aggregatedData.get(boothDocId).get(postId).set(candidateId, 0);
+                    postVoteMap.set(candidateId, 0);
                 }
             });
             // Add NOTA for each post
-            aggregatedData.get(boothDocId).get(postId).set('NOTA', 0);
+            postVoteMap.set('NOTA', 0);
+            boothVoteMap.set(postId, postVoteMap);
         });
+        aggregatedData.set(boothDocId, boothVoteMap);
     });
 
-    votes.forEach(vote => {
-        const { boothDocId, postId, candidateId } = vote;
-        if (aggregatedData.has(boothDocId) && aggregatedData.get(boothDocId).has(postId)) {
-            const postVotes = aggregatedData.get(boothDocId).get(postId);
-            postVotes.set(candidateId, (postVotes.get(candidateId) || 0) + 1);
-        } else {
-            console.warn(`Vote for unknown boothDocId (${boothDocId}) or postId (${postId}) skipped.`);
+    // --- NEW AGGREGATION LOGIC ---
+    // Iterate over each ballot document
+    votes.forEach(ballot => {
+        const { boothDocId, votes: sessionVotes } = ballot; // Destructure the ballot
+        
+        if (aggregatedData.has(boothDocId) && sessionVotes) {
+            const boothAggregatedVotes = aggregatedData.get(boothDocId);
+
+            // Iterate over the votes within the ballot (e.g., { postId: candidateId, ... })
+            for (const postId in sessionVotes) {
+                const candidateId = sessionVotes[postId];
+                if (boothAggregatedVotes.has(postId)) {
+                    const postVotes = boothAggregatedVotes.get(postId);
+                    // Increment the count for the specific candidate
+                    postVotes.set(candidateId, (postVotes.get(candidateId) || 0) + 1);
+                }
+            }
         }
     });
+    // --- END NEW LOGIC ---
 
     return aggregatedData;
 }
+
 
 /**
  * Generates a booth-wise vote count PDF report.
