@@ -1,0 +1,1331 @@
+function base64Encode(str) {
+                return btoa(unescape(encodeURIComponent(str)));
+            }
+
+        function setBase64ParamsInUrl(userId) {
+                const encoded = base64Encode(userId);
+                const newUrl = `${window.location.pathname}?wxev=${encodeURIComponent(encoded)}`;
+                window.history.replaceState({}, '', newUrl);
+            }
+
+        function base64Decode(str) {
+                return decodeURIComponent(escape(atob(str)));
+            }
+
+        function loadParamsFromBase64Url() {
+                const urlParams = new URLSearchParams(window.location.search);
+                const dataParam = urlParams.get('wxev');
+
+                if (dataParam) {
+                    try {
+                        console.log("dataparam",dataParam);
+                        const decoded = dataParam;// base64Decode(dataParam);
+                        const userId = decoded;
+                        if (userId) {
+                            localStorage.setItem('userId', userId);
+                            //localStorage.setItem('appId', appId);
+                            return userId ;
+                        }
+                    } catch (e) {
+                        console.error('Invalid Base64 data:', e);
+                    }
+                }
+
+                // fallback
+                return 
+                    localStorage.getItem('userId') || 'defaultUser';
+            }
+
+           // setBase64ParamsInUrl('kyhss');
+           // let appId = "timetableData"
+            // Later in your app, decode from URL or localStorage
+            const currentUserId= loadParamsFromBase64Url();
+            const appId = typeof __app_id !== 'undefined' ? __app_id :currentUserId
+            
+            const basePath = `${appId}/${currentUserId}`;
+        
+
+            console.log(basePath);
+
+
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, query, orderBy, addDoc, getDocs, where, writeBatch, updateDoc as firestoreUpdateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+
+//const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyABrgqY0EpBVJF_jQ6Zpvo7whtxbaYB_b8",
+  authDomain: "kyhss-athavanad.firebaseapp.com",
+  projectId: "kyhss-athavanad",
+  storageBucket: "kyhss-athavanad.firebasestorage.app",
+  messagingSenderId: "471650360488",
+  appId: "1:471650360488:web:88483d99ac63075addb69d",
+  measurementId: "G-ETE3YCBXVD"
+};
+const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+let app;
+let db;
+let auth;
+let userId; // Will store the authenticated user ID
+
+// DOM Elements
+const adminLoginCard = document.getElementById('adminLoginCard');
+const adminPasswordInput = document.getElementById('adminPassword');
+const adminPasswordError = document.getElementById('adminPasswordError');
+const adminLoginBtn = document.getElementById('adminLoginBtn');
+const adminContent = document.getElementById('adminContent');
+const currentUserIdSpan = document.getElementById('currentUserId');
+const loadingOverlay = document.getElementById('loadingOverlay');
+const loadingText = document.querySelector('#loadingOverlay .loading-text');
+const alertContainer = document.getElementById('alertContainer');
+
+// Modals and Forms (unchanged)
+const addPostModal = new bootstrap.Modal(document.getElementById('addPostModal'));
+const postForm = document.getElementById('postForm');
+const postIdInput = document.getElementById('postId');
+const postTitleInput = document.getElementById('postTitle');
+const postDescriptionInput = document.getElementById('postDescription');
+const postOrderInput = document.getElementById('postOrder');
+const postsTableBody = document.getElementById('postsTableBody');
+
+const addCandidateModal = new bootstrap.Modal(document.getElementById('addCandidateModal'));
+const candidateForm = document.getElementById('candidateForm');
+const candidateIdInput = document.getElementById('candidateId');
+const candidateNameInput = document.getElementById('candidateName');
+const candidatePhotoUrlInput = document.getElementById('candidatePhotoUrl');
+const candidatePostSelect = document.getElementById('candidatePost');
+const candidatesTableBody = document.getElementById('candidatesTableBody');
+
+const addBoothModal = new bootstrap.Modal(document.getElementById('addBoothModal'));
+const boothForm = document.getElementById('boothForm');
+const boothDocIdInput = document.getElementById('boothDocId');
+const boothIdInput = document.getElementById('boothId');
+const boothNameInput = document.getElementById('boothName');
+const boothUserInput = document.getElementById('boothUser');
+const boothPasswordInput = document.getElementById('boothPassword');
+const boothsTableBody = document.getElementById('boothsTableBody');
+
+const addVotingMachineModal = new bootstrap.Modal(document.getElementById('addVotingMachineModal'));
+const votingMachineForm = document.getElementById('votingMachineForm');
+const votingMachineDocIdInput = document.getElementById('votingMachineDocId');
+const votingMachineIdInput = document.getElementById('votingMachineId');
+const votingMachinePasswordInput = document.getElementById('votingMachinePassword');
+const votingMachineBoothIdSelect = document.getElementById('votingMachineBoothId');
+const votingMachinesTableBody = document.getElementById('votingMachinesTableBody');
+
+// New Reporting & Results DOM Elements
+const generateBoothWisePdfBtn = document.getElementById('generateBoothWisePdfBtn');
+const generateBoothWiseExcelBtn = document.getElementById('generateBoothWiseExcelBtn');
+const publishResultsSwitch = document.getElementById('publishResultsSwitch');
+const publishStatusText = document.getElementById('publishStatusText');
+const resetAllMachinesBtn = document.getElementById('resetAllMachinesBtn'); // New button
+
+// --- Utility Functions ---
+
+/**
+ * Displays a temporary alert message to the user.
+ * @param {string} message - The message to display.
+ * @param {'success'|'danger'|'warning'|'info'} type - The type of alert.
+ */
+function showAlert(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show alert-message`;
+    alertDiv.setAttribute('role', 'alert');
+    alertDiv.innerHTML = `
+        <span class="icon me-2">
+            ${type === 'success' ? '<i class="fas fa-check-circle"></i>' : ''}
+            ${type === 'danger' ? '<i class="fas fa-exclamation-circle"></i>' : ''}
+            ${type === 'warning' ? '<i class="fas fa-exclamation-triangle"></i>' : ''}
+            ${type === 'info' ? '<i class="fas fa-info-circle"></i>' : ''}
+        </span>
+        <div>${message}</div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+    alertContainer.appendChild(alertDiv);
+
+    setTimeout(() => {
+        alertDiv.classList.remove('show');
+        alertDiv.classList.add('fade');
+        alertDiv.addEventListener('transitionend', () => alertDiv.remove());
+    }, 5000); // Alert disappears after 5 seconds
+}
+
+/**
+ * Shows or hides the loading overlay.
+ * @param {boolean} show - True to show, false to hide.
+ * @param {string} message - Message to display during loading.
+ */
+function showLoading(show, message = 'Loading...') {
+    loadingText.textContent = message;
+    loadingOverlay.style.display = show ? 'flex' : 'none';
+}
+
+// --- Firebase Initialization and Authentication ---
+
+window.onload = async function() {
+    showLoading(true, 'Initializing Firebase...');
+    try {
+        app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
+        auth = getAuth(app);
+
+        // Listen for authentication state changes
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                userId = user.uid;
+                currentUserIdSpan.textContent = userId;
+                // Check if the user is the 'admin' (simple check for now)
+                if (localStorage.getItem('isAdminLoggedIn') === 'true' && user.isAnonymous) {
+                    showAdminContent();
+                } else {
+                    showLoginCard();
+                }
+            } else {
+                userId = 'Not Authenticated';
+                currentUserIdSpan.textContent = userId;
+                showLoginCard();
+            }
+            showLoading(false);
+        });
+
+        // Attempt to sign in with custom token if available (for Canvas environment)
+        if (initialAuthToken) {
+            await signInWithCustomToken(auth, initialAuthToken);
+        } else {
+            // Sign in anonymously if no custom token (for local testing)
+            await signInAnonymously(auth);
+        }
+
+    } catch (error) {
+        console.error("Error initializing Firebase:", error);
+        showAlert("Failed to initialize Firebase. Check console for details.", "danger");
+        showLoading(false);
+    }
+};
+
+/**
+ * Handles admin login. For this demo, a simple hardcoded password.
+ * In a production app, use Firebase Authentication for proper admin accounts.
+ */
+adminLoginBtn.addEventListener('click', () => {
+    const password = adminPasswordInput.value;
+    const correctPassword = 'adminpassword123'; // Replace with a strong, securely stored password in a real app
+
+    if (password === correctPassword) {
+        adminPasswordInput.classList.remove('is-invalid');
+        adminPasswordError.textContent = '';
+        localStorage.setItem('isAdminLoggedIn', 'true'); // Simple flag
+        showAdminContent();
+        showAlert('Admin login successful!', 'success');
+    } else {
+        adminPasswordInput.classList.add('is-invalid');
+        adminPasswordError.textContent = 'Incorrect password.';
+        showAlert('Incorrect admin password.', 'danger');
+    }
+});
+
+function showAdminContent() {
+    adminLoginCard.style.display = 'none';
+    adminContent.style.display = 'block';
+    // Start listening to data
+    listenToPosts();
+    listenToCandidates();
+    listenToBooths();
+    listenToVotingMachines();
+    populatePostSelects(); // Populate candidate post dropdown
+    populateBoothSelects(); // Populate voting machine booth dropdown
+    listenToPublishStatus(); // Listen to election publish status
+    attachAdminControlEventListeners(); // Attach event listeners for new admin controls
+}
+
+function showLoginCard() {
+    adminLoginCard.style.display = 'block';
+    adminContent.style.display = 'none';
+    localStorage.removeItem('isAdminLoggedIn'); // Clear login flag
+}
+
+/**
+ * Attaches event listeners for new admin control buttons.
+ */
+function attachAdminControlEventListeners() {
+    resetAllMachinesBtn.addEventListener('click', async () => {
+        if (confirm('Are you sure you want to reset ALL voting machines? This will set them to inactive and clear current sessions.')) {
+            await resetAllVotingMachines();
+        }
+    });
+}
+
+
+// --- CRUD Operations for Posts (unchanged) ---
+
+/**
+ * Listens for real-time updates to posts and renders them in the table.
+ */
+function listenToPosts() {
+    const postsRef = collection(db, `artifacts/${appId}/public/data/posts`);
+    onSnapshot(query(postsRef, orderBy('order', 'asc')), (snapshot) => {
+        postsTableBody.innerHTML = '';
+        snapshot.forEach((doc) => {
+            const post = doc.data();
+            const row = postsTableBody.insertRow();
+            row.innerHTML = `
+                <td>${post.title}</td>
+                <td>${post.description}</td>
+                <td>${post.order}</td>
+                <td>
+                    <button class="btn btn-sm btn-info edit-post me-2" data-id="${doc.id}">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-sm btn-danger delete-post" data-id="${doc.id}">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+        });
+        attachPostEventListeners();
+        populatePostSelects(); // Update candidate post dropdown when posts change
+    }, (error) => {
+        console.error("Error listening to posts:", error);
+        showAlert("Error loading posts.", "danger");
+    });
+}
+
+/**
+ * Attaches event listeners to dynamically created post edit/delete buttons.
+ */
+function attachPostEventListeners() {
+    document.querySelectorAll('.edit-post').forEach(button => {
+        button.onclick = async (e) => {
+            const postId = e.currentTarget.dataset.id;
+            await editPost(postId);
+        };
+    });
+    document.querySelectorAll('.delete-post').forEach(button => {
+        button.onclick = async (e) => {
+            const postId = e.currentTarget.dataset.id;
+            if (confirm('Are you sure you want to delete this post? This will also remove associated candidates and votes!')) {
+                await deletePost(postId);
+            }
+        };
+    });
+}
+
+/**
+ * Handles adding/editing a post.
+ */
+postForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    showLoading(true, 'Saving Post...');
+    const postId = postIdInput.value;
+    const title = postTitleInput.value;
+    const description = postDescriptionInput.value;
+    const order = parseInt(postOrderInput.value);
+
+    try {
+        if (postId) {
+            // Edit existing post
+            await setDoc(doc(db, `artifacts/${appId}/public/data/posts`, postId), {
+                title,
+                description,
+                order
+            }, { merge: true });
+            showAlert('Post updated successfully!', 'success');
+        } else {
+            // Add new post
+            await addDoc(collection(db, `artifacts/${appId}/public/data/posts`), {
+                title,
+                description,
+                order
+            });
+            showAlert('Post added successfully!', 'success');
+        }
+        postForm.reset();
+        addPostModal.hide();
+    } catch (error) {
+        console.error("Error saving post:", error);
+        showAlert(`Failed to save post: ${error.message}`, "danger");
+    } finally {
+        showLoading(false);
+    }
+});
+
+/**
+ * Populates the post form for editing.
+ * @param {string} postId - The ID of the post to edit.
+ */
+async function editPost(postId) {
+    showLoading(true, 'Loading Post Data...');
+    try {
+        const postDoc = await getDoc(doc(db, `artifacts/${appId}/public/data/posts`, postId));
+        if (postDoc.exists()) {
+            const post = postDoc.data();
+            postIdInput.value = postDoc.id;
+            postTitleInput.value = post.title;
+            postDescriptionInput.value = post.description;
+            postOrderInput.value = post.order;
+            addPostModal.show();
+        } else {
+            showAlert('Post not found.', 'danger');
+        }
+    } catch (error) {
+        console.error("Error fetching post for edit:", error);
+        showAlert(`Failed to load post for edit: ${error.message}`, "danger");
+    } finally {
+        showLoading(false);
+    }
+}
+
+/**
+ * Deletes a post and its associated candidates.
+ * @param {string} postId - The ID of the post to delete.
+ */
+async function deletePost(postId) {
+    showLoading(true, 'Deleting Post...');
+    try {
+        // Delete associated candidates first
+        const candidatesRef = collection(db, `artifacts/${appId}/public/data/candidates`);
+        const q = query(candidatesRef, where('postId', '==', postId));
+        const candidateDocs = await getDocs(q);
+        const deleteCandidatePromises = [];
+        candidateDocs.forEach(doc => {
+            deleteCandidatePromises.push(deleteDoc(doc.ref));
+        });
+        await Promise.all(deleteCandidatePromises);
+
+        // Then delete the post
+        await deleteDoc(doc(db, `artifacts/${appId}/public/data/posts`, postId));
+        showAlert('Post and associated candidates deleted successfully!', 'success');
+    } catch (error) {
+        console.error("Error deleting post:", error);
+        showAlert(`Failed to delete post: ${error.message}`, "danger");
+    } finally {
+        showLoading(false);
+    }
+}
+
+/**
+ * Populates the post dropdown in the candidate modal.
+ */
+async function populatePostSelects() {
+    candidatePostSelect.innerHTML = '<option value="">Select a Post</option>';
+    try {
+        const postsRef = collection(db, `artifacts/${appId}/public/data/posts`);
+        const snapshot = await getDocs(query(postsRef, orderBy('order', 'asc')));
+        snapshot.forEach((doc) => {
+            const post = doc.data();
+            const option = document.createElement('option');
+            option.value = doc.id;
+            option.textContent = post.title;
+            candidatePostSelect.appendChild(option);
+        });
+    } catch (error) {
+        console.error("Error populating post select:", error);
+        showAlert("Failed to load posts for candidate selection.", "danger");
+    }
+}
+
+// --- CRUD Operations for Candidates (unchanged) ---
+
+/**
+ * Listens for real-time updates to candidates and renders them in the table.
+ */
+function listenToCandidates() {
+    const candidatesRef = collection(db, `artifacts/${appId}/public/data/candidates`);
+    onSnapshot(candidatesRef, async (snapshot) => {
+        candidatesTableBody.innerHTML = '';
+        const postsMap = new Map();
+        // Fetch all posts to map postId to postTitle
+        const postsSnapshot = await getDocs(collection(db, `artifacts/${appId}/public/data/posts`));
+        postsSnapshot.forEach(doc => {
+            postsMap.set(doc.id, doc.data().title);
+        });
+
+        snapshot.forEach((doc) => {
+            const candidate = doc.data();
+            const postTitle = postsMap.get(candidate.postId) || 'N/A';
+            const row = candidatesTableBody.insertRow();
+            row.innerHTML = `
+                <td><img src="${candidate.photoUrl ?candidate.photoUrl : 'https://placehold.co/80x100/cccccc/333333?text=YES+Photo'}" alt="${candidate.name}" class="rounded-circle" width="50" height="50" onerror="this.onerror=null;this.src='https://placehold.co/50x50/cccccc/333333?text=No+Photo';"></td>
+                <td>${candidate.name}</td>
+                <td>${postTitle}</td>
+                <td>
+                    <button class="btn btn-sm btn-info edit-candidate me-2" data-id="${doc.id}">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-sm btn-danger delete-candidate" data-id="${doc.id}">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+        });
+        attachCandidateEventListeners();
+    }, (error) => {
+        console.error("Error listening to candidates:", error);
+        showAlert("Error loading candidates.", "danger");
+    });
+}
+
+/**
+ * Attaches event listeners to dynamically created candidate edit/delete buttons.
+ */
+function attachCandidateEventListeners() {
+    document.querySelectorAll('.edit-candidate').forEach(button => {
+        button.onclick = async (e) => {
+            const candidateId = e.currentTarget.dataset.id;
+            await editCandidate(candidateId);
+        };
+    });
+    document.querySelectorAll('.delete-candidate').forEach(button => {
+        button.onclick = async (e) => {
+            const candidateId = e.currentTarget.dataset.id;
+            if (confirm('Are you sure you want to delete this candidate?')) {
+                await deleteCandidate(candidateId);
+            }
+        };
+    });
+}
+
+/**
+ * Handles adding/editing a candidate.
+ */
+candidateForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    showLoading(true, 'Saving Candidate...');
+    const candidateId = candidateIdInput.value;
+    const name = candidateNameInput.value;
+    const photoUrl = candidatePhotoUrlInput.value;
+    const postId = candidatePostSelect.value;
+
+    try {
+        if (candidateId) {
+            // Edit existing candidate
+            await setDoc(doc(db, `artifacts/${appId}/public/data/candidates`, candidateId), {
+                name,
+                photoUrl,
+                postId
+            }, { merge: true });
+            showAlert('Candidate updated successfully!', 'success');
+        } else {
+            // Add new candidate
+            await addDoc(collection(db, `artifacts/${appId}/public/data/candidates`), {
+                name,
+                photoUrl,
+                postId
+            });
+            showAlert('Candidate added successfully!', 'success');
+        }
+        candidateForm.reset();
+        addCandidateModal.hide();
+    } catch (error) {
+        console.error("Error saving candidate:", error);
+        showAlert(`Failed to save candidate: ${error.message}`, "danger");
+    } finally {
+        showLoading(false);
+    }
+});
+
+/**
+ * Populates the candidate form for editing.
+ * @param {string} candidateId - The ID of the candidate to edit.
+ */
+async function editCandidate(candidateId) {
+    showLoading(true, 'Loading Candidate Data...');
+    try {
+        await populatePostSelects(); // Ensure posts are loaded before setting candidate's post
+        const candidateDoc = await getDoc(doc(db, `artifacts/${appId}/public/data/candidates`, candidateId));
+        if (candidateDoc.exists()) {
+            const candidate = candidateDoc.data();
+            candidateIdInput.value = candidateDoc.id;
+            candidateNameInput.value = candidate.name;
+            candidatePhotoUrlInput.value = candidate.photoUrl;
+            candidatePostSelect.value = candidate.postId;
+            addCandidateModal.show();
+        } else {
+            showAlert('Candidate not found.', 'danger');
+        }
+    } catch (error) {
+        console.error("Error fetching candidate for edit:", error);
+        showAlert(`Failed to load candidate for edit: ${error.message}`, "danger");
+    } finally {
+        showLoading(false);
+    }
+}
+
+/**
+ * Deletes a candidate.
+ * @param {string} candidateId - The ID of the candidate to delete.
+ */
+async function deleteCandidate(candidateId) {
+    showLoading(true, 'Deleting Candidate...');
+    try {
+        await deleteDoc(doc(db, `artifacts/${appId}/public/data/candidates`, candidateId));
+        showAlert('Candidate deleted successfully!', 'success');
+    } catch (error) {
+        console.error("Error deleting candidate:", error);
+        showAlert(`Failed to delete candidate: ${error.message}`, "danger");
+    } finally {
+        showLoading(false);
+    }
+}
+
+// --- CRUD Operations for Booths (unchanged) ---
+
+/**
+ * Listens for real-time updates to booths and renders them in the table.
+ */
+function listenToBooths() {
+    const boothsRef = collection(db, `artifacts/${appId}/public/data/booths`);
+    onSnapshot(boothsRef, (snapshot) => {
+        boothsTableBody.innerHTML = '';
+        snapshot.forEach((doc) => {
+            const booth = doc.data();
+            const row = boothsTableBody.insertRow();
+            row.innerHTML = `
+                <td>${booth.boothId}</td>
+                <td>${booth.name}</td>
+                <td>${booth.user}</td>
+                <td>********</td> <td>
+                    <button class="btn btn-sm btn-info edit-booth me-2" data-id="${doc.id}">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-sm btn-danger delete-booth" data-id="${doc.id}">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+        });
+        attachBoothEventListeners();
+        populateBoothSelects(); // Update voting machine booth dropdown when booths change
+    }, (error) => {
+        console.error("Error listening to booths:", error);
+        showAlert("Error loading booths.", "danger");
+    });
+}
+
+/**
+ * Attaches event listeners to dynamically created booth edit/delete buttons.
+ */
+function attachBoothEventListeners() {
+    document.querySelectorAll('.edit-booth').forEach(button => {
+        button.onclick = async (e) => {
+            const boothDocId = e.currentTarget.dataset.id;
+            await editBooth(boothDocId);
+        };
+    });
+    document.querySelectorAll('.delete-booth').forEach(button => {
+        button.onclick = async (e) => {
+            const boothDocId = e.currentTarget.dataset.id;
+            if (confirm('Are you sure you want to delete this booth? This will also remove associated voting machines!')) {
+                await deleteBooth(boothDocId);
+            }
+        };
+    });
+}
+
+/**
+ * Handles adding/editing a booth.
+ */
+boothForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    showLoading(true, 'Saving Booth...');
+    const boothDocId = boothDocIdInput.value;
+    const boothId = boothIdInput.value;
+    const name = boothNameInput.value;
+    const user = boothUserInput.value;
+    const password = boothPasswordInput.value; // In a real app, hash this password!
+
+    try {
+        if (boothDocId) {
+            // Edit existing booth
+            await setDoc(doc(db, `artifacts/${appId}/public/data/booths`, boothDocId), {
+                boothId,
+                name,
+                user,
+                password // Store password as plain text for demo, hash in production
+            }, { merge: true });
+            showAlert('Booth updated successfully!', 'success');
+        } else {
+            // Add new booth
+            // Check for duplicate boothId before adding
+            const q = query(collection(db, `artifacts/${appId}/public/data/booths`), where('boothId', '==', boothId));
+            const existingBooths = await getDocs(q);
+            if (!existingBooths.empty) {
+                showAlert('Booth ID already exists. Please use a unique ID.', 'danger');
+                showLoading(false);
+                return;
+            }
+
+            await addDoc(collection(db, `artifacts/${appId}/public/data/booths`), {
+                boothId,
+                name,
+                user,
+                password // Store password as plain text for demo, hash in production
+            });
+            showAlert('Booth added successfully!', 'success');
+        }
+        boothForm.reset();
+        addBoothModal.hide();
+    } catch (error) {
+        console.error("Error saving booth:", error);
+        showAlert(`Failed to save booth: ${error.message}`, "danger");
+    } finally {
+        showLoading(false);
+    }
+});
+
+/**
+ * Populates the booth form for editing.
+ * @param {string} boothDocId - The document ID of the booth to edit.
+ */
+async function editBooth(boothDocId) {
+    showLoading(true, 'Loading Booth Data...');
+    try {
+        const boothDoc = await getDoc(doc(db, `artifacts/${appId}/public/data/booths`, boothDocId));
+        if (boothDoc.exists()) {
+            const booth = boothDoc.data();
+            boothDocIdInput.value = boothDoc.id;
+            boothIdInput.value = booth.boothId;
+            boothNameInput.value = booth.name;
+            boothUserInput.value = booth.user;
+            boothPasswordInput.value = booth.password; // Populate password for edit
+            addBoothModal.show();
+        } else {
+            showAlert('Booth not found.', 'danger');
+        }
+    } catch (error) {
+        console.error("Error fetching booth for edit:", error);
+        showAlert(`Failed to load booth for edit: ${error.message}`, "danger");
+    } finally {
+        showLoading(false);
+    }
+}
+
+/**
+ * Deletes a booth and its associated voting machines.
+ * @param {string} boothDocId - The document ID of the booth to delete.
+ */
+async function deleteBooth(boothDocId) {
+    showLoading(true, 'Deleting Booth...');
+    try {
+        // Delete associated voting machines first
+        const votingMachinesRef = collection(db, `artifacts/${appId}/public/data/votingMachines`);
+        const q = query(votingMachinesRef, where('boothDocId', '==', boothDocId)); // Use boothDocId for reference
+        const vmDocs = await getDocs(q);
+        const deleteVmPromises = [];
+        vmDocs.forEach(doc => {
+            deleteVmPromises.push(deleteDoc(doc.ref));
+        });
+        await Promise.all(deleteVmPromises);
+
+        // Then delete the booth
+        await deleteDoc(doc(db, `artifacts/${appId}/public/data/booths`, boothDocId));
+        showAlert('Booth and associated voting machines deleted successfully!', 'success');
+    } catch (error) {
+        console.error("Error deleting booth:", error);
+        showAlert(`Failed to delete booth: ${error.message}`, "danger");
+    } finally {
+        showLoading(false);
+    }
+}
+
+/**
+ * Populates the booth dropdown in the voting machine modal.
+ */
+async function populateBoothSelects() {
+    votingMachineBoothIdSelect.innerHTML = '<option value="">Select a Booth</option>';
+    try {
+        const boothsRef = collection(db, `artifacts/${appId}/public/data/booths`);
+        const snapshot = await getDocs(boothsRef);
+        snapshot.forEach((doc) => {
+            const booth = doc.data();
+            const option = document.createElement('option');
+            option.value = doc.id; // Store the Firestore document ID of the booth
+            option.textContent = `${booth.name} (ID: ${booth.boothId})`;
+            votingMachineBoothIdSelect.appendChild(option);
+        });
+    } catch (error) {
+        console.error("Error populating booth select:", error);
+        showAlert("Failed to load booths for voting machine selection.", "danger");
+    }
+}
+
+// --- CRUD Operations for Voting Machines ---
+
+/**
+ * Listens for real-time updates to voting machines and renders them in the table.
+ */
+function listenToVotingMachines() {
+    const votingMachinesRef = collection(db, `artifacts/${appId}/public/data/votingMachines`);
+    onSnapshot(votingMachinesRef, async (snapshot) => {
+        votingMachinesTableBody.innerHTML = '';
+        const boothsMap = new Map();
+        // Fetch all booths to map boothDocId to boothId/name
+        const boothsSnapshot = await getDocs(collection(db, `artifacts/${appId}/public/data/booths`));
+        boothsSnapshot.forEach(doc => {
+            const boothData = doc.data();
+            boothsMap.set(doc.id, `${boothData.name} (ID: ${boothData.boothId})`);
+        });
+
+        snapshot.forEach((doc) => {
+            const vm = doc.data();
+            const boothInfo = boothsMap.get(vm.boothDocId) || 'N/A'; // Use boothDocId
+            const row = votingMachinesTableBody.insertRow();
+            row.innerHTML = `
+                <td>${vm.votingId}</td>
+                <td>********</td> <td>${boothInfo}</td>
+                <td><span class="badge ${getVmStatusClass(vm.status)}">${vm.status || 'inactive'}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-info edit-voting-machine me-2" data-id="${doc.id}">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-sm btn-danger delete-voting-machine me-2" data-id="${doc.id}">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                    ${vm.status === 'inactive' || vm.status === 'completed' ?
+                        `<button class="btn btn-sm btn-success set-vm-status" data-id="${doc.id}" data-status="ready">
+                            <i class="fas fa-check-circle"></i> Set Ready
+                        </button>` :
+                        `<button class="btn btn-sm btn-secondary set-vm-status" data-id="${doc.id}" data-status="inactive">
+                            <i class="fas fa-power-off"></i> Set Inactive
+                        </button>`
+                    }
+                </td>
+            `;
+        });
+        attachVotingMachineEventListeners();
+        attachAdminVMControlEventListeners(); // Attach new event listeners for admin VM control
+    }, (error) => {
+        console.error("Error listening to voting machines:", error);
+        showAlert("Error loading voting machines.", "danger");
+    });
+}
+
+/**
+ * Helper to get Bootstrap badge class based on status.
+ * @param {string} status
+ */
+function getVmStatusClass(status) {
+    switch (status) {
+        case 'ready': return 'bg-success';
+        case 'active': return 'bg-primary';
+        case 'completed': return 'bg-warning text-dark';
+        case 'inactive': return 'bg-secondary';
+        default: return 'bg-light text-dark';
+    }
+}
+
+/**
+ * Attaches event listeners to dynamically created voting machine edit/delete buttons.
+ */
+function attachVotingMachineEventListeners() {
+    document.querySelectorAll('.edit-voting-machine').forEach(button => {
+        button.onclick = async (e) => {
+            const vmDocId = e.currentTarget.dataset.id;
+            await editVotingMachine(vmDocId);
+        };
+    });
+    document.querySelectorAll('.delete-voting-machine').forEach(button => {
+        button.onclick = async (e) => {
+            const vmDocId = e.currentTarget.dataset.id;
+            if (confirm('Are you sure you want to delete this voting machine?')) {
+                await deleteVotingMachine(vmDocId);
+            }
+        };
+    });
+}
+
+/**
+ * Attaches event listeners for admin control over individual voting machine status.
+ */
+function attachAdminVMControlEventListeners() {
+    document.querySelectorAll('.set-vm-status').forEach(button => {
+        button.onclick = async (e) => {
+            const vmDocId = e.currentTarget.dataset.id;
+            const newStatus = e.currentTarget.dataset.status;
+            await setVotingMachineStatus(vmDocId, newStatus);
+        };
+    });
+}
+
+/**
+ * Sets the status of a specific voting machine from the admin panel.
+ * @param {string} vmDocId - The document ID of the voting machine.
+ * @param {string} status - The new status ('ready' or 'inactive').
+ */
+async function setVotingMachineStatus(vmDocId, status) {
+    showLoading(true, `Setting machine to ${status}...`);
+    try {
+        await firestoreUpdateDoc(doc(db, `artifacts/${appId}/public/data/votingMachines`, vmDocId), {
+            status: status,
+            //currentSessionId: status === 'inactive' ? null : null// crypto.randomUUID() // Clear session if setting inactive
+        });
+        showAlert(`Voting machine set to ${status.toUpperCase()}!`, 'success');
+    } catch (error) {
+        console.error(`Error setting voting machine to ${status}:`, error);
+        showAlert(`Failed to set machine to ${status}: ${error.message}`, "danger");
+    } finally {
+        showLoading(false);
+    }
+}
+
+
+/**
+ * Handles adding/editing a voting machine.
+ */
+votingMachineForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    showLoading(true, 'Saving Voting Machine...');
+    const vmDocId = votingMachineDocIdInput.value;
+    const votingId = votingMachineIdInput.value;
+    const password = votingMachinePasswordInput.value; // In a real app, hash this password!
+    const boothDocId = votingMachineBoothIdSelect.value; // This is the Firestore document ID of the booth
+
+    try {
+        if (vmDocId) {
+            // Edit existing voting machine
+            await setDoc(doc(db, `artifacts/${appId}/public/data/votingMachines`, vmDocId), {
+                votingId,
+                password, // Store password as plain text for demo, hash in production
+                boothDocId // Reference to the booth's Firestore document ID
+            }, { merge: true });
+            showAlert('Voting machine updated successfully!', 'success');
+        } else {
+            // Add new voting machine
+            // Check for duplicate votingId before adding
+            const q = query(collection(db, `artifacts/${appId}/public/data/votingMachines`), where('votingId', '==', votingId));
+            const existingVMs = await getDocs(q);
+            if (!existingVMs.empty) {
+                showAlert('Voting ID already exists. Please use a unique ID.', 'danger');
+                showLoading(false);
+                return;
+            }
+
+            await addDoc(collection(db, `artifacts/${appId}/public/data/votingMachines`), {
+                votingId,
+                password, // Store password as plain text for demo, hash in production
+                boothDocId, // Reference to the booth's Firestore document ID
+                status: 'inactive', // Initial status
+                currentSessionId: null, // No active session initially
+                lastActiveTime: null
+            });
+            showAlert('Voting machine added successfully!', 'success');
+        }
+        votingMachineForm.reset();
+        addVotingMachineModal.hide();
+    } catch (error) {
+        console.error("Error saving voting machine:", error);
+        showAlert(`Failed to save voting machine: ${error.message}`, "danger");
+    } finally {
+        showLoading(false);
+    }
+});
+
+/**
+ * Populates the voting machine form for editing.
+ * @param {string} vmDocId - The document ID of the voting machine to edit.
+ */
+async function editVotingMachine(vmDocId) {
+    showLoading(true, 'Loading Voting Machine Data...');
+    try {
+        await populateBoothSelects(); // Ensure booths are loaded before setting VM's booth
+        const vmDoc = await getDoc(doc(db, `artifacts/${appId}/public/data/votingMachines`, vmDocId));
+        if (vmDoc.exists()) {
+            const vm = vmDoc.data();
+            votingMachineDocIdInput.value = vmDoc.id;
+            votingMachineIdInput.value = vm.votingId;
+            votingMachinePasswordInput.value = vm.password; // Populate password for edit
+            votingMachineBoothIdSelect.value = vm.boothDocId; // Set selected booth by its document ID
+            addVotingMachineModal.show();
+        } else {
+            showAlert('Voting machine not found.', 'danger');
+        }
+    } catch (error) {
+        console.error("Error fetching voting machine for edit:", error);
+        showAlert(`Failed to load voting machine for edit: ${error.message}`, "danger");
+    } finally {
+        showLoading(false);
+    }
+}
+
+/**
+ * Deletes a voting machine.
+ * @param {string} vmDocId - The document ID of the voting machine to delete.
+ */
+async function deleteVotingMachine(vmDocId) {
+    showLoading(true, 'Deleting Voting Machine...');
+    try {
+        await deleteDoc(doc(db, `artifacts/${appId}/public/data/votingMachines`, vmDocId));
+        showAlert('Voting machine deleted successfully!', 'success');
+    } catch (error) {
+        console.error("Error deleting voting machine:", error);
+        showAlert(`Failed to delete voting machine: ${error.message}`, "danger");
+    } finally {
+        showLoading(false);
+    }
+}
+
+// --- Reporting & Results Management ---
+
+/**
+ * Fetches all necessary data (posts, candidates, booths, votes) for reporting.
+ * @returns {object} An object containing maps of posts, candidates, booths, and all votes.
+ */
+async function fetchAllElectionData() {
+    showLoading(true, 'Fetching election data for reports...');
+    try {
+        const [postsSnapshot, candidatesSnapshot, boothsSnapshot, votesSnapshot] = await Promise.all([
+            getDocs(collection(db, `artifacts/${appId}/public/data/posts`)),
+            getDocs(collection(db, `artifacts/${appId}/public/data/candidates`)),
+            getDocs(collection(db, `artifacts/${appId}/public/data/booths`)),
+            getDocs(collection(db, `artifacts/${appId}/public/data/votes`))
+        ]);
+
+        const postsMap = new Map(postsSnapshot.docs.map(doc => [doc.id, doc.data()]));
+        const candidatesMap = new Map(candidatesSnapshot.docs.map(doc => [doc.id, doc.data()]));
+        const boothsMap = new Map(boothsSnapshot.docs.map(doc => [doc.id, doc.data()]));
+        const votes = votesSnapshot.docs.map(doc => doc.data());
+
+        showLoading(false);
+        return { postsMap, candidatesMap, boothsMap, votes };
+    } catch (error) {
+        console.error("Error fetching election data:", error);
+        showAlert(`Failed to fetch election data: ${error.message}`, "danger");
+        showLoading(false);
+        return null;
+    }
+}
+
+/**
+ * Aggregates votes by booth, then by post, then by candidate.
+ * @param {Array} votes - Array of raw vote documents.
+ * @param {Map} postsMap - Map of post IDs to post data.
+ * @param {Map} candidatesMap - Map of candidate IDs to candidate data.
+ * @param {Map} boothsMap - Map of booth document IDs to booth data.
+ * @returns {Map<string, Map<string, Map<string, number>>>} Aggregated vote counts.
+ * Structure: Map<boothDocId, Map<postId, Map<candidateId, count>>>
+ */
+function aggregateVotes(votes, postsMap, candidatesMap, boothsMap) {
+    const aggregatedData = new Map(); // Map<boothDocId, Map<postId, Map<candidateId, count>>>
+
+    boothsMap.forEach((boothData, boothDocId) => {
+        aggregatedData.set(boothDocId, new Map()); // Initialize for each booth
+        postsMap.forEach((postData, postId) => {
+            aggregatedData.get(boothDocId).set(postId, new Map()); // Initialize for each post within booth
+            // Initialize candidates for this post
+            candidatesMap.forEach((candidateData, candidateId) => {
+                if (candidateData.postId === postId) {
+                    aggregatedData.get(boothDocId).get(postId).set(candidateId, 0);
+                }
+            });
+            // Add NOTA for each post
+            aggregatedData.get(boothDocId).get(postId).set('NOTA', 0);
+        });
+    });
+
+    votes.forEach(vote => {
+        const { boothDocId, postId, candidateId } = vote;
+        if (aggregatedData.has(boothDocId) && aggregatedData.get(boothDocId).has(postId)) {
+            const postVotes = aggregatedData.get(boothDocId).get(postId);
+            postVotes.set(candidateId, (postVotes.get(candidateId) || 0) + 1);
+        } else {
+            console.warn(`Vote for unknown boothDocId (${boothDocId}) or postId (${postId}) skipped.`);
+        }
+    });
+
+    return aggregatedData;
+}
+
+/**
+ * Generates a booth-wise vote count PDF report.
+ */
+generateBoothWisePdfBtn.addEventListener('click', async () => {
+    const electionData = await fetchAllElectionData();
+    if (!electionData) return;
+
+    const { postsMap, candidatesMap, boothsMap, votes } = electionData;
+    const aggregatedVotes = aggregateVotes(votes, postsMap, candidatesMap, boothsMap);
+
+    showLoading(true, 'Generating PDF report...');
+
+    // Create a temporary div to render content for PDF
+    const pdfContentDiv = document.createElement('div');
+    pdfContentDiv.style.padding = '20px';
+    pdfContentDiv.style.fontFamily = 'sans-serif';
+
+    let htmlContent = `
+        <h1 style="text-align: center; color: #0d6efd;">Booth-wise Vote Count Report</h1>
+        <p style="text-align: center; font-size: 0.9em; color: #666;">Generated on: ${new Date().toLocaleString()}</p>
+        <hr style="border: 1px solid #eee;">
+    `;
+
+    boothsMap.forEach((boothData, boothDocId) => {
+        htmlContent += `
+            <h2 style="color: #28a745; margin-top: 30px;">Booth: ${boothData.name} (ID: ${boothData.boothId})</h2>
+        `;
+        const boothAggregatedVotes = aggregatedVotes.get(boothDocId);
+
+        if (boothAggregatedVotes) {
+            postsMap.forEach((postData, postId) => {
+                const postAggregatedVotes = boothAggregatedVotes.get(postId);
+                if (postAggregatedVotes) {
+                    htmlContent += `
+                        <h3 style="color: #0d6efd; margin-top: 20px; font-size: 1.2em;">Post: ${postData.title}</h3>
+                        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                            <thead>
+                                <tr style="background-color: #f2f2f2;">
+                                    <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Candidate</th>
+                                    <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Votes</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                    `;
+                    // Sort candidates by votes (descending)
+                    const sortedCandidates = Array.from(postAggregatedVotes.entries()).sort((a, b) => b[1] - a[1]);
+
+                    sortedCandidates.forEach(([candidateId, count]) => {
+                        const candidateName = candidateId === 'NOTA' ? 'NOTA' : (candidatesMap.get(candidateId)?.name || 'Unknown Candidate');
+                        htmlContent += `
+                            <tr>
+                                <td style="border: 1px solid #ddd; padding: 8px;">${candidateName}</td>
+                                <td style="border: 1px solid #ddd; padding: 8px;">${count}</td>
+                            </tr>
+                        `;
+                    });
+                    htmlContent += `
+                            </tbody>
+                        </table>
+                    `;
+                }
+            });
+        } else {
+            htmlContent += `<p style="color: #666;">No votes recorded for this booth.</p>`;
+        }
+        htmlContent += `<div style="page-break-after: always;"></div>`; // Page break after each booth
+    });
+
+    pdfContentDiv.innerHTML = htmlContent;
+    document.body.appendChild(pdfContentDiv); // Append to body temporarily for html2canvas
+
+    try {
+        const canvas = await html2canvas(pdfContentDiv, { scale: 2 }); // Higher scale for better quality
+        const imgData = canvas.toDataURL('image/png');
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4'); // Portrait, millimeters, A4 size
+
+        const imgWidth = 210; // A4 width in mm
+        const pageHeight = 297; // A4 height in mm
+        const imgHeight = canvas.height * imgWidth / canvas.width;
+        let heightLeft = imgHeight;
+        let position = 0;
+
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+
+        while (heightLeft >= 0) {
+            position = heightLeft - imgHeight;
+            pdf.addPage();
+            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
+        }
+
+        pdf.save('booth_wise_vote_count.pdf');
+        showAlert('PDF report generated successfully!', 'success');
+    } catch (error) {
+        console.error("Error generating PDF:", error);
+        showAlert(`Failed to generate PDF: ${error.message}`, "danger");
+    } finally {
+        document.body.removeChild(pdfContentDiv); // Remove temporary div
+        showLoading(false);
+    }
+});
+
+/**
+ * Generates a booth-wise vote count Excel report.
+ */
+// generateBoothWiseExcelBtn.addEventListener('click', async () => {
+//     const electionData = await fetchAllElectionData();
+//     if (!electionData) return;
+
+//     const { postsMap, candidatesMap, boothsMap, votes } = electionData;
+//     const aggregatedVotes = aggregateVotes(votes, postsMap, candidatesMap, boothsMap);
+
+//     showLoading(true, 'Generating Excel report...');
+
+//     const workbook = XLSX.utils.book_new();
+
+//     boothsMap.forEach((boothData, boothDocId) => {
+//         const boothAggregatedVotes = aggregatedVotes.get(boothDocId);
+//         const worksheetData = [['Post', 'Candidate', 'Votes']]; // Header row
+
+//         if (boothAggregatedVotes) {
+//             postsMap.forEach((postData, postId) => {
+//                 const postAggregatedVotes = boothAggregatedVotes.get(postId);
+//                 if (postAggregatedVotes) {
+//                     // Add a separator for each post
+//                     worksheetData.push([postData.title, '', '']);
+
+//                     // Sort candidates by votes (descending)
+//                     const sortedCandidates = Array.from(postAggregatedVotes.entries()).sort((a, b) => b[1] - a[1]);
+
+//                     sortedCandidates.forEach(([candidateId, count]) => {
+//                         const candidateName = candidateId === 'NOTA' ? 'NOTA' : (candidatesMap.get(candidateId)?.name || 'Unknown Candidate');
+//                         worksheetData.push(['', candidateName, count]);
+//                     });
+//                 }
+//             });
+//         } else {
+//             worksheetData.push(['', 'No votes recorded for this booth.', '']);
+//         }
+
+//         const ws = XLSX.utils.aoa_to_sheet(worksheetData);
+//         XLSX.utils.book_append_sheet(workbook, ws, `${boothData.name} (${boothData.boothId})`);
+//     });
+
+//     try {
+//         XLSX.writeFile(workbook, 'booth_wise_vote_count.xlsx');
+//         showAlert('Excel report generated successfully!', 'success');
+//     } catch (error) {
+//         console.error("Error generating Excel:", error);
+//         showAlert(`Failed to generate Excel: ${error.message}`, "danger");
+//     } finally {
+//         showLoading(false);
+//     }
+// });
+
+generateBoothWiseExcelBtn.addEventListener('click', async () => {
+    const electionData = await fetchAllElectionData();
+    if (!electionData) return;
+
+    const { postsMap, candidatesMap, boothsMap, votes } = electionData;
+    // const aggregatedVotes = aggregateVotes(votes, postsMap, candidatesMap, boothsMap); // We will not use this aggregation for the individual vote sheet
+
+    showLoading(true, 'Generating Excel report...');
+
+    const workbook = XLSX.utils.book_new();
+
+    boothsMap.forEach((boothData, boothDocId) => {
+        // Filter the raw votes for the current booth
+        const boothRawVotes = votes.filter(vote => vote.boothDocId === boothDocId);
+
+        // Define headers for the raw vote sheet. You might need to adjust these
+        // based on the actual structure of your 'vote' objects.
+        const worksheetData = [['Vote ID', 'Post', 'Candidate', 'Timestamp']]; // Example headers
+
+        if (boothRawVotes.length > 0) {
+            boothRawVotes.forEach(vote => {
+                const postTitle = postsMap.get(vote.postId)?.title || 'Unknown Post';
+                const candidateName = vote.candidateId === 'NOTA' ? 'NOTA' : (candidatesMap.get(vote.candidateId)?.name || 'Unknown Candidate');
+                // Assuming your vote object has a 'timestamp' or similar field
+                const timestamp = vote.timestamp ? new Date(vote.timestamp).toLocaleString() : '';
+
+                // Add a row for each individual vote
+                worksheetData.push([vote.voteId || '', postTitle, candidateName, timestamp]);
+            });
+        } else {
+            worksheetData.push(['', 'No votes recorded for this booth.', '', '']);
+        }
+
+        const ws = XLSX.utils.aoa_to_sheet(worksheetData);
+        XLSX.utils.book_append_sheet(workbook, ws, `${boothData.name} (${boothData.boothId}) - Raw Votes`);
+    });
+
+    try {
+        XLSX.writeFile(workbook, 'booth_wise_raw_vote_report.xlsx');
+        showAlert('Excel report generated successfully!', 'success');
+    } catch (error) {
+        console.error("Error generating Excel:", error);
+        showAlert(`Failed to generate Excel: ${error.message}`, "danger");
+    } finally {
+        showLoading(false);
+    }
+});
+
+/**
+ * Listens to the election publish status and updates the UI.
+ */
+function listenToPublishStatus() {
+    const settingsDocRef = doc(db, `artifacts/${appId}/public/data/settings`, 'electionStatus');
+    onSnapshot(settingsDocRef, (docSnapshot) => {
+        let isPublished = false;
+        if (docSnapshot.exists()) {
+            isPublished = docSnapshot.data().published || false;
+        }
+
+        publishResultsSwitch.checked = isPublished;
+        publishStatusText.textContent = isPublished ? 'Results are currently Published' : 'Results are currently Unpublished';
+        showAlert(`Results status updated: ${isPublished ? 'Published' : 'Unpublished'}`, 'info');
+    }, (error) => {
+        console.error("Error listening to publish status:", error);
+        showAlert("Error loading publish status.", "danger");
+    });
+}
+
+/**
+ * Toggles the election results publish status.
+ */
+publishResultsSwitch.addEventListener('change', async (e) => {
+    const publish = e.target.checked;
+    showLoading(true, `Setting results to ${publish ? 'Published' : 'Unpublished'}...`);
+    try {
+        const settingsDocRef = doc(db, `artifacts/${appId}/public/data/settings`, 'electionStatus');
+        await setDoc(settingsDocRef, { published: publish }, { merge: true });
+        showAlert(`Results successfully set to ${publish ? 'Published' : 'Unpublished'}!`, 'success');
+    } catch (error) {
+        console.error("Error updating publish status:", error);
+        showAlert(`Failed to update publish status: ${error.message}`, "danger");
+    } finally {
+        showLoading(false);
+    }
+});
+
+/**
+ * Resets the status of all voting machines to 'inactive' and clears their sessions.
+ */
+async function resetAllVotingMachines() {
+    showLoading(true, 'Resetting all voting machines...');
+    try {
+        const votingMachinesRef = collection(db, `artifacts/${appId}/public/data/votingMachines`);
+        const snapshot = await getDocs(votingMachinesRef);
+        const batch = writeBatch(db);
+
+        snapshot.forEach(docSnapshot => {
+            const vmRef = doc(db, `artifacts/${appId}/public/data/votingMachines`, docSnapshot.id);
+            batch.update(vmRef, {
+                status: 'inactive',
+                currentSessionId: null,
+                lastActiveTime: null
+            });
+        });
+
+        await batch.commit();
+        showAlert('All voting machines have been reset to inactive!', 'success');
+    } catch (error) {
+        console.error("Error resetting all voting machines:", error);
+        showAlert(`Failed to reset all voting machines: ${error.message}`, "danger");
+    } finally {
+        showLoading(false);
+    }
+}
+
+
+// Reset forms when modals are hidden (unchanged)
+document.getElementById('addPostModal').addEventListener('hidden.bs.modal', () => {
+    postForm.reset();
+    postIdInput.value = '';
+});
+document.getElementById('addCandidateModal').addEventListener('hidden.bs.modal', () => {
+    candidateForm.reset();
+    candidateIdInput.value = '';
+});
+document.getElementById('addBoothModal').addEventListener('hidden.bs.modal', () => {
+    boothForm.reset();
+    boothDocIdInput.value = '';
+});
+document.getElementById('addVotingMachineModal').addEventListener('hidden.bs.modal', () => {
+    votingMachineForm.reset();
+    votingMachineDocIdInput.value = '';
+});
