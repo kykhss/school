@@ -32,7 +32,7 @@ function loadParamsFromBase64Url() {
             // Later in your app, decode from URL or localStorage
             const currentUserId= loadParamsFromBase64Url();
             const appId = typeof __app_id !== 'undefined' ? __app_id :currentUserId
-            
+            console.log(appId);
 const firebaseConfig = {
   apiKey: "AIzaSyABrgqY0EpBVJF_jQ6Zpvo7whtxbaYB_b8",
   authDomain: "kyhss-athavanad.firebaseapp.com",
@@ -237,6 +237,7 @@ function updateViewBasedOnStatus() {
             if (invigilatorPasswordModal) {
                 invigilatorPasswordModal.hide(); // Hide the modal
             }
+            
             postCandidateSelectionView.style.display = 'block';
             renderCurrentPost(); // Render the current post when active
             break;
@@ -783,9 +784,11 @@ async function handleAllPostsVoted() {
         localStorage.removeItem(VOTING_SESSION_VOTES_KEY);
         sessionVotes = {}; // Clear the local object
 
-        if (invigilatorPasswordModal) {
-            invigilatorPasswordModal.hide();
-        }
+        // Reset voting session state for the next voter
+                currentPostIndex = 0;
+                votedPosts.clear();
+                localStorage.removeItem(VOTING_PROGRESS_KEY); // Clear progress on invigilator reset
+
 
     } catch (error) {
         console.error("Error submitting final ballot:", error);
