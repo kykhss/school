@@ -522,6 +522,7 @@ function onLoginSuccess(role, user) {
         unsubscribeListeners = [];
     }
 
+    // This object defines all collections and the functions to update their global variables.
     let collectionsToWatch = {};
 
     // Base collections everyone needs
@@ -536,12 +537,11 @@ function onLoginSuccess(role, user) {
         festEvents: data => festEvents = data,
         festSettings: data => { if (data.length > 0) festSettings = data[0]; },
     };
-
     Object.assign(collectionsToWatch, baseCollections);
 
+    // Add role-specific collections
     switch (role) {
         case 'admin':
-            // Admin needs everything
             Object.assign(collectionsToWatch, {
                 teachers: data => teachers = data,
                 students: data => { students = data; filterAndRenderStudents(); },
@@ -557,66 +557,80 @@ function onLoginSuccess(role, user) {
                 reports: data => reports = data,
                 books: data => books = data,
                 bookIssuances: data => bookIssuances = data,
-                vehicles: data => {
-                    vehicles = data;
-                    if (currentUserRole === 'admin') checkVehicleExpiriesAndNotify();
-                },
+                vehicles: data => { vehicles = data; if (currentUserRole === 'admin') updateAllNotifications(); },
                 festRegistrations: data => festRegistrations = data,
                 festResults: data => festResults = data,
             });
             break;
-
         case 'teacher':
-            // Teacher needs their data, their class's data, and general school data
             Object.assign(collectionsToWatch, {
-                teachers: data => teachers = data, // For general reference
-                students: data => { students = data; filterAndRenderStudents(); }, // Filtered in view
-                classroomSubjects: data => classroomSubjects = data, // Filtered in view
-                examSchedules: data => examSchedules = data, // Filtered in view
-                marks: data => marks = data, // Filtered in view
-                attendance: data => attendance = data, // Filtered in view
-                syllabuses: data => syllabuses = data, // Filtered in view
-                syllabusCompletion: data => syllabusCompletion = data, // Filtered in view
-                chapters: data => chapters = data, // Filtered in view
-                forms: data => { forms = data; updateAllNotifications(); }, // Filtered in view
-                formResponses: data => formResponses = data, // Filtered in view
+                teachers: data => teachers = data,
+                students: data => { students = data; filterAndRenderStudents(); },
+                classroomSubjects: data => classroomSubjects = data,
+                examSchedules: data => examSchedules = data,
+                marks: data => marks = data,
+                attendance: data => attendance = data,
+                syllabuses: data => syllabuses = data,
+                syllabusCompletion: data => syllabusCompletion = data,
+                chapters: data => chapters = data,
+                forms: data => { forms = data; updateAllNotifications(); },
+                formResponses: data => formResponses = data,
                 books: data => books = data,
                 bookIssuances: data => bookIssuances = data,
                 festRegistrations: data => festRegistrations = data,
                 festResults: data => festResults = data,
             });
             break;
-
         case 'student':
-            // Student needs their own data and general school data
             Object.assign(collectionsToWatch, {
-                students: data => { students = data; }, // For their own profile
-                marks: data => marks = data, // Filtered in view
-                attendance: data => attendance = data, // Filtered in view
-                forms: data => { forms = data; updateAllNotifications(); }, // Filtered in view
-                formResponses: data => formResponses = data, // Filtered in view
-                bookIssuances: data => bookIssuances = data, // Filtered in view
-                festRegistrations: data => festRegistrations = data, // Filtered in view
+                students: data => { students = data; },
+                marks: data => marks = data,
+                attendance: data => attendance = data,
+                forms: data => { forms = data; updateAllNotifications(); },
+                formResponses: data => formResponses = data,
+                bookIssuances: data => bookIssuances = data,
+                festRegistrations: data => festRegistrations = data,
             });
-            // Render the main application interface
             break;
     }
 
+    // ✅ 1. IMMEDIATE LOAD FROM CACHE
+    // Loop through the collections this user needs and load any cached data.
+    console.log("Loading initial data from cache for user role:", role);
+    for (const name in collectionsToWatch) {
+        const setter = collectionsToWatch[name];
+        const cachedData = loadFromCache(`app_cache_${name}`);
+        if (cachedData) {
+            setter(cachedData);
+        }
+    }
+
+    // ✅ 2. RENDER THE APP WITH CACHED DATA RIGHT AWAY
+    // This makes the app feel instant, showing the last known data.
+    showMainApp();
+
+    // ✅ 3. LISTEN FOR FRESH DATA FROM FIRESTORE IN THE BACKGROUND
     for (const [name, setter] of Object.entries(collectionsToWatch)) {
         const unsub = onSnapshot(getCollectionRef(name), snapshot => {
-            setter(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            const freshData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            
+            // Update the global variable with fresh data
+            setter(freshData);
+            
+            // ✅ Save the fresh data back to the cache for the next visit
+            saveToCache(`app_cache_${name}`, freshData);
+            
+            // Re-render the active view to show any new changes
             const activeNavId = document.querySelector('.nav-link.active')?.id.replace('nav-', '');
             if (activeNavId && window.viewRenderers[activeNavId]) {
                 window.viewRenderers[activeNavId]();
             }
         }, (error) => {
             console.error(`[Firestore] Error listening to ${name}: `, error);
-            showAlert(`Failed to load data: ${name}.`, 'danger');
+            showAlert(`Could not load fresh data for: ${name}. Displaying cached version.`, 'warning');
         });
         unsubscribeListeners.push(unsub);
     }
-    // Render the main application interface
-    showMainApp();
 }
 
 function attachFeeDataListeners(financialYear, role, user) {
@@ -12295,6 +12309,34 @@ window.addEventListener('beforeunload', (event) => {
     }
 });
 
+
+/**
+ * Saves data to localStorage with JSON stringification.
+ * @param {string} key The key for the storage item.
+ * @param {any} data The data to save.
+ */
+function saveToCache(key, data) {
+    try {
+        localStorage.setItem(key, JSON.stringify(data));
+    } catch (e) {
+        console.error("Failed to save to cache:", e);
+    }
+}
+
+/**
+ * Loads and parses data from localStorage.
+ * @param {string} key The key for the storage item.
+ * @returns {any | null} The parsed data or null if not found/error.
+ */
+function loadFromCache(key) {
+    try {
+        const data = localStorage.getItem(key);
+        return data ? JSON.parse(data) : null;
+    } catch (e) {
+        console.error("Failed to load from cache:", e);
+        return null;
+    }
+}
 
 </script>
 </body>
