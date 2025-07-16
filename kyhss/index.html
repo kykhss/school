@@ -3700,6 +3700,11 @@ function renderExamTimetableView() {
             <div class="col-md-4"><label class="form-label fw-bold">Exam</label><select id="tt-view-exam" class="form-select">${exams.map(ex=>`<option value="${ex.id}">${ex.name}</option>`).join('')}</select></div>
             <div class="col-md-4"><label class="form-label fw-bold">Class</label><select id="tt-view-class" class="form-select">${classes.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}</select></div>
         </div>
+        <div class="d-flex justify-content-end mt-3">
+    <button class="btn btn-outline-primary" onclick="window.printExamTimetable()">
+        <i class="fa fa-print me-1"></i> Print Timetable
+    </button>
+</div>
         <div id="timetable-display-container"></div>
     `;
 
@@ -3707,41 +3712,51 @@ function renderExamTimetableView() {
     const classSelect = document.getElementById('tt-view-class');
 
     const displayTimetable = () => {
-        const examId = examSelect.value;
-        const classId = classSelect.value;
-        if (examId && classId) {
-            const classData = classes.find(c => c.id === classId);
-            const divisions = classData ? classData.divisions : [];
-            const schedules = examSchedules.filter(s => s.examId === examId && s.classId === classId);
-            const displayContainer = document.getElementById('timetable-display-container');
-            
-            let html = '';
-            divisions.forEach(division => {
-                const divSchedules = schedules.filter(s => s.division === division)
-                    .sort((a, b) => new Date(a.date) - new Date(b.date) || a.session.localeCompare(b.session));
-                
-                html += `<h4 class="mt-4">Timetable for ${classData.name} - ${division}</h4>`;
-                if (divSchedules.length === 0) {
-                    html += `<p class="text-muted">No schedule published for this division.</p>`;
-                    return;
-                }
+    const examId = examSelect.value;
+    if (!examId) return;
 
-                html += `<table class="table table-striped table-bordered">
-                    <thead class="table-light"><tr><th>Date</th><th>Session</th><th>Subject</th></tr></thead>
-                    <tbody>`;
-                divSchedules.forEach(s => {
-                    const subject = subjects.find(sub => sub.id === s.subjectId);
-                    html += `<tr>
-                        <td>${new Date(s.date).toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</td>
-                        <td>${s.session || 'N/A'}</td>
-                        <td class="fw-bold">${subject ? subject.name : 'Unknown'}</td>
-                    </tr>`;
-                });
-                html += `</tbody></table>`;
+    const displayContainer = document.getElementById('timetable-display-container');
+    let html = '';
+
+    classes.forEach(classData => {
+        const divisions = ['A'];// classData.divisions || [];
+        const schedules = examSchedules.filter(s => s.examId === examId && s.classId === classData.id);
+
+        divisions.forEach(division => {
+            const divSchedules = schedules
+                .filter(s => s.division === division)
+                .sort((a, b) => new Date(a.date) - new Date(b.date) || a.session.localeCompare(b.session));
+
+            html += `<h4 class="mt-4">Timetable for ${classData.name} - ${division}</h4>`;
+
+            if (divSchedules.length === 0) {
+                html += `<p class="text-muted">No schedule published for this division.</p>`;
+                return;
+            }
+
+            html += `<table class="table table-striped table-bordered">
+                <thead class="table-light">
+                    <tr><th>Date</th><th>Session</th><th>Subject</th></tr>
+                </thead>
+                <tbody>`;
+
+            divSchedules.forEach(s => {
+                const subject = subjects.find(sub => sub.id === s.subjectId);
+                html += `<tr>
+                    <td>${new Date(s.date).toLocaleDateString('en-GB', {
+                        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+                    })}</td>
+                    <td>${s.session || 'N/A'}</td>
+                    <td class="fw-bold">${subject ? subject.name : 'Unknown'}</td>
+                </tr>`;
             });
-            displayContainer.innerHTML = html;
-        }
-    };
+
+            html += `</tbody></table>`;
+        });
+    });
+
+    displayContainer.innerHTML = html || '<p class="text-muted">No schedules found.</p>';
+};
     
     examSelect.addEventListener('change', displayTimetable);
     classSelect.addEventListener('change', displayTimetable);
@@ -13339,7 +13354,33 @@ window.addEventListener('beforeunload', (event) => {
     }
 });
 
+function printExamTimetable () {
+    const printContents = document.getElementById('timetable-display-container')?.innerHTML;
+    if (!printContents) return alert("No timetable available to print.");
 
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+        <html>
+            <head>
+                <title>Exam Timetable</title>
+                <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+                <style>
+                    body { font-family: Arial, sans-serif; padding: 20px; }
+                    h4 { margin-top: 20px; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+                    thead { background-color: #f8f9fa; }
+                </style>
+            </head>
+            <body>
+                <h2 class="mb-4">Exam Timetable</h2>
+                ${printContents}
+                
+            </body>
+        </html>
+    `);
+    printWindow.document.close();
+};
 </script>
 </body>
 </html>
