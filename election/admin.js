@@ -83,6 +83,12 @@ const loadingOverlay = document.getElementById('loadingOverlay');
 const loadingText = document.querySelector('#loadingOverlay .loading-text');
 const alertContainer = document.getElementById('alertContainer');
 
+// Add these with your other DOM element constants
+const deleteConfirmModalEl = document.getElementById('deleteConfirmModal');
+const deleteConfirmModal = new bootstrap.Modal(deleteConfirmModalEl);
+const deleteConfirmInput = document.getElementById('deleteConfirmInput');
+const finalDeleteBtn = document.getElementById('finalDeleteBtn');
+
 // Modals and Forms (unchanged)
 const addPostModal = new bootstrap.Modal(document.getElementById('addPostModal'));
 const postForm = document.getElementById('postForm');
@@ -125,6 +131,9 @@ const publishStatusText = document.getElementById('publishStatusText');
 const resetAllMachinesBtn = document.getElementById('resetAllMachinesBtn'); // New button
 
 // --- Utility Functions ---
+const candidatePhotoInput = document.getElementById('candidatePhotoInput');
+const candidatePhotoPreview = document.getElementById('candidatePhotoPreview');
+
 
 /**
  * Displays a temporary alert message to the user.
@@ -497,8 +506,14 @@ candidateForm.addEventListener('submit', async (e) => {
     showLoading(true, 'Saving Candidate...');
     const candidateId = candidateIdInput.value;
     const name = candidateNameInput.value;
-    const photoUrl = candidatePhotoUrlInput.value;
+    const photoUrl = candidatePhotoUrlInput.value; // This now gets the URL from the hidden input
     const postId = candidatePostSelect.value;
+
+    if (!photoUrl) {
+         showAlert('Please upload a photo for the candidate.', 'warning');
+         showLoading(false);
+         return;
+    }
 
     try {
         if (candidateId) {
@@ -518,8 +533,7 @@ candidateForm.addEventListener('submit', async (e) => {
             });
             showAlert('Candidate added successfully!', 'success');
         }
-        candidateForm.reset();
-        addCandidateModal.hide();
+        addCandidateModal.hide(); // The 'hidden.bs.modal' event will handle the form reset
     } catch (error) {
         console.error("Error saving candidate:", error);
         showAlert(`Failed to save candidate: ${error.message}`, "danger");
@@ -528,6 +542,7 @@ candidateForm.addEventListener('submit', async (e) => {
     }
 });
 
+
 /**
  * Populates the candidate form for editing.
  * @param {string} candidateId - The ID of the candidate to edit.
@@ -535,25 +550,36 @@ candidateForm.addEventListener('submit', async (e) => {
 async function editCandidate(candidateId) {
     showLoading(true, 'Loading Candidate Data...');
     try {
-        await populatePostSelects(); // Ensure posts are loaded before setting candidate's post
+        await populatePostSelects();
         const candidateDoc = await getDoc(doc(db, `artifacts/${appId}/public/data/candidates`, candidateId));
         if (candidateDoc.exists()) {
             const candidate = candidateDoc.data();
             candidateIdInput.value = candidateDoc.id;
             candidateNameInput.value = candidate.name;
-            candidatePhotoUrlInput.value = candidate.photoUrl;
+            candidatePhotoUrlInput.value = candidate.photoUrl || ''; // Populate hidden input
             candidatePostSelect.value = candidate.postId;
+
+            // Show the existing photo in the preview
+            if (candidate.photoUrl) {
+                candidatePhotoPreview.src = candidate.photoUrl;
+                candidatePhotoPreview.style.display = 'block';
+            } else {
+                candidatePhotoPreview.style.display = 'none';
+            }
+
             addCandidateModal.show();
         } else {
             showAlert('Candidate not found.', 'danger');
         }
-    } catch (error) {
+    } catch (error)
+        {
         console.error("Error fetching candidate for edit:", error);
         showAlert(`Failed to load candidate for edit: ${error.message}`, "danger");
     } finally {
         showLoading(false);
     }
 }
+
 
 /**
  * Deletes a candidate.
@@ -1213,45 +1239,45 @@ generateBoothWisePdfBtn.addEventListener('click', async () => {
 //     }
 // });
 
+// In admin.js, REPLACE the entire function with this corrected version:
+
 generateBoothWiseExcelBtn.addEventListener('click', async () => {
     const electionData = await fetchAllElectionData();
     if (!electionData) return;
 
-    const { postsMap, candidatesMap, boothsMap, votes } = electionData;
-    // const aggregatedVotes = aggregateVotes(votes, postsMap, candidatesMap, boothsMap); // We will not use this aggregation for the individual vote sheet
+    // The 'votes' variable now holds an array of ballot documents
+    const { postsMap, candidatesMap, boothsMap, votes: ballots } = electionData;
 
     showLoading(true, 'Generating Excel report...');
 
     const workbook = XLSX.utils.book_new();
 
-    boothsMap.forEach((boothData, boothDocId) => {
-        // Filter the raw votes for the current booth
-        const boothRawVotes = votes.filter(vote => vote.boothDocId === boothDocId);
+    // Create one worksheet with all raw votes for easier analysis
+    const allVotesWorksheetData = [['Booth Name', 'Post', 'Candidate', 'Session ID', 'Timestamp']];
 
-        // Define headers for the raw vote sheet. You might need to adjust these
-        // based on the actual structure of your 'vote' objects.
-        const worksheetData = [['Vote ID', 'Post', 'Candidate', 'Timestamp']]; // Example headers
-
-        if (boothRawVotes.length > 0) {
-            boothRawVotes.forEach(vote => {
-                const postTitle = postsMap.get(vote.postId)?.title || 'Unknown Post';
-                const candidateName = vote.candidateId === 'NOTA' ? 'NOTA' : (candidatesMap.get(vote.candidateId)?.name || 'Unknown Candidate');
-                // Assuming your vote object has a 'timestamp' or similar field
-                const timestamp = vote.timestamp ? new Date(vote.timestamp).toLocaleString() : '';
-
-                // Add a row for each individual vote
-                worksheetData.push([vote.voteId || '', postTitle, candidateName, timestamp]);
-            });
-        } else {
-            worksheetData.push(['', 'No votes recorded for this booth.', '', '']);
+    ballots.forEach(ballot => {
+        const boothName = boothsMap.get(ballot.boothDocId)?.name || 'Unknown Booth';
+        
+        // FIX 1: The 'timestamp' is a Firestore object and needs the .toDate() method
+        const timestamp = ballot.timestamp ? ballot.timestamp.toDate().toLocaleString() : 'N/A';
+        
+        // FIX 2: Loop through the 'votes' object within each ballot
+        for (const postId in ballot.votes) {
+            const candidateId = ballot.votes[postId];
+            const postTitle = postsMap.get(postId)?.title || 'Unknown Post';
+            const candidateName = candidateId === 'NOTA' ? 'NOTA' : (candidatesMap.get(candidateId)?.name || 'Unknown Candidate');
+            
+            // FIX 3: 'voteId' does not exist. We use 'ballot.sessionId' as a unique identifier for the voting session.
+            allVotesWorksheetData.push([boothName, postTitle, candidateName, ballot.sessionId || 'N/A', timestamp]);
         }
-
-        const ws = XLSX.utils.aoa_to_sheet(worksheetData);
-        XLSX.utils.book_append_sheet(workbook, ws, `${boothData.name} (${boothData.boothId}) - Raw Votes`);
     });
 
+    const ws = XLSX.utils.aoa_to_sheet(allVotesWorksheetData);
+    XLSX.utils.book_append_sheet(workbook, ws, 'All Raw Votes');
+
+
     try {
-        XLSX.writeFile(workbook, 'booth_wise_raw_vote_report.xlsx');
+        XLSX.writeFile(workbook, 'election_raw_vote_report.xlsx');
         showAlert('Excel report generated successfully!', 'success');
     } catch (error) {
         console.error("Error generating Excel:", error);
@@ -1337,7 +1363,12 @@ document.getElementById('addPostModal').addEventListener('hidden.bs.modal', () =
 document.getElementById('addCandidateModal').addEventListener('hidden.bs.modal', () => {
     candidateForm.reset();
     candidateIdInput.value = '';
+    candidatePhotoUrlInput.value = ''; // Clear hidden URL input
+    candidatePhotoInput.value = '';     // Clear the file chooser
+    candidatePhotoPreview.src = '#';    // Reset the image source
+    candidatePhotoPreview.style.display = 'none'; // Hide the preview
 });
+
 document.getElementById('addBoothModal').addEventListener('hidden.bs.modal', () => {
     boothForm.reset();
     boothDocIdInput.value = '';
@@ -1345,4 +1376,151 @@ document.getElementById('addBoothModal').addEventListener('hidden.bs.modal', () 
 document.getElementById('addVotingMachineModal').addEventListener('hidden.bs.modal', () => {
     votingMachineForm.reset();
     votingMachineDocIdInput.value = '';
+});
+
+
+// This new function contains the core logic for the deletion process.
+// It will be called by the modal's final delete button.
+async function performBallotDeletion() {
+    showLoading(true, 'Deleting all ballot records...');
+    try {
+        const ballotsRef = collection(db, `artifacts/${appId}/public/data/voteBallots`);
+        const snapshot = await getDocs(ballotsRef);
+
+        if (snapshot.empty) {
+            showAlert('There are no ballots to delete.', 'info');
+            return;
+        }
+
+        const batch = writeBatch(db);
+        snapshot.docs.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+
+        await batch.commit();
+        showAlert('All cast ballots have been permanently deleted.', 'success');
+
+    } catch (error) {
+        console.error("Error deleting all ballots:", error);
+        showAlert(`Failed to delete ballots: ${error.message}`, "danger");
+    } finally {
+        showLoading(false);
+    }
+}
+
+// REPLACE your old deleteAllBallots function with this one.
+// Its only job now is to open the modal and reset its state.
+function deleteAllBallots() {
+    // Reset the form every time the modal is opened
+    deleteConfirmInput.value = '';
+    finalDeleteBtn.disabled = true;
+    
+    // Show the confirmation modal
+    deleteConfirmModal.show();
+}
+
+// This event listener checks what the user is typing.
+deleteConfirmInput.addEventListener('input', () => {
+    // Enable the final delete button ONLY if the input exactly matches the phrase
+    if (deleteConfirmInput.value === 'delete permanently') {
+        finalDeleteBtn.disabled = false;
+    } else {
+        finalDeleteBtn.disabled = true;
+    }
+});
+
+// This listener triggers the actual deletion after confirmation.
+finalDeleteBtn.addEventListener('click', () => {
+    // Hide the modal first
+    deleteConfirmModal.hide();
+    // Then call the function that performs the deletion
+    performBallotDeletion();
+});
+
+// The event listener attachment in attachAdminControlEventListeners remains the same.
+// Just ensure it calls the new deleteAllBallots function.
+// document.getElementById('deleteAllBallotsBtn').addEventListener('click', deleteAllBallots);
+
+async function uploadPhotoToDrive(photoBlob, uniqueId, subfolderName = 'candidatePhotos-2025') {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+            const base64Image = reader.result;
+            const formData = new FormData();
+            formData.append('photoData', base64Image.split(',')[1]);
+            formData.append('studentId', uniqueId); // The script uses 'studentId' as the identifier
+            formData.append('subfolderName', subfolderName);
+
+            // IMPORTANT: This is the URL of your Google Apps Script Web App
+            const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyFVRUjvnf3dj5uh0m6BCAiPCWHdmyxV9HvTjEfTB29LWAy7kC5vk96qPDFqwz1JlOK/exec';
+
+            try {
+                const response = await fetch(`${SCRIPT_URL}?action=uploadStudentPhotoOnly`, {
+                    method: 'POST',
+                    body: formData,
+                });
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const result = await response.json();
+                if (result.success) {
+                    resolve(result);
+                } else {
+                    reject(new Error(result.error || 'Unknown error during Drive upload.'));
+                }
+            } catch (error) {
+                console.error('Error during Drive upload fetch:', error);
+                reject(error);
+            }
+        };
+        reader.onerror = (error) => {
+            console.error('FileReader error:', error);
+            reject(error);
+        };
+        reader.readAsDataURL(photoBlob);
+    });
+}
+
+candidatePhotoInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const candidateName = candidateNameInput.value.trim();
+    if (!candidateName) {
+        showAlert('Please enter the candidate\'s name before uploading a photo.', 'warning');
+        candidatePhotoInput.value = ''; // Reset the file input
+        return;
+    }
+
+    // Show image preview
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        candidatePhotoPreview.src = event.target.result;
+        candidatePhotoPreview.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+
+    showLoading(true, 'Uploading photo...');
+    try {
+        // A unique identifier for the file
+        const uniqueFileId = `${candidateName.replace(/\s+/g, '_')}_${Date.now()}`;
+        const result = await uploadPhotoToDrive(file, uniqueFileId, 'electionCandidatePhotos');
+
+        if (result && result.success && result.fileId) {
+            // Construct a direct, embeddable Google Drive URL
+            const photoUrl = `https://lh3.googleusercontent.com/d/${result.fileId}`;
+            candidatePhotoUrlInput.value = photoUrl; // Set the value of the hidden input
+            showAlert('Photo uploaded successfully!', 'success');
+        } else {
+            throw new Error(result.error || 'Upload failed. The server did not return a file ID.');
+        }
+    } catch (error) {
+        console.error('Error during photo upload:', error);
+        showAlert(`Photo upload failed: ${error.message}`, 'danger');
+        candidatePhotoUrlInput.value = ''; // Clear the hidden URL input
+        candidatePhotoPreview.style.display = 'none'; // Hide preview on failure
+        candidatePhotoInput.value = ''; // Reset the file input
+    } finally {
+        showLoading(false);
+    }
 });
