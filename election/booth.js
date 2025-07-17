@@ -3,33 +3,71 @@ import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged }
 import { getFirestore, doc, getDocs, setDoc, onSnapshot, collection, query, where, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 
+/**
+ * A more robust function to encode a string to Base64, correctly handling Unicode.
+ * @param {string} str The string to encode.
+ * @returns {string} The Base64 encoded string.
+ */
+function base64Encode(str) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(str);
+    // Convert binary string to Base64
+    return btoa(String.fromCharCode.apply(null, data));
+}
+
+/**
+ * A more robust function to decode a Base64 string, correctly handling Unicode.
+ * @param {string} str The Base64 string to decode.
+ * @returns {string} The decoded string.
+ */
 function base64Decode(str) {
-                return decodeURIComponent(escape(atob(str)));
-            }
-// Global Firebase variables (provided by the environment)
+    const binaryString = atob(str);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+    }
+    const decoder = new TextDecoder();
+    return decoder.decode(bytes);
+}
+
+
+/**
+ * Sets a Base64 encoded user ID as a URL parameter.
+ * @param {string} userId The user ID to encode and set in the URL.
+ */
+function setBase64ParamsInUrl(userId) {
+    const encoded = base64Encode(userId);
+    const newUrl = `${window.location.pathname}?wxev=${encodeURIComponent(encoded)}`;
+    window.history.replaceState({}, '', newUrl);
+}
+
+
+/**
+ * Loads parameters from the URL, decodes them, and saves to localStorage.
+ * @returns {string} The loaded and decoded user ID.
+ */
 function loadParamsFromBase64Url() {
-                const urlParams = new URLSearchParams(window.location.search);
-                const dataParam = urlParams.get('wxev');
+    const urlParams = new URLSearchParams(window.location.search);
+    const dataParam = urlParams.get('wxev');
 
-                if (dataParam) {
-                    try {
-                        console.log("dataparam",dataParam);
-                        const decoded = base64Decode(dataParam);
-                        const userId = decoded;
-                        if (userId) {
-                            localStorage.setItem('userId', userId);
-                            //localStorage.setItem('appId', appId);
-                            return userId ;
-                        }
-                    } catch (e) {
-                        console.error('Invalid Base64 data:', e);
-                    }
-                }
-
-                // fallback
-                return 
-                    localStorage.getItem('userId') || 'defaultUser';
+    if (dataParam) {
+        try {
+            // FIXED: The decoding function is now correctly called.
+            const decoded = base64Decode(dataParam);
+            const userId = decoded;
+            if (userId) {
+                localStorage.setItem('userId', userId);
+                return userId;
             }
+        } catch (e) {
+            console.error('Invalid Base64 data in URL:', e);
+        }
+    }
+
+    // FIXED: The return statement is now on a single line to work correctly.
+    // This will now execute as the fallback if the URL param fails.
+    return localStorage.getItem('userId') || 'defaultUser';
+}
 
            // setBase64ParamsInUrl('kyhss');
            // let appId = "timetableData"
