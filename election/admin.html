@@ -319,9 +319,16 @@
                             <input type="text" class="form-control" id="candidateName" required>
                         </div>
                         <div class="mb-3">
-                            <label for="candidatePhotoUrl" class="form-label">Photo URL</label>
-                            <input type="text" class="form-control" id="candidatePhotoUrl" placeholder="e.g., https://placehold.co/120x120">
-                        </div>
+    <label for="candidatePhotoInput" class="form-label">Candidate Photo/Emblem</label>
+    <input type="file" class="form-control" id="candidatePhotoInput" accept="image/*">
+    <small class="form-text text-muted">Select an image to upload. The URL will be generated automatically.</small>
+</div>
+
+<div class="mb-3 text-center">
+    <img id="candidatePhotoPreview" src="#" alt="Photo Preview" class="rounded" style="display: none; max-height: 150px; max-width: 100%;">
+</div>
+
+<input type="hidden" id="candidatePhotoUrl">
                         <div class="mb-3">
                             <label for="candidatePost" class="form-label">Post</label>
                             <select class="form-select" id="candidatePost" required>
