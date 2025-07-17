@@ -2,6 +2,9 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebas
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, query, where, addDoc, getDocs, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+function base64Decode(str) {
+                return decodeURIComponent(escape(atob(str)));
+            }
 // Global Firebase variables (provided by the environment)
 function loadParamsFromBase64Url() {
                 const urlParams = new URLSearchParams(window.location.search);
@@ -10,7 +13,7 @@ function loadParamsFromBase64Url() {
                 if (dataParam) {
                     try {
                         console.log("dataparam",dataParam);
-                        const decoded = dataParam;// base64Decode(dataParam);
+                        const decoded =base64Decode(dataParam);
                         const userId = decoded;
                         if (userId) {
                             localStorage.setItem('userId', userId);
