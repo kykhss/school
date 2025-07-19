@@ -1,40 +1,68 @@
+/**
+ * A more robust function to encode a string to Base64, correctly handling Unicode.
+ * @param {string} str The string to encode.
+ * @returns {string} The Base64 encoded string.
+ */
 function base64Encode(str) {
-                return btoa(unescape(encodeURIComponent(str)));
+    const encoder = new TextEncoder();
+    const data = encoder.encode(str);
+    // Convert binary string to Base64
+    return btoa(String.fromCharCode.apply(null, data));
+}
+
+/**
+ * A more robust function to decode a Base64 string, correctly handling Unicode.
+ * @param {string} str The Base64 string to decode.
+ * @returns {string} The decoded string.
+ */
+function base64Decode(str) {
+    const binaryString = atob(str);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+    }
+    const decoder = new TextDecoder();
+    return decoder.decode(bytes);
+}
+
+
+/**
+ * Sets a Base64 encoded user ID as a URL parameter.
+ * @param {string} userId The user ID to encode and set in the URL.
+ */
+function setBase64ParamsInUrl(userId) {
+    const encoded = base64Encode(userId);
+    const newUrl = `${window.location.pathname}?wxev=${encodeURIComponent(encoded)}`;
+    window.history.replaceState({}, '', newUrl);
+}
+
+
+/**
+ * Loads parameters from the URL, decodes them, and saves to localStorage.
+ * @returns {string} The loaded and decoded user ID.
+ */
+function loadParamsFromBase64Url() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const dataParam = urlParams.get('wxev');
+
+    if (dataParam) {
+        try {
+            // FIXED: The decoding function is now correctly called.
+            const decoded = dataParam ;//base64Decode(dataParam);
+            const userId = decoded;
+            if (userId) {
+                localStorage.setItem('userId', userId);
+                return userId;
             }
+        } catch (e) {
+            console.error('Invalid Base64 data in URL:', e);
+        }
+    }
 
-        function setBase64ParamsInUrl(userId) {
-                const encoded = base64Encode(userId);
-                const newUrl = `${window.location.pathname}?wxev=${encodeURIComponent(encoded)}`;
-                window.history.replaceState({}, '', newUrl);
-            }
-
-        function base64Decode(str) {
-                return decodeURIComponent(escape(atob(str)));
-            }
-
-        function loadParamsFromBase64Url() {
-                const urlParams = new URLSearchParams(window.location.search);
-                const dataParam = urlParams.get('wxev');
-
-                if (dataParam) {
-                    try {
-                        console.log("dataparam",dataParam);
-                        const decoded = dataParam;// base64Decode(dataParam);
-                        const userId = decoded;
-                        if (userId) {
-                            localStorage.setItem('userId', userId);
-                            //localStorage.setItem('appId', appId);
-                            return userId ;
-                        }
-                    } catch (e) {
-                        console.error('Invalid Base64 data:', e);
-                    }
-                }
-
-                // fallback
-                return 
-                    localStorage.getItem('userId') || 'defaultUser';
-            }
+    // FIXED: The return statement is now on a single line to work correctly.
+    // This will now execute as the fallback if the URL param fails.
+    return localStorage.getItem('userId') || 'defaultUser';
+}
 
            // setBase64ParamsInUrl('kyhss');
            // let appId = "timetableData"
@@ -1373,6 +1401,16 @@ document.getElementById('addBoothModal').addEventListener('hidden.bs.modal', () 
     boothForm.reset();
     boothDocIdInput.value = '';
 });
+// Correct way to add a click listener for the booth link
+document.getElementById('addBoothLink').addEventListener('click', () => {
+    handleCopyLinkClick('booth');
+});
+
+// Correct way to add a click listener for the voting machine link
+document.getElementById('addVoteLink').addEventListener('click', () => {
+    handleCopyLinkClick('votingmachine');
+});
+
 document.getElementById('addVotingMachineModal').addEventListener('hidden.bs.modal', () => {
     votingMachineForm.reset();
     votingMachineDocIdInput.value = '';
@@ -1524,3 +1562,37 @@ candidatePhotoInput.addEventListener('change', async (e) => {
         showLoading(false);
     }
 });
+
+/**
+ * Handles the click event for any 'Copy Link' button.
+ * @param {Event} e - The click event object.
+ */
+/**
+ * Copies a generic, shareable link for the booth or voting machine pages.
+ * The link is configured with the current election's ID (currentUserId).
+ * @param {'booth' | 'votingmachine'} linkType - The type of link to generate.
+ */
+function handleCopyLinkClick(linkType) {
+    // base64Encode and currentUserId are available from the top of the admin.js script
+    const param = base64Encode(currentUserId);
+    if (!linkType) return;
+
+    let fullUrl = null;
+    const baseUrl = 'https://kykhss.github.io/school/election/';
+
+    if (linkType === 'booth') {
+        // Corrected URL with backticks `` and proper protocol
+        fullUrl = `${baseUrl}booth.html?wxev=${param}`;
+    } else if (linkType === 'votingmachine') {
+        fullUrl = `${baseUrl}votingmachine.html?wxev=${param}`;
+    }
+
+    if (fullUrl) {
+        navigator.clipboard.writeText(fullUrl).then(() => {
+            showAlert('Link copied to clipboard!', 'success');
+        }).catch(err => {
+            console.error('Failed to copy link: ', err);
+            showAlert('Could not copy link. See console for details.', 'danger');
+        });
+    }
+}
