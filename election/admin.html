@@ -120,7 +120,25 @@
     </div>
 
     <div class="alert-container" id="alertContainer"></div>
-<div class="card mb-4" id="electionSettingsCard">
+
+    <div class="container mt-5">
+        <h1 class="text-center mb-4 text-primary">Admin Panel</h1>
+        <p class="text-center mb-4">Current User ID: <span id="currentUserId">Loading...</span></p>
+
+        <div class="card" id="adminLoginCard">
+            <div class="card-header">Admin Login</div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="adminPassword" class="form-label">Admin Password</label>
+                    <input type="password" class="form-control" id="adminPassword" placeholder="Enter admin password">
+                    <div class="invalid-feedback" id="adminPasswordError"></div>
+                </div>
+                <button type="button" class="btn btn-primary w-100" id="adminLoginBtn">Login</button>
+            </div>
+        </div>
+
+        <div id="adminContent" style="display: none;">
+            <div class="card mb-4" id="electionSettingsCard">
     <div class="card-header">
         <i class="fas fa-university me-2"></i> Election Settings
     </div>
@@ -149,23 +167,6 @@
     </div>
 </div>
 
-    <div class="container mt-5">
-        <h1 class="text-center mb-4 text-primary">Admin Panel</h1>
-        <p class="text-center mb-4">Current User ID: <span id="currentUserId">Loading...</span></p>
-
-        <div class="card" id="adminLoginCard">
-            <div class="card-header">Admin Login</div>
-            <div class="card-body">
-                <div class="mb-3">
-                    <label for="adminPassword" class="form-label">Admin Password</label>
-                    <input type="password" class="form-control" id="adminPassword" placeholder="Enter admin password">
-                    <div class="invalid-feedback" id="adminPasswordError"></div>
-                </div>
-                <button type="button" class="btn btn-primary w-100" id="adminLoginBtn">Login</button>
-            </div>
-        </div>
-
-        <div id="adminContent" style="display: none;">
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     Posts Management
