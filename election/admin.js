@@ -1584,7 +1584,7 @@ function handleCopyLinkClick(linkType) {
         // Corrected URL with backticks `` and proper protocol
         fullUrl = `${baseUrl}booth.html?wxev=${param}`;
     } else if (linkType === 'votingmachine') {
-        fullUrl = `${baseUrl}votingmachine.html?wxev=${param}`;
+        fullUrl = `${baseUrl}voting_machine.html?wxev=${param}`;
     }
 
     if (fullUrl) {
