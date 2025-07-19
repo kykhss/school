@@ -75,7 +75,7 @@ function loadParamsFromBase64Url() {
 
             console.log(basePath);
 const param = base64Encode(currentUserId);
-    document.getElementById('resultLink').href = `https://kykhss.github.io/schools/election/result.html?wxev=${param}`;
+    document.getElementById('resultLink').href = `results.html?wxev=${param}`;
 
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
