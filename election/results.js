@@ -98,6 +98,7 @@ const totalVotesCountSpan = document.getElementById('totalVotesCount');
 const lastUpdatedTimeSpan = document.getElementById('lastUpdatedTime');
 const postsResultsContainer = document.getElementById('postsResultsContainer');
 const boothProgressContent = document.getElementById('boothProgressContent'); // *** NEW ***
+const liveStandingsContainer = document.getElementById('liveStandingsContainer'); // *** NEW ***
 
 // *** NEW: Header DOM Elements ***
 const emblemImage = document.getElementById('emblemImage');
@@ -144,6 +145,14 @@ function showLoading(show, message = 'Loading...') {
     loadingOverlay.style.display = show ? 'flex' : 'none';
 }
 
+function shuffleArray(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+}
+
 // *** NEW: Fetch and display election details ***
 async function displayElectionDetails() {
     try {
@@ -175,90 +184,223 @@ window.onload = async function() {
         app = initializeApp(firebaseConfig);
         db = getFirestore(app);
         auth = getAuth(app);
-
-        await displayElectionDetails(); // *** NEW: Load details on page start ***
-
+        await displayElectionDetails();
         onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                userId = user.uid;
-            } else {
-                userId = 'Not Authenticated';
-            }
-            // Start listening to the publish status immediately
             listenToPublishStatus();
-            listenForVotingProgress(); // MODIFIED: Renamed from listenForLiveResults
             showLoading(false);
         });
-
         if (initialAuthToken) {
             await signInWithCustomToken(auth, initialAuthToken);
         } else {
             await signInAnonymously(auth);
         }
-
     } catch (error) {
         console.error("Error initializing Firebase:", error);
-        showAlert("Failed to initialize Firebase. Check console for details.", "danger");
+        showAlert(`Firebase Initialization Failed: ${error.message}. Please check your project setup.`, 'danger');
         showLoading(false);
     }
 };
 
-/**
- * Listens to the election publish status and updates the view accordingly.
- */
+
+
+let unsubscribeFromVotes = null; // To hold the listener function
+
 function listenToPublishStatus() {
     const settingsDocRef = doc(db, `artifacts/${appId}/public/data/settings`, 'electionStatus');
     onSnapshot(settingsDocRef, (docSnapshot) => {
-        let isPublished = false;
-        if (docSnapshot.exists()) {
-            isPublished = docSnapshot.data().published || false;
+        const isPublished = docSnapshot.exists() && docSnapshot.data().published;
+
+        if (unsubscribeFromVotes && isPublished) {
+            unsubscribeFromVotes();
+            
+            unsubscribeFromVotes = null;
         }
 
         if (isPublished) {
+            showLoading(true, 'Revealing Final Results...');
             resultsNotPublishedView.style.display = 'none';
-            electionResultsContent.style.display = 'block';
-            fetchAndRenderResults(); // Fetch and display results when published
-        } else {
-            resultsNotPublishedView.style.display = 'block';
             electionResultsContent.style.display = 'none';
-            postsResultsContainer.innerHTML = ''; // Clear previous results
-            totalVotesCountSpan.textContent = '0';
-            lastUpdatedTimeSpan.textContent = 'N/A';
+            // if(boothProgressContent) boothProgressContent.style.display = 'none';
+             revealFinalResults();
+             listenForVotingProgress(isPublished);
+            
+            showLoading(false);
+        } else {
+            document.getElementById('electionResultsContent').style.display = 'none';
+            resultsNotPublishedView.style.display = 'none';
+            if(boothProgressContent) boothProgressContent.style.display = 'block';
+            document.getElementById('electionResultsContent').style.display = 'none';
+            if (!unsubscribeFromVotes) {
+                listenForVotingProgress(isPublished);
+            }
         }
-    }, (error) => {
-        console.error("Error listening to publish status:", error);
-        showAlert("Error loading publish status.", "danger");
-        resultsNotPublishedView.style.display = 'block';
-        electionResultsContent.style.display = 'none';
     });
 }
+
+
+
+async function revealFinalResults() {
+    const allData = await fetchAllElectionDataForResults();
+    if (!allData) return;
+
+    const { ballots, postsMap, candidatesMap } = allData;
+    const aggregatedResults = aggregateOverallVotes(ballots, postsMap, candidatesMap);
+    liveStandingsContainer.innerHTML = ''; // Clear previous graph
+   // fetchAndRenderResults(aggregatedResults);
+    const postsArray = Array.from(postsMap.values());
+
+    postsArray.forEach((postData, postIndex) => {
+        const postVotes = aggregatedResults.get(postData.id) || new Map();
+        
+        const postChartContainer = document.createElement('div');
+        postChartContainer.className = 'live-post-chart revealed'; // Add 'revealed' class
+        postChartContainer.innerHTML = `<h4 class="live-post-title">${postData.title}</h4>`; // REAL post title
+
+        let candidateResults = Array.from(postVotes.entries()).map(([candidateId, count]) => {
+            const details = candidatesMap.get(candidateId);
+            return {
+                id: candidateId,
+                name: candidateId === 'NOTA' ? 'NOTA' : (details?.name || 'Unknown'),
+                photoUrl: candidateId === 'NOTA' ? '' : (details?.photoUrl || 'https://placehold.co/80x80/cccccc/333333?text=N/A'),
+                votes: count
+            };
+        });
+
+        // SORT by votes to determine winner
+        candidateResults.sort((a, b) => b.votes - a.votes);
+        const maxVotesInPost = candidateResults.length > 0 ? candidateResults[0].votes : 1;
+
+        candidateResults.forEach((result, index) => {
+            const percentage = maxVotesInPost > 0 ? (result.votes / maxVotesInPost) * 100 : 0;
+            const isWinner = index === 0 && result.votes > 0 && result.id !== 'NOTA';
+
+            const bar = document.createElement('div');
+            bar.className = 'live-candidate-bar revealed';
+            if(isWinner) bar.classList.add('winner');
+
+            const photoHTML = result.id !== 'NOTA'
+                ? `<img class="revealed-photo" src="${result.photoUrl}" style="width:45px; height:45px; border-radius:50%; object-fit:cover;">`
+                : `<div class="revealed-photo" style="width:45px; height:45px; border-radius:50%; background-color:#f0f0f0; display:flex; align-items:center; justify-content:center;"><i class="fas fa-ban fa-lg text-muted"></i></div>`;
+
+            bar.innerHTML = `
+                <div class="live-candidate-avatar">
+                    <i class="fas fa-user-secret fa-lg"></i>
+                </div>
+                ${photoHTML}
+                <div class="live-candidate-info">
+                    <div class="live-candidate-name">${result.name}</div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar-live" style="width: ${percentage}%;">
+                           ${result.votes} Votes ${isWinner ? '<i class="fas fa-trophy ms-2"></i>' : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+            postChartContainer.appendChild(bar);
+        });
+
+        liveStandingsContainer.appendChild(postChartContainer);
+    });
+}
+function listenForVotingProgress(isPublished) {
+    const voteBallotsCollectionRef = collection(db, `artifacts/${appId}/public/data/voteBallots`);
+    unsubscribeFromVotes = onSnapshot(voteBallotsCollectionRef, async (snapshot) => {
+        showLoading(true, 'Updating live data...');
+        const ballots = snapshot.docs.map(doc => doc.data());
+        const allData = await fetchAllElectionDataForResults();
+        if (!allData) {
+            showLoading(false);
+            return;
+        }
+        if(isPublished){
+            await renderBoothProgress(ballots);
+            showLoading(false);
+        }else{
+         await renderBoothProgress(ballots);
+        await renderLiveStandingsGraph(ballots, allData.postsMap, allData.candidatesMap);
+        
+        } 
+    });
+}
+
+
+
+
+/**
+ * Renders the ANONYMOUS graph before results are published.
+ */
+async function renderLiveStandingsGraph(ballots, postsMap, candidatesMap) {
+    if (!liveStandingsContainer) return;
+
+    const aggregatedResults = aggregateOverallVotes(ballots, postsMap, candidatesMap);
+    liveStandingsContainer.innerHTML = '';
+
+    const postsArray = Array.from(postsMap.values());
+
+    postsArray.forEach((postData, postIndex) => {
+        const postVotes = aggregatedResults.get(postData.id);
+        if (!postVotes) return;
+        
+        const postChartContainer = document.createElement('div');
+        postChartContainer.className = 'live-post-chart';
+        postChartContainer.innerHTML = `<h4 class="live-post-title">Position #${postIndex + 1}</h4>`;
+
+        let candidateResults = Array.from(postVotes.entries()).map(([_, count]) => ({ votes: count }));
+        const maxVotesInPost = Math.max(...candidateResults.map(c => c.votes), 1);
+        candidateResults = shuffleArray(candidateResults);
+
+        candidateResults.forEach(result => {
+            const percentage = (result.votes / maxVotesInPost) * 100;
+            const bar = document.createElement('div');
+            bar.className = 'live-candidate-bar';
+            bar.innerHTML = `
+                <div class="live-candidate-avatar">
+                    <i class="fas fa-user-secret fa-lg"></i>
+                </div>
+                <div class="live-candidate-info">
+                    <div class="live-candidate-name">Candidate ?</div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar-live" style="width: ${percentage}%;">?</div>
+                    </div>
+                </div>
+            `;
+            postChartContainer.appendChild(bar);
+        });
+        liveStandingsContainer.appendChild(postChartContainer);
+    });
+}
+
+
+
 
 /**
  * Fetches all necessary data (posts, candidates, votes) for displaying results.
  * @returns {object} An object containing maps of posts, candidates, and all votes.
  */
+// --- Data Fetching ---
 async function fetchAllElectionDataForResults() {
-    showLoading(true, 'Fetching election results data...');
     try {
-        const [postsSnapshot, candidatesSnapshot, votesSnapshot] = await Promise.all([
+        const [postsSnapshot, candidatesSnapshot, votesSnapshot, boothsSnapshot] = await Promise.all([
             getDocs(query(collection(db, `artifacts/${appId}/public/data/posts`), orderBy('order', 'asc'))),
             getDocs(collection(db, `artifacts/${appId}/public/data/candidates`)),
-            getDocs(collection(db, `artifacts/${appId}/public/data/voteBallots`))
+            getDocs(collection(db, `artifacts/${appId}/public/data/voteBallots`)),
+            getDocs(collection(db, `artifacts/${appId}/public/data/booths`))
         ]);
 
-        const postsMap = new Map(postsSnapshot.docs.map(doc => [doc.id, doc.data()]));
-        const candidatesMap = new Map(candidatesSnapshot.docs.map(doc => [doc.id, doc.data()]));
-        const votes = votesSnapshot.docs.map(doc => doc.data());
+        const postsMap = new Map(postsSnapshot.docs.map(doc => [doc.id, { id: doc.id, ...doc.data() }]));
+        const candidatesMap = new Map(candidatesSnapshot.docs.map(doc => [doc.id, { id: doc.id, ...doc.data() }]));
+        const boothsMap = new Map(boothsSnapshot.docs.map(doc => [doc.id, { id: doc.id, ...doc.data() }]));
+        const ballots = votesSnapshot.docs.map(doc => doc.data());
 
-        showLoading(false);
-        return { postsMap, candidatesMap, votes };
+        return { postsMap, candidatesMap, ballots, boothsMap };
     } catch (error) {
-        console.error("Error fetching election data for results:", error);
+        console.error("Error fetching all election data:", error);
         showAlert(`Failed to fetch election data: ${error.message}`, "danger");
-        showLoading(false);
         return null;
     }
 }
+
+
 
 /**
  * Aggregates votes by post, then by candidate.
@@ -268,10 +410,17 @@ async function fetchAllElectionDataForResults() {
  * @returns {Map<string, Map<string, number>>} Aggregated vote counts.
  * Structure: Map<postId, Map<candidateId, count>>
  */
+// --- Vote Aggregation ---
 function aggregateOverallVotes(ballots, postsMap, candidatesMap) {
     const aggregatedData = new Map();
 
-    // 1. Initialize the data structure for all posts and candidates with 0 votes
+    // *** SAFEGUARD ADDED HERE ***
+    // This check prevents the 'forEach' of undefined error.
+    if (!postsMap || !candidatesMap) {
+        console.error("aggregateOverallVotes was called with undefined postsMap or candidatesMap.");
+        return aggregatedData; // Return an empty map to prevent a crash
+    }
+
     postsMap.forEach((postData, postId) => {
         const postVoteMap = new Map();
         candidatesMap.forEach((candidateData, candidateId) => {
@@ -279,31 +428,21 @@ function aggregateOverallVotes(ballots, postsMap, candidatesMap) {
                 postVoteMap.set(candidateId, 0);
             }
         });
-        postVoteMap.set('NOTA', 0); // Add NOTA for each post
+        postVoteMap.set('NOTA', 0);
         aggregatedData.set(postId, postVoteMap);
     });
 
-    // 2. Process each ballot document
     ballots.forEach(ballot => {
-        // **CORRECTION START**
-        // Get the nested 'votes' object from the ballot document
         const sessionVotes = ballot.votes;
-
-        // Check if the nested object exists
         if (sessionVotes) {
-            // Loop through the key-value pairs inside the nested object
-            // The key is the postId, and the value is the candidateId
             for (const postId in sessionVotes) {
                 const candidateId = sessionVotes[postId];
-
-                // Now, with the correct postId and candidateId, update the count
                 if (aggregatedData.has(postId)) {
                     const postVotes = aggregatedData.get(postId);
                     postVotes.set(candidateId, (postVotes.get(candidateId) || 0) + 1);
                 }
             }
         }
-        // **CORRECTION END**
     });
 
     return aggregatedData;
@@ -313,7 +452,7 @@ function aggregateOverallVotes(ballots, postsMap, candidatesMap) {
  * Fetches and renders the election results.
  */
 async function fetchAndRenderResults() {
-    const electionData = await fetchAllElectionDataForResults();
+    const electionData = await fetchAllElectionDataForResultscounts();
     if (!electionData) {
         postsResultsContainer.innerHTML = '<div class="text-center text-muted mt-5">Failed to load election results.</div>';
         return;
@@ -381,22 +520,27 @@ async function fetchAndRenderResults() {
 }
 
 
-/**
- * Sets up a real-time listener on the vote ballots to update progress.
- */
-function listenForVotingProgress() {
-    const voteBallotsCollectionRef = collection(db, `artifacts/${appId}/public/data/voteBallots`);
+async function fetchAllElectionDataForResultscounts() {
+    showLoading(true, 'Fetching election results data...');
+    try {
+        const [postsSnapshot, candidatesSnapshot, votesSnapshot] = await Promise.all([
+            getDocs(query(collection(db, `artifacts/${appId}/public/data/posts`), orderBy('order', 'asc'))),
+            getDocs(collection(db, `artifacts/${appId}/public/data/candidates`)),
+            getDocs(collection(db, `artifacts/${appId}/public/data/voteBallots`))
+        ]);
 
-    onSnapshot(voteBallotsCollectionRef, async (snapshot) => {
-        showLoading(true, 'Updating voter turnout...');
-        const votes = snapshot.docs.map(doc => doc.data());
-        await renderBoothProgress(votes);
+        const postsMap = new Map(postsSnapshot.docs.map(doc => [doc.id, doc.data()]));
+        const candidatesMap = new Map(candidatesSnapshot.docs.map(doc => [doc.id, doc.data()]));
+        const votes = votesSnapshot.docs.map(doc => doc.data());
+
         showLoading(false);
-    }, (error) => {
-        console.error("Error listening to vote ballots:", error);
-        showAlert("Could not load live voting progress.", "danger");
+        return { postsMap, candidatesMap, votes };
+    } catch (error) {
+        console.error("Error fetching election data for results:", error);
+        showAlert(`Failed to fetch election data: ${error.message}`, "danger");
         showLoading(false);
-    });
+        return null;
+    }
 }
 
 /**
