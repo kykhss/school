@@ -111,7 +111,11 @@
     </div>
 
     <div class="alert-container" id="alertContainer"></div>
-
+    <header class="election-header text-center p-3 mb-4 bg-light shadow-sm">
+    <img id="emblemImage" src="https://placehold.co/100x100/cccccc/333333?text=Emblem" alt="Institution Emblem" class="rounded-circle mb-2" style="width: 80px; height: 80px;">
+    <h1 id="electionNameHeader" class="h4">Election Title</h1>
+    <h3 id="institutionNameHeader" class="h6 text-muted">Institution Name</h3>
+    </header>
     <div class="container mt-5">
         <h1 class="text-center mb-4 text-primary">Booth Panel</h1>
         <p class="text-center mb-4">Current User ID: <span id="currentUserId">Loading...</span></p>
@@ -157,6 +161,8 @@
             </div>
         </div>
     </div>
+
+    
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script type="module" src="booth.js"></script>
