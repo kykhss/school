@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, doc, getDocs, setDoc, onSnapshot, collection, query, where, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { getFirestore, doc, getDoc, getDocs, setDoc, onSnapshot, collection, query, where, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"; // Added getDoc
+
 function base64Decode(str) {
                 return decodeURIComponent(escape(atob(str)));
             }
@@ -70,6 +71,11 @@ const loadingOverlay = document.getElementById('loadingOverlay');
 const loadingText = document.querySelector('#loadingOverlay .loading-text');
 const alertContainer = document.getElementById('alertContainer');
 
+// *** NEW: Header DOM Elements ***
+const emblemImage = document.getElementById('emblemImage');
+const electionNameHeader = document.getElementById('electionNameHeader');
+const institutionNameHeader = document.getElementById('institutionNameHeader');
+
 // --- Utility Functions ---
 
 /**
@@ -110,6 +116,29 @@ function showLoading(show, message = 'Loading...') {
     loadingOverlay.style.display = show ? 'flex' : 'none';
 }
 
+// *** NEW: Fetch and display election details ***
+async function displayElectionDetails() {
+    try {
+        const settingsDocRef = doc(db, `artifacts/${appId}/public/data/settings`, 'electionDetails');
+        const docSnap = await getDoc(settingsDocRef);
+        if (docSnap.exists()) {
+            const settings = docSnap.data();
+            if (settings.institutionName) {
+                institutionNameHeader.textContent = settings.institutionName;
+            }
+            if (settings.electionName) {
+                electionNameHeader.textContent = settings.electionName;
+            }
+            if (settings.emblemUrl) {
+                emblemImage.src = settings.emblemUrl;
+            }
+        }
+    } catch (error) {
+        console.error("Could not fetch election details:", error);
+    }
+}
+
+
 // --- Firebase Initialization and Authentication ---
 
 window.onload = async function() {
@@ -118,6 +147,8 @@ window.onload = async function() {
         app = initializeApp(firebaseConfig);
         db = getFirestore(app);
         auth = getAuth(app);
+
+        await displayElectionDetails(); // *** NEW: Load details on page start ***
 
         // Listen for authentication state changes
         onAuthStateChanged(auth, async (user) => {
