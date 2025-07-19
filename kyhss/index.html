@@ -385,7 +385,9 @@
         let db, auth;
         const mainContent = document.getElementById('main-content');
         const sidebarNav = document.getElementById('sidebar-nav');
-        let classes = [], teachers = [], subjects = [], students = [], exams = [], classroomSubjects = [], examSchedules = [], marks = [], attendance = [], holidays = [], syllabuses = [], syllabusCompletion = [], chapters = [],books = [], bookIssuances = [];
+        let classes = [], teachers = [], subjects = [], students = [], exams = [], classroomSubjects = [], examSchedules = [], 
+        // marks = [], 
+        attendance = [], holidays = [], syllabuses = [], syllabusCompletion = [], chapters = [],books = [], bookIssuances = [];
 ;
         let feeStructures = [], studentFeeSetups = [], receipts = [];
         
@@ -410,7 +412,12 @@
         let croppedPhotoBlob = null; // Stores the final cropped image as a Blob for upload
         let currentPhotoURL = ''; // Stores the URL of the student's existing photo (if editing)
         let reports = [], schoolDetails = {},vehicles = [];
+       // let unsubscribeMarksListener = null; // To manage the dynamic marks listener
         // Add this near your other global variables
+
+        let activeMarksListeners = {}; // NEW: To store multiple listeners
+        let marks = {};              // Store marks in an object for easier management
+
 let currentLibraryReportData = [];
 let libraryReportSort = {
     column: 'dueDate', // Default column to sort by
@@ -423,11 +430,35 @@ let festParticipantFilters = {
     classId: '' // Stores the last selected Class ID
 };
 
+
 // Add these to your list of global variables
 let festHouses = [], fests = [], festEvents = [], festRegistrations = [], festResults = [], festSettings = {};
 // --- Global State & Timers ---
     let houseToEdit = null, festToEdit = null, eventToEdit = null;
-   
+   let initialDataPromises = {};
+let dataLoadStatus = {}; // To track if a collection has received its first snapshot
+let collectionLoadPromises = {}; // Stores Promises that resolve when a specific collection's initial load is complete { collectionName: Promise }
+
+// Global variable to store a teacher's unique class-division assignments
+let teacherAssignedClasses = [];
+
+function waitForCollectionLoad(collectionName) {
+    if (dataLoadStatus[collectionName]) {
+        return Promise.resolve(); // Data is already loaded, resolve immediately
+    }
+
+    if (!collectionLoadPromises[collectionName]) {
+        // Create a new Deferred-style Promise if one doesn't exist
+        // This is a common pattern for creating a Promise that can be resolved externally.
+        let resolveFunc;
+        collectionLoadPromises[collectionName] = new Promise(resolve => {
+            resolveFunc = resolve;
+        });
+        collectionLoadPromises[collectionName].resolve = resolveFunc; // Store the resolve function
+    }
+    return collectionLoadPromises[collectionName];
+}
+
         const adminNav = [
   { id: 'dashboard', icon: 'fa-tachometer-alt', text: 'Dashboard' },
   { id: 'add-student', icon: 'fa-user-plus', text: 'Add Student' },
@@ -512,152 +543,99 @@ const studentNav = [
             alertEl.style.display = 'block';
             setTimeout(() => { alertEl.style.display = 'none'; }, 3000);
         }
+        // This function needs to be called after 'classroomSubjects' and 'teachers' data are available
+async function updateTeacherAssignedClasses() {
+  await attachDataListeners(['classroomSubjects']);
+
+    if ( currentUserRole === 'teacher' && selectedUser && classroomSubjects.length > 0) {
+        const uniquePairs = new Set();
+        teacherAssignedClasses = [];
+
+        classroomSubjects.forEach(cs => {
+            if (cs.teacherId === selectedUser.id) {
+                const key = `${cs.classId}|${cs.division}`;
+                if (!uniquePairs.has(key)) {
+                    uniquePairs.add(key);
+                    teacherAssignedClasses.push({ classId: cs.classId, division: cs.division });
+                }
+            }
+        });
+    } else {
+        teacherAssignedClasses = []; // Clear if not a teacher or data not ready
+    }
+    // You might also want to trigger a re-render of relevant teacher views here
+    // if this function is called dynamically (e.g., if a teacher's allocation changes).
+}
+
         
-        
-function onLoginSuccess(role, user) {
+async function onLoginSuccess(role, user) {
     currentUserRole = role;
     selectedUser = user;
- // Render the main application interface
-    showMainApp();
-    // Attach data listeners
-    // attachMainDataListeners(role, user);
-    attachFeeDataListeners(activeFinancialYear, role, user);
+    unsubscribeAllListeners(); // Clean up any previous session listeners
     
-    // --- ✅ SESSION RESTORE LOGIC ---
-    const savedSessionJSON = localStorage.getItem('schoolAppLastSession');
-    if (savedSessionJSON) {
-        const savedSession = JSON.parse(savedSessionJSON);
-        const fifteenMinutes = 15 * 60 * 1000;
+    // IMPORTANT: Call this AFTER 'classroomSubjects' (and teachers/students) are loaded
+        updateTeacherAssignedClasses(); // Populate the teacherAssignedClasses array
 
-        // Check if the saved session is for the same user and is recent
-        if (savedSession.userId === user.id && (Date.now() - savedSession.timestamp < fifteenMinutes)) {
-            showAlert(`Restoring your previous session...`, 'info');
-            // Restore the view, but do not push to history again
-            navigateTo(savedSession.viewId, false); 
-        }
-        // Clean up the saved session regardless of whether it was used
-        localStorage.removeItem('schoolAppLastSession');
-    }
-    // --- END OF LOGIC ---
-}
+    showMainApp(); // Render the main app layout (sidebar, main-content divs)
 
+    // Define core essential collections that *must* be loaded before any view is rendered.
+    // Ensure 'classroomSubjects' is in this list as 'updateTeacherAssignedClasses' depends on it.
+    const coreCollections = ['classes', 'subjects', 'exams', 'holidays', 'schoolDetails', 'festSettings', 'festHouses', 'fests', 'festEvents', 'classroomSubjects', 'students', 'teachers'];
 
-        function attachMainDataListeners(role, user) {
-    if (unsubscribeListeners.length > 0) {
-        unsubscribeListeners.forEach(unsub => unsub());
-        unsubscribeListeners = [];
-    }
+    try {
+        showAlert(`Loading essential school data...`, 'info');
+        // Initiate listeners for all core collections
+        attachDataListeners(coreCollections);
 
-    let collectionsToWatch = {};
+        // Wait for ALL core collections to deliver their initial snapshot
+        const coreCollectionPromises = coreCollections.map(name => waitForCollectionLoad(name));
+        await Promise.all(coreCollectionPromises);
+        showAlert(`Core data loaded.`, 'success');
 
-    // Base collections everyone needs
-    const baseCollections = {
-        classes: data => classes = data,
-        subjects: data => subjects = data,
-        exams: data => { exams = data; renderExamsList(); },
-        holidays: data => holidays = data,
-        schoolDetails: data => { if (data.length > 0) schoolDetails = data[0]; },
-        festHouses: data => festHouses = data,
-        fests: data => fests = data,
-        festEvents: data => festEvents = data,
-        festSettings: data => { if (data.length > 0) festSettings = data[0]; },
-    };
+        // IMPORTANT: Call this AFTER 'classroomSubjects' (and teachers/students) are loaded
+        updateTeacherAssignedClasses(); // Populate the teacherAssignedClasses array
 
-    Object.assign(collectionsToWatch, baseCollections);
+        // Attach other background listeners (e.g., marks, fees)
+        // These don't necessarily block initial UI, but ensure data is streamed.
+        attachFeeDataListeners(activeFinancialYear, role, user);
+        syncDataForUser(); // This will leverage teacherAssignedClasses for marks
 
-    switch (role) {
-        case 'admin':
-            // Admin needs everything
-            Object.assign(collectionsToWatch, {
-                teachers: data => teachers = data,
-                students: data => { students = data; filterAndRenderStudents(); },
-                classroomSubjects: data => classroomSubjects = data,
-                examSchedules: data => examSchedules = data,
-                marks: data => marks = data,
-                attendance: data => attendance = data,
-                syllabuses: data => syllabuses = data,
-                syllabusCompletion: data => syllabusCompletion = data,
-                chapters: data => chapters = data,
-                forms: data => { forms = data; updateAllNotifications(); },
-                formResponses: data => formResponses = data,
-                reports: data => reports = data,
-                books: data => books = data,
-                bookIssuances: data => bookIssuances = data,
-                vehicles: data => {
-                    vehicles = data;
-                    if (currentUserRole === 'admin') checkVehicleExpiriesAndNotify();
-                },
-                festRegistrations: data => festRegistrations = data,
-                festResults: data => festResults = data,
-            });
-            break;
-
-        case 'teacher':
-            // Teacher needs their data, their class's data, and general school data
-            Object.assign(collectionsToWatch, {
-                teachers: data => teachers = data, // For general reference
-                students: data => { students = data; filterAndRenderStudents(); }, // Filtered in view
-                classroomSubjects: data => classroomSubjects = data, // Filtered in view
-                examSchedules: data => examSchedules = data, // Filtered in view
-                marks: data => marks = data, // Filtered in view
-                attendance: data => attendance = data, // Filtered in view
-                syllabuses: data => syllabuses = data, // Filtered in view
-                syllabusCompletion: data => syllabusCompletion = data, // Filtered in view
-                chapters: data => chapters = data, // Filtered in view
-                forms: data => { forms = data; updateAllNotifications(); }, // Filtered in view
-                formResponses: data => formResponses = data, // Filtered in view
-                books: data => books = data,
-                bookIssuances: data => bookIssuances = data,
-                festRegistrations: data => festRegistrations = data,
-                festResults: data => festResults = data,
-            });
-            break;
-
-        case 'student':
-            // Student needs their own data and general school data
-            Object.assign(collectionsToWatch, {
-                students: data => { students = data; }, // For their own profile
-                marks: data => marks = data, // Filtered in view
-                attendance: data => attendance = data, // Filtered in view
-                forms: data => { forms = data; updateAllNotifications(); }, // Filtered in view
-                formResponses: data => formResponses = data, // Filtered in view
-                bookIssuances: data => bookIssuances = data, // Filtered in view
-                festRegistrations: data => festRegistrations = data, // Filtered in view
-            });
-            // Render the main application interface
-            break;
-    }
-
-    for (const [name, setter] of Object.entries(collectionsToWatch)) {
-        const unsub = onSnapshot(getCollectionRef(name), snapshot => {
-            setter(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-            const activeNavId = document.querySelector('.nav-link.active')?.id.replace('nav-', '');
-            if (activeNavId && window.viewRenderers[activeNavId]) {
-                window.viewRenderers[activeNavId]();
+        // Determine the initial view as before
+        let initialViewId = 'dashboard';
+        const savedSessionJSON = localStorage.getItem('schoolAppLastSession');
+        if (savedSessionJSON) {
+            const savedSession = JSON.parse(savedSessionJSON);
+            const fifteenMinutes = 15 * 60 * 1000;
+            if (savedSession.userId === user.id && (Date.now() - savedSession.timestamp < fifteenMinutes)) {
+                showAlert(`Restoring your previous session...`, 'info');
+                initialViewId = savedSession.viewId;
             }
-        }, (error) => {
-            console.error(`[Firestore] Error listening to ${name}: `, error);
-            showAlert(`Failed to load data: ${name}.`, 'danger');
-        });
-        unsubscribeListeners.push(unsub);
+            localStorage.removeItem('schoolAppLastSession');
+        }
+
+        // Navigate to the initial view, which will internally wait for *its* specific data.
+        await navigateTo(initialViewId, false);
+
+    } catch (error) {
+        console.error("Initial data load failed:", error);
+        showAlert("Failed to load essential school data. Please try again.", 'danger');
+        // Optionally, force logout or show a retry button
     }
-    // Render the main application interface
-    showMainApp();
 }
 
 
-
+ 
 // Add this new object to your script
 const viewDependencies = {
     // Admin & General Views
-    'dashboard': ['students', 'teachers', 'classes', 'subjects', 'attendance'],
+    'dashboard': ['students', 'teachers', 'classes', 'subjects', 'attendance','classroomSubjects'],
     'add-student': ['classes', 'students'],
     'student-mgt': ['students', 'classes'],
     'teacher-mgt': ['teachers', 'classes'],
     'class-mgt': ['classes'],
     'subject-mgt': ['subjects'],
     'subject-allocation': ['classes', 'subjects', 'teachers', 'classroomSubjects'],
-    'exam-mgt': ['exams', 'classes', 'subjects', 'teachers', 'examSchedules', 'marks'],
+    'exam-mgt': ['exams', 'classes', 'subjects', 'teachers', 'examSchedules','classroomSubjects'],
     'attendance-mgt': ['students', 'classes', 'holidays', 'attendance'],
     'holiday-mgt': ['holidays'],
     'syllabus-tracker': ['classes', 'subjects', 'teachers', 'classroomSubjects', 'chapters', 'syllabuses', 'syllabusCompletion'],
@@ -682,7 +660,7 @@ const viewDependencies = {
 
 
     // Student Views
-    'my-results': ['exams', 'examSchedules', 'marks', 'subjects'],
+    'my-results': ['exams', 'examSchedules', 'subjects'],
     'my-attendance': ['holidays', 'attendance'],
     'my-fees': ['studentFeeSetups', 'receipts'],
     'forms': ['forms', 'formResponses'],
@@ -695,84 +673,479 @@ const viewDependencies = {
 let activeListeners = {};
 
 
-/**
- * Unsubscribes from all active Firestore listeners.
- */
-function unsubscribeAllListeners() {
-    for (const key in activeListeners) {
-        if (typeof activeListeners[key] === 'function') {
-            activeListeners[key](); // Call the unsubscribe function
-        }
-    }
-    activeListeners = {}; // Reset the object
-}
 
 /**
  * Attaches Firestore listeners only for the specified collections.
  * It avoids re-attaching listeners that are already active.
  * @param {string[]} collectionsToWatch - An array of collection names to listen to.
  */
-async function attachDataListeners(collectionsToWatch) {
-    if (!collectionsToWatch || collectionsToWatch.length === 0) return;
+/**
+ * Attaches Firestore listeners for the specified collections.
+ * Enhanced to scope data for teachers across all their assigned classes/divisions.
+ * It does NOT return a Promise directly anymore. Instead, use `waitForCollectionLoad`.
+ * @param {string[]} collectionsToWatch - An array of collection names to listen to.
+ */
+function attachDataListeners(collectionsToWatch ,main=false) { // No longer `async` and returns void
+    if (!collectionsToWatch || collectionsToWatch.length === 0) {
+        return; // Nothing to watch
+    }
 
-    // A map linking collection names to their state variable and any render function
     const collectionMap = {
-        classes: { setter: data => classes = data },
-        subjects: { setter: data => subjects = data },
+        classes: { setter: data => classes = data, renderer: null },
+        subjects: { setter: data => subjects = data, renderer: null },
         students: { setter: data => students = data, renderer: filterAndRenderStudents },
-        teachers: { setter: data => teachers = data },
+        teachers: { setter: data => teachers = data, renderer: null },
         exams: { setter: data => exams = data, renderer: renderExamsList },
-        classroomSubjects: { setter: data => classroomSubjects = data },
-        examSchedules: { setter: data => examSchedules = data },
-        marks: { setter: data => marks = data },
-        attendance: { setter: data => attendance = data },
-        holidays: { setter: data => holidays = data },
-        syllabuses: { setter: data => syllabuses = data },
-        syllabusCompletion: { setter: data => syllabusCompletion = data },
-        chapters: { setter: data => chapters = data },
-        books: { setter: data => books = data },
-        bookIssuances: { setter: data => bookIssuances = data },
-        feeStructures: { setter: data => feeStructures = data },
-        studentFeeSetups: { setter: data => studentFeeSetups = data },
-        receipts: { setter: data => receipts = data },
+        classroomSubjects: { setter: data => classroomSubjects = data, renderer: null },
+        examSchedules: { setter: data => examSchedules = data, renderer: null },
+        attendance: { setter: data => attendance = data, renderer: null },
+        holidays: { setter: data => holidays = data, renderer: null },
+        syllabuses: { setter: data => syllabuses = data, renderer: null },
+        syllabusCompletion: { setter: data => syllabusCompletion = data, renderer: null },
+        chapters: { setter: data => chapters = data, renderer: null },
+        books: { setter: data => books = data, renderer: null },
+        bookIssuances: { setter: data => bookIssuances = data, renderer: null },
+        feeStructures: { setter: data => feeStructures = data, renderer: null },
+        studentFeeSetups: { setter: data => studentFeeSetups = data, renderer: null },
+        receipts: { setter: data => receipts = data, renderer: null },
         forms: { setter: data => forms = data, renderer: updateAllNotifications },
-        formResponses: { setter: data => formResponses = data },
-        reports: { setter: data => reports = data },
-        schoolDetails: { setter: data => { if (data.length > 0) schoolDetails = data[0]; } },
-        vehicles: { setter: data => vehicles = data, renderer: checkVehicleExpiriesAndNotify },
-        festHouses: { setter: data => festHouses = data },
-        fests: { setter: data => fests = data },
-        festEvents: { setter: data => festEvents = data },
-        festRegistrations: { setter: data => festRegistrations = data },
-        festResults: { setter: data => festResults = data },
-        festSettings: { setter: data => { if (data.length > 0) festSettings = data[0]; } },
-        timetables: { setter: data => timetables = data },
+        formResponses: { setter: data => formResponses = data, renderer: null },
+        reports: { setter: data => reports = data, renderer: null },
+        schoolDetails: { setter: data => { if (data.length > 0) schoolDetails = data[0]; }, renderer: null },
+        vehicles: { setter: data => vehicles = data, renderer: updateAllNotifications },
+        festHouses: { setter: data => festHouses = data, renderer: null },
+        fests: { setter: data => fests = data, renderer: null },
+        festEvents: { setter: data => festEvents = data, renderer: null },
+        festRegistrations: { setter: data => festRegistrations = data, renderer: null },
+        festResults: { setter: data => festResults = data, renderer: null },
+        festSettings: { setter: data => { if (data.length > 0) festSettings = data[0]; }, renderer: null },
+        timetables: { setter: data => timetables = data, renderer: null },
     };
 
     collectionsToWatch.forEach(name => {
-        // Only attach a listener if one isn't already active for this collection
-        if (!activeListeners[name]) {
-            const config = collectionMap[name];
-            if (config) {
-                const collectionRef = name.includes('fee') || name.includes('receipt')
-                    ? getFeeCollectionRef(activeFinancialYear, name)
-                    : getCollectionRef(name);
+        // If listener is already active AND initial data has arrived for this collection, skip.
+        // This prevents redundant work.
+        if (activeListeners[name] && dataLoadStatus[name]) {
+            return;
+        }
 
-                const unsub = onSnapshot(collectionRef, snapshot => {
-                    config.setter(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-                    // If a specific renderer function is associated, call it
-                    if (config.renderer) {
-                        config.renderer();
+        const config = collectionMap[name];
+        if (!config) {
+            console.warn(`No configuration found for collection: ${name}. This listener will be skipped.`);
+            // If no config, resolve its loading promise immediately to unblock `waitForCollectionLoad`.
+            if (collectionLoadPromises[name] && collectionLoadPromises[name].resolve) {
+                collectionLoadPromises[name].resolve();
+            }
+            return;
+        }
+
+        // Unsubscribe any existing listener for this collection before setting up new ones
+        if (activeListeners[name]) {
+            activeListeners[name]();
+            delete activeListeners[name];
+        }
+
+        let queriesToExecuteForCollection = [];
+
+        // --- Role-based Query Logic for Teachers ---
+        const collectionsToScopeForTeacher = ['students', 'examSchedules', 'syllabuses', 'syllabusCompletion', 'chapters'];
+
+        if (currentUserRole === 'teacher' && collectionsToScopeForTeacher.includes(name)) {
+            if (teacherAssignedClasses.length > 0) {
+                teacherAssignedClasses.forEach(({ classId, division }) => {
+                    queriesToExecuteForCollection.push({
+                        key: `${name}_${classId}_${division}`,
+                        query: query(getCollectionRef(name),
+                            where('classId', '==', classId),
+                            where('division', '==', division)
+                        )
+                    });
+                });
+                console.log(`Setting up ${queriesToExecuteForCollection.length} scoped queries for ${name} (teacher).`);
+            } else {
+                console.log(`Teacher has no assigned classes for ${name}. Setting up empty query.`);
+                // Use an impossible query to get an empty snapshot quickly
+                // For admins or collections that don't need role-based filtering, get all documents
+                queriesToExecuteForCollection.push({ key: `${name}_all`, query: getCollectionRef(name) });
+              //  queriesToExecuteForCollection.push({ key: `${name}_empty`, query: query(getCollectionRef(name), where('nonExistentField', '==', 'impossibleValue')) });
+            }
+        } else {
+            // For admins or collections that don't need role-based filtering, get all documents
+            queriesToExecuteForCollection.push({ key: `${name}_all`, query: getCollectionRef(name) });
+            console.log(`Setting up full query for ${name} (${currentUserRole}).`);
+        }
+
+        let collectedData = {}; // Temp object to merge data from multiple queries for one collection
+        let queriesCompletedInitialSnapshot = 0; // Track initial snapshot completion for this collection
+        let expectedInitialSnapshots = queriesToExecuteForCollection.length;
+
+        // Ensure expectedInitialSnapshots is at least 1 to avoid division by zero or hanging if queries list is empty.
+        if (expectedInitialSnapshots === 0) {
+            expectedInitialSnapshots = 1; // Treat as 1 for immediate resolution if no actual queries
+            // Add a dummy query to ensure onSnapshot runs at least once, even if it returns nothing.
+            // This ensures the initial load promise for this collection is eventually resolved.
+            queriesToExecuteForCollection.push({ key: `${name}_dummy`, query: query(getCollectionRef(name), where('dummyField', '==', 'dummyValue')) });
+        }
+
+
+        const currentCollectionUnsubs = []; // To store unsubscribe functions for this specific collection
+
+        queriesToExecuteForCollection.forEach(qInfo => {
+            const unsub = onSnapshot(qInfo.query, snapshot => {
+                snapshot.docChanges().forEach(change => {
+                    if (change.type === "removed") {
+                        delete collectedData[change.doc.id];
+                    } else {
+                        collectedData[change.doc.id] = { id: change.doc.id, ...change.doc.data() };
                     }
-                }, (error) => {
-                    console.error(`[Firestore] Error listening to ${name}: `, error);
                 });
 
-                // Store the new unsubscribe function
-                activeListeners[name] = unsub;
+                // Update the main global data array for this collection
+                config.setter(Object.values(collectedData));
+
+                // Check if this is the initial snapshot for all queries for this collection
+                if (!dataLoadStatus[name]) {
+                    queriesCompletedInitialSnapshot++;
+                    if (queriesCompletedInitialSnapshot === expectedInitialSnapshots) {
+                        dataLoadStatus[name] = true; // Mark as initially loaded
+                        // Resolve the promise for this collection if it exists
+                        if (collectionLoadPromises[name] && collectionLoadPromises[name].resolve) {
+                            collectionLoadPromises[name].resolve();
+                        }
+                    }
+                }
+
+                // Trigger renderer if configured (for live updates after initial load)
+                if (config.renderer) {
+                    config.renderer();
+                }
+            }, (error) => {
+                console.error(`[Firestore] Error listening to ${name} (query ${qInfo.key}): `, error);
+                // Ensure the promise resolves even on error to unblock Promise.all
+                if (!dataLoadStatus[name]) {
+                    queriesCompletedInitialSnapshot++;
+                    if (queriesCompletedInitialSnapshot === expectedInitialSnapshots) {
+                        dataLoadStatus[name] = true;
+                        if (collectionLoadPromises[name] && collectionLoadPromises[name].resolve) {
+                            collectionLoadPromises[name].resolve();
+                        }
+                    }
+                }
+            });
+            currentCollectionUnsubs.push(unsub);
+        });
+        // Store a single unsubscribe function for this collection that calls all its sub-unsubs
+        activeListeners[name] = () => currentCollectionUnsubs.forEach(unsub => unsub());
+    });
+}
+
+
+
+
+
+/**
+ * Attaches a Firestore listener that fetches marks for only one specific class and division.
+ * It detaches any previous marks listener before creating a new one.
+ * @param {string} classId - The ID of the class to fetch marks for.
+ * @param {string} division - The division to fetch marks for.
+ */
+
+ function setupInitialMarksListeners() {
+    let classDataArray = [];
+
+    if (currentUserRole === 'teacher') {
+        // Get all class/division allocations for this teacher
+        const teacherAllocations = classroomSubjects.filter(cs => cs.teacherId === selectedUser.id);
+        const uniquePairs = new Set();
+
+        teacherAllocations.forEach(({ classId, division }) => {
+            const key = `${classId}_${division}`;
+            if (!uniquePairs.has(key)) {
+                uniquePairs.add(key);
+                classDataArray.push({ classId, division });
             }
+        });
+
+    } else if (currentUserRole === 'student') {
+        if (selectedUser?.classId && selectedUser?.division) {
+            classDataArray.push({
+                classId: selectedUser.classId,
+                division: selectedUser.division
+            });
+        }
+
+    } else if (currentUserRole === 'admin') {
+        // Admin: all classes/divisions
+        classDataArray = classes.flatMap(cls =>
+            cls.divisions.map(division => ({
+                classId: cls.id,
+                division
+            }))
+        );
+    }
+
+    // Attach listeners without examId (null)
+    attachMarksListener(null, classDataArray);
+}
+
+function syncDataForUser() {
+    // First, detach any previous marks listeners to prevent memory leaks or duplicate data
+    Object.values(activeMarksListeners).forEach(unsub => unsub());
+    activeMarksListeners = {};
+
+    let queriesToRun = [];
+
+    // 1. Determine the scope based on the user role
+    if (currentUserRole === 'admin') {
+        // Admin needs all marks. We create one query for the whole collection.
+        queriesToRun.push({
+            key: 'all_marks',
+            query: getCollectionRef('marks')
+        });
+    } else if (currentUserRole === 'teacher') {
+        // Teacher needs marks for every class/division they are assigned to.
+        const teacherAssignments = Object.values(classroomSubjects).filter(cs => cs.teacherId === selectedUser.id);
+        
+        // Get unique class-division pairs to avoid redundant listeners
+        const uniqueClassKeys = [...new Set(teacherAssignments.map(a => `${a.classId}|${a.division}`))];
+
+        uniqueClassKeys.forEach(key => {
+            const [classId, division] = key.split('|');
+            queriesToRun.push({
+                key: `${classId}_${division}`,
+                query: query(getCollectionRef('marks'), where('classId', '==', classId), where('division', '==', division))
+            });
+        });
+
+    } else if (currentUserRole === 'student') {
+        // Student only needs their own marks.
+        queriesToRun.push({
+            key: `student_${selectedUser.id}`,
+            query: query(getCollectionRef('marks'), where('studentId', '==', selectedUser.id))
+        });
+    }
+
+    // 2. Execute all the necessary queries and attach listeners
+    queriesToRun.forEach(qInfo => {
+        // Only attach if a listener for this specific key isn't already active
+        if (!activeMarksListeners[qInfo.key]) {
+            const unsubscribe = onSnapshot(qInfo.query, (snapshot) => {
+                // Use docChanges for efficient updates instead of re-reading everything
+                snapshot.docChanges().forEach(change => {
+                    if (change.type === "removed") {
+                        delete marks[change.doc.id]; // Remove deleted marks
+                    } else {
+                        // Add or update the mark in our global 'marks' object
+                        marks[change.doc.id] = { id: change.doc.id, ...change.doc.data() };
+                    }
+                });
+
+                // After updating the data, re-render the currently active view if it depends on marks
+                // This is crucial for UI updates.
+                const activeNavId = document.querySelector('#sidebar-nav .nav-link.active')?.id.replace('nav-', '');
+                if (activeNavId === 'exam-mgt' || activeNavId === 'my-results') {
+                     // Find the specific function that renders the active results table to refresh it
+                     // For example, if 'results' tab is active in exam-mgt:
+                     const resultsContainer = document.getElementById('pills-exam-wise');
+                     if(resultsContainer && resultsContainer.classList.contains('active')) {
+                         const examId = document.getElementById('res-exam')?.value;
+                         const classId = document.getElementById('res-class')?.value;
+                         const division = document.getElementById('res-division')?.value;
+                         if (examId && classId && division) {
+                            generateExamWiseResultsTable(examId, classId, division);
+                         }
+                     }
+                }
+
+            }, (error) => {
+                console.error(`[Firestore] Error listening to marks for ${qInfo.key}:`, error);
+            });
+
+            // Store the unsubscribe function so we can clean it up later
+            activeMarksListeners[qInfo.key] = unsubscribe;
         }
     });
+}
+function attachMarksListener(examId, classId, division) {
+
+    if (!classId || !division) {
+
+        return;
+
+    }
+
+
+
+    // Create a unique key for this specific listener
+
+    const listenerKey = `${classId}_${division}`;
+
+
+
+    // --- NEW: If a listener for this specific query is already active, do nothing ---
+
+    if (activeMarksListeners[listenerKey]) {
+
+        // The data is already being synced in real-time. We just need to re-render the table.
+
+        generateExamWiseResultsTable(examId, classId, division);
+
+        return;
+
+    }
+
+    let marksQuery ="";
+
+    if(examId&&!classId&&!division){
+
+        marksQuery = query(getCollectionRef('marks'),
+
+        where('examId', '==', examId)
+
+    );
+
+
+
+    }else if(examId&&classId&&division){
+
+marksQuery = query(getCollectionRef('marks'),
+
+        where('examId', '==', examId),
+
+        where('classId', '==', classId),
+
+        where('division', '==', division)
+
+    );
+
+
+
+}else{
+
+    marksQuery = query(getCollectionRef('marks'),
+
+        where('classId', '==', classId),
+
+        where('division', '==', division)
+
+    );
+
+}
+
+   
+
+
+
+    const unsubscribe = onSnapshot(marksQuery, (snapshot) => {
+
+        // Merge the incoming data into our global marks object
+
+        snapshot.docs.forEach(doc => {
+
+            marks[doc.id] = { id: doc.id, ...doc.data() };
+
+        });
+
+       
+
+        // After data arrives or updates, re-render the results table
+
+        generateExamWiseResultsTable(examId, classId, division);
+
+
+
+    }, (error) => {
+
+        console.error(`[Firestore] Error listening to marks for ${listenerKey}: `, error);
+
+    });
+
+
+
+    // Store the new unsubscribe function in our cache
+
+    activeMarksListeners[listenerKey] = unsubscribe;
+
+}
+
+
+
+
+function attachMarksListenerarray(examId, classDataArray = []) {
+    // If no classDataArray is provided, fallback to selected class/division
+    if (!Array.isArray(classDataArray) || classDataArray.length === 0) {
+        const classId = selectedUser?.classId || null;
+        const division = selectedUser?.division || null;
+        if (classId && division) {
+            classDataArray = [{ classId, division }];
+        } else {
+            console.warn('attachMarksListener: No valid class/division available.');
+            return;
+        }
+    }
+
+    classDataArray.forEach(({ classId, division }) => {
+        const listenerKey = `${classId}_${division}`;
+
+        if (activeMarksListeners[listenerKey]) {
+            // Already listening for this combination, re-render if needed
+            generateExamWiseResultsTable(examId,classId, division);
+            return;
+        }
+
+        // Create Firestore query
+        let marksQuery;
+        if (examId) {
+            marksQuery = query(
+                getCollectionRef('marks'),
+                where('examId', '==', examId),
+                where('classId', '==', classId),
+                where('division', '==', division)
+            );
+        } else {
+            marksQuery = query(
+                getCollectionRef('marks'),
+                where('classId', '==', classId),
+                where('division', '==', division)
+            );
+        }
+
+        const unsubscribe = onSnapshot(marksQuery, (snapshot) => {
+            snapshot.docChanges().forEach(change => {
+                if (change.type === "removed") {
+                    delete marks[change.doc.id];
+                } else {
+                    marks[change.doc.id] = { id: change.doc.id, ...change.doc.data() };
+                }
+            });
+
+            generateExamWiseResultsTable(examId, classId, division);
+        }, (error) => {
+            console.error(`[Firestore] Error listening to marks for ${listenerKey}:`, error);
+        });
+
+        activeMarksListeners[listenerKey] = unsubscribe;
+    });
+}
+
+
+
+function unsubscribeAllListeners() {
+    // Unsubscribe from general listeners
+    for (const key in activeListeners) {
+        if (typeof activeListeners[key] === 'function') {
+            activeListeners[key]();
+        }
+    }
+    activeListeners = {};
+
+    // --- NEW: Also unsubscribe from all active marks listeners ---
+    for (const key in activeMarksListeners) {
+        if (typeof activeMarksListeners[key] === 'function') {
+            activeMarksListeners[key]();
+        }
+    }
+    activeMarksListeners = {};
 }
 
 function attachFeeDataListeners(financialYear, role, user) {
@@ -853,31 +1226,39 @@ function attachFeeDataListeners(financialYear, role, user) {
     });
 }
 
-      async  function navigateTo(viewId, pushState = true) {
-    // 1. Get the required collections from our dependency map
-    const requiredCollections = viewDependencies[viewId] || [];
+async function navigateTo(viewId, pushState = true) {
+    const mainContent = document.getElementById('main-content');
+    if (!mainContent) return;
 
-    // 2. Attach listeners. This will only add listeners for collections not already active.
-   await attachDataListeners(requiredCollections);
+    // Show a loading spinner immediately
+    mainContent.innerHTML = `<div class="d-flex justify-content-center align-items-center" style="height: 80vh;"><div class="spinner-border text-primary" role="status"></div></div>`;
 
-    // 3. Update the UI and render the view (this part remains the same)
     document.querySelectorAll('#sidebar-nav .nav-link').forEach(link => link.classList.remove('active'));
     const navLink = document.getElementById(`nav-${viewId}`);
-    if (navLink) {
-        navLink.classList.add('active');
-    }
+    if (navLink) navLink.classList.add('active');
+    if (pushState) history.pushState({ viewId: viewId }, viewId, `#${viewId}`);
 
-    if (pushState) {
-        history.pushState({ viewId: viewId }, viewId, `#${viewId}`);
-    }
+    const requiredCollections = viewDependencies[viewId] || [];
 
-    const renderFunc = window.viewRenderers[viewId];
-    if (renderFunc) {
-        setTimeout(() => {
-            renderFunc();
-        }, 100); 
-    } else {
-        mainContent.innerHTML = `<h1 class="h3">${viewId.replace(/-/g, ' ')}</h1><p>UI under construction.</p>`;
+    try {
+        // Initiate listeners for required collections
+        attachDataListeners(requiredCollections);
+
+        // Wait for only the required collections for THIS specific view to be loaded
+        showAlert(`Loading data for ${viewId.replace(/-/g, ' ')}...`, 'info');
+        const viewDataPromises = requiredCollections.map(name => waitForCollectionLoad(name));
+        await Promise.all(viewDataPromises);
+        showAlert(`Data for ${viewId.replace(/-/g, ' ')} loaded.`, 'success');
+
+        const renderFunc = window.viewRenderers[viewId];
+        if (renderFunc) {
+            renderFunc(); // Call the render function only after data is confirmed loaded
+        } else {
+            mainContent.innerHTML = `<h1 class="h3">${viewId.replace(/-/g, ' ')}</h1><p>UI under construction or renderer not found.</p>`;
+        }
+    } catch (error) {
+        console.error(`Failed to load data for view ${viewId}:`, error);
+        mainContent.innerHTML = `<div class="alert alert-danger">Failed to load data for this section. Please try again.</div>`;
     }
 
     // Hide mobile sidebar
@@ -889,6 +1270,23 @@ function attachFeeDataListeners(financialYear, role, user) {
         document.body.style.overflow = '';
     }
 }
+
+
+    function attachAdminDataListeners(collectionsToWatch) {
+    collectionsToWatch.forEach(name => {
+        if (!activeListeners[name]) {
+            const unsub = onSnapshot(getCollectionRef(name), (snapshot) => {
+                const dataObject = {};
+                snapshot.docs.forEach(doc => {
+                    dataObject[doc.id] = { id: doc.id, ...doc.data() };
+                });
+                window[name] = dataObject;
+            });
+            activeListeners[name] = unsub;
+        }
+    });
+}
+
 
         
         // Find your existing showMainApp function and modify it like this:
@@ -907,7 +1305,7 @@ function showMainApp() {
         panelTitle.textContent = "Student Portal";
     } else if (currentUserRole === 'teacher') {
         let dynamicTeacherNav = teacherNav.filter(item =>
-            item.id !== 'library-mgt' && item.id !== 'library-status'
+            item.id !== 'library-mgt' && item.id !== 'library-status' 
         );
 
         if (selectedUser.roles && selectedUser.roles.includes('librarian')) {
@@ -916,16 +1314,19 @@ function showMainApp() {
             dynamicTeacherNav.push({ id: 'library-status', icon: 'fa-books', text: 'Library Status' });
         }
         
-
+        if (selectedUser.roles && selectedUser.roles.includes('exam_controller')) {
+            dynamicTeacherNav.push({ id: 'exam-mgt', icon: 'fa-file-signature', text: 'Exam Management' });
+        }
         navItems = dynamicTeacherNav;
         panelTitle.textContent = "Teacher Panel";
     }
 
     renderSidebar(navItems);
 
-    const initialViewId = 'dashboard';
-    history.replaceState({ viewId: initialViewId }, initialViewId, `#${initialViewId}`);
-    navigateTo(initialViewId, false);
+    // REMOVED the navigation logic from here.
+    // const initialViewId = 'dashboard';
+    // history.replaceState({ viewId: initialViewId }, initialViewId, `#${initialViewId}`);
+    // navigateTo(initialViewId, false);
 }
 
 
@@ -1574,12 +1975,13 @@ function attachSchoolDetailsListeners() {
         const rolesArray = rolesInput.value.split(',')       // Split the string by commas
                                        .map(role => role.trim())   // Trim whitespace from each role
                                        .filter(Boolean);            // Remove any empty strings
-
+        const role = rolesInput.value;
         const teacherData = {
             id: idInput.value,
             name: nameInput.value,
             mobile: mobileInput.value,
             email: emailInput.value.toLowerCase(),
+            role:rolesArray[0],
             roles: rolesArray, // Save the clean array
             classCharge: classDropdown.value ? { classId: classDropdown.value, division: divisionDropdown.value } : null,
         };
@@ -2903,9 +3305,6 @@ document.getElementById('print-student-details-btn').addEventListener('click', (
 
 /**
  * Filters the student list based on selected criteria and renders the table and report.
- */
-/**
- * Filters the student list based on selected criteria and renders the table and report.
  * This is the main function controlling the student management view's dynamic content.
  */
 function filterAndRenderStudents() {
@@ -2917,6 +3316,14 @@ function filterAndRenderStudents() {
     const admissionReportContent = document.getElementById('admission-report-content');
     const studentListTbody = document.getElementById('student-list-tbody');
     const noStudentsMessage = document.getElementById('no-students-message');
+
+    // IMPORTANT: Add this defensive check at the very beginning
+    if (!filterClassDropdown || !filterDivisionDropdown || !studentSearchInput || !newAdmissionsBtn || !studentReportSection || !admissionReportContent || !studentListTbody || !noStudentsMessage) {
+        // The DOM elements for this view are not yet available.
+        // This function was likely triggered by a background data update.
+        // console.log("filterAndRenderStudents: Required DOM elements not found. Skipping render.");
+        return;
+    }
 
     const filterClassId = filterClassDropdown.value;
     const filterDivision = filterDivisionDropdown.value;
@@ -2999,7 +3406,6 @@ function filterAndRenderStudents() {
         admissionReportContent.innerHTML = ''; // Clear report if no students
     }
 }
-
 /**
  * Generates and displays a detailed admission report based on a given list of students.
  * The report provides a class-wise breakdown including gender counts and totals.
@@ -3249,6 +3655,7 @@ window.renderExamManagement = () => {
     }
 };
 
+
 /**
  * Generates the entry report, filtering schedules based on user role
  * and then calling the summary table renderer.
@@ -3266,6 +3673,7 @@ function generateEntryReport(examId) {
         relevantSchedules = examSchedules.filter(s => s.examId === examId);
     } else if (currentUserRole === 'teacher') {
         // Teachers see schedules only for subjects they handle
+        console.log(classroomSubjects);
         const teacherAllocations = classroomSubjects.filter(cs => cs.teacherId === selectedUser.id);
         relevantSchedules = examSchedules.filter(s =>
             s.examId === examId && teacherAllocations.some(ta =>
@@ -3290,9 +3698,13 @@ function generateEntryReport(examId) {
  * @param {Array} schedules - The pre-filtered list of schedules to report on.
  * @param {HTMLElement} container - The DOM element to render the report into.
  */
-function renderMarkEntrySummaryTable(examId, schedules, container) {
+async function renderMarkEntrySummaryTable(examId, schedules, container) {
     let summaryData = [];
     
+    // NOTE: The line `await attachMarksListener(examId, null,null);` is removed.
+    // The marks listener should be triggered by the filter controls, 
+    // and this function will simply render the data that is currently available.
+
     schedules.forEach(schedule => {
         const { classId, division, subjectId } = schedule;
         const studentsInClass = students.filter(s => s.classId === classId && s.division === division);
@@ -3300,11 +3712,16 @@ function renderMarkEntrySummaryTable(examId, schedules, container) {
 
         if (totalStudents === 0) return;
 
-        const enteredCount = marks.filter(m => 
-            m.examId === examId &&
-            m.subjectId === subjectId &&
-            studentsInClass.some(s => s.id === m.studentId)
-        ).length;
+        // --- MODIFIED: Logic to count entered marks from an object ---
+        let enteredCount = 0;
+        studentsInClass.forEach(student => {
+            // Construct the unique key for the mark document
+            const markId = `${examId}_${student.id}_${subjectId}`;
+            // Check if that key exists in our marks object
+            if (marks[markId]) {
+                enteredCount++;
+            }
+        });
         
         const className = classes.find(c => c.id === classId)?.name || 'N/A';
         const subjectName = subjects.find(sub => sub.id === subjectId)?.name || 'N/A';
@@ -3677,7 +4094,7 @@ async function saveExamSchedule(examId, classId, divisions) {
             divisions.forEach(division => {
                 const scheduleId = `${examId}_${classId}_${division}_${subjectId}`;
                 const scheduleRef = getDocRef('examSchedules', scheduleId);
-                batch.set(scheduleRef, { ...subjectScheduleData, division, id: scheduleId });
+                batch.set(scheduleRef, { ...subjectScheduleData, division: division, id: scheduleId });
             });
         }
     });
@@ -3705,11 +4122,50 @@ function renderExamTimetableView() {
         <i class="fa fa-print me-1"></i> Print Timetable
     </button>
 </div>
+
         <div id="timetable-display-container"></div>
     `;
 
     const examSelect = document.getElementById('tt-view-exam');
     const classSelect = document.getElementById('tt-view-class');
+
+    const displayTimetableAll = () => {
+        const examId = examSelect.value;
+        const classId = classSelect.value;
+        if (examId && classId) {
+            const classData = classes.find(c => c.id === classId);
+            const divisions = ['A'];// classData ? classData.divisions : [];
+            const schedules = examSchedules.filter(s => s.examId === examId && s.classId === classId);
+            const displayContainer = document.getElementById('timetable-display-container');
+            
+            let html = '';
+            divisions.forEach(division => {
+                const divSchedules = schedules.filter(s => s.division === division)
+                    .sort((a, b) => new Date(a.date) - new Date(b.date) || a.session.localeCompare(b.session));
+                
+                html += `<h4 class="mt-4">Timetable for ${classData.name} - ${division}</h4>`;
+                if (divSchedules.length === 0) {
+                    html += `<p class="text-muted">No schedule published for this division.</p>`;
+                    return;
+                }
+
+                html += `<table class="table table-striped table-bordered">
+                    <thead class="table-light"><tr><th>Date</th><th>Session</th><th>Subject</th></tr></thead>
+                    <tbody>`;
+                divSchedules.forEach(s => {
+                    const subject = subjects.find(sub => sub.id === s.subjectId);
+                    html += `<tr>
+                        <td>${new Date(s.date).toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</td>
+                        <td>${s.session || 'N/A'}</td>
+                        <td class="fw-bold">${subject ? subject.name : 'Unknown'}</td>
+                    </tr>`;
+                });
+                html += `</tbody></table>`;
+            });
+            displayContainer.innerHTML = html;
+        }
+    };
+    
 
     const displayTimetable = () => {
     const examId = examSelect.value;
@@ -3757,15 +4213,18 @@ function renderExamTimetableView() {
 
     displayContainer.innerHTML = html || '<p class="text-muted">No schedules found.</p>';
 };
-    
+
     examSelect.addEventListener('change', displayTimetable);
     classSelect.addEventListener('change', displayTimetable);
     if (exams.length > 0 && classes.length > 0) displayTimetable();
 }
 
+
+
 // --- RESULTS TAB OVERHAUL ---
 
-function renderResultsTab() {
+async function renderResultsTab() {
+  // await syncMarksDataForUser();
     const container = document.getElementById('results');
     container.innerHTML = `
         <div class="d-flex justify-content-end align-items-center p-3 bg-light border rounded mb-3">
@@ -3858,6 +4317,17 @@ function renderResultsTab() {
         const classId = classSelect.value;
         const division = divisionSelect.value;
         if (examId && classId && division) {
+
+            // Create a unique key for this specific listener
+    const listenerKey = `${classId}_${division}`;
+
+    // --- NEW: If a listener for this specific query is already active, do nothing ---
+    if (activeMarksListeners[listenerKey]) {
+        // The data is already being synced in real-time. We just need to re-render the table.
+        generateExamWiseResultsTable(examId, classId, division);
+        return;
+    }
+            attachMarksListener(examId,classId, division);
             generateExamWiseResultsTable(examId, classId, division);
             printBtn.disabled = false; // Enable print button after report generates
         } else {
@@ -4017,14 +4487,15 @@ async function generateExamWiseResultsTable(examId, classId, division) {
 
 /**
  * Processes raw data to calculate marks, totals, and grades for each student.
+ * This version now includes the subjectId in the results for reliable lookups.
  * @param {Array} studentsInClass
  * @param {Array} schedules
- * @param {Array} allMarks
+ * @param {object} marksObject
  * @param {string} examId
  * @param {string} gradingSystem
  * @returns {Array} A new array with calculated results for each student.
  */
-function processExamResultsData(studentsInClass, schedules, allMarks, examId, gradingSystem) {
+function processExamResultsData(studentsInClass, schedules, marksObject, examId, gradingSystem) {
     const subjectHeaders = schedules.map(s => subjects.find(sub => sub.id === s.subjectId)).filter(Boolean);
 
     return studentsInClass.map(student => {
@@ -4038,7 +4509,8 @@ function processExamResultsData(studentsInClass, schedules, allMarks, examId, gr
             const maxTE = schedule?.maxTE || 0;
             const maxCE = schedule?.maxCE || 0;
             const maxTotal = maxTE + maxCE;
-            const mark = allMarks.find(m => m.examId === examId && m.studentId === student.id && m.subjectId === subject.id);
+            const markId = `${examId}_${student.id}_${subject.id}`;
+            const mark = marksObject[markId];
             
             const te = mark?.te ?? 'N/A';
             const ce = mark?.ce ?? 'N/A';
@@ -4053,8 +4525,11 @@ function processExamResultsData(studentsInClass, schedules, allMarks, examId, gr
                 grandMaxMarks += maxTotal;
             } else {
                 finalStatus = 'FAIL';
+                if(maxTotal > 0) grandMaxMarks += maxTotal;
             }
-            subjectResults.push({ te, ce, maxTE, maxCE, total, pct, grade });
+            
+            // --- MODIFIED: Added subjectId to the results object ---
+            subjectResults.push({ subjectId: subject.id, te, ce, maxTE, maxCE, total, pct, grade });
         });
 
         const grandPct = grandMaxMarks > 0 ? ((grandTotalMarks / grandMaxMarks) * 100) : 0;
@@ -4069,6 +4544,7 @@ function processExamResultsData(studentsInClass, schedules, allMarks, examId, gr
         };
     });
 }
+
 /**
  * Renders the HTML table from the processed results data with cleaner headers.
  * @param {Array} resultsData - The processed data with calculated results.
@@ -4126,28 +4602,26 @@ function renderExamResultsTable(resultsData, subjectHeaders) {
     return `<table class="table table-bordered table-hover table-sm">${headerHTML}${bodyHTML}</table>`;
 }
 
+/**
+ * Renders a multi-dataset bar chart showing the grade distribution for each subject in an exam.
+ * This version uses a reliable subjectId lookup to ensure data accuracy.
+ * @param {Array} resultsData
+ * @param {string} gradingSystem
+ * @param {Array} subjects - An array of subject objects to be displayed in the chart.
+ */
 function renderExamWisePerformanceChart(resultsData, gradingSystem, subjects) {
     const canvas = document.getElementById('exam-wise-performance-canvas');
     if (!canvas) return;
 
-    // Safely destroy any previous chart instance
     try {
         const existingChart = Chart.getChart(canvas);
         if (existingChart) existingChart.destroy();
     } catch (e) {}
 
-    // Define a consistent color palette for the subjects
     const colorPalette = [
-        'rgba(54, 162, 235, 0.7)',  // Blue
-        'rgba(255, 99, 132, 0.7)',  // Red
-        'rgba(75, 192, 192, 0.7)',  // Green
-        'rgba(255, 206, 86, 0.7)',  // Yellow
-        'rgba(153, 102, 255, 0.7)', // Purple
-        'rgba(255, 159, 64, 0.7)',  // Orange
-        'rgba(99, 255, 132, 0.7)',  // Lime
-        'rgba(255, 99, 255, 0.7)'   // Magenta
+        'rgba(54, 162, 235, 0.7)', 'rgba(255, 99, 132, 0.7)', 'rgba(75, 192, 192, 0.7)',
+        'rgba(255, 206, 86, 0.7)', 'rgba(153, 102, 255, 0.7)', 'rgba(255, 159, 64, 0.7)'
     ];
-
     const gradeScale = gradingSystem === 'type1' 
         ? ['A+', 'A', 'B+', 'B', 'C+', 'C', 'D', 'E', 'AB'] 
         : ['O', 'A', 'B', 'C', 'D', 'E', 'F', 'AB'];
@@ -4158,8 +4632,9 @@ function renderExamWisePerformanceChart(resultsData, gradingSystem, subjects) {
 
         // Go through each student's results
         resultsData.forEach(studentResult => {
-            // Find the result for the current subject
-            const subjectResult = studentResult.subjectResults[index];
+            // --- MODIFIED: Find the result for the current subject BY ID, not by index ---
+            const subjectResult = studentResult.subjectResults.find(sr => sr.subjectId === subject.id);
+            
             if (subjectResult && gradeCounts[subjectResult.grade] !== undefined) {
                 gradeCounts[subjectResult.grade]++;
             }
@@ -4168,7 +4643,7 @@ function renderExamWisePerformanceChart(resultsData, gradingSystem, subjects) {
         return {
             label: subject.name,
             data: Object.values(gradeCounts),
-            backgroundColor: colorPalette[index % colorPalette.length], // Cycle through colors
+            backgroundColor: colorPalette[index % colorPalette.length],
         };
     });
 
@@ -4182,23 +4657,12 @@ function renderExamWisePerformanceChart(resultsData, gradingSystem, subjects) {
             responsive: true,
             maintainAspectRatio: false,
             scales: {
-                x: { stacked: false }, // Group bars by grade
-                y: { 
-                    stacked: false,
-                    beginAtZero: true, 
-                    ticks: { stepSize: 1 },
-                    title: { display: true, text: 'Number of Students' } 
-                }
+                x: { stacked: false },
+                y: { stacked: false, beginAtZero: true, ticks: { stepSize: 1 }, title: { display: true, text: 'Number of Students' } }
             },
             plugins: {
-                title: {
-                    display: true,
-                    text: 'Grade Distribution by Subject'
-                },
-                tooltip: {
-                    mode: 'index',
-                    intersect: false
-                }
+                title: { display: true, text: 'Grade Distribution by Subject' },
+                tooltip: { mode: 'index', intersect: false }
             }
         }
     });
@@ -4498,7 +4962,11 @@ function processSubjectWiseResults(studentsInClass, selectedExams, subjectId, gr
         let totalMax = 0;
         selectedExams.forEach(exam => {
             const schedule = examSchedules.find(s => s.examId === exam.id && s.subjectId === subjectId);
-            const mark = marks.find(m => m.examId === exam.id && m.studentId === student.id && m.subjectId === subjectId);
+            
+            // --- MODIFIED: Direct lookup from the marks object ---
+            const markId = `${exam.id}_${student.id}_${subjectId}`;
+            const mark = marks[markId]; // Use object lookup instead of .find()
+            
             if (schedule && mark) {
                 const te = mark.te === 'AB' ? 'AB' : Number(mark.te || 0);
                 const ce = mark.ce === 'AB' ? 'AB' : Number(mark.ce || 0);
@@ -4520,6 +4988,7 @@ function processSubjectWiseResults(studentsInClass, selectedExams, subjectId, gr
     });
 }
 
+
         /**
          * New function to render a bar chart for subject performance.
          */
@@ -4529,44 +4998,38 @@ function processSubjectWiseResults(studentsInClass, selectedExams, subjectId, gr
 function renderSubjectPerformanceChart(resultsData, exams, gradingSystem, subjectId) {
     const chartContainer = document.getElementById('subject-wise-chart-container');
     const canvas = document.getElementById('subject-performance-canvas');
-    if (!canvas || !chartContainer) return; // Exit if elements aren't found
+    if (!canvas || !chartContainer) return;
 
-    // Safely destroy any existing chart instance on the canvas
+    // Safely destroy any existing chart instance
     try {
         const existingChart = Chart.getChart(canvas);
         if (existingChart) {
             existingChart.destroy();
         }
-    } catch (e) {
-        // This catch block prevents errors if the canvas had no chart
-    }
+    } catch (e) { /* Ignore errors if no chart exists */ }
 
     if (resultsData.length === 0 || exams.length === 0) {
-        chartContainer.innerHTML = '<canvas id="subject-performance-canvas"></canvas>'; // Keep canvas for next render
+        chartContainer.innerHTML = '<canvas id="subject-performance-canvas"></canvas>';
         return;
     }
 
-    // Predefined, professional color palette
     const colorPalette = [
-        'rgba(54, 162, 235, 0.6)', // Blue
-        'rgba(255, 99, 132, 0.6)', // Red
-        'rgba(75, 192, 192, 0.6)', // Green
-        'rgba(255, 206, 86, 0.6)', // Yellow
-        'rgba(153, 102, 255, 0.6)',// Purple
-        'rgba(255, 159, 64, 0.6)' // Orange
+        'rgba(54, 162, 235, 0.6)', 'rgba(255, 99, 132, 0.6)',
+        'rgba(75, 192, 192, 0.6)', 'rgba(255, 206, 86, 0.6)',
+        'rgba(153, 102, 255, 0.6)', 'rgba(255, 159, 64, 0.6)'
     ];
-
     const gradeScale = gradingSystem === 'type1' ? ['A+', 'A', 'B+', 'B', 'C+', 'C', 'D', 'E', 'AB'] : ['O', 'A', 'B', 'C', 'D', 'E', 'F', 'AB'];
     
     const datasets = exams.map((exam, index) => {
         const gradeCounts = gradeScale.reduce((acc, grade) => ({ ...acc, [grade]: 0 }), {});
-        
-        // Find the schedule once per exam, not for every student
         const schedule = examSchedules.find(s => s.examId === exam.id && s.subjectId === subjectId);
 
         if (schedule) {
             resultsData.forEach(res => {
-                const mark = marks.find(m => m.examId === exam.id && m.studentId === res.student.id && m.subjectId === subjectId);
+                // --- CORRECTED: Use direct object lookup instead of .find() ---
+                const markId = `${exam.id}_${res.student.id}_${subjectId}`;
+                const mark = marks[markId]; // This is the fix
+
                 if (mark) {
                     const score = (mark.te === 'AB' || mark.ce === 'AB') ? 'AB' : (mark.te || 0) + (mark.ce || 0);
                     const grade = gradingSystem === 'type1' ? calculateGrade(score, schedule.maxTE + schedule.maxCE) : calculateGradeType2(score, schedule.maxTE + schedule.maxCE);
@@ -4580,7 +5043,7 @@ function renderSubjectPerformanceChart(resultsData, exams, gradingSystem, subjec
         return {
             label: exam.name,
             data: Object.values(gradeCounts),
-            backgroundColor: colorPalette[index % colorPalette.length] // Cycle through the color palette
+            backgroundColor: colorPalette[index % colorPalette.length]
         };
     });
 
@@ -4597,9 +5060,7 @@ function renderSubjectPerformanceChart(resultsData, exams, gradingSystem, subjec
             scales: {
                 y: {
                     beginAtZero: true,
-                    ticks: {
-                        stepSize: 1 // Ensure y-axis only shows whole numbers for student counts
-                    },
+                    ticks: { stepSize: 1 },
                     title: { display: true, text: 'Number of Students' }
                 }
             },
@@ -4612,6 +5073,8 @@ function renderSubjectPerformanceChart(resultsData, exams, gradingSystem, subjec
         }
     });
 }
+
+
 function copyColumnData(tableId, colIndex) {
     const table = document.getElementById(tableId);
     if (!table) return;
@@ -4761,30 +5224,35 @@ function copyColumnData(tableId, colIndex) {
             }
         }
 
-        function loadMarkEntrySheet(examId, classId, division, subjectId) {
-            const container = document.getElementById('mark-entry-sheet');
-            if (!examId || !classId || !division || !subjectId) { container.innerHTML = `<div class="text-center p-5 text-muted">Please select all filters to enter marks.</div>`; return; }
-            
-            const schedule = examSchedules.find(s => s.examId === examId && s.classId === classId && s.division === division && s.subjectId === subjectId);
-            const maxTE = schedule?.maxTE || 0, maxCE = schedule?.maxCE || 0;
-            const studentsInClass = students.filter(s => s.classId === classId && s.division === division).sort((a,b)=>a.name.localeCompare(b.name));
-            if (studentsInClass.length === 0) { container.innerHTML = '<div class="alert alert-warning">No students found in this class/division.</div>'; return; }
-            
-            const existingMarks = marks.filter(m => m.examId === examId && m.subjectId === subjectId);
-            // --- ✅ NEW: Calculate Entered and Pending Counts ---
+        async function loadMarkEntrySheet(examId, classId, division, subjectId) {
+    const container = document.getElementById('mark-entry-sheet');
+    if (!examId || !classId || !division || !subjectId) { 
+        container.innerHTML = `<div class="text-center p-5 text-muted">Please select all filters to enter marks.</div>`; 
+        return; 
+    }
+    
+    const schedule = examSchedules.find(s => s.examId === examId && s.classId === classId && s.division === division && s.subjectId === subjectId);
+    const maxTE = schedule?.maxTE || 0, maxCE = schedule?.maxCE || 0;
+    const studentsInClass = students.filter(s => s.classId === classId && s.division === division).sort((a,b) => a.name.localeCompare(b.name));
+    if (studentsInClass.length === 0) { 
+        container.innerHTML = '<div class="alert alert-warning">No students found in this class/division.</div>'; 
+        return; 
+    }
+    
+    // Calculate Entered and Pending Counts
     const enteredStudents = [];
     const notEnteredStudents = [];
 
     studentsInClass.forEach(student => {
-        // A mark is considered "entered" if a record for that student exists in the filtered marks list.
-        if (existingMarks.some(m => m.studentId === student.id)) {
+        const markId = `${examId}_${student.id}_${subjectId}`;
+        if (marks[markId]) { // Check if a mark exists for this student in the marks object
             enteredStudents.push(student.name);
         } else {
             notEnteredStudents.push(student.name);
         }
     });
 
-    // --- ✅ NEW: HTML for the summary section ---
+    // HTML for the summary section
     const summaryHTML = `
         <div class="card bg-light p-3 mb-4 border-0">
             <h6 class="fw-bold">Entry Status</h6>
@@ -4816,35 +5284,41 @@ function copyColumnData(tableId, colIndex) {
         </div>
     `;
 
+    // HTML for the marks entry table
+    let tableHTML = `<div class="table-responsive"><table id="marks-table" class="table table-bordered">
+        <thead class="table-light"><tr><th>Student Name</th><th>Admission No.</th><th>Theory / ${maxTE}</th><th>Internal / ${maxCE}</th></tr></thead><tbody>`;
+    studentsInClass.forEach(student => {
+        const markId = `${examId}_${student.id}_${subjectId}`;
+        const mark = marks[markId];
+        const teValue = mark?.te === 'AB' ? 'AB' : (mark?.te ?? '');
+        const ceValue = mark?.ce === 'AB' ? 'AB' : (mark?.ce ?? '');
+        tableHTML += `<tr data-student-id="${student.id}">
+            <td class="fw-bold">${student.name}</td><td>${student.admissionNumber}</td>
+            <td><input type="text" name="te" class="form-control form-control-sm" value="${teValue}" data-max="${maxTE}"></td>
+            <td><input type="text" name="ce" class="form-control form-control-sm" value="${ceValue}" data-max="${maxCE}"></td>
+        </tr>`;
+    });
+    tableHTML += `</tbody></table></div><div class="text-end mt-3"><button id="save-marks-btn" class="btn btn-success">Save Marks</button></div>`;
+    
+    // --- REARRANGED: Summary is now displayed above the table ---
+    container.innerHTML = summaryHTML + tableHTML;
+    document.getElementById('mark-entry-summary-container').innerHTML = ''; // Clear the other container
 
-            
-            let tableHTML = `<div class="table-responsive"><table id="marks-table" class="table table-bordered">
-                <thead class="table-light"><tr><th>Student Name</th><th>Admission No.</th><th>Theory / ${maxTE}</th><th>Internal / ${maxCE}</th></tr></thead><tbody>`;
-            studentsInClass.forEach(student => {
-                const mark = existingMarks.find(m => m.studentId === student.id);
-                const teValue = mark?.te === 'AB' ? 'AB' : (mark?.te ?? '');
-                const ceValue = mark?.ce === 'AB' ? 'AB' : (mark?.ce ?? '');
-                tableHTML += `<tr data-student-id="${student.id}">
-                    <td class="fw-bold">${student.name}</td><td>${student.admissionNumber}</td>
-                    <td><input type="text" name="te" class="form-control form-control-sm" value="${teValue}" data-max="${maxTE}"></td>
-                    <td><input type="text" name="ce" class="form-control form-control-sm" value="${ceValue}" data-max="${maxCE}"></td>
-                </tr>`;
-            });
-            tableHTML += `</tbody></table></div><div class="text-end mt-3"><button id="save-marks-btn" class="btn btn-success">Save Marks</button></div>`;
-            container.innerHTML = tableHTML + summaryHTML;
 
-            container.querySelectorAll('input[name="te"], input[name="ce"]').forEach(input => {
-                if(input.value.toUpperCase() === 'AB') { input.classList.add('absent-mark'); }
-                input.addEventListener('input', (e) => {
-                    e.target.classList.remove('absent-mark');
-                    if(e.target.value.toUpperCase() === 'AB') { e.target.classList.add('absent-mark'); return; }
-                    const maxValue = parseInt(e.target.dataset.max, 10);
-                    const currentValue = parseInt(e.target.value, 10);
-                    if (!isNaN(currentValue) && currentValue > maxValue) { e.target.value = ''; }
-                });
-            });
-            document.getElementById('save-marks-btn').addEventListener('click', () => saveMarks(examId, classId, division, subjectId));
-        }
+    // Attach event listeners for the input fields
+    container.querySelectorAll('input[name="te"], input[name="ce"]').forEach(input => {
+        if(input.value.toUpperCase() === 'AB') { input.classList.add('absent-mark'); }
+        input.addEventListener('input', (e) => {
+            e.target.classList.remove('absent-mark');
+            if(e.target.value.toUpperCase() === 'AB') { e.target.classList.add('absent-mark'); return; }
+            const maxValue = parseInt(e.target.dataset.max, 10);
+            const currentValue = parseInt(e.target.value, 10);
+            if (!isNaN(currentValue) && currentValue > maxValue) { e.target.value = ''; }
+        });
+    });
+    document.getElementById('save-marks-btn').addEventListener('click', () => saveMarks(examId, classId, division, subjectId));
+}
+
 
         async function saveMarks(examId, classId, division, subjectId) {
     const saveButton = document.getElementById('save-marks-btn');
@@ -4985,7 +5459,210 @@ window.  renderMarkEntrySummaryTable = (examId) => {
     summaryContainer.innerHTML = tableHTML;
 }
 
-        function renderRankListTab() {
+        /**
+ * Main controller for the Rank List tab.
+ * It triggers the data loading and then calls the processing and rendering functions.
+ * @param {HTMLElement} container - The DOM element to render the report into.
+ */
+function generateResultsTable(container) {
+    const examId = document.getElementById('res-exam').value;
+    const classId = document.getElementById('res-class').value;
+    const division = document.getElementById('res-division').value;
+    
+    if (!examId || !classId || !division) { 
+        container.innerHTML = `<p class="text-center p-5 text-muted">Please select all filters.</p>`; 
+        return; 
+    }
+    
+    // --- CORRECTED: Use the dynamic listener to fetch only the required marks ---
+    // This will automatically trigger the report to re-render when data arrives.
+    attachMarksListener(examId, classId, division);
+
+    // Process and render the table with currently available data
+    const studentsInClass = students.filter(s => s.classId === classId && s.division === division);
+    const schedulesForClass = examSchedules.filter(s => s.examId === examId && s.classId === classId && s.division === division);
+    
+    // The global 'marks' object will be used here
+    let results = processRankListData(studentsInClass, schedulesForClass, marks, examId);
+    
+    // Sort results by total marks in descending order
+    results.sort((a, b) => b.totalMark - a.totalMark);
+
+    // Render the final HTML table
+    container.innerHTML = renderRankListTable(results);
+}
+
+
+/**
+ * Processes data to calculate totals and status for the rank list.
+ * @returns {Array} An array of student result objects.
+ */
+function processRankListData(studentsInClass, schedulesForClass, marksObject, examId) {
+    let results = [];
+    studentsInClass.forEach(student => {
+        let totalMark = 0, maxTotal = 0, status = 'PASS';
+        
+        schedulesForClass.forEach(schedule => {
+            // --- FIXED: Direct object lookup for performance ---
+            const markId = `${examId}_${student.id}_${schedule.subjectId}`;
+            const mark = marksObject[markId];
+
+            const te = mark?.te;
+            const ce = mark?.ce;
+            const subjectTotal = (te === 'AB' || ce === 'AB') ? 'AB' : (Number(te) || 0) + (Number(ce) || 0);
+            
+            // Determine fail status
+            if (subjectTotal === 'AB' || (typeof subjectTotal === 'number' && (subjectTotal / (schedule.maxTE + schedule.maxCE) < 0.35))) {
+                status = 'FAIL';
+            }
+            
+            if (typeof subjectTotal === 'number') {
+                totalMark += subjectTotal;
+            }
+            maxTotal += (schedule.maxTE || 0) + (schedule.maxCE || 0);
+        });
+
+        const percentage = maxTotal > 0 ? ((totalMark / maxTotal) * 100).toFixed(2) : 0;
+        results.push({ student, totalMark, maxTotal, percentage, status });
+    });
+    return results;
+}
+
+
+/**
+ * Renders the HTML for the rank list table, correctly handling ties.
+ * @param {Array} sortedResults - The array of sorted student result objects.
+ * @returns {string} The complete HTML string for the table.
+ */
+function renderRankListTable(sortedResults) {
+    let tableHTML = `<div class="table-responsive"><table class="table table-bordered table-hover">
+        <thead class="table-light"><tr><th>Rank</th><th>Name</th><th>Total</th><th>%</th><th>Result</th></tr></thead>
+        <tbody>`;
+
+    let lastMark = -1;
+    let lastRank = 0;
+
+    sortedResults.forEach((res, index) => {
+        // --- NEW: Correctly handle rank ties ---
+        let currentRank;
+        if (res.status === 'FAIL') {
+            currentRank = '-';
+        } else {
+            // If the current student's score is the same as the previous one, they get the same rank
+            if (res.totalMark === lastMark) {
+                currentRank = lastRank;
+            } else {
+                currentRank = index + 1;
+                lastRank = currentRank;
+            }
+            lastMark = res.totalMark;
+        }
+
+        tableHTML += `
+            <tr class="${res.status === 'FAIL' ? 'table-danger' : ''}">
+                <td class="fw-bold">${currentRank}</td>
+                <td>${res.student.name}</td>
+                <td>${res.totalMark} / ${res.maxTotal}</td>
+                <td>${res.percentage}%</td>
+                <td class="fw-bold">${res.status === 'PASS' ? 'PASS' : 'FAIL'}</td>
+            </tr>`;
+    });
+
+    tableHTML += `</tbody></table></div>`;
+    return tableHTML;
+}
+        
+        function renderReportCardTab() {
+    const container = document.getElementById('pills-reportcard');
+    container.innerHTML = `
+        <div class="row g-3 no-print">
+            <div class="col-md-5"><label class="form-label">Exam</label><select id="rc-exam" class="form-select">${exams.map(e => `<option value="${e.id}">${e.name}</option>`).join('')}</select></div>
+            <div class="col-md-5"><label class="form-label">Search Student (Name or Admn No.)</label><input type="text" id="rc-student-search" class="form-control" placeholder="Start typing..."><div id="rc-student-suggestions" class="position-relative"></div></div>
+            
+            <div class="col-md-2 d-flex align-items-end"><button id="rc-print-btn" class="btn btn-secondary w-100" disabled><i class="fas fa-print me-2"></i>Print Card</button></div>
+        </div>
+        <hr class="no-print">
+        <div id="rc-results-container">
+            <p class="text-center p-5 text-muted">Please search for a student and select an exam to generate a report card.</p>
+        </div>`;
+
+    const searchInput = container.querySelector('#rc-student-search');
+    const suggestionsBox = container.querySelector('#rc-student-suggestions');
+    const examSelect = container.querySelector('#rc-exam');
+    const printBtn = container.querySelector('#rc-print-btn');
+    let selectedStudentId = null;
+
+    const generateCard = () => {
+        const examId = examSelect.value;
+        if (selectedStudentId && examId) {
+            const student = students.find(s => s.id === selectedStudentId);
+            if(student) {
+                // --- NEW: Attach listener for this student's specific class/exam ---
+                attachMarksListener(examId, student.classId, student.division);
+                // The generateReportCardHTML will be called from within the listener's callback,
+                // but we can call it here to show a loading state.
+                generateReportCardHTML(selectedStudentId, examId, 'rc-results-container');
+            }
+            printBtn.disabled = false;
+        } else {
+            printBtn.disabled = true;
+        }
+    };
+
+    searchInput.addEventListener('input', () => { /* ... (search logic remains the same) ... */ });
+    document.addEventListener('click', (e) => { if (!suggestionsBox.contains(e.target)) suggestionsBox.innerHTML = ''; });
+    suggestionsBox.addEventListener('click', (e) => { /* ... (selection logic remains the same) ... */ });
+    examSelect.addEventListener('change', generateCard);
+
+    // --- NEW: Attach listener to the print button ---
+    printBtn.addEventListener('click', () => {
+        const student = students.find(s => s.id === selectedStudentId);
+        const exam = exams.find(e => e.id === examSelect.value);
+        if(student && exam) {
+            const reportTitle = `Progress Report - ${exam.name}`;
+            printReportCard(reportTitle);
+        }
+    });
+}
+
+
+/**
+ * Handles printing for the generated student report card.
+ * @param {string} reportTitle - The title for the print document.
+ */
+function printReportCard(reportTitle) {
+    const contentToPrint = document.getElementById('report-card-printable');
+    if (!contentToPrint) {
+        showAlert('Report card content not found for printing.', 'danger');
+        return;
+    }
+
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+        <html>
+            <head>
+                <title>${reportTitle}</title>
+                <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+                <style>
+                    body { font-family: 'Inter', sans-serif; }
+                    @page { size: A4; margin: 1.5cm; }
+                </style>
+            </head>
+            <body>
+                ${contentToPrint.innerHTML}
+            </body>
+        </html>
+    `);
+
+    printWindow.document.close();
+    setTimeout(() => {
+        printWindow.focus();
+        printWindow.print();
+        printWindow.close();
+    }, 250);
+}
+
+function renderRankListTab() {
             const container = document.getElementById('pills-ranklist');
 
             // Determine class options based on user role
@@ -5040,159 +5717,75 @@ window.  renderMarkEntrySummaryTable = (examId) => {
             }
         }
 
-        function generateResultsTable(container) {
-            const examId = document.getElementById('res-exam').value;
-            const classId = document.getElementById('res-class').value;
-            const division = document.getElementById('res-division').value;
-            
-            if (!examId || !classId || !division) { 
-                container.innerHTML = `<p class="text-center p-5 text-muted">Please select all filters.</p>`; 
-                return; 
-            }
-            
-            const studentsInClass = students.filter(s => s.classId === classId && s.division === division);
-            const schedulesForClass = examSchedules.filter(s => s.examId === examId && s.classId === classId && s.division === division).sort((a,b) => (subjects.find(sub=>sub.id===a.subjectId)?.name || '').localeCompare(subjects.find(sub=>sub.id===b.subjectId)?.name || ''));
-            const marksForExam = marks.filter(m => m.examId === examId);
-            
-            let results = [];
-            studentsInClass.forEach(student => {
-                let totalMark = 0, maxTotal = 0, status = 'P';
-                schedulesForClass.forEach(schedule => {
-                    const mark = marksForExam.find(m => m.studentId === student.id && m.subjectId === schedule.subjectId);
-                    const te = mark?.te === 'AB' ? 'AB' : (parseInt(mark?.te) || 0);
-                    const ce = mark?.ce === 'AB' ? 'AB' : (parseInt(mark?.ce) || 0);
-                    const subjectTotal = (te === 'AB' || ce === 'AB') ? 'AB' : te + ce;
-                    
-                    // Fail if absent or below 35% in any subject
-                    if (subjectTotal === 'AB' || ( (te !== 'AB' && ce !== 'AB') && (te+ce) / (schedule.maxTE + schedule.maxCE) < 0.35) ) {
-                         status = 'F';
-                    }
-                    if (typeof subjectTotal === 'number') {
-                        totalMark += subjectTotal;
-                    }
-                    maxTotal += (parseInt(schedule.maxTE || 0) + parseInt(schedule.maxCE || 0));
-                });
-                const percentage = maxTotal > 0 ? ((totalMark / maxTotal) * 100).toFixed(2) : 0;
-                results.push({ student, totalMark, maxTotal, percentage, status });
-            });
-            results.sort((a, b) => b.totalMark - a.totalMark);
-
-            container.innerHTML = `<div class="table-responsive"><table class="table table-bordered table-hover">
-                <thead class="table-light"><tr><th>Rank</th><th>Name</th><th>Total</th><th>%</th><th>Result</th></tr></thead>
-                <tbody>${results.map((res, i) => `
-                    <tr class="${res.status === 'F' ? 'table-danger' : ''}">
-                        <td class="fw-bold">${res.status === 'F' ? '-' : i + 1}</td>
-                        <td>${res.student.name}</td>
-                        <td>${res.totalMark} / ${res.maxTotal}</td>
-                        <td>${res.percentage}%</td>
-                        <td class="fw-bold">${res.status === 'P' ? 'PASS' : 'FAIL'}</td>
-                    </tr>`).join('')}
-                </tbody>
-            </table></div>`;
-        }
-        
-        function renderReportCardTab() {
-            const container = document.getElementById('pills-reportcard');
-            container.innerHTML = `
-                <div class="row g-3 no-print">
-                    <div class="col-md-5"><label class="form-label">Exam</label><select id="rc-exam" class="form-select">${exams.map(e => `<option value="${e.id}">${e.name}</option>`).join('')}</select></div>
-                    <div class="col-md-5"><label class="form-label">Search Student (Name or Admn No.)</label><input type="text" id="rc-student-search" class="form-control" placeholder="Start typing..."><div id="rc-student-suggestions" class="position-relative"></div></div>
-                    <div class="col-md-2 d-flex align-items-end"><button id="rc-print-btn" class="btn btn-secondary w-100" disabled><i class="fas fa-print me-2"></i>Print</button></div>
-                </div>
-                <hr class="no-print">
-                <div id="rc-results-container">
-                    <p class="text-center p-5 text-muted">Please search for a student and select an exam to generate a report card.</p>
-                </div>`;
-
-            const searchInput = container.querySelector('#rc-student-search'), suggestionsBox = container.querySelector('#rc-student-suggestions'), examSelect = container.querySelector('#rc-exam'), printBtn = container.querySelector('#rc-print-btn');
-            let selectedStudentId = null;
-
-            const generateCard = () => {
-                const examId = examSelect.value;
-                if(selectedStudentId && examId) {
-                    generateReportCardHTML(selectedStudentId, examId, 'rc-results-container');
-                    printBtn.disabled = false;
-                }
-            };
-            searchInput.addEventListener('input', () => {
-                const query = searchInput.value.toUpperCase();
-                suggestionsBox.innerHTML = '';
-                if (query.length < 2) return;
-                const matchingStudents = students.filter(s => s.name.toUpperCase().includes(query) || s.admissionNumber.toUpperCase().includes(query)).slice(0, 5);
-                suggestionsBox.innerHTML = `<div class="list-group position-absolute w-100" style="z-index:1000">${matchingStudents.map(s => `<a href="#" class="list-group-item list-group-item-action" data-id="${s.id}" data-name="${s.name} (${s.admissionNumber})">${s.name} - ${s.admissionNumber}</a>`).join('')}</div>`;
-            });
-            document.addEventListener('click', (e) => { if (!suggestionsBox.contains(e.target)) suggestionsBox.innerHTML = ''; });
-            suggestionsBox.addEventListener('click', (e) => {
-                if (e.target.matches('[data-id]')) {
-                    e.preventDefault();
-                    selectedStudentId = e.target.dataset.id;
-                    searchInput.value = e.target.dataset.name;
-                    suggestionsBox.innerHTML = '';
-                    generateCard();
-                }
-            });
-            examSelect.addEventListener('change', generateCard);
-            printBtn.addEventListener('click', () => window.print());
-        }
-
         function generateReportCardHTML(studentId, examId, containerId) {
-            const container = document.getElementById(containerId);
-            const student = students.find(s => s.id === studentId);
-            const exam = exams.find(e => e.id === examId);
-            const studentClass = classes.find(c => c.id === student.classId);
-            const schedules = examSchedules.filter(s => s.examId === examId && s.classId === student.classId && s.division === student.division);
-            const marksForExam = marks.filter(m => m.examId === examId && m.studentId === student.id);
-            
-            let totalMarksObtained = 0, maxTotalMarks = 0;
-            const subjectResults = schedules.map(schedule => {
-                const subject = subjects.find(s => s.id === schedule.subjectId);
-                const mark = marksForExam.find(m => m.subjectId === schedule.subjectId);
-                const maxTE = schedule.maxTE || 0, maxCE = schedule.maxCE || 0, maxTotal = maxTE + maxCE;
-                const te = (mark?.te === 'AB') ? 'AB' : (parseInt(mark?.te) || 0);
-                const ce = (mark?.ce === 'AB') ? 'AB' : (parseInt(mark?.ce) || 0);
-                const total = (te === 'AB' || ce === 'AB') ? 'AB' : te + ce;
-                if (typeof total === 'number') totalMarksObtained += total;
-                maxTotalMarks += maxTotal;
-                return { subjectName: subject.name, te, ce, total, maxTE, maxCE, maxTotal, grade: calculateGrade(total, maxTotal) };
-            });
-            const percentage = maxTotalMarks > 0 ? ((totalMarksObtained / maxTotalMarks) * 100).toFixed(2) : 0;
-            const finalResult = parseFloat(percentage) >= 35 ? 'PASS' : 'NEEDS IMPROVEMENT';
+    const container = document.getElementById(containerId);
+    if (!container) return;
 
-            container.innerHTML = `
-            <div id="report-card-printable" class="p-4 border bg-white">
-                <div class="text-center border-bottom pb-3 mb-3">
-                    <h3 class="fw-bold">${schoolDetails.name || 'School Name'}</h3>
-                    <p class="mb-0">${schoolDetails.address || 'School address'}</p>
-                    <h5 class="mt-3">PROGRESS REPORT - ${exam.name.toUpperCase()}</h5>
-                </div>
-                <div class="row mb-3">
-                    <div class="col-6"><strong>Student Name:</strong> ${student.name}</div>
-                    <div class="col-6"><strong>Admission No:</strong> ${student.admissionNumber}</div>
-                    <div class="col-6"><strong>Class:</strong> ${studentClass.name} - ${student.division}</div>
-                    <div class="col-6"><strong>Date of Birth:</strong> ${new Date(student.dob).toLocaleDateString()}</div>
-                </div>
-                <table class="table table-bordered table-sm">
-                    <thead class="table-light text-center"><tr><th>SUBJECT</th><th>THEORY</th><th>INTERNAL</th><th>TOTAL</th><th>MAX</th><th>GRADE</th></tr></thead>
+    const student = students.find(s => s.id === studentId);
+    const exam = exams.find(e => e.id === examId);
+    const studentClass = classes.find(c => c.id === student.classId);
+    const schedules = examSchedules.filter(s => s.examId === examId && s.classId === student.classId && s.division === student.division);
+    
+    // The global 'marks' object is used here
+    const { subjectResults, totalMarksObtained, maxTotalMarks, percentage, finalResult } = processRankListData([student], schedules, marks, examId)[0] || {};
+    
+    if (!subjectResults) {
+        container.innerHTML = `<div class="text-center p-5"><div class="spinner-border"></div><p class="mt-2">Loading marks...</p></div>`;
+        return;
+    }
+
+    const gradingSystem = document.getElementById('shared-grading-system').value;
+
+    container.innerHTML = `
+    <div id="report-card-printable" class="p-4 border bg-white mx-auto" style="max-width: 210mm;">
+        <div class="report-header">
+            ${schoolDetails.logoUrl ? `<img src="${schoolDetails.logoUrl}" alt="School Logo" style="max-height: 80px; margin-bottom: 1rem;">` : ''}
+            <h3>${schoolDetails.name || 'School Name'}</h3>
+            <p class="lead mb-0">${schoolDetails.address || 'School Address'}</p>
+            <h5 class="mt-3">PROGRESS REPORT - ${exam.name.toUpperCase()}</h5>
+        </div>
+
+        <div class="row mb-4 align-items-center">
+            <div class="col-md-9">
+                <table class="table table-sm table-borderless">
                     <tbody>
-                        ${subjectResults.map(res => `
-                        <tr class="text-center">
-                            <td class="text-start">${res.subjectName}</td><td>${res.te}</td><td>${res.ce}</td><td>${res.total}</td><td>${res.maxTotal}</td><td>${res.grade}</td>
-                        </tr>`).join('')}
+                        <tr><th style="width: 150px;">Student Name</th><td>: ${student.name}</td></tr>
+                        <tr><th>Admission No</th><td>: ${student.admissionNumber}</td></tr>
+                        <tr><th>Class</th><td>: ${studentClass.name} - ${student.division}</td></tr>
+                        <tr><th>Date of Birth</th><td>: ${new Date(student.dob).toLocaleDateString('en-GB')}</td></tr>
                     </tbody>
-                    <tfoot class="fw-bold text-center">
-                        <tr><td colspan="2" class="text-end">GRAND TOTAL</td><td>${totalMarksObtained}</td><td>${maxTotalMarks}</td><td colspan="2"></td></tr>
-                    </tfoot>
                 </table>
-                <div class="row mt-4 fw-bold text-center">
-                    <div class="col-6">Overall Percentage: <span class="fs-5">${percentage}%</span></div>
-                    <div class="col-6">Final Result: <span class="fs-5 text-${finalResult === 'PASS' ? 'success':'danger'}">${finalResult}</span></div>
-                </div>
-                <div class="row mt-5 pt-5 text-center text-muted">
-                    <div class="col-6"><hr class="mx-auto w-50">Class Teacher</div>
-                    <div class="col-6"><hr class="mx-auto w-50">Principal</div>
-                </div>
-            </div>`;
-        }
+            </div>
+            <div class="col-md-3 text-center">
+                <img src="${student.photoDriveId ? `https://drive.google.com/thumbnail?id=${student.photoDriveId}&sz=400` : 'https://placehold.co/150x200?text=No+Photo'}" 
+                     alt="Student Photo" class="img-thumbnail" style="width: 130px; height: 170px; object-fit: cover;">
+            </div>
+        </div>
+
+        <table class="table table-bordered table-sm">
+            <thead class="table-light text-center"><tr><th>SUBJECT</th><th>THEORY</th><th>INTERNAL</th><th>TOTAL</th><th>MAX</th><th>GRADE</th></tr></thead>
+            <tbody>
+                ${subjectResults.map(res => `
+                <tr class="text-center">
+                    <td class="text-start">${subjects.find(s=>s.id === examSchedules.find(es=>es.maxTE===res.maxTE && es.maxCE === res.maxCE)?.subjectId)?.name}</td>
+                    <td>${res.te}</td><td>${res.ce}</td><td>${res.total}</td><td>${res.maxTotal}</td><td>${gradingSystem === 'type1' ? calculateGrade(res.total, res.maxTotal) : calculateGradeType2(res.total, res.maxTotal)}</td>
+                </tr>`).join('')}
+            </tbody>
+            <tfoot class="fw-bold text-center">
+                <tr><td colspan="2" class="text-end">GRAND TOTAL</td><td>${totalMarksObtained}</td><td>${maxTotalMarks}</td><td colspan="2"></td></tr>
+            </tfoot>
+        </table>
+        <div class="row mt-4 fw-bold text-center">
+            <div class="col-6">Overall Percentage: <span class="fs-5">${percentage}%</span></div>
+            <div class="col-6">Final Result: <span class="fs-5 text-${finalResult === 'PASS' ? 'success':'danger'}">${finalResult}</span></div>
+        </div>
+        <div class="row mt-5 pt-5 text-center text-muted" style="font-size: 0.9rem;">
+            <div class="col-6"><hr class="mx-auto w-50">Class Teacher</div>
+            <div class="col-6"><hr class="mx-auto w-50">Principal</div>
+        </div>
+    </div>`;
+}
+
 
         function calculateGrade(score, maxScore) {
             if (score === 'AB') return 'AB';
@@ -13325,7 +13918,7 @@ function handleOnline() {
     // Re-initialize data listeners if a user is logged in to get the latest data
     if (currentUserRole) {
         console.log('Re-attaching Firebase listeners...');
-        attachMainDataListeners();
+        attachDataListeners();
         attachFeeDataListeners(activeFinancialYear);
     }
 }
@@ -13353,7 +13946,6 @@ window.addEventListener('beforeunload', (event) => {
         event.returnValue = '';
     }
 });
-
 function printExamTimetable () {
     const printContents = document.getElementById('timetable-display-container')?.innerHTML;
     if (!printContents) return alert("No timetable available to print.");
@@ -13381,6 +13973,10 @@ function printExamTimetable () {
     `);
     printWindow.document.close();
 };
+
+
 </script>
 </body>
 </html>
+
+          
