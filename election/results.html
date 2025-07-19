@@ -8,195 +8,207 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
     <style>
         :root {
-        --header-bg-start: #4e54c8;
-        --header-bg-end: #8f94fb;
-        --header-text-light: #ffffff;
-        --header-text-dark: #f0f0f0;
-        --emblem-border-color: #ffffff;
-    }
+            --header-bg-start: #4e54c8;
+            --header-bg-end: #8f94fb;
+            --header-text-light: #ffffff;
+            --header-text-dark: #f0f0f0;
+            --emblem-border-color: #ffffff;
+            --body-bg: #f4f7f9;
+            --card-bg: #ffffff;
+            --text-color: #343a40;
+            --winner-glow: #f9ca24;
+        }
 
-    .election-header-container {
-        background: linear-gradient(135deg, var(--header-bg-start), var(--header-bg-end));
-        color: white;
-        padding: 2rem 0;
-        margin-bottom: 2.5rem;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-        position: relative;
-        overflow: hidden;
-    }
+        body {
+            background-color: var(--body-bg);
+            color: var(--text-color);
+        }
 
-    .election-header-container::before {
-        content: '';
-        position: absolute;
-        top: -50px;
-        left: -50px;
-        width: 200px;
-        height: 200px;
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: 50%;
-        opacity: 0.5;
-    }
+        /* --- Header Styles --- */
+        .election-header-container {
+            background: linear-gradient(135deg, var(--header-bg-start), var(--header-bg-end));
+            color: white;
+            padding: 2rem 0;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
 
-    .election-header-content {
-        display: flex;
-        align-items: center;
-        gap: 25px;
-        position: relative;
-        z-index: 2;
-    }
-
-    .emblem-container img {
-        width: 100px;
-        height: 100px;
-        border-radius: 50%;
-        border: 4px solid var(--emblem-border-color);
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-        background-color: #fff;
-    }
-
-    .election-details h1 {
-        font-size: 2.2rem;
-        font-weight: bold;
-        margin: 0;
-        color: var(--header-text-light);
-        line-height: 1.2;
-    }
-
-    .election-details p {
-        font-size: 1.2rem;
-        margin: 0;
-        color: var(--header-text-dark);
-        opacity: 0.9;
-    }
-
-    /* Responsive adjustments for smaller screens */
-    @media (max-width: 768px) {
         .election-header-content {
-            flex-direction: column;
-            text-align: center;
-            gap: 15px;
+            display: flex;
+            align-items: center;
+            gap: 25px;
+        }
+
+        .emblem-container img {
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            border: 4px solid var(--emblem-border-color);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+            background-color: var(--card-bg);
         }
 
         .election-details h1 {
-            font-size: 1.8rem;
+            font-size: 2rem;
+            font-weight: bold;
+            margin: 0;
+            color: var(--header-text-light);
         }
 
         .election-details p {
-            font-size: 1rem;
+            font-size: 1.1rem;
+            margin: 0;
+            color: var(--header-text-dark);
+            opacity: 0.9;
         }
-    }
 
-        .container {
-            max-width: 960px;
-            width: 100%;
+        /* --- Main Content & Card Styles --- */
+        .main-content {
+            padding-top: 2rem;
         }
-        .card {
-            border-radius: 15px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-            margin-bottom: 30px;
+        
+        .content-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            border: none;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            margin-bottom: 2rem;
         }
-        .card-header {
-            background-color: #0d6efd;
-            color: white;
-            border-top-left-radius: 15px;
-            border-top-right-radius: 15px;
-            font-weight: bold;
-            padding: 15px 20px;
+
+        .content-card .card-header {
+            background-color: transparent;
+            border-bottom: 1px solid #e9ecef;
+            padding: 1.25rem;
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-color);
         }
-        .post-results-card {
-            margin-top: 30px;
-            border: 1px solid #dee2e6;
+        
+        /* --- Live Graph & Turnout Styles --- */
+        .live-post-chart {
+            margin-bottom: 2rem;
         }
-        .post-results-card .card-header {
-            background-color: #e9ecef;
-            color: #343a40;
-            border-bottom: 1px solid #dee2e6;
-            font-size: 1.5em;
+        .live-post-chart:last-child {
+            margin-bottom: 0;
         }
-        .candidate-row {
+
+        .live-post-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #f0f0f0;
+        }
+        
+        .live-candidate-bar {
             display: flex;
             align-items: center;
-            padding: 10px 0;
-            border-bottom: 1px dashed #eee;
+            margin-bottom: 15px;
+            transition: all 0.5s ease-in-out;
         }
-        .candidate-row:last-child {
-            border-bottom: none;
-        }
-        .candidate-photo {
-            width: 60px;
-            height: 60px;
-            object-fit: cover;
+
+        .live-candidate-avatar {
+            width: 45px;
+            height: 45px;
             border-radius: 50%;
             margin-right: 15px;
+            background-color: #d1d8e0;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
         }
-        .candidate-name {
-            font-weight: bold;
-            font-size: 1.1em;
+        
+        .revealed-photo {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin-right: 15px;
+        }
+        
+        .live-candidate-info {
             flex-grow: 1;
+            min-width: 0; /* Prevents text overflow issues in flexbox */
         }
-        .vote-count {
-            font-size: 1.2em;
-            font-weight: bold;
-            color: #0d6efd;
+
+        .live-candidate-name {
+            font-weight: 500;
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
-        .winner-badge {
-            background-color: #28a745;
-            color: white;
-            padding: 5px 10px;
+
+        .progress-bar-container {
+            width: 100%;
+            background-color: #e9ecef;
             border-radius: 5px;
-            font-size: 0.8em;
-            margin-left: 10px;
+            height: 28px;
+            overflow: hidden;
+        }
+        
+        .progress-bar-live {
+            background: linear-gradient(90deg, #6a82fb, #fc5c7d);
+            height: 100%;
+            color: white;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            transition: width 0.4s ease-in-out;
+            white-space: nowrap;
+        }
+
+        /* Revealed State Styles */
+        .live-post-chart.revealed .live-post-title {
+            border-bottom-color: #28a745;
+        }
+
+        .live-candidate-bar.revealed .progress-bar-live {
+            background: linear-gradient(90deg, #1dd1a1, #48dbfb);
+        }
+
+        .live-candidate-bar.winner .progress-bar-container {
+            border: 2px solid var(--winner-glow);
+            box-shadow: 0 0 10px var(--winner-glow);
+        }
+
+        /* --- Loading & Alerts --- */
+        .loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 255, 255, 0.85);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 9999; flex-direction: column;
         }
         .alert-container {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 1050;
+            position: fixed; top: 20px; right: 20px; z-index: 1050;
         }
-        .alert-message {
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            padding: 15px 20px;
-            margin-bottom: 10px;
-            display: flex;
-            align-items: center;
+
+        /* --- Responsive Adjustments --- */
+        @media (max-width: 991.98px) {
+            .main-content {
+                padding-top: 1.5rem;
+            }
         }
-        .alert-message .icon {
-            margin-right: 10px;
-            font-size: 1.2em;
+        @media (max-width: 768px) {
+            .election-header-content {
+                flex-direction: column;
+                text-align: center;
+                gap: 15px;
+            }
+            .election-details h1 { font-size: 1.8rem; }
+            .election-details p { font-size: 1rem; }
         }
-        .loading-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(255, 255, 255, 0.8);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 9999;
-            flex-direction: column;
-        }
-        .spinner-border {
-            width: 3rem;
-            height: 3rem;
-            color: #0d6efd;
-        }
-        .loading-text {
-            margin-top: 10px;
-            font-size: 1.2em;
-            color: #333;
-        }
+
     </style>
 </head>
 <body>
-    <header class="election-header text-center p-3 mb-4 bg-light shadow-sm">
-    <img id="emblemImage" src="https://placehold.co/100x100/cccccc/333333?text=Emblem" alt="Institution Emblem" class="rounded-circle mb-2" style="width: 80px; height: 80px;">
-    <h1 id="electionNameHeader" class="h4">Election Title</h1>
-    <h3 id="institutionNameHeader" class="h6 text-muted">Institution Name</h3>
-</header>
-    <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+    
+     <div class="loading-overlay" id="loadingOverlay" style="display: none;">
         <div class="spinner-border" role="status">
             <span class="visually-hidden">Loading...</span>
         </div>
@@ -207,20 +219,46 @@
 
 
 
-    <div class="container mt-4">
-    <div id="boothProgressContainer" class="card">
-        <div class="card-header">
-            <h3 class="card-title mb-0">Live Booth-wise Voter Turnout</h3>
-        </div>
-        <div id="boothProgressContent" class="card-body">
+    <div class="w-100">
+        <header class="election-header-container">
+            <div class="container">
+                <div class="election-header-content">
+                    <div class="emblem-container">
+                        <img id="emblemImage" src="https://placehold.co/100x100/cccccc/333333?text=E" alt="Institution Emblem">
+                    </div>
+                    <div class="election-details">
+                        <h1 id="institutionNameHeader">Institution Name</h1>
+                        <p id="electionNameHeader">Election Title</p>
+                    </div>
+                </div>
             </div>
+        </header>
+
+        <main class="container main-content">
+            <div class="row">
+                <div class="col-lg-5">
+                    <div id="boothProgressContainer" class="content-card">
+                        <div class="card-header">
+                            <i class="fas fa-person-booth me-2"></i> Live Voter Turnout
+                        </div>
+                        <div id="boothProgressContent" class="card-body p-4">
+                            </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-7">
+                    <div class="content-card">
+                        <div class="card-header">
+                            <i class="fas fa-chart-bar me-2"></i> Live Standings
+                        </div>
+                        <div id="liveStandingsContainer" class="card-body p-4">
+                            </div>
+                    </div>
+                </div>
+            </div>
+        </main>
     </div>
-</div>
-
-    <div class="container mt-5">
-        <h1 class="text-center mb-4 text-primary">Official Election Results</h1>
-
-        <div id="resultsNotPublished" class="card text-center py-5" style="display: none;">
+ <div id="resultsNotPublished" class="card text-center py-5" style="display: none;">
             <div class="card-body">
                 <i class="fas fa-lock fa-4x text-warning mb-3"></i>
                 <h2 class="card-title text-warning">Results Not Yet Published</h2>
@@ -243,7 +281,6 @@
                 </div>
         </div>
     </div>
-
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script type="module" src="results.js"></script>
 </body>
