@@ -2,30 +2,67 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebas
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, doc, getDoc, onSnapshot, collection, query, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-// Global Firebase variables (provided by the environment)
+function base64Encode(str) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(str);
+    // Convert binary string to Base64
+    return btoa(String.fromCharCode.apply(null, data));
+}
+
+/**
+ * A more robust function to decode a Base64 string, correctly handling Unicode.
+ * @param {string} str The Base64 string to decode.
+ * @returns {string} The decoded string.
+ */
+function base64Decode(str) {
+    const binaryString = atob(str);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+    }
+    const decoder = new TextDecoder();
+    return decoder.decode(bytes);
+}
+
+
+/**
+ * Sets a Base64 encoded user ID as a URL parameter.
+ * @param {string} userId The user ID to encode and set in the URL.
+ */
+function setBase64ParamsInUrl(userId) {
+    const encoded = base64Encode(userId);
+    const newUrl = `${window.location.pathname}?wxev=${encodeURIComponent(encoded)}`;
+    window.history.replaceState({}, '', newUrl);
+}
+
+
+/**
+ * Loads parameters from the URL, decodes them, and saves to localStorage.
+ * @returns {string} The loaded and decoded user ID.
+ */
 function loadParamsFromBase64Url() {
-                const urlParams = new URLSearchParams(window.location.search);
-                const dataParam = urlParams.get('wxev');
+    const urlParams = new URLSearchParams(window.location.search);
+    const dataParam = urlParams.get('wxev');
 
-                if (dataParam) {
-                    try {
-                        console.log("dataparam",dataParam);
-                        const decoded = dataParam;// base64Decode(dataParam);
-                        const userId = decoded;
-                        if (userId) {
-                            localStorage.setItem('userId', userId);
-                            //localStorage.setItem('appId', appId);
-                            return userId ;
-                        }
-                    } catch (e) {
-                        console.error('Invalid Base64 data:', e);
-                    }
-                }
-
-                // fallback
-                return 
-                    localStorage.getItem('userId') || 'defaultUser';
+    if (dataParam) {
+        try {
+            // FIXED: The decoding function is now correctly called.
+            const decoded = base64Decode(dataParam);
+            const userId = decoded;
+            if (userId) {
+                localStorage.setItem('userId', userId);
+                return userId;
             }
+        } catch (e) {
+            console.error('Invalid Base64 data in URL:', e);
+        }
+    }
+
+    // FIXED: The return statement is now on a single line to work correctly.
+    // This will now execute as the fallback if the URL param fails.
+    return localStorage.getItem('userId') || 'defaultUser';
+}
+
 
            // setBase64ParamsInUrl('kyhss');
            // let appId = "timetableData"
@@ -60,6 +97,12 @@ const electionResultsContent = document.getElementById('electionResultsContent')
 const totalVotesCountSpan = document.getElementById('totalVotesCount');
 const lastUpdatedTimeSpan = document.getElementById('lastUpdatedTime');
 const postsResultsContainer = document.getElementById('postsResultsContainer');
+const boothProgressContent = document.getElementById('boothProgressContent'); // *** NEW ***
+
+// *** NEW: Header DOM Elements ***
+const emblemImage = document.getElementById('emblemImage');
+const electionNameHeader = document.getElementById('electionNameHeader');
+const institutionNameHeader = document.getElementById('institutionNameHeader');
 
 // --- Utility Functions ---
 
@@ -101,6 +144,29 @@ function showLoading(show, message = 'Loading...') {
     loadingOverlay.style.display = show ? 'flex' : 'none';
 }
 
+// *** NEW: Fetch and display election details ***
+async function displayElectionDetails() {
+    try {
+        const settingsDocRef = doc(db, `artifacts/${appId}/public/data/settings`, 'electionDetails');
+        const docSnap = await getDoc(settingsDocRef);
+        if (docSnap.exists()) {
+            const settings = docSnap.data();
+            if (settings.institutionName) {
+                institutionNameHeader.textContent = settings.institutionName;
+            }
+            if (settings.electionName) {
+                electionNameHeader.textContent = settings.electionName;
+            }
+            if (settings.emblemUrl) {
+                emblemImage.src = settings.emblemUrl;
+            }
+        }
+    } catch (error) {
+        console.error("Could not fetch election details:", error);
+    }
+}
+
+
 // --- Firebase Initialization and Authentication ---
 
 window.onload = async function() {
@@ -110,6 +176,8 @@ window.onload = async function() {
         db = getFirestore(app);
         auth = getAuth(app);
 
+        await displayElectionDetails(); // *** NEW: Load details on page start ***
+
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 userId = user.uid;
@@ -118,7 +186,7 @@ window.onload = async function() {
             }
             // Start listening to the publish status immediately
             listenToPublishStatus();
-            listenForVotingProgress();
+            listenForVotingProgress(); // MODIFIED: Renamed from listenForLiveResults
             showLoading(false);
         });
 
@@ -200,29 +268,42 @@ async function fetchAllElectionDataForResults() {
  * @returns {Map<string, Map<string, number>>} Aggregated vote counts.
  * Structure: Map<postId, Map<candidateId, count>>
  */
-function aggregateOverallVotes(votes, postsMap, candidatesMap) {
-    const aggregatedData = new Map(); // Map<postId, Map<candidateId, count>>
+function aggregateOverallVotes(ballots, postsMap, candidatesMap) {
+    const aggregatedData = new Map();
 
+    // 1. Initialize the data structure for all posts and candidates with 0 votes
     postsMap.forEach((postData, postId) => {
-        aggregatedData.set(postId, new Map()); // Initialize for each post
-        // Initialize candidates for this post
+        const postVoteMap = new Map();
         candidatesMap.forEach((candidateData, candidateId) => {
             if (candidateData.postId === postId) {
-                aggregatedData.get(postId).set(candidateId, 0);
+                postVoteMap.set(candidateId, 0);
             }
         });
-        // Add NOTA for each post
-        aggregatedData.get(postId).set('NOTA', 0);
+        postVoteMap.set('NOTA', 0); // Add NOTA for each post
+        aggregatedData.set(postId, postVoteMap);
     });
 
-    votes.forEach(vote => {
-        const { postId, candidateId } = vote;
-        if (aggregatedData.has(postId)) {
-            const postVotes = aggregatedData.get(postId);
-            postVotes.set(candidateId, (postVotes.get(candidateId) || 0) + 1);
-        } else {
-            console.warn(`Vote for unknown postId (${postId}) skipped during overall aggregation.`);
+    // 2. Process each ballot document
+    ballots.forEach(ballot => {
+        // **CORRECTION START**
+        // Get the nested 'votes' object from the ballot document
+        const sessionVotes = ballot.votes;
+
+        // Check if the nested object exists
+        if (sessionVotes) {
+            // Loop through the key-value pairs inside the nested object
+            // The key is the postId, and the value is the candidateId
+            for (const postId in sessionVotes) {
+                const candidateId = sessionVotes[postId];
+
+                // Now, with the correct postId and candidateId, update the count
+                if (aggregatedData.has(postId)) {
+                    const postVotes = aggregatedData.get(postId);
+                    postVotes.set(candidateId, (postVotes.get(candidateId) || 0) + 1);
+                }
+            }
         }
+        // **CORRECTION END**
     });
 
     return aggregatedData;
@@ -242,7 +323,7 @@ async function fetchAndRenderResults() {
     const aggregatedResults = aggregateOverallVotes(votes, postsMap, candidatesMap);
 
     let totalVotes = 0;
-    votes.forEach(() => totalVotes++);
+    votes.forEach(() =>  totalVotes++);
     totalVotesCountSpan.textContent = totalVotes;
     lastUpdatedTimeSpan.textContent = new Date().toLocaleString();
 
@@ -319,27 +400,20 @@ function listenForVotingProgress() {
 }
 
 /**
- * Fetches booth data (name and max voters) from Firestore settings.
+ * Fetches booth data (name and max voters) from Firestore.
  * @returns {Promise<Object|null>} An object containing data for all booths.
  */
 async function fetchBoothData() {
     try {
-        // Correctly reference the 'booths' collection in Firestore.
         const boothsCollectionRef = collection(db, `artifacts/${appId}/public/data/booths`);
-        
-        // Fetch all documents within that collection.
         const querySnapshot = await getDocs(boothsCollectionRef);
 
-        // If the collection is empty, show a warning.
         if (querySnapshot.empty) {
             console.warn("The 'booths' collection is empty or does not exist!");
             showAlert("Booth configuration is missing.", "warning");
             return null;
         }
 
-        // Convert the array of documents into a single object,
-        // which is what the renderBoothProgress function expects.
-        // The document ID is used as the key for each booth.
         const boothsData = {};
         querySnapshot.forEach(doc => {
             boothsData[doc.id] = doc.data();
@@ -353,45 +427,37 @@ async function fetchBoothData() {
         return null;
     }
 }
+/**
+ * Renders the progress of voting for each booth based on maxVoters.
+ * @param {Array} votes - An array of all vote ballot documents.
+ */
 async function renderBoothProgress(votes) {
-    // This fetches all booth documents and structures them in an object
-    // where the keys are the document IDs. e.g., { boothDocId1: { name: '...', maxVoters: ... }, ... }
     const boothData = await fetchBoothData();
 
-    if (!boothData) {
-        boothProgressContent.innerHTML = '<p class="text-center text-muted">Booth information is not available.</p>';
+    if (!boothData || !boothProgressContent) {
+        if (boothProgressContent) {
+            boothProgressContent.innerHTML = '<p class="text-center text-muted">Booth information is not available.</p>';
+        }
         return;
     }
-
-    // 1. Initialize vote counts for each booth using its Document ID as the key.
+    
     const boothVoteCounts = {};
     for (const boothDocId in boothData) {
-        // 'boothId' here is the actual Document ID from the 'booths' collection.
         boothVoteCounts[boothDocId] = 0;
     }
 
-    // 2. Count votes by matching the 'boothId' field in each vote document
-    //    with the Document IDs we have in 'boothVoteCounts'.
     votes.forEach(vote => {
-        // 'vote.boothId' should contain the Document ID of the booth where the vote was cast.
         const voteBoothId = vote.boothDocId;
-
-        // We check if the boothId from the vote exists as a key in our counts object.
-        // This ensures we only count votes for valid booths.
         if (voteBoothId && boothVoteCounts.hasOwnProperty(voteBoothId)) {
             boothVoteCounts[voteBoothId]++;
         }
     });
-
-    // 3. Clear previous content before rendering updated bars.
+    
     boothProgressContent.innerHTML = '';
 
-    // 4. Render a progress bar for each booth, again using the Document ID.
-    for (const boothId in boothData) {
-        // 'boothId' is the Document ID.
-        // 'booth' is the data object for that document (e.g., { name: 'Booth A', maxVoters: 150 }).
-        const booth = boothData[boothId];
-        const currentVotes = boothVoteCounts[boothId] || 0;
+    for (const boothDocId in boothData) {
+        const booth = boothData[boothDocId];
+        const currentVotes = boothVoteCounts[boothDocId] || 0;
         const maxVoters = booth.maxVoters || 0;
         const progressPercentage = maxVoters > 0 ? ((currentVotes / maxVoters) * 100).toFixed(1) : 0;
 
@@ -399,7 +465,7 @@ async function renderBoothProgress(votes) {
         progressElement.className = 'booth-progress-item mb-4';
         progressElement.innerHTML = `
             <div class="d-flex justify-content-between align-items-center mb-1">
-                <span class="booth-name fw-bold fs-5">${booth.name || boothId}</span>
+                <span class="booth-name fw-bold fs-5">${booth.name || boothDocId}</span>
                 <span class="booth-stats text-muted fw-bold">${currentVotes} / ${maxVoters} Voted</span>
             </div>
             <div class="progress" style="height: 25px; font-size: 1rem;">
@@ -411,4 +477,3 @@ async function renderBoothProgress(votes) {
         boothProgressContent.appendChild(progressElement);
     }
 }
-
