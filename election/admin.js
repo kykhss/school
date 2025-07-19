@@ -74,7 +74,8 @@ function loadParamsFromBase64Url() {
         
 
             console.log(basePath);
-
+const param = base64Encode(currentUserId);
+    document.getElementById('resultLink').href = `https://kykhss.github.io/schools/election/result.html?wxev=${param}`;
 
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -111,6 +112,15 @@ const loadingOverlay = document.getElementById('loadingOverlay');
 const loadingText = document.querySelector('#loadingOverlay .loading-text');
 const alertContainer = document.getElementById('alertContainer');
 
+// *** NEW: Election Settings DOM Elements ***
+const electionSettingsForm = document.getElementById('electionSettingsForm');
+const institutionNameInput = document.getElementById('institutionNameInput');
+const electionNameInput = document.getElementById('electionNameInput');
+const emblemPhotoInput = document.getElementById('emblemPhotoInput');
+const emblemPhotoPreview = document.getElementById('emblemPhotoPreview');
+const emblemPhotoUrlInput = document.getElementById('emblemPhotoUrlInput');
+
+
 // Add these with your other DOM element constants
 const deleteConfirmModalEl = document.getElementById('deleteConfirmModal');
 const deleteConfirmModal = new bootstrap.Modal(deleteConfirmModalEl);
@@ -141,6 +151,7 @@ const boothIdInput = document.getElementById('boothId');
 const boothNameInput = document.getElementById('boothName');
 const boothUserInput = document.getElementById('boothUser');
 const boothPasswordInput = document.getElementById('boothPassword');
+const boothMaxVotersInput = document.getElementById('boothMaxVotersInput'); // *** NEW ***
 const boothsTableBody = document.getElementById('boothsTableBody');
 
 const addVotingMachineModal = new bootstrap.Modal(document.getElementById('addVotingMachineModal'));
@@ -269,6 +280,7 @@ function showAdminContent() {
     adminLoginCard.style.display = 'none';
     adminContent.style.display = 'block';
     // Start listening to data
+    listenToElectionSettings(); // *** NEW ***
     listenToPosts();
     listenToCandidates();
     listenToBooths();
@@ -295,6 +307,92 @@ function attachAdminControlEventListeners() {
         }
     });
 }
+
+// *** NEW: ELECTION SETTINGS MANAGEMENT ***
+
+/**
+ * Listens to the main election settings and populates the form.
+ */
+function listenToElectionSettings() {
+    const settingsDocRef = doc(db, `artifacts/${appId}/public/data/settings`, 'electionDetails');
+    onSnapshot(settingsDocRef, (docSnapshot) => {
+        if (docSnapshot.exists()) {
+            const settings = docSnapshot.data();
+            institutionNameInput.value = settings.institutionName || '';
+            electionNameInput.value = settings.electionName || '';
+            emblemPhotoUrlInput.value = settings.emblemUrl || '';
+            if (settings.emblemUrl) {
+                emblemPhotoPreview.src = settings.emblemUrl;
+                emblemPhotoPreview.style.display = 'block';
+            } else {
+                emblemPhotoPreview.style.display = 'none';
+            }
+        }
+    }, (error) => {
+        console.error("Error listening to election settings:", error);
+        showAlert("Could not load election settings.", "danger");
+    });
+}
+
+/**
+ * Handles submission of the election settings form.
+ */
+electionSettingsForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    showLoading(true, 'Saving Election Settings...');
+
+    const settingsData = {
+        institutionName: institutionNameInput.value,
+        electionName: electionNameInput.value,
+        emblemUrl: emblemPhotoUrlInput.value,
+    };
+
+    try {
+        const settingsDocRef = doc(db, `artifacts/${appId}/public/data/settings`, 'electionDetails');
+        await setDoc(settingsDocRef, settingsData, { merge: true });
+        showAlert('Election settings saved successfully!', 'success');
+    } catch (error) {
+        console.error("Error saving election settings:", error);
+        showAlert(`Failed to save settings: ${error.message}`, "danger");
+    } finally {
+        showLoading(false);
+    }
+});
+
+/**
+ * Handles upload of the institution emblem.
+ */
+emblemPhotoInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Show image preview
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        emblemPhotoPreview.src = event.target.result;
+        emblemPhotoPreview.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+
+    showLoading(true, 'Uploading emblem...');
+    try {
+        const uniqueFileId = `emblem_${Date.now()}`;
+        const result = await uploadPhotoToDrive(file, uniqueFileId, 'electionEmblems');
+
+        if (result && result.success && result.fileId) {
+            const photoUrl = `https://lh3.googleusercontent.com/d/${result.fileId}`;
+            emblemPhotoUrlInput.value = photoUrl;
+            showAlert('Emblem uploaded successfully!', 'success');
+        } else {
+            throw new Error(result.error || 'Upload failed. The server did not return a file ID.');
+        }
+    } catch (error) {
+        console.error('Error during emblem upload:', error);
+        showAlert(`Emblem upload failed: ${error.message}`, 'danger');
+    } finally {
+        showLoading(false);
+    }
+});
 
 
 // --- CRUD Operations for Posts (unchanged) ---
@@ -626,7 +724,7 @@ async function deleteCandidate(candidateId) {
     }
 }
 
-// --- CRUD Operations for Booths (unchanged) ---
+// --- CRUD Operations for Booths (MODIFIED) ---
 
 /**
  * Listens for real-time updates to booths and renders them in the table.
@@ -642,7 +740,8 @@ function listenToBooths() {
                 <td>${booth.boothId}</td>
                 <td>${booth.name}</td>
                 <td>${booth.user}</td>
-                <td>********</td> <td>
+                <td>********</td>
+                <td>${booth.maxVoters || 'N/A'}</td> <td>
                     <button class="btn btn-sm btn-info edit-booth me-2" data-id="${doc.id}">
                         <i class="fas fa-edit"></i>
                     </button>
@@ -690,21 +789,31 @@ boothForm.addEventListener('submit', async (e) => {
     const boothId = boothIdInput.value;
     const name = boothNameInput.value;
     const user = boothUserInput.value;
-    const password = boothPasswordInput.value; // In a real app, hash this password!
+    const password = boothPasswordInput.value;
+    const maxVoters = parseInt(boothMaxVotersInput.value, 10); // *** NEW ***
+
+    // *** NEW: Validation for maxVoters ***
+    if (isNaN(maxVoters) || maxVoters <= 0) {
+        showAlert('Please enter a valid number for Max Voters.', 'danger');
+        showLoading(false);
+        return;
+    }
 
     try {
+        const boothData = {
+            boothId,
+            name,
+            user,
+            password, // In a real app, hash this password!
+            maxVoters // *** NEW ***
+        };
+
         if (boothDocId) {
             // Edit existing booth
-            await setDoc(doc(db, `artifacts/${appId}/public/data/booths`, boothDocId), {
-                boothId,
-                name,
-                user,
-                password // Store password as plain text for demo, hash in production
-            }, { merge: true });
+            await setDoc(doc(db, `artifacts/${appId}/public/data/booths`, boothDocId), boothData, { merge: true });
             showAlert('Booth updated successfully!', 'success');
         } else {
             // Add new booth
-            // Check for duplicate boothId before adding
             const q = query(collection(db, `artifacts/${appId}/public/data/booths`), where('boothId', '==', boothId));
             const existingBooths = await getDocs(q);
             if (!existingBooths.empty) {
@@ -713,12 +822,7 @@ boothForm.addEventListener('submit', async (e) => {
                 return;
             }
 
-            await addDoc(collection(db, `artifacts/${appId}/public/data/booths`), {
-                boothId,
-                name,
-                user,
-                password // Store password as plain text for demo, hash in production
-            });
+            await addDoc(collection(db, `artifacts/${appId}/public/data/booths`), boothData);
             showAlert('Booth added successfully!', 'success');
         }
         boothForm.reset();
@@ -730,6 +834,7 @@ boothForm.addEventListener('submit', async (e) => {
         showLoading(false);
     }
 });
+
 
 /**
  * Populates the booth form for editing.
@@ -745,7 +850,8 @@ async function editBooth(boothDocId) {
             boothIdInput.value = booth.boothId;
             boothNameInput.value = booth.name;
             boothUserInput.value = booth.user;
-            boothPasswordInput.value = booth.password; // Populate password for edit
+            boothPasswordInput.value = booth.password;
+            boothMaxVotersInput.value = booth.maxVoters || ''; // *** NEW ***
             addBoothModal.show();
         } else {
             showAlert('Booth not found.', 'danger');
@@ -1575,6 +1681,7 @@ candidatePhotoInput.addEventListener('change', async (e) => {
 function handleCopyLinkClick(linkType) {
     // base64Encode and currentUserId are available from the top of the admin.js script
     const param = base64Encode(currentUserId);
+    
     if (!linkType) return;
 
     let fullUrl = null;
