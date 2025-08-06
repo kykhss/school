@@ -8635,11 +8635,17 @@ const generateQRCode = () => {
     // If amount is valid, enable the button
     upiLinkButton.classList.remove('disabled');
 
-    // Create a unique transaction note for reconciliation
-    const transactionNote = `ADMN${selectedUser.admissionNumber}-PYMT-${Date.now()}`;
+    const transactionRefId = generateUniqueTransactionId();
+
+    // **CHANGE 2: Create a more descriptive Transaction Note (tn)**
+    // The note should contain specific details to make it look less generic.
+    const transactionNote = `Fee Payment for Admn No: ${selectedUser.admissionNumber} - Student: ${selectedUser.name}`;
     
-    // The UPI deep link string
-    const upiURI = `upi://pay?pa=${schoolDetails.upiId}&pn=${encodeURIComponent(schoolDetails.upiPayeeName)}&am=${amount.toFixed(2)}&cu=INR&tn=${transactionNote}`;
+
+    const merchantCode = '5551'; // Example: Educational Services. Use your actual code if you have it.
+
+    const upiURI = `upi://pay?pa=${schoolDetails.upiId}&pn=${encodeURIComponent(schoolDetails.upiPayeeName)}&am=${amount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(transactionNote)}&tr=${transactionRefId}&mc=${merchantCode}`;
+
 
     // --- Update QR Code ---
     qrContainer.innerHTML = ''; // Clear previous content
@@ -8657,6 +8663,7 @@ const generateQRCode = () => {
     generateQRCode();
     amountInput.addEventListener('input', generateQRCode);
 });
+
 
 // Add this event listener inside your main script block
 
