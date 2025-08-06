@@ -4,15 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>School Management Pro</title>
-    
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://unpkg.com/cropperjs/dist/cropper.css" rel="stylesheet">
-    
+   <script src="variables.js"></script>
 
     <style>
         .hall-ticket-page {
@@ -473,13 +473,17 @@
 <!-- Cropper JS -->
 <script src="https://unpkg.com/cropperjs/dist/cropper.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/davidshimjs-qrcodejs/qrcode.min.js"></script>
+    
     <script type="module">
-
+      // Correct import for side effects
+        
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, addDoc, setDoc, getDoc, getDocs,updateDoc, collection, onSnapshot, deleteDoc, writeBatch, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        const appId = 'school-management-app';
+       // import {getData, getStudentsData, showSidebar, hideSidebar, printExamTimetable } from "./finalgs.js";
+        const mainContent = document.getElementById('main-content');
+        const sidebarNav = document.getElementById('sidebar-nav');
+         const appId = 'school-management-app';
         const firebaseConfig = {
             apiKey: "AIzaSyAu5TDMWepJX7naoG5H3WpGJ1yxAu01whg",
             authDomain: "timetables-470dd.firebaseapp.com",
@@ -490,9 +494,7 @@
         };
 
         let db, auth;
-        const mainContent = document.getElementById('main-content');
-        const sidebarNav = document.getElementById('sidebar-nav');
-
+       
         
         let classes = [], teachers = [], subjects = [],  exams = [], classroomSubjects = [], examSchedules = [], 
         // marks = [], 
@@ -549,8 +551,7 @@ let festParticipantFilters = {
 // Add these to your list of global variables
 let festHouses = [], fests = [], festEvents = [], festRegistrations = [], festResults = [], festSettings = {};
 // --- Global State & Timers ---
-const students =  await getStudentsData(); // Get all students from IndexedDB (or global array if already loaded)
-    let houseToEdit = null, festToEdit = null, eventToEdit = null;
+let houseToEdit = null, festToEdit = null, eventToEdit = null;
    let initialDataPromises = {};
 let dataLoadStatus = {}; // To track if a collection has received its first snapshot
 let collectionLoadPromises = {}; // Stores Promises that resolve when a specific collection's initial load is complete { collectionName: Promise }
@@ -574,6 +575,37 @@ schoolDetails = {
             schoolSealPng: 'SEAL.jpg'
         };
 
+        async function getData(storeName, queryObj = null) {
+    try {
+        const store = appDb[storeName];
+        if (!store) {
+            console.error(`Store "${storeName}" does not exist in the database.`);
+            return null;
+        }
+
+        // 1. First, try to get data from the local cache (IndexedDB)
+        let localData = [];
+        if (queryObj) {
+            localData = await store.where(queryObj).toArray();
+        } else {
+            localData = await store.toArray();
+        }
+
+        // 2. Check if data was found locally
+        if (localData.length <= 0) {
+            await attachDataListeners([storeName]);
+            localData = await store.toArray();
+        } 
+        console.log(`Cache HIT for "${storeName}"`);
+            return localData; // Return the fast, local data
+    } catch (error) {
+        console.error(`Error fetching data from "${storeName}":`, error);
+        return []; // Return an empty array on error
+    }
+}
+
+//const students = await getData('students');
+let students =[]
         // exams = [
         //     { id: 'EXAM001', name: 'Term Exam 2025' },
         //     { id: 'EXAM002', name: 'Annual Exam 2025' }
@@ -780,7 +812,6 @@ const studentNav = [
             setTimeout(() => { alertEl.style.display = 'none'; }, 3000);
         }
     
-
 // This function needs to be called after 'classroomSubjects' and 'teachers' data are available
 function updateTeacherAssignedClasses() {
     if (currentUserRole === 'teacher' && selectedUser && classroomSubjects.length > 0) {
@@ -929,7 +960,7 @@ function attachDataListeners(collectionsToWatch ,main=false) { // No longer `asy
     const collectionMap = {
         classes: { setter: data => classes = data, renderer: null },
         subjects: { setter: data => subjects = data, renderer: null },
-        students: { setter: data => students = data, renderer: filterAndRenderStudents },
+        students: { setter: data => students = data, renderer: null },
         teachers: { setter: data => teachers = data, renderer: null },
         exams: { setter: data => exams = data, renderer: renderExamsList },
         classroomSubjects: { setter: data => classroomSubjects = data, renderer: null },
@@ -1078,8 +1109,8 @@ function attachDataListeners(collectionsToWatch ,main=false) { // No longer `asy
                 
                 if(name==='students'){
                // attachDataListenersnew([name]);
-                updateGlobalDataAndCache(name, Object.values(collectedData));
-            
+                //updateGlobalDataAndCache(name, Object.values(collectedData));
+                config.setter(Object.values(collectedData));
             }else{
                 config.setter(Object.values(collectedData));
             }
@@ -2078,7 +2109,6 @@ function attachSchoolDetailsListeners() {
                 const dayStr = today.getDate().toString();
                 const monthDataDoc = await getDoc(getDocRef('attendance', monthYear));
                 const dayRecord = monthDataDoc.data()?.[dayStr] || {};
-
                 const classStudents = students.filter(s => s.classId === charge.classId && s.division === charge.division);
                 const absentees = classStudents.filter(s => !dayRecord[s.id] || !dayRecord[s.id].FN || !dayRecord[s.id].AN);
                 
@@ -3626,7 +3656,8 @@ window.formatAadhaar = (input) => {
 
 
 
-        
+        let currentFilteredStudents = []; // Store the full list of filtered students
+
         window.renderStudentManagement = () => {
     const mainContent = document.getElementById('main-content');
     if (!mainContent) {
@@ -3636,7 +3667,6 @@ window.formatAadhaar = (input) => {
 
     const currentYear = new Date().getFullYear();
     const currentAcademicYear = `${currentYear}-${currentYear + 1}`;
-
     const classOptions = classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
 
     mainContent.innerHTML = `
@@ -3669,8 +3699,15 @@ window.formatAadhaar = (input) => {
                     </div>
                 </div>
                 <hr class="mt-4 mb-3">
-                <div class="text-end">
-                    <button id="reset-filters-btn" class="btn btn-outline-secondary btn-sm">Reset Filters</button>
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                         <button id="export-students-btn" class="btn btn-success btn-sm">
+                             <i class="fas fa-file-excel me-1"></i> Export Filtered Data
+                         </button>
+                    </div>
+                    <div>
+                        <button id="reset-filters-btn" class="btn btn-outline-secondary btn-sm">Reset Filters</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -3678,12 +3715,22 @@ window.formatAadhaar = (input) => {
         <div id="student-report-section" class="card shadow mb-4 d-none">
             <div class="card-header fw-bold text-primary">Admission Report</div>
             <div class="card-body" id="admission-report-content">
-                </div>
+            </div>
         </div>
 
         <div class="card shadow">
             <div class="card-header fw-bold text-primary">Student List</div>
             <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <span class="text-muted">Showing <span id="pagination-start">0</span> to <span id="pagination-end">0</span> of <span id="pagination-total">0</span> students</span>
+                    </div>
+                    <div class="btn-group" role="group" aria-label="Pagination controls">
+                        <button id="prev-page-btn" class="btn btn-outline-primary btn-sm" disabled>Previous</button>
+                        <button id="next-page-btn" class="btn btn-outline-primary btn-sm" disabled>Next</button>
+                    </div>
+                </div>
+
                 <div class="table-responsive">
                     <table class="table table-hover">
                         <thead>
@@ -3696,7 +3743,7 @@ window.formatAadhaar = (input) => {
                             </tr>
                         </thead>
                         <tbody id="student-list-tbody">
-                            </tbody>
+                        </tbody>
                     </table>
                 </div>
                 <p id="no-students-message" class="text-muted text-center mt-3 d-none">No students found matching your criteria.</p>
@@ -3710,6 +3757,12 @@ window.formatAadhaar = (input) => {
     const studentSearchInput = document.getElementById('student-search-input');
     const newAdmissionsBtn = document.getElementById('new-admissions-btn');
     const resetFiltersBtn = document.getElementById('reset-filters-btn');
+    const exportStudentsBtn = document.getElementById('export-students-btn');
+
+    // --- Pagination variables ---
+    let currentPage = 1;
+    const studentsPerPage = 50; // Set the number of students to display per page
+    let currentFilteredStudents = []; // Store the full list of filtered students
 
     // Function to update division dropdown based on selected class
     const updateFilterDivisions = () => {
@@ -3721,32 +3774,156 @@ window.formatAadhaar = (input) => {
         } else {
             filterDivisionDropdown.disabled = true;
         }
-        filterAndRenderStudents(); // Re-filter when class changes
+        currentPage = 1; // Reset to first page on class change
+        filterAndRenderStudents();
     };
 
-    filterClassDropdown.addEventListener('change', updateFilterDivisions);
-    filterDivisionDropdown.addEventListener('change', filterAndRenderStudents);
-    studentSearchInput.addEventListener('input', filterAndRenderStudents);
-    
-    let isNewAdmissionsFiltered = false; // State variable for new admissions filter
+    /**
+     * Filters the student list based on selected criteria and re-renders the table and report.
+     * @param {string} [genderFilter=null] - Optional gender filter ('M', 'F', or 'all')
+     */
+    const filterAndRenderStudents = (genderFilter = null) => {
+        const studentReportSection = document.getElementById('student-report-section');
+        const admissionReportContent = document.getElementById('admission-report-content');
+        
+        if (!filterClassDropdown || !filterDivisionDropdown || !studentSearchInput || !newAdmissionsBtn || !studentReportSection || !admissionReportContent) {
+            return;
+        }
 
-    newAdmissionsBtn.addEventListener('click', () => {
-        isNewAdmissionsFiltered = !isNewAdmissionsFiltered; // Toggle state
+        const filterClassId = filterClassDropdown.value;
+        const filterDivision = filterDivisionDropdown.value;
+        const searchTerm = studentSearchInput.value.toLowerCase();
+        const isNewAdmissionsFiltered = newAdmissionsBtn.classList.contains('btn-info');
+        
+        let studentsToFilter = currentUserRole === 'teacher' ?
+            students.filter(s => s.classId === selectedUser.classCharge?.classId && s.division === selectedUser.classCharge?.division) :
+            students;
+
+        if (filterClassId) {
+            studentsToFilter = studentsToFilter.filter(s => s.classId === filterClassId);
+        }
+
+        if (filterDivision) {
+            studentsToFilter = studentsToFilter.filter(s => s.division === filterDivision);
+        }
+
+        if (searchTerm) {
+            studentsToFilter = studentsToFilter.filter(s =>
+                (s.admissionNumber && s.admissionNumber.toLowerCase().includes(searchTerm)) ||
+                (s.name && s.name.toLowerCase().includes(searchTerm))
+            );
+        }
+
         if (isNewAdmissionsFiltered) {
-            // Apply new admissions filter
+            const currentYear = new Date().getFullYear();
+            studentsToFilter = studentsToFilter.filter(s => {
+                if (s.admissionDate) {
+                    const admissionYear = new Date(s.admissionDate).getFullYear();
+                    return admissionYear === currentYear;
+                }
+                return false; 
+            });
+        }
+        
+        // --- Apply Gender Filter from Report if it exists ---
+        if (genderFilter === 'M' || genderFilter === 'F') {
+            studentsToFilter = studentsToFilter.filter(s => s.gender === genderFilter);
+        }
+
+        studentsToFilter.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+        currentFilteredStudents = studentsToFilter; // Store the full filtered list
+        
+        // Render only the paginated view
+        renderPaginatedStudents();
+
+        // Generate and Render Admission Report only if no specific gender filter is applied
+        if (currentFilteredStudents.length > 0) {
+            studentReportSection.classList.remove('d-none');
+            // The report should always be based on the general filters, not the gender-specific list
+            // So we pass the list before the gender filter is applied to the report generator.
+            // This ensures the report reflects all students in the class/division, not just one gender.
+            generateAdmissionReport(studentsToFilter, admissionReportContent);
+        } else {
+            studentReportSection.classList.add('d-none');
+            admissionReportContent.innerHTML = '';
+        }
+    };
+
+    /**
+     * Renders the student table based on the current page and filtered list.
+     */
+    const renderPaginatedStudents = () => {
+        const studentListTbody = document.getElementById('student-list-tbody');
+        const noStudentsMessage = document.getElementById('no-students-message');
+        const paginationTotal = document.getElementById('pagination-total');
+        const paginationStart = document.getElementById('pagination-start');
+        const paginationEnd = document.getElementById('pagination-end');
+        const prevPageBtn = document.getElementById('prev-page-btn');
+        const nextPageBtn = document.getElementById('next-page-btn');
+        
+        const totalStudents = currentFilteredStudents.length;
+        const totalPages = Math.ceil(totalStudents / studentsPerPage);
+        
+        const startIndex = (currentPage - 1) * studentsPerPage;
+        const endIndex = Math.min(startIndex + studentsPerPage, totalStudents);
+        const studentsToDisplay = currentFilteredStudents.slice(startIndex, endIndex);
+
+        paginationTotal.textContent = totalStudents;
+        paginationStart.textContent = totalStudents > 0 ? startIndex + 1 : 0;
+        paginationEnd.textContent = endIndex;
+        
+        prevPageBtn.disabled = currentPage === 1;
+        nextPageBtn.disabled = currentPage === totalPages || totalPages === 0;
+
+        if (studentsToDisplay.length > 0) {
+            studentListTbody.innerHTML = studentsToDisplay.map(s => {
+                const cls = classes.find(c => c.id === s.classId);
+                return `<tr>
+                    <td>${s.id || 'id'}</td>
+                    <td>${s.admissionNumber || 'N/A'}</td>
+                    <td><a href="#" class="student-name-link fw-bold" data-id="${s.id}">${s.name || 'N/A'}</a></td>
+                    <td>${cls?.name || 'N/A'} - ${s.division || 'N/A'}</td>
+                    ${currentUserRole === 'admin' ? `<td class="text-end">
+                        <button onclick="window.handleEditStudent('${s.id}')" class="btn btn-sm btn-outline-primary me-2" title="Edit"><i class="fas fa-edit"></i></button>
+                        <button onclick="window.handleDelete('students', '${s.id}')" class="btn btn-sm btn-outline-danger" title="Delete"><i class="fas fa-trash-alt"></i></button>
+                        <button onclick="window.showAdmissionExtractModal('${s.id}')" class="btn btn-sm btn-outline-info ad-form-btn" title="Admission Form"><i class="fas fa-file-alt"></i></button>
+                    </td>` : ''}
+                </tr>`;
+            }).join('');
+            noStudentsMessage.classList.add('d-none');
+        } else {
+            studentListTbody.innerHTML = '';
+            noStudentsMessage.classList.remove('d-none');
+        }
+    };
+    
+    // --- Event Listeners ---
+    filterClassDropdown.addEventListener('change', updateFilterDivisions);
+    filterDivisionDropdown.addEventListener('change', () => {
+        currentPage = 1;
+        filterAndRenderStudents();
+    });
+    studentSearchInput.addEventListener('input', () => {
+        currentPage = 1;
+        filterAndRenderStudents();
+    });
+
+    let isNewAdmissionsFiltered = false;
+    newAdmissionsBtn.addEventListener('click', () => {
+        isNewAdmissionsFiltered = !isNewAdmissionsFiltered;
+        if (isNewAdmissionsFiltered) {
             newAdmissionsBtn.classList.remove('btn-outline-info');
             newAdmissionsBtn.classList.add('btn-info');
-            // Reset other filters for a clean "new admissions" view
             filterClassDropdown.value = '';
             filterDivisionDropdown.value = '';
             filterDivisionDropdown.disabled = true;
             studentSearchInput.value = '';
         } else {
-            // Remove new admissions filter
             newAdmissionsBtn.classList.remove('btn-info');
             newAdmissionsBtn.classList.add('btn-outline-info');
         }
-        filterAndRenderStudents(); // Re-filter
+        currentPage = 1;
+        filterAndRenderStudents();
     });
 
     resetFiltersBtn.addEventListener('click', () => {
@@ -3757,202 +3934,115 @@ window.formatAadhaar = (input) => {
         isNewAdmissionsFiltered = false;
         newAdmissionsBtn.classList.remove('btn-info');
         newAdmissionsBtn.classList.add('btn-outline-info');
-        filterAndRenderStudents(); // Re-filter
+        currentPage = 1;
+        filterAndRenderStudents();
     });
 
-    // Initial render of students and report when the page loads
-    updateFilterDivisions(); // Populate divisions initially
+    // --- Pagination Button Event Listeners ---
+    document.getElementById('prev-page-btn').addEventListener('click', () => {
+        if (currentPage > 1) {
+            currentPage--;
+            renderPaginatedStudents();
+        }
+    });
+
+    document.getElementById('next-page-btn').addEventListener('click', () => {
+        const totalPages = Math.ceil(currentFilteredStudents.length / studentsPerPage);
+        if (currentPage < totalPages) {
+            currentPage++;
+            renderPaginatedStudents();
+        }
+    });
+
+    // --- Export Button Event Listener ---
+    exportStudentsBtn.addEventListener('click', () => {
+        exportFilteredStudentsToCsv(currentFilteredStudents);
+    });
+
+    // Initial render
+    updateFilterDivisions();
     filterAndRenderStudents();
 
     // --- Attach event listener for the full student details modal ---
-    // Use event delegation on the tbody for efficiency
     document.getElementById('student-list-tbody').addEventListener('click', (e) => {
-        const studentNameLink = e.target.closest('.student-name-link'); // Find the closest link
+        const studentNameLink = e.target.closest('.student-name-link');
         if (studentNameLink) {
-            e.preventDefault(); // Prevent default link behavior
+            e.preventDefault();
             const studentId = studentNameLink.dataset.id;
             populateAndShowFullStudentModal(studentId);
         }
+        const adFormButton = e.target.closest('.ad-form-btn');
+        if (adFormButton) {
+            e.preventDefault();
+            const studentId = adFormButton.dataset.id;
+            showAdmissionExtractModal(studentId);
+        }
     });
-
-    const studentListTbody = document.getElementById('student-list-tbody'); // Get this element
-    if (studentListTbody) {
-        studentListTbody.addEventListener('click', (e) => {
-            const adFormButton = e.target.closest('.ad-form-btn');
-            if (adFormButton) {
-                e.preventDefault(); // Prevent default if it's an anchor or form
-                const studentId = adFormButton.dataset.id;
-                showAdmissionExtractModal(studentId);
-            }
-        });
-    }
 
     document.getElementById('print-student-extract-btn')?.addEventListener('click', showAdmissionExtractModal);
-    // In window.renderStudentManagement or relevant setup
-document.getElementById('print-student-details-btn').addEventListener('click', () => {
-    // Here, you would replace the direct print logic with a call to printContentOfDiv
-    const studentName = document.getElementById('fullStudentDetailModalLabel').textContent.replace('Student Details: ', '');
-
-    const customHeader = `
-        <h1 style="text-align:center; color:#0d6efd;">School Management Pro</h1>
-        <h2 style="text-align:center;">Student Profile: ${studentName}</h2>
-        <hr style="border: 1px solid #eee; margin: 15px 0;">
-    `;
-    const customFooter = `
-        <p style="text-align:center; font-size: 0.7em; color: #777; margin-top: 30px;">
-            Generated on ${new Date().toLocaleDateString('en-IN', { dateStyle: 'long' })}
-        </p>
-    `;
-    const modalSpecificCss = `
-        /* Ensure images print well */
-        .img-thumbnail { border: 1px solid #ddd; padding: 5px; background-color: #fff; }
-        /* Any specific overrides for modal content layout if needed */
-        #student-details-printable .row { margin-bottom: 0.5em; }
-        #student-details-printable strong { color: #555; display: inline-block; min-width: 120px; }
-        #student-details-printable h5.text-info { color: #17a2b8 !important; border-bottom: 1px solid #ccc; padding-bottom: 5px; margin-bottom: 10px; }
-    `;
-
-    printContentOfDiv('student-details-printable', `Student Profile - ${studentName}`, {
-        customHeaderHtml: customHeader,
-        customFooterHtml: customFooter,
-        extraCss: modalSpecificCss
+    document.getElementById('print-student-details-btn')?.addEventListener('click', () => {
+        const studentName = document.getElementById('fullStudentDetailModalLabel').textContent.replace('Student Details: ', '');
+        const customHeader = `<h1 style="text-align:center; color:#0d6efd;">School Management Pro</h1>
+                              <h2 style="text-align:center;">Student Profile: ${studentName}</h2>
+                              <hr style="border: 1px solid #eee; margin: 15px 0;">`;
+        const customFooter = `<p style="text-align:center; font-size: 0.7em; color: #777; margin-top: 30px;">
+                                  Generated on ${new Date().toLocaleDateString('en-IN', { dateStyle: 'long' })}
+                              </p>`;
+        const modalSpecificCss = `.img-thumbnail { border: 1px solid #ddd; padding: 5px; background-color: #fff; }
+                                  #student-details-printable .row { margin-bottom: 0.5em; }
+                                  #student-details-printable strong { color: #555; display: inline-block; min-width: 120px; }
+                                  #student-details-printable h5.text-info { color: #17a2b8 !important; border-bottom: 1px solid #ccc; padding-bottom: 5px; margin-bottom: 10px; }`;
+        
+        printContentOfDiv('student-details-printable', `Student Profile - ${studentName}`, {
+            customHeaderHtml: customHeader,
+            customFooterHtml: customFooter,
+            extraCss: modalSpecificCss
+        });
     });
-
-    // The original modal hiding/showing logic after print is no longer needed in this button,
-    // as the new print function handles its own window.
-    // You might still want to close the modal after the print dialog appears, though.
-    const studentDetailModal = bootstrap.Modal.getInstance(document.getElementById('fullStudentDetailModal'));
-    if (studentDetailModal) {
-        // Optional: Close modal after print initiated
-        // studentDetailModal.hide();
-    }
-});
-
 };
 
-/**
- * Filters the student list based on selected criteria and renders the table and report.
- * This is the main function controlling the student management view's dynamic content.
- * @param {string} [genderFilter=null] - Optional. 'M', 'F', or 'all' to filter by gender.
- * If 'all', it clears any previous gender filter.
- */
-function filterAndRenderStudents(genderFilter = null) { // Added genderFilter parameter
-    const filterClassDropdown = document.getElementById('filter-class');
-    const filterDivisionDropdown = document.getElementById('filter-division');
-    const studentSearchInput = document.getElementById('student-search-input');
-    const newAdmissionsBtn = document.getElementById('new-admissions-btn');
-    const studentReportSection = document.getElementById('student-report-section');
-    const admissionReportContent = document.getElementById('admission-report-content');
-    const studentListTbody = document.getElementById('student-list-tbody');
-    const noStudentsMessage = document.getElementById('no-students-message');
 
-    // IMPORTANT: Add this defensive check at the very beginning
-    if (!filterClassDropdown || !filterDivisionDropdown || !studentSearchInput || !newAdmissionsBtn || !studentReportSection || !admissionReportContent || !studentListTbody || !noStudentsMessage) {
-        // The DOM elements for this view are not yet available.
-        // This function was likely triggered by a background data update.
-        // console.log("filterAndRenderStudents: Required DOM elements not found. Skipping render.");
+/**
+ * Creates and downloads a CSV file from the filtered student data.
+ * @param {Array<object>} students - The list of students to export.
+ */
+function exportFilteredStudentsToCsv(students) {
+    if (!students || students.length === 0) {
+        alert('No students to export.');
         return;
     }
 
-    const filterClassId = filterClassDropdown.value;
-    const filterDivision = filterDivisionDropdown.value;
-    const searchTerm = studentSearchInput.value.toLowerCase();
-    const isNewAdmissionsFiltered = newAdmissionsBtn.classList.contains('btn-info'); // Check if the button is active
+    const headers = ["ID", "Admission Number", "Name", "Class", "Division", "Gender", "Admission Date"];
+    const csvRows = [headers.join(',')];
 
-    // This part should reflect how `students` data is loaded for the current user role.
-    // Assuming `students` global array already contains only data the user can access.
-    let currentFilteredStudents = currentUserRole === 'teacher' ?
-        students.filter(s => s.classId === selectedUser.classCharge?.classId && s.division === selectedUser.classCharge?.division) :
-        students;
+    students.forEach(student => {
+        const classInfo = classes.find(c => c.id === student.classId);
+        const className = classInfo ? classInfo.name : 'N/A';
 
-    // Apply Class filter
-    if (filterClassId) {
-        currentFilteredStudents = currentFilteredStudents.filter(s => s.classId === filterClassId);
-    }
+        const row = [
+            `"${student.id || ''}"`,
+            `"${student.admissionNumber || ''}"`,
+            `"${student.name || ''}"`,
+            `"${className}"`,
+            `"${student.division || ''}"`,
+            `"${student.gender || ''}"`,
+            `"${student.admissionDate || ''}"`
+        ];
+        csvRows.push(row.join(','));
+    });
 
-    // Apply Division filter
-    if (filterDivision) {
-        currentFilteredStudents = currentFilteredStudents.filter(s => s.division === filterDivision);
-    }
-
-    // Apply Search Term filter (Admission No. or Name)
-    if (searchTerm) {
-        currentFilteredStudents = currentFilteredStudents.filter(s =>
-            (s.admissionNumber && s.admissionNumber.toLowerCase().includes(searchTerm)) ||
-            (s.name && s.name.toLowerCase().includes(searchTerm))
-        );
-    }
-
-    // --- NEW: Apply Gender Filter ---
-    // If genderFilter is provided explicitly (from clickable report counts)
-    if (genderFilter !== null) {
-        if (genderFilter === 'M' || genderFilter === 'F') {
-            currentFilteredStudents = currentFilteredStudents.filter(s => s.gender === genderFilter);
-        }
-        // If genderFilter is 'all', no specific gender filtering is applied, effectively showing all.
-        // If you had a gender dropdown in the main filter section, you'd update its value here too.
-    }
-    // No `else` for `genderFilter === null` because it means no filter is requested.
-
-
-    // Apply "New Admissions" filter based on current year
-    if (isNewAdmissionsFiltered) {
-        const currentYear = new Date().getFullYear();
-        currentFilteredStudents = currentFilteredStudents.filter(s => {
-            if (s.admissionDate) {
-                const admissionYear = new Date(s.admissionDate).getFullYear();
-                return admissionYear === currentYear;
-            }
-            if (s.admissionNumber) {
-                const parts = s.admissionNumber.split('_');
-                if (parts.length === 3) {
-                    const admissionYearSuffix = parseInt(parts[1], 10);
-                    const fullAdmissionYear = (currentYear - (currentYear % 100)) + admissionYearSuffix; 
-                    return fullAdmissionYear === currentYear;
-                }
-            }
-            return false; 
-        });
-    }
-
-    // Sort the filtered list
-    currentFilteredStudents.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-
-    // Render Student List Table
-    if (currentFilteredStudents.length > 0) {
-        studentListTbody.innerHTML = currentFilteredStudents.map(s => {
-            const cls = classes.find(c => c.id === s.classId);
-            return `<tr>
-                        <td>${s.id||'id'}</td>
-                        <td>${s.admissionNumber || 'N/A'}</td>
-                        <td><a href="#" class="student-name-link fw-bold" data-id="${s.id}">${s.name || 'N/A'}</a></td>
-                        <td>${cls?.name || 'N/A'} - ${s.division || 'N/A'}</td>
-                        ${currentUserRole === 'admin' ? `<td class="text-end">
-                            <button onclick="window.handleEditStudent('${s.id}')" class="btn btn-sm btn-outline-primary me-2" title="Edit"><i class="fas fa-edit"></i></button>
-                            <button onclick="window.handleDelete('students', '${s.id}')" class="btn btn-sm btn-outline-danger" title="Delete"><i class="fas fa-trash-alt"></i></button>
-                            <button onclick="window.showAdmissionExtractModal('${s.id}')" class="btn btn-sm btn-outline-danger" title="ad-form"><i class="fas fa-form-alt"></i></button>
-                        </td>` : ''}
-                    </tr>`;
-        }).join('');
-        noStudentsMessage.classList.add('d-none');
-    } else {
-        studentListTbody.innerHTML = '';
-        noStudentsMessage.classList.remove('d-none');
-    }
-
-    // Generate and Render Admission Report (this will re-run based on the currently displayed list)
-    // Pass the currently filtered list to generateAdmissionReport
-    if (currentFilteredStudents.length > 0) {
-        studentReportSection.classList.remove('d-none');
-        if(genderFilter===null){
-       generateAdmissionReport(currentFilteredStudents, admissionReportContent);
-        }
-    } else {
-        studentReportSection.classList.add('d-none');
-        admissionReportContent.innerHTML = '';
-    }
+    const csvString = csvRows.join('\n');
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    
+    const date = new Date().toISOString().slice(0, 10);
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute('download', `student_list_${date}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    alert(`Successfully exported ${students.length} students to CSV.`);
 }
-
 
 /**
  * Displays the Admission Extract (FORM 3) for a specific student in a modal.
@@ -4417,7 +4507,7 @@ function applyReportFiltersToMainList(classId, division, gender) {
         filterDivisionDropdown.value = division;
         // Call filterAndRenderStudents with the new gender parameter
         // This will trigger the final re-render of the student list.
-        filterAndRenderStudents(gender);
+       // filterAndRenderStudents(gender);
     }, 50); // Small delay to ensure division dropdown is populated
 }
 
@@ -5307,75 +5397,6 @@ async function renderResultsTab() {
  * @param {string} division
  */
 
- /**
- * Creates a print-friendly view of a container, converting a canvas chart to an image.
- * @param {string} printableAreaId - The ID of the div that contains all content to print.
- * @param {string} canvasId - The ID of the canvas element to convert to an image.
- * @param {string} reportTitle - The main title for the printed report.
- * @param {string} reportSubtitle - The subtitle for the printed report.
- */
-function printReportWithChart(printableAreaId, canvasId, reportTitle, reportSubtitle) {
-    const printableArea = document.getElementById(printableAreaId);
-    const canvas = document.getElementById(canvasId);
-    if (!printableArea || !canvas) {
-        showAlert('Report content not found for printing.', 'danger');
-        return;
-    }
-
-    // Convert the canvas to a static image
-    const chartImageURL = canvas.toDataURL('image/png', 1.0);
-
-    // Clone the printable content to avoid modifying the live page
-    const contentToPrint = printableArea.cloneNode(true);
-    
-    // Replace the canvas in the cloned content with the image
-    const canvasInClone = contentToPrint.querySelector('#' + canvasId);
-    if (canvasInClone) {
-        const chartImage = document.createElement('img');
-        chartImage.src = chartImageURL;
-        chartImage.style.maxWidth = '100%';
-        chartImage.style.height = 'auto';
-        canvasInClone.parentNode.replaceChild(chartImage, canvasInClone);
-    }
-    
-    // Create a new window for printing
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(`
-        <html>
-            <head>
-                <title>${reportTitle}</title>
-                <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-                <style>
-                    body { font-family: 'Inter', sans-serif; padding: 20px; }
-                    @page { 
-                        size: A4 landscape; 
-                        margin: 1cm; 
-                    }
-
-                    .table { font-size: 0.75rem; } /* Slightly smaller for landscape */
-                    .table th, .table td { padding: 0.1rem; vertical-align: middle; }
-                    .report-header { text-align: center; margin-bottom: 1.5rem; border-bottom: 1px solid #dee2e6; padding-bottom: 1rem; }
-                    img { page-break-inside: avoid; } /* Prevent chart image from splitting across pages */
-                </style>
-
-            </head>
-            <body>
-                <div class="report-header">
-                    <h4>${schoolDetails.name || 'School Management Pro'}</h4>
-                    <h3>${reportTitle}</h3>
-                    <p class="text-muted mb-0">${reportSubtitle}</p>
-                </div>
-                ${contentToPrint.innerHTML}
-            </body>
-        </html>
-    `);
-
-    printWindow.document.close();
-    setTimeout(() => { // Timeout to ensure content and styles are loaded
-        printWindow.focus();
-        printWindow.print();
-    }, 500);
-}
 async function generateExamWiseResultsTable(examId, classId, division) {
     const container = document.getElementById('exam-wise-results-container');
     if (!container) return; // Guard clause
@@ -6831,41 +6852,7 @@ function renderReportCardTab(initialStudentId = null, initialExamId = null) {
     }
 }
 
-/**
- * Handles printing for the generated student report card.
- * @param {string} reportTitle - The title for the print document.
- */
-function printReportCard(reportTitle) {
-    const contentToPrint = document.getElementById('report-card-printable');
-    if (!contentToPrint) {
-        showAlert('Report card content not found for printing.', 'danger');
-        return;
-    }
 
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(`
-        <html>
-            <head>
-                <title>${reportTitle}</title>
-                <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-                <style>
-                    body { font-family: 'Inter', sans-serif; }
-                    @page { size: A4; margin: 1.5cm; }
-                </style>
-            </head>
-            <body>
-                ${contentToPrint.innerHTML}
-            </body>
-        </html>
-    `);
-
-    printWindow.document.close();
-    setTimeout(() => {
-        printWindow.focus();
-        printWindow.print();
-        printWindow.close();
-    }, 250);
-}
 
 function renderRankListTab() {
             const container = document.getElementById('pills-ranklist');
@@ -14227,178 +14214,6 @@ function getDragAfterElement(container, y) {
     }, { offset: Number.NEGATIVE_INFINITY }).element;
 }
 
-/**
- * Prints the content of a specified HTML div, optimized for a professional-looking report/PDF.
- *
- * @param {string} divId - The ID of the div element whose content is to be printed.
- * @param {string} title - The title for the print document (appears in browser tab/PDF title).
- * @param {object} [options={}] - Configuration options for the print output.
- * @param {string} [options.customHeaderHtml=''] - Custom HTML to prepend to the printable content.
- * @param {string} [options.customFooterHtml=''] - Custom HTML to append to the printable content.
- * @param {string} [options.extraCss=''] - Additional CSS rules to apply specifically to the print window.
- * @param {string} [options.pageSize='A4 portrait'] - Paper size and orientation (e.g., 'A4 portrait', 'Letter landscape').
- * @param {string} [options.pageMargins='1cm'] - CSS margin value for the print page (e.g., '1cm', '0.5in', '10mm').
- */
-function printContentOfDiv(divId, title = 'Report', options = {}) {
-    const {
-        customHeaderHtml = '',
-        customFooterHtml = '',
-        extraCss = '',
-        pageSize = 'A4 portrait', // Default to A4 portrait
-        pageMargins = '0.5cm' // Default to 1cm margins
-    } = options;
-
-    const contentEl = document.getElementById(divId);
-    if (!contentEl) {
-        showAlert('Could not find content to print.', 'danger');
-        return;
-    }
-
-    // Clone the content to avoid modifying the live DOM
-    const contentToPrint = contentEl.cloneNode(true);
-
-    // Handle .printable-group for page breaks (if used, e.g., in Reports module)
-    const groups = contentToPrint.querySelectorAll('.printable-group');
-    if (groups.length > 0) {
-        groups.forEach(group => {
-            const headerNode = document.createElement('div');
-            headerNode.innerHTML = customHeaderHtml;
-            group.insertBefore(headerNode, group.firstChild);
-        });
-    }
-
-    // Create a new window for printing
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-        showAlert('Please allow pop-ups for this website to print the report.', 'warning');
-        return;
-    }
-
-    printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>${title}</title>
-                <!-- Include Bootstrap CSS for consistent styling -->
-                <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-                <style>
-                    /* --- General Print Styles --- */
-                    body {
-                        font-family: 'Inter', sans-serif; /* Use your app's font */
-                        margin: 0; /* Reset default body margin */
-                        padding: 0; /* Reset default body padding */
-                        color: #333; /* Darker text for print clarity */
-                    }
-                    
-                    /* Page setup for print */
-                    @page {
-                        size: ${pageSize}; /* A4 portrait, Letter landscape, etc. */
-                        margin: ${pageMargins}; /* Minimal margins for more content */
-                        /* Optional: Add headers/footers for print here */
-                        /* @top-center { content: "${title}"; } */
-                        /* @bottom-center { content: counter(page); } */
-                    }
-
-                    /* Ensure all elements are visible and print correctly */
-                    * {
-                        box-sizing: border-box;
-                        -webkit-print-color-adjust: exact !important; /* Forces background colors/images to print */
-                        print-color-adjust: exact !important;
-                    }
-
-                    /* Hide elements not meant for print */
-                    .no-print {
-                        display: none !important;
-                    }
-
-                    /* --- Table Specific Styles --- */
-                    table {
-                        width: 100%;
-                        border-collapse: collapse;
-                        font-size: 0.85rem; /* Slightly larger for readability than 0.8rem */
-                        margin-bottom: 1rem; /* Space after tables */
-                    }
-                    th, td {
-                        border: 1px solid #ccc; /* Lighter border */
-                        padding: 0.5rem 0.75rem; /* More padding for readability */
-                        text-align: left;
-                        vertical-align: top; /* Align text to top in cells */
-                    }
-                    thead th {
-                        background-color: #e9ecef; /* Lighter header background */
-                        font-weight: bold;
-                        color: #495057;
-                    }
-                    tbody tr:nth-child(even) {
-                        background-color: #f8f9fa; /* Zebra striping for readability */
-                    }
-                    /* Ensure borders are visible on print */
-                    table, th, td {
-                        border-color: #dee2e6 !important;
-                    }
-
-                    /* --- Header/Footer/Group Specific Styles --- */
-                    .report-header {
-                        text-align: center;
-                        margin-bottom: 2rem;
-                        padding-bottom: 1rem;
-                        border-bottom: 1px solid #eee;
-                    }
-                    .report-header h1, .report-header h2, .report-header h3, .report-header h4, .report-header h5 {
-                        margin-top: 0;
-                        margin-bottom: 0.5rem;
-                        color: #343a40;
-                    }
-                    .report-header p {
-                        margin-bottom: 0.25rem;
-                        font-size: 0.95rem;
-                        color: #6c757d;
-                    }
-                    
-                    /* Page breaks for groups (if applicable) */
-                    .printable-group {
-                        page-break-before: always; /* Start each group on a new page */
-                        padding-top: 1rem; /* Padding at top of new page */
-                    }
-                    .printable-group:first-child {
-                        page-break-before: auto; /* Don't break before the very first group */
-                        padding-top: 0;
-                    }
-                    
-                    /* Ensure no content is cut off */
-                    img, table, pre, blockquote {
-                        page-break-inside: avoid;
-                    }
-
-                    /* Additional custom CSS passed in options */
-                    ${extraCss}
-                </style>
-            </head>
-            <body>
-                <div style="padding: ${pageMargins};"> <!-- Apply padding to body content for consistent margins -->
-                    ${groups.length === 0 ? customHeaderHtml : ''} <!-- Render header only if no groups, otherwise groups handle it -->
-                    ${contentToPrint.innerHTML}
-                    ${customFooterHtml}
-                </div>
-            </body>
-        </html>
-    `);
-
-    printWindow.document.close();
-    printWindow.focus(); // Focus the new window
-    // Use a slightly longer timeout to ensure all assets (like images) are loaded before printing
-    setTimeout(() => {
-        try {
-            printWindow.print();
-            printWindow.close(); // Close the print window after printing
-        } catch (e) {
-            console.error("Error during print:", e);
-            showAlert("Printing failed. Please check your browser's print settings.", "danger");
-        }
-    }, 500); // Increased timeout for better reliability
-}
 
 // --- MODAL CREATION FUNCTIONS ---
 function createRelatedFieldModal() {
@@ -17148,9 +16963,6 @@ function renderMyEventsList() {
 
 
 
-
-
-
     window.renderTimetableManagement = () => {
     mainContent.innerHTML = `
         <h1 class="h2 mb-4">Timetable Management</h1>
@@ -19499,180 +19311,6 @@ let hallTicketDivision = null;
 let hallTicketExamId = null; // Added this variable for Hall Ticket's exam selection
 
 
-        /**
- * Renders the Hall Ticket Generation tab content.
- */
-function renderExamControlHallTicketTab() {
-    const container = document.getElementById('exam-control-hall-ticket');
-    if (!container) return;
-
-    const classOptions = classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-
-    container.innerHTML = `
-        <div class="ui-card mb-4">
-            <h5 class="section-header">Generate Hall Tickets</h5>
-            <div class="row g-3 align-items-end">
-                <div class="col-md-3">
-                    <label class="form-label" for="hall-ticket-exam-select">Select Exam</label>
-                    <select id="hall-ticket-exam-select" class="form-select">
-                        <option value="">-- Select Exam --</option>
-                        ${exams.map(e => `<option value="${e.id}">${e.name}</option>`).join('')}
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label" for="hall-ticket-class-select">Select Class</label>
-                    <select id="hall-ticket-class-select" class="form-select">
-                        <option value="">-- Select Class --</option>
-                        ${classOptions}
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label" for="hall-ticket-division-select">Select Division</label>
-                    <select id="hall-ticket-division-select" class="form-select" disabled>
-                        <option value="">-- Select Division --</option>
-                    </select>
-                </div>
-                <div class="col-md-3 d-grid">
-                    <button id="generate-all-hall-tickets-btn" class="btn btn-primary" disabled>Generate All Hall Tickets</button>
-                </div>
-            </div>
-            <div id="hall-ticket-student-list-container" class="mt-4">
-                <p class="text-muted text-center p-4">Select an exam, class and division to load students.</p>
-            </div>
-        </div>
-        
-        <div class="modal fade" id="hallTicketModal" tabindex="-1" aria-labelledby="hallTicketModalLabel" aria-hidden="true">
-            <div class="modal-dialog modal-xl modal-dialog-scrollable">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="hallTicketModalLabel">Hall Ticket Preview</h5>
-                        <button type="button" class="btn-close no-print" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <div class="modal-body" id="hall-ticket-modal-body">
-                        </div>
-                    <div class="modal-footer no-print">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                        <button type="button" class="btn btn-primary" id="print-hall-ticket-btn"><i class="fas fa-print me-2"></i>Print Hall Ticket</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-
-    const examSelect = document.getElementById('hall-ticket-exam-select');
-    const classSelect = document.getElementById('hall-ticket-class-select');
-    const divisionSelect = document.getElementById('hall-ticket-division-select');
-    const generateAllBtn = document.getElementById('generate-all-hall-tickets-btn');
-    const studentListContainer = document.getElementById('hall-ticket-student-list-container');
-
-    // --- NEW LOCAL VARIABLE TO STORE THE CURRENTLY DISPLAYED STUDENTS ---
-    let currentStudentsForHallTicket = [];
-
-    const loadStudentsForHallTicket = () => {
-        hallTicketClassId = classSelect.value;
-        hallTicketDivision = divisionSelect.value;
-        hallTicketExamId = examSelect.value;
-
-        if (hallTicketExamId && hallTicketClassId && hallTicketDivision) {
-            // displayHallTicketStudentList will now return the filtered list of students
-            currentStudentsForHallTicket = displayHallTicketStudentList(hallTicketExamId, hallTicketClassId, hallTicketDivision);
-            generateAllBtn.disabled = (currentStudentsForHallTicket.length === 0); // Disable if no students found
-        } else {
-            studentListContainer.innerHTML = `<p class="text-muted text-center p-4">Select an exam, class and division to load students.</p>`;
-            generateAllBtn.disabled = true;
-            currentStudentsForHallTicket = []; // Clear student list
-        }
-    };
-
-    examSelect.addEventListener('change', loadStudentsForHallTicket);
-
-    classSelect.addEventListener('change', () => {
-        const selectedClass = classes.find(c => c.id === classSelect.value);
-        divisionSelect.innerHTML = '<option value="">-- Select Division --</option>';
-        if (selectedClass) {
-            divisionSelect.disabled = false;
-            selectedClass.divisions.forEach(d => {
-                const option = document.createElement('option');
-                option.value = d;
-                option.textContent = d;
-                divisionSelect.appendChild(option);
-            });
-        } else {
-            divisionSelect.disabled = true;
-        }
-        loadStudentsForHallTicket();
-    });
-
-    divisionSelect.addEventListener('change', loadStudentsForHallTicket);
-
-    generateAllBtn.addEventListener('click', () => {
-        if (currentStudentsForHallTicket.length === 0) {
-            showAlert('No students found for generating hall tickets for the selected exam, class, and division.', 'info');
-            return;
-        }
-
-        let allHallTicketsHtml = '';
-        currentStudentsForHallTicket.forEach(student => { // Iterate through the stored list
-            allHallTicketsHtml += generateSingleHallTicketHTML(student.id, hallTicketExamId);
-        });
-
-        const printWindow = window.open('', '_blank');
-        if (!printWindow) { showAlert('Please allow pop-ups to generate and print.', 'warning'); return; }
-        printWindow.document.write(`
-            <!DOCTYPE html><html><head><title>All Hall Tickets</title>
-            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-            <style>
-                body { font-family: 'Inter', sans-serif; margin: 0; padding: 0; }
-                /* The .hall-ticket-page ensures each ticket is a logical "page" for print */
-                
-                .hall-ticket-page:last-child { page-break-after: avoid; } /* No break after last one */
-                @media print {
-                    .hall-ticket-page {
-                        border: none !important;
-                        margin: 0 !important;
-                        padding: 1.5cm !important;
-                        box-shadow: none !important;
-                    }
-                    /* Ensure headers/footers/logos print correctly */
-                    img, h1, h2, h3, h4, h5, p, table, hr {
-                        -webkit-print-color-adjust: exact !important;
-                        print-color-adjust: exact !important;
-                    }
-                }
-            </style>
-            </head><body>
-            ${allHallTicketsHtml}
-            </body></html>
-        `);
-       // printWindow.document.close();
-        printWindow.focus();
-        setTimeout(() => { printWindow.print(); printWindow.close(); }, 500);
-    });
-
-    document.getElementById('print-hall-ticket-btn')?.addEventListener('click', () => {
-        const modalBody = document.getElementById('hall-ticket-modal-body');
-        if (modalBody) {
-            printContentOfDiv('hall-ticket-modal-body', 'Hall Ticket', {
-                pageSize: 'A4 portrait',
-                pageMargins: '0.5cm',
-                extraCss: `
-                    .modal-body { overflow: visible !important; }
-                    .hall-ticket-content { width: 100%; height: auto; margin: 0; padding: 0; }
-                    .hall-ticket-page { /* For individual print from modal, treat the content as a single page */
-                        width: 210mm; 
-                        height: 297mm; 
-                        padding: 1.5cm;
-                        box-sizing: border-box;
-                        page-break-after: auto !important; /* Don't force break after single ticket in modal print */
-                        border: none !important;
-                        margin: 0 !important;
-                        box-shadow: none !important;
-                    }
-                `
-            });
-        }
-    });
-}
 
         /**
  * Displays the list of students for Hall Ticket generation.
@@ -20745,31 +20383,8 @@ const updateGlobalDataAndCache = async (collectionName, data) => {
 'my-fest-events': window.renderMyFestEvents,
 'fest-scoreboard': window.renderFestScoreboard,
 'timetable-mgt': window.renderTimetableManagement,
-    'class-timetable': window.renderClassTimetableView,
-    
-    
-
-
-        
-        };
-        
-        // Start App
-        initializeAppAndAuth();
-
-        
-    </script>
-    <script src="https://cdn.jsdelivr.net/npm/davidshimjs-qrcodejs/qrcode.min.js"></script>
-     <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <!-- Cropper CSS -->
-<link href="https://cdn.jsdelivr.net/npm/cropperjs@1.5.13/dist/cropper.min.css" rel="stylesheet">
-
-<!-- Bootstrap & Cropper JS (at end of body) -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/cropperjs@1.5.13/dist/cropper.min.js"></script>
-<script>
-
-    // 1. Initialize Dexie DB (once at app start)
+    'class-timetable': window.renderClassTimetableView
+};      
 const appDb = new Dexie("SchoolAppDB");
 appDb.version(3.1).stores({
     classes: "id,name", // Define primary key 'id' and index 'name'
@@ -20777,70 +20392,55 @@ appDb.version(3.1).stores({
     teachers: "id,name",
     // ... other collections you want to cache
 });
-async function getStudentsData(studentId = null) {
+
+ export async function getStudentsData(studentId = null) {
     if (studentId) {
-        // Try to get a single student
         let student = null;
-        try {
-            // First, check if already in the global array (fastest)
-            student = students.find(s => s.id === studentId);
-            if (!student) {
-                // If not in global array, try IndexedDB
-                student = await appDb.students.get(studentId);
-                // If found in IndexedDB, update global array to ensure consistency for future fast lookups
-                if (student && !students.some(s => s.id === student.id)) {
-                    // This is a simplistic update for one student. For bulk updates, rely on `onSnapshot`.
-                    // It might be better to just return the data without modifying the global array here,
-                    // as the global array is meant to be the full, synced source.
-                    // For now, let's keep it simple: just fetch.
-                }
-            }
-        } catch (error) {
-            console.error(`Error getting student ${studentId} from IndexedDB:`, error);
-        }
-        return student;
-    } else {
+        
         // Get all students
         let allStudents = [];
         try {
-            // Prefer IndexedDB for the full list
+            // AWAIT the result from IndexedDB
             allStudents = await appDb.students.toArray();
-            // If IndexedDB is empty but global `students` has data (e.g., still syncing after page load),
-            // you might want a fallback or an explicit check.
-            // However, the `waitForCollectionLoad` handles populating `students` from IndexedDB.
-            // So, generally, if `getStudentsData()` is called after `waitForCollectionLoad('students')` resolves,
-            // `appDb.students` should contain the data.
+            
             if (allStudents.length === 0 && students.length > 0) {
-                 // Fallback if IndexedDB somehow cleared but global array is still populated
-                 // This shouldn't happen often if sync is robust, but good for safety.
-                 console.warn("IndexedDB students empty, falling back to global array.");
-                 return students;
+               console.warn("IndexedDB students empty, falling back to global array.");
+               return students;
             }
         } catch (error) {
             console.error("Error getting all students from IndexedDB:", error);
-            // If IndexedDB fails, fall back to the in-memory global array
-            return students;
+            return students; // Fallback
         }
         return allStudents;
     }
-}
+} 
+/**
+ * A generic, reusable function to get data from any store.
+ * Implements a "cache-first, then network" strategy.
+ *
+ * @param {string} storeName - The name of the store/collection (e.g., 'students').
+ * @param {object} [queryObj=null] - An optional query object, e.g., { classId: 'CLASS10', division: 'A' }.
+ * @returns {Promise<Array|object|null>} A promise that resolves to the query result.
+ */
+// This is the corrected version of the function.
+// Notice the `async` keyword and the `await` before the database calls.
 
 
 //let students = Objects.values(appDb.students.toArray());
 
-    const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
+const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
 const sidebarCloseBtn = document.getElementById('sidebar-close-btn');
 const sidebarOverlay = document.getElementById('sidebar-overlay');
 
 // Function to show the sidebar
-function showSidebar() {
+export function showSidebar() {
     sidebar.classList.add('show');
     sidebarOverlay.classList.add('show');
     document.body.style.overflow = 'hidden'; // Prevent scrolling main content when sidebar is open
 }
 
 // Function to hide the sidebar
-function hideSidebar() {
+export function hideSidebar() {
     sidebar.classList.remove('show');
     sidebarOverlay.classList.remove('show');
     document.body.style.overflow = ''; // Restore scrolling
@@ -20889,7 +20489,7 @@ window.addEventListener('resize', () => {
 
 const offlineIndicator = document.getElementById('offline-indicator');
 
-function handleOffline() {
+export function handleOffline() {
     if (offlineIndicator) offlineIndicator.style.display = 'block';
     showAlert('You are offline. Functionality will be limited.', 'warning');
     // Detach Firebase listeners to prevent console errors and unnecessary retries
@@ -20904,7 +20504,7 @@ function handleOffline() {
     }
 }
 
-function handleOnline() {
+export function handleOnline() {
     if (offlineIndicator) offlineIndicator.style.display = 'none';
     showAlert('You are back online!', 'success');
     // Re-initialize data listeners if a user is logged in to get the latest data
@@ -20938,35 +20538,20 @@ window.addEventListener('beforeunload', (event) => {
         event.returnValue = '';
     }
 });
-function printExamTimetable () {
-    const printContents = document.getElementById('timetable-display-container')?.innerHTML;
-    if (!printContents) return alert("No timetable available to print.");
 
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(`
-        <html>
-            <head>
-                <title>Exam Timetable</title>
-                <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-                <style>
-                    body { font-family: Arial, sans-serif; padding: 20px; }
-                    h4 { margin-top: 20px; }
-                    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-                    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-                    thead { background-color: #f8f9fa; }
-                </style>
-            </head>
-            <body>
-                <h2 class="mb-4">Exam Timetable</h2>
-                ${printContents}
-                
-            </body>
-        </html>
-    `);
-    printWindow.document.close();
-};
+        // Start App
+        initializeAppAndAuth();
 
+        
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/davidshimjs-qrcodejs/qrcode.min.js"></script>
+     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Cropper CSS -->
+<link href="https://cdn.jsdelivr.net/npm/cropperjs@1.5.13/dist/cropper.min.css" rel="stylesheet">
 
-</script>
+<!-- Bootstrap & Cropper JS (at end of body) -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/cropperjs@1.5.13/dist/cropper.min.js"></script>
+
 </body>
 </html>
