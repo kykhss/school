@@ -8817,35 +8817,53 @@ window.rejectPayment = async (transactionId) => {
             document.getElementById('modal-balance-due').textContent = `₹ ${balance.toFixed(2)}`;
 
             const generateQRCode = () => {
-                const amount = parseFloat(amountInput.value);
-                const qrContainer = document.getElementById('qr-code-container');
-                const upiLinkButton = document.getElementById('pay-with-upi-app-btn');
-                const upiUriDisplay = document.getElementById('upi-uri-display');
+    const amountInput = document.getElementById('payment-amount');
+    const amount = parseFloat(amountInput.value);
+    const qrContainer = document.getElementById('qr-code-container');
+    const upiLinkButton = document.getElementById('pay-with-upi-app-btn');
+    const upiUriDisplay = document.getElementById('upi-uri-display');
 
-                if (isNaN(amount) || amount <= 0) {
-                    qrContainer.innerHTML = '<p class="text-center text-muted" style="padding-top: 5rem;">Enter a valid amount to generate the QR Code.</p>';
-                    if (upiLinkButton) {
-                        upiLinkButton.href = '#';
-                        upiLinkButton.classList.add('disabled');
-                    }
-                    upiUriDisplay.textContent = 'UPI link will appear here.';
-                    return;
-                }
+    // **IMPROVEMENT**: If amount is invalid, show a message instead of a blank box.
+    if (isNaN(amount) || amount <= 0) {
+        qrContainer.innerHTML = '<p class="text-center text-muted" style="padding-top: 5rem;">Enter a valid amount to generate the QR Code.</p>';
+        upiLinkButton.href = '#'; // Disable the mobile payment link
+        upiLinkButton.classList.add('disabled'); // Add disabled style
+        upiUriDisplay.textContent = 'UPI link will appear here.';
+        return;
+    }
 
-                if (upiLinkButton) upiLinkButton.classList.remove('disabled');
+    // If amount is valid, enable the button
+    upiLinkButton.classList.remove('disabled');
 
-                const transactionNote = `ADMN${selectedUser.admissionNumber}-PYMT-${Date.now()}`;
-                const upiURI = `upi://pay?pa=${schoolDetails.upiId}&pn=${encodeURIComponent(schoolDetails.upiPayeeName)}&am=${amount.toFixed(2)}&cu=INR&tn=${transactionNote}`;
-                
-                qrContainer.innerHTML = '';
-                new QRCode(qrContainer, { text: upiURI, width: 220, height: 220 });
-                upiUriDisplay.textContent = upiURI;
-                if (upiLinkButton) upiLinkButton.href = upiURI;
-            };
+    const transactionRefId = generateUniqueTransactionId();
 
-            generateQRCode(); // Generate initial QR code when modal opens
-            amountInput.addEventListener('input', generateQRCode); // Update QR code on amount change
-        });
+    // **CHANGE 2: Create a more descriptive Transaction Note (tn)**
+    // The note should contain specific details to make it look less generic.
+    const transactionNote = `Fee Payment for Admn No: ${selectedUser.admissionNumber} - Student: ${selectedUser.name}`;
+    
+
+    const merchantCode = '5551'; // Example: Educational Services. Use your actual code if you have it.
+
+    const upiURI = `upi://pay?pa=${schoolDetails.upiId}&pn=${encodeURIComponent(schoolDetails.upiPayeeName)}&am=${amount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(transactionNote)}&tr=${transactionRefId}&mc=${merchantCode}`;
+
+
+    // --- Update QR Code ---
+    qrContainer.innerHTML = ''; // Clear previous content
+    new QRCode(qrContainer, {
+        text: upiURI,
+        width: 220,
+        height: 220,
+    });
+    upiUriDisplay.textContent = upiURI;
+
+    // --- Update the Mobile Button Link ---
+    upiLinkButton.href = upiURI;
+};
+    // Generate initial QR code and add listener for amount changes
+    generateQRCode();
+    amountInput.addEventListener('input', generateQRCode);
+});
+
     }
 };
 
