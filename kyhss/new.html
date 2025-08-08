@@ -21554,7 +21554,7 @@ const updateGlobalDataAndCache = async (collectionName, data) => {
 
 const appDb = new Dexie("SchoolAppDB");
 // Increment the version number if you are changing the schema
-appDb.version(3.6).stores({
+appDb.version(3.7).stores({
     classes: "&id, name", // &id means primary key and must be unique
     subjects: "&id, name",
     students: "&id, classId, division, admissionNumber, name",
@@ -21576,7 +21576,14 @@ appDb.version(3.6).stores({
     bookIssuances: "&id, studentId, bookId, status",
     // You can also cache fee data, but be mindful of financial year changes
     feeStructures: "&id, financialYear, feeHead, classId, stage",
-    studentFeeSetups: "&id, financialYear, classId, division"
+    studentFeeSetups: "&id, financialYear, classId, division",
+    //festAssociates
+    fests:"&id",
+    festHouses:"&id",
+    festEvents:"&id",
+    festSettings:"&id",
+    festRegistrations:"&id",
+    festResults:"&id",
 });
     
  export async function getStudentsData(studentId = null) {
