@@ -12,8 +12,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://unpkg.com/cropperjs/dist/cropper.css" rel="stylesheet">
-   <script src="variables.js"></script>
-
+   
     <style>
         .hall-ticket-page {
             position: relative;
@@ -515,9 +514,11 @@
         let db, auth;
        
         
-        let classes = [], teachers = [], subjects = [],  exams = [], classroomSubjects = [], examSchedules = [], attendance = [], holidays = [], syllabuses = [], syllabusCompletion = [], chapters = [],books = [], bookIssuances = [];
-        let students =[];
+        let classes = [], teachers = [], subjects = [],  exams = [], classroomSubjects = [], examSchedules = [], 
         // marks = [], 
+        
+        
+        attendance = [], holidays = [], syllabuses = [], syllabusCompletion = [], chapters = [],books = [], bookIssuances = [];
         let feeStructures = [], studentFeeSetups = [], receipts = [];
         
         let unsubscribeListeners = [];
@@ -563,7 +564,7 @@ let festParticipantFilters = {
     classId: '' // Stores the last selected Class ID
 };
 
-
+let students =[];
 // Add these to your list of global variables
 let festHouses = [], fests = [], festEvents = [], festRegistrations = [], festResults = [], festSettings = {};
 // --- Global State & Timers ---
@@ -1748,6 +1749,12 @@ function showMainApp() {
                 { id: 'exam-control', icon: 'fa-clipboard-check', text: 'Exam Control' } // New Exam Control
              );
         }
+        if (selectedUser.roles && selectedUser.roles.includes('festmgr')) {
+            dynamicTeacherNav.push(
+               { id: 'fest-mgt', icon: 'fa-trophy', text: 'Fest Management' } // Existing mark entry
+             );
+        }
+        
         navItems = dynamicTeacherNav;
         panelTitle.textContent = "Teacher Panel";
     }
@@ -2334,7 +2341,7 @@ async function renderAdminAttendanceChart() {
     const data = Array(daysInMonth).fill(0);
 
     // --- CHANGE 1: Fetch data using the cache-first getData function ---
-    const monthData = await getData('attendance', {key:'id',value:monthYear});
+    const monthData = await getData('attendance', {'id':monthYear});
     console.log(monthData);
 
     if (monthData) {
@@ -8001,16 +8008,21 @@ async function generateStudentCalendar(studentId, monthYear, containerId, isDash
 
     //const monthDataDoc = await getDoc(getDocRef('attendance', monthYear));
     //const monthData = monthDataDoc.data() || {};
-    const monthData = await getData('attendance', monthYear);
-
+    let  monthData = await getData('attendance', {'id':monthYear});
+       // monthData = Object.values(monthData);
     const [year, month] = monthYear.split('-').map(Number);
     const classKey = `${student.classId}-${student.division}`;
 
     let stats = { present: 0, absent: 0, halfDay: 0, workingDays: 0 };
     
     // --- NEW: Calculate stats based on submitted days ---
-    for (const day in monthData) {
+    for(const data in monthData){
+
+    }
+    for (const day in data) {
+        console.log(day);
         const classData = monthData[day]?.[classKey];
+        console.log(classData);
         if (classData?.status === 'SUBMITTED') {
             stats.workingDays++;
             const studentException = classData.exceptions?.[studentId];
@@ -16309,6 +16321,16 @@ window.renderFestManagement = () => {
     const mainContent = document.getElementById('main-content');
     if (!mainContent) {
         console.error("Fatal Error: #main-content container not found.");
+        return;
+    }
+    const hasAccess = currentUserRole === 'admin' || (currentUserRole === 'teacher' && selectedUser.roles && selectedUser.roles.includes('festmgr'));
+    
+    if (!hasAccess) {
+        mainContent.innerHTML = `
+            <div class="alert alert-danger">
+                <h4>Access Denied</h4>
+                <p>You do not have permission to access this module. Please see your class fest status if applicable.</p>
+            </div>`;
         return;
     }
 
