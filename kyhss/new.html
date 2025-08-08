@@ -466,7 +466,25 @@
     </div>
   </div>
 </div>
-
+<div class="modal fade" id="poster-modal" tabindex="-1" aria-labelledby="posterModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="posterModalLabel">Topper Poster Preview</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body text-center">
+        <img id="poster-image-display" src="" class="img-fluid" alt="Generated Topper Poster">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <a id="save-poster-btn" href="#" class="btn btn-primary" download="topper-poster.png">
+          <i class="fas fa-download me-2"></i>Save Poster
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
    <!-- Cropper CSS -->
 <link href="https://unpkg.com/cropperjs/dist/cropper.min.css" rel="stylesheet"/>
 
@@ -480,7 +498,8 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, addDoc, setDoc, getDoc, getDocs,updateDoc, collection, onSnapshot, deleteDoc, writeBatch, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-       // import {getData, getStudentsData, showSidebar, hideSidebar, printExamTimetable } from "./finalgs.js";
+       //import {getData, getStudentsData, showSidebar, hideSidebar, printExamTimetable,generateTopperPoster } from "./finalgs.js";
+      // import {generateTopperPoster } from "./finalgs.js";
         const mainContent = document.getElementById('main-content');
         const sidebarNav = document.getElementById('sidebar-nav');
          const appId = 'school-management-app';
@@ -501,7 +520,6 @@
         
         
         attendance = [], holidays = [], syllabuses = [], syllabusCompletion = [], chapters = [],books = [], bookIssuances = [];
-;
         let feeStructures = [], studentFeeSetups = [], receipts = [];
         
         let unsubscribeListeners = [];
@@ -575,37 +593,72 @@ schoolDetails = {
             schoolSealPng: 'SEAL.jpg'
         };
 
-        async function getData(storeName, queryObj = null) {
+        // REPLACE your existing getData function with this improved version
+
+// A cleaner, more robust, and more efficient version of your getData function.
+async function getData(storeName, queryObj = null, viewId = null) {
     try {
         const store = appDb[storeName];
         if (!store) {
             console.error(`Store "${storeName}" does not exist in the database.`);
-            return null;
+            return [];
         }
 
-        // 1. First, try to get data from the local cache (IndexedDB)
-        let localData = [];
-        if (queryObj) {
-            localData = await store.where(queryObj).toArray();
+        // 1. --- Query the Local Cache (IndexedDB) ---
+        // Let Dexie do the filtering if a query is provided. It's much faster.
+        let localData = queryObj ? await store.where(queryObj).toArray() : await store.toArray();
+
+        // 2. --- Cache Hit: Data Found Locally ---
+        if (localData.length > 0) {
+            console.log(`IndexedDB Cache HIT for "${storeName}"`);
+            
+            // Hydrate the appropriate global variable (marks object or window[storeName] array)
+            if (storeName === 'marks') {
+                marks = localData.reduce((obj, item) => { obj[item.id] = item; return obj; }, {});
+            } else {
+                window[storeName] = localData;
+            }
+            return localData; // Always return the array for consistency
+        }
+
+        // 3. --- Cache Miss: Fetch from Network if Online ---
+        if (navigator.onLine) {
+            if (viewId) showAlert(`Fetching fresh data for ${viewId.replace(/-/g, ' ')}...`, 'info');
+
+            // Trigger the appropriate listener to sync data from Firestore
+            if (storeName === 'marks') {
+                syncDataForUser();
+            } else {
+                attachDataListeners([storeName]);
+            }
+            
+            // Wait for the initial sync to complete
+            await waitForCollectionLoad(storeName);
+            
+            if (viewId) showAlert(`Data for ${viewId.replace(/-/g, ' ')} loaded.`, 'success');
+            
+            // Now that the cache is populated, read from it again, applying the query
+            let freshData = queryObj ? await store.where(queryObj).toArray() : await store.toArray();
+
+            // Hydrate the global variable with the fresh data
+            if (storeName === 'marks') {
+                marks = freshData.reduce((obj, item) => { obj[item.id] = item; return obj; }, {});
+            } else {
+                window[storeName] = freshData;
+            }
+            return freshData;
+
         } else {
-            localData = await store.toArray();
+            // 4. --- Offline and no data in cache ---
+            showAlert(`You are offline and data for this section is not cached.`, 'warning');
+            return [];
         }
 
-        // 2. Check if data was found locally
-        if (localData.length <= 0) {
-            await attachDataListeners([storeName]);
-            localData = await store.toArray();
-        } 
-        console.log(`Cache HIT for "${storeName}"`);
-            return localData; // Return the fast, local data
     } catch (error) {
         console.error(`Error fetching data from "${storeName}":`, error);
-        return []; // Return an empty array on error
+        return [];
     }
 }
-
-//const students = await getData('students');
-let students =[]
         // exams = [
         //     { id: 'EXAM001', name: 'Term Exam 2025' },
         //     { id: 'EXAM002', name: 'Annual Exam 2025' }
@@ -831,9 +884,63 @@ function updateTeacherAssignedClasses() {
         teacherAssignedClasses = []; // Clear if not a teacher or data not ready
     }
 }
+// --- MODIFY your onLoginSuccess function ---
 
-        
+// --- In your <script type="module"> block ---
+// REPLACE your entire onLoginSuccess function with this one
+
 async function onLoginSuccess(role, user) {
+    currentUserRole = role;
+    selectedUser = user;
+    unsubscribeAllListeners();
+
+    showMainApp(); // Render the main app layout
+
+    if (navigator.onLine) {
+        // --- ONLINE: Fetch all data and populate the cache ---
+        showAlert('Syncing latest data from server...', 'info');
+        try {
+            const collectionsToCache = ['classes', 'subjects', 'students', 'teachers', 'exams', 'classroomSubjects', 'examSchedules', 'holidays', 'books', 'bookIssuances', 'feeStructures', 'studentFeeSetups', 'attendance']; // Added 'attendance'
+
+            // Create an array of promises to fetch all data concurrently
+            const dataPromises = collectionsToCache.map(name => getData(name));
+            
+            // CORRECT: Wait for all data fetching to complete
+            await Promise.all(dataPromises);
+            
+            showAlert('Data sync complete!', 'success');
+
+            // CORRECT: Now that the cache is warm, attach real-time listeners for future updates
+            attachDataListeners(collectionsToCache);
+            // You can re-add your other specific listeners here if needed
+            // attachFeeDataListeners(activeFinancialYear, role, user);
+            // syncDataForUser();
+            
+        } catch (error) {
+            console.error("Initial data sync failed:", error);
+            showAlert("Failed to sync initial data. App may not work correctly offline.", 'danger');
+        }
+    } else {
+        // --- OFFLINE: Load all data from the local cache ---
+        showAlert('You are offline. Loading data from local cache.', 'info');
+        try {
+            // Get all table names directly from Dexie's schema
+            const allTables = appDb.tables.map(table => table.name);
+            for (const name of allTables) {
+                 window[name] = await appDb[name].toArray();
+            }
+        } catch (dbError) {
+            console.error("Error loading data from IndexedDB:", dbError);
+            showAlert("Could not load local data.", "danger");
+        }
+    }
+
+    // After data is loaded (either from network or cache), navigate to dashboard
+    await navigateTo('dashboard');
+}
+
+
+async function onLoginSuccessold (role, user) {
     currentUserRole = role;
     selectedUser = user;
     unsubscribeAllListeners(); // Clean up any previous session listeners
@@ -850,8 +957,8 @@ async function onLoginSuccess(role, user) {
     try {
         showAlert(`Loading essential school data...`, 'info');
         // Initiate listeners for all core collections
-        // attachDataListeners(coreCollections);
-
+        await attachDataListeners(coreCollections);
+        setupInitialMarksListeners();
         // Wait for ALL core collections to deliver their initial snapshot
         const coreCollectionPromises = coreCollections.map(name => waitForCollectionLoad(name));
         await Promise.all(coreCollectionPromises);
@@ -900,7 +1007,7 @@ const viewDependencies = {
     'class-mgt': ['classes'],
     'subject-mgt': ['subjects'],
     'subject-allocation': ['classes', 'subjects', 'teachers', 'classroomSubjects'],
-    'exam-mgt': ['exams', 'classes', 'subjects', 'teachers', 'examSchedules','classroomSubjects'],
+    'exam-mgt': ['marks','exams', 'classes', 'subjects', 'teachers', 'examSchedules','classroomSubjects'],
     'exam-control': ['exams', 'classes', 'subjects', 'teachers', 'examSchedules','classroomSubjects','examRooms', 'examDuties', 'examAbsentees', 'examRegistrationSettings','examRoomAllocationRules'],
     'attendance-mgt': ['students', 'classes', 'holidays', 'attendance'],
     'holiday-mgt': ['holidays'],
@@ -952,12 +1059,7 @@ let activeListeners = {};
  * It does NOT return a Promise directly anymore. Instead, use `waitForCollectionLoad`.
  * @param {string[]} collectionsToWatch - An array of collection names to listen to.
  */
-function attachDataListeners(collectionsToWatch ,main=false) { // No longer `async` and returns void
-    if (!collectionsToWatch || collectionsToWatch.length === 0) {
-        return; // Nothing to watch
-    }
-
-    const collectionMap = {
+const collectionMap = {
         classes: { setter: data => classes = data, renderer: null },
         subjects: { setter: data => subjects = data, renderer: null },
         students: { setter: data => students = data, renderer: null },
@@ -996,7 +1098,17 @@ function attachDataListeners(collectionsToWatch ,main=false) { // No longer `asy
     
     
     };
+function attachDataListeners(collectionsToWatch ,main=false) { // No longer `async` and returns void
+    if (!collectionsToWatch || collectionsToWatch.length === 0) {
+        return; // Nothing to watch
+    }
+if (!navigator.onLine) {
+        showAlert('Offline admin login failed. Credentials do not match cached data.', 'danger');
+        return; // Definitive failure if offline.
+    }
+    
 
+    
     collectionsToWatch.forEach(name => {
 
         
@@ -1107,13 +1219,11 @@ function attachDataListeners(collectionsToWatch ,main=false) { // No longer `asy
 
                 // Update the main global data array for this collection
                 
-                if(name==='students'){
-               // attachDataListenersnew([name]);
-                //updateGlobalDataAndCache(name, Object.values(collectedData));
+               // Set the global variable (like `window.students`)
                 config.setter(Object.values(collectedData));
-            }else{
-                config.setter(Object.values(collectedData));
-            }
+
+                // Sync the entire updated collection to IndexedDB
+                updateGlobalDataAndCache(name, Object.values(collectedData));
 
                 // Check if this is the initial snapshot for all queries for this collection
                 if (!dataLoadStatus[name]) {
@@ -1150,7 +1260,6 @@ function attachDataListeners(collectionsToWatch ,main=false) { // No longer `asy
         activeListeners[name] = () => currentCollectionUnsubs.forEach(unsub => unsub());
     });
 }
-
 
 
 
@@ -1200,27 +1309,21 @@ function attachDataListeners(collectionsToWatch ,main=false) { // No longer `asy
     attachMarksListener(null, classDataArray);
 }
 
+// --- In your <script type="module"> block ---
+// REPLACE your syncDataForUser function with this one
+
 function syncDataForUser() {
-    // First, detach any previous marks listeners to prevent memory leaks or duplicate data
+    // Detach any previous marks listeners to prevent duplicates
     Object.values(activeMarksListeners).forEach(unsub => unsub());
     activeMarksListeners = {};
 
     let queriesToRun = [];
 
-    // 1. Determine the scope based on the user role
+    // 1. Determine the scope based on the user role (this logic remains the same)
     if (currentUserRole === 'admin') {
-        // Admin needs all marks. We create one query for the whole collection.
-        queriesToRun.push({
-            key: 'all_marks',
-            query: getCollectionRef('marks')
-        });
+        queriesToRun.push({ key: 'all_marks', query: getCollectionRef('marks') });
     } else if (currentUserRole === 'teacher') {
-        // Teacher needs marks for every class/division they are assigned to.
-        const teacherAssignments = Object.values(classroomSubjects).filter(cs => cs.teacherId === selectedUser.id);
-        
-        // Get unique class-division pairs to avoid redundant listeners
-        const uniqueClassKeys = [...new Set(teacherAssignments.map(a => `${a.classId}|${a.division}`))];
-
+        const uniqueClassKeys = [...new Set(classroomSubjects.filter(cs => cs.teacherId === selectedUser.id).map(a => `${a.classId}|${a.division}`))];
         uniqueClassKeys.forEach(key => {
             const [classId, division] = key.split('|');
             queriesToRun.push({
@@ -1228,57 +1331,62 @@ function syncDataForUser() {
                 query: query(getCollectionRef('marks'), where('classId', '==', classId), where('division', '==', division))
             });
         });
-
     } else if (currentUserRole === 'student') {
-        // Student only needs their own marks.
         queriesToRun.push({
             key: `student_${selectedUser.id}`,
             query: query(getCollectionRef('marks'), where('studentId', '==', selectedUser.id))
         });
     }
 
-    // 2. Execute all the necessary queries and attach listeners
+    // 2. Execute queries and attach listeners that sync with IndexedDB
     queriesToRun.forEach(qInfo => {
-        // Only attach if a listener for this specific key isn't already active
         if (!activeMarksListeners[qInfo.key]) {
-            const unsubscribe = onSnapshot(qInfo.query, (snapshot) => {
-                // Use docChanges for efficient updates instead of re-reading everything
-                snapshot.docChanges().forEach(change => {
+            const unsubscribe = onSnapshot(qInfo.query, async (snapshot) => {
+                const changes = snapshot.docChanges();
+                if (changes.length === 0) return;
+
+                // Prepare arrays for batch operations
+                const toAddOrUpdate = [];
+                const toDelete = [];
+
+                changes.forEach(change => {
+                    const docData = { id: change.doc.id, ...change.doc.data() };
                     if (change.type === "removed") {
-                        delete marks[change.doc.id]; // Remove deleted marks
+                        delete marks[change.doc.id]; // Update in-memory object
+                        toDelete.push(change.doc.id); // Add ID to delete array for DB
                     } else {
-                        // Add or update the mark in our global 'marks' object
-                        marks[change.doc.id] = { id: change.doc.id, ...change.doc.data() };
+                        marks[change.doc.id] = docData; // Update in-memory object
+                        toAddOrUpdate.push(docData);    // Add full object for DB
                     }
                 });
 
-                // After updating the data, re-render the currently active view if it depends on marks
-                // This is crucial for UI updates.
-                const activeNavId = document.querySelector('#sidebar-nav .nav-link.active')?.id.replace('nav-', '');
-                if (activeNavId === 'exam-mgt' || activeNavId === 'my-results') {
-                     // Find the specific function that renders the active results table to refresh it
-                     // For example, if 'results' tab is active in exam-mgt:
-                     const resultsContainer = document.getElementById('pills-exam-wise');
-                     if(resultsContainer && resultsContainer.classList.contains('active')) {
-                         const examId = document.getElementById('res-exam')?.value;
-                         const classId = document.getElementById('res-class')?.value;
-                         const division = document.getElementById('res-division')?.value;
-                         if (examId && classId && division) {
-                            generateExamWiseResultsTable(examId, classId, division);
-                         }
-                     }
+                // --- Perform efficient batch database operations ---
+                try {
+                    if (toAddOrUpdate.length > 0) {
+                        await appDb.marks.bulkPut(toAddOrUpdate);
+                        console.log(`[Sync] ${toAddOrUpdate.length} mark(s) saved to IndexedDB.`);
+                    }
+                    if (toDelete.length > 0) {
+                        await appDb.marks.bulkDelete(toDelete);
+                        console.log(`[Sync] ${toDelete.length} mark(s) removed from IndexedDB.`);
+                    }
+                } catch (error) {
+                    console.error('Error updating marks in IndexedDB:', error);
                 }
 
             }, (error) => {
                 console.error(`[Firestore] Error listening to marks for ${qInfo.key}:`, error);
             });
-
-            // Store the unsubscribe function so we can clean it up later
+            if (collectionLoadPromises[name] && collectionLoadPromises[name].resolve) {
+                collectionLoadPromises[name].resolve();
+            }
             activeMarksListeners[qInfo.key] = unsubscribe;
         }
     });
 }
-function attachMarksListener(examId, classId, division) {
+
+
+function attachMarksListener(examId, classId, division,refresh=null) {
 
     if (!classId || !division) {
 
@@ -1296,7 +1404,7 @@ function attachMarksListener(examId, classId, division) {
 
     // --- NEW: If a listener for this specific query is already active, do nothing ---
 
-    if (activeMarksListeners[listenerKey]) {
+    if (activeMarksListeners[listenerKey]&&refresh===null) {
 
         // The data is already being synced in real-time. We just need to re-render the table.
 
@@ -1539,6 +1647,8 @@ function attachFeeDataListeners(financialYear, role, user) {
     });
 }
 
+// REPLACE your existing navigateTo function with this optimized version
+
 async function navigateTo(viewId, pushState = true) {
     const mainContent = document.getElementById('main-content');
     if (!mainContent) return;
@@ -1554,18 +1664,25 @@ async function navigateTo(viewId, pushState = true) {
     const requiredCollections = viewDependencies[viewId] || [];
 
     try {
-        // Initiate listeners for required collections
-        attachDataListeners(requiredCollections);
+        // --- THIS IS THE OPTIMIZED LOGIC ---
 
-        // Wait for only the required collections for THIS specific view to be loaded
-        showAlert(`Loading data for ${viewId.replace(/-/g, ' ')}...`, 'info');
-        const viewDataPromises = requiredCollections.map(name => waitForCollectionLoad(name));
-        await Promise.all(viewDataPromises);
-        showAlert(`Data for ${viewId.replace(/-/g, ' ')} loaded.`, 'success');
+        // 1. Create a list of promises for ONLY the collections that are not yet loaded into memory.
+        const dataPromises = requiredCollections
+            .filter(name => !window[name] || window[name].length === 0) // Check if global variable is empty
+            .map(name => getData(name, null, viewId)); // Create a getData() promise only for those that are empty
+
+        // 2. If there are any collections that need fetching, wait for them all to complete.
+        if (dataPromises.length > 0) {
+            console.log(`Fetching missing data for view: ${viewId}`, requiredCollections.filter(name => !window[name] || window[name].length === 0));
+            await Promise.all(dataPromises);
+        }
+
+        // By this point, all required data is guaranteed to be in the global variables (e.g., window.students)
+        // because getData() populates them.
 
         const renderFunc = window.viewRenderers[viewId];
         if (renderFunc) {
-            renderFunc(); // Call the render function only after data is confirmed loaded
+            renderFunc(); // Call the render function
         } else {
             mainContent.innerHTML = `<h1 class="h3">${viewId.replace(/-/g, ' ')}</h1><p>UI under construction or renderer not found.</p>`;
         }
@@ -1573,12 +1690,7 @@ async function navigateTo(viewId, pushState = true) {
         console.error(`Failed to load data for view ${viewId}:`, error);
         mainContent.innerHTML = `<div class="alert alert-danger">Failed to load data for this section. Please try again.</div>`;
     }
-    const renderFunc = window.viewRenderers[viewId];
-        if (renderFunc) {
-            renderFunc(); // Call the render function only after data is confirmed loaded
-        } else {
-            mainContent.innerHTML = `<h1 class="h3">${viewId.replace(/-/g, ' ')}</h1><p>UI under construction or renderer not found.</p>`;
-        }
+    
     // Hide mobile sidebar
     const sidebar = document.getElementById('sidebar');
     const sidebarOverlay = document.getElementById('sidebar-overlay');
@@ -1774,7 +1886,166 @@ function showMainApp() {
         submitButton.innerHTML = originalButtonHtml;
     }
 });
+document.getElementById('login-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
 
+    const submitButton = e.target.querySelector('button[type="submit"]');
+    if (!submitButton) return;
+
+    const originalButtonHtml = submitButton.innerHTML;
+    submitButton.disabled = true;
+    submitButton.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Signing In...`;
+
+    try {
+        const activeRole = document.querySelector('#loginTab .nav-link.active').getAttribute('data-bs-target').replace('#', '').replace('-login-view', '');
+
+        if (activeRole === 'teacher') {
+            const email = document.getElementById('teacher-useremail').value.toLowerCase();
+            const password = document.getElementById('teacher-password').value;
+            if (!email || !password) {
+                showAlert('Please enter email and password.', 'danger');
+                return; // Early exit
+            }
+
+            // 1. --- ALWAYS TRY LOCAL DB FIRST ---
+            const localTeacher = await appDb.teachers.where('email').equalsIgnoreCase(email).first();
+
+            if (localTeacher && password === (localTeacher.mobile || '').slice(-5)) {
+                // 2. --- LOCAL LOGIN SUCCESS ---
+                showAlert('Logged in successfully from local cache.', 'success');
+                onLoginSuccess('teacher', localTeacher);
+                return; // Login successful, stop here.
+            }
+
+            // 3. --- LOCAL LOGIN FAILED, CHECK IF ONLINE TO TRY SERVER ---
+            if (!navigator.onLine) {
+                showAlert('Offline login failed. Credentials do not match cached data.', 'danger');
+                return; // Definitive failure if offline.
+            }
+
+            // 4. --- TRY SERVER (FIREBASE) AS FALLBACK ---
+            const q = query(getCollectionRef('teachers'), where('email', '==', email));
+            const querySnapshot = await getDocs(q);
+
+            if (querySnapshot.empty) {
+                showAlert('Teacher email not found on the server.', 'danger');
+            } else {
+                const teacherDoc = querySnapshot.docs[0];
+                const teacherData = { id: teacherDoc.id, ...teacherDoc.data() };
+                if (password === (teacherData.mobile || '').slice(-5)) {
+                    // 5. --- SERVER LOGIN SUCCESS & CACHE UPDATE ---
+                    await appDb.teachers.put(teacherData); // Update local DB for next time
+                    showAlert('Logged in successfully from server.', 'success');
+                    onLoginSuccess('teacher', teacherData);
+                } else {
+                    showAlert('Incorrect password.', 'danger');
+                }
+            }
+        } else if (activeRole === 'student') {
+            const admnNoSuffix = document.getElementById('student-admn').value.toUpperCase();
+            const dobYear = document.getElementById('student-dob').value;
+            if (!admnNoSuffix || !dobYear) {
+                showAlert('Please enter Admission No. and Year of Birth.', 'danger');
+                return;
+            }
+            
+            // 1. --- ALWAYS TRY LOCAL DB FIRST ---
+            const localStudent = await appDb.students.where('admissionNumber').endsWithIgnoreCase(admnNoSuffix).first();
+
+            if (localStudent && dobYear === (localStudent.dob || '').split('-')[0]) {
+                // 2. --- LOCAL LOGIN SUCCESS ---
+                showAlert('Logged in successfully from local cache.', 'success');
+                onLoginSuccess('student', localStudent);
+                return; // Login successful, stop here.
+            }
+
+            // 3. --- LOCAL LOGIN FAILED, CHECK IF ONLINE TO TRY SERVER ---
+            if (!navigator.onLine) {
+                showAlert('Offline login failed. Credentials do not match cached data.', 'danger');
+                return; // Definitive failure if offline.
+            }
+
+            // 4. --- TRY SERVER (FIREBASE) AS FALLBACK ---
+            const studentsSnapshot = await getDocs(getCollectionRef('students'));
+            let foundStudent = null;
+            studentsSnapshot.forEach(doc => {
+                const studentData = doc.data();
+                if (studentData.admissionNumber && studentData.admissionNumber.toUpperCase().endsWith(admnNoSuffix)) {
+                    foundStudent = { id: doc.id, ...studentData };
+                }
+            });
+            
+            if (foundStudent) {
+                if (dobYear === (foundStudent.dob || '').split('-')[0]) {
+                    // 5. --- SERVER LOGIN SUCCESS & CACHE UPDATE ---
+                    await appDb.students.put(foundStudent); // Update local DB for next time
+                    showAlert('Logged in successfully from server.', 'success');
+                    onLoginSuccess('student', foundStudent);
+                } else {
+                    showAlert('Incorrect year of birth.', 'danger');
+                }
+            } else {
+                showAlert('Student admission number not found on the server.', 'danger');
+            }
+        } // Find the admin login block in your script and REPLACE it with this
+
+else if (activeRole === 'admin') {
+    const email = document.getElementById('admin-user').value.toLowerCase();
+    const password = document.getElementById('admin-pass').value;
+    if (!email || !password) {
+        showAlert('Please enter admin email and password.', 'danger');
+        return; // Early exit
+    }
+
+    // 1. --- ALWAYS TRY LOCAL DB FIRST ---
+    const localAdmin = await appDb.teachers.where('email').equalsIgnoreCase(email).first();
+
+    if (localAdmin && localAdmin.role === 'admin' && password === (localAdmin.mobile || '').slice(-5)) {
+        // 2. --- LOCAL LOGIN SUCCESS ---
+        // The user was found in the local cache, is an admin, and the password matches.
+        showAlert('Logged in as Admin from local cache.', 'success');
+        onLoginSuccess('admin', localAdmin);
+        return; // Login successful, stop here.
+    }
+
+    // 3. --- LOCAL LOGIN FAILED, CHECK IF ONLINE TO TRY SERVER ---
+    if (!navigator.onLine) {
+        showAlert('Offline admin login failed. Credentials do not match cached data.', 'danger');
+        return; // Definitive failure if offline.
+    }
+
+    // 4. --- TRY SERVER (FIREBASE) AS FALLBACK ---
+    showAlert('Checking server for admin credentials...', 'info');
+    const q = query(getCollectionRef('teachers'), where('email', '==', email));
+    const querySnapshot = await getDocs(q);
+
+    if (querySnapshot.empty) {
+        showAlert('Admin user not found in the database.', 'danger');
+    } else {
+        const adminDoc = querySnapshot.docs[0];
+        const adminData = { id: adminDoc.id, ...adminDoc.data() };
+
+        if (adminData.role === 'admin') {
+            if (password === (adminData.mobile || '').slice(-5)) {
+                // 5. --- SERVER LOGIN SUCCESS & CACHE UPDATE ---
+                // The user was found on the server, so we update our local cache for their next login.
+                await appDb.teachers.put(adminData);
+                showAlert('Logged in successfully from server.', 'success');
+                onLoginSuccess('admin', adminData);
+            } else {
+                showAlert('Incorrect password for admin.', 'danger');
+            }
+        } else {
+            showAlert('This user does not have admin privileges.', 'danger');
+        }
+    }
+}
+    } finally {
+        // This block always runs, ensuring the button is restored
+        submitButton.disabled = false;
+        submitButton.innerHTML = originalButtonHtml;
+    }
+});
 
 
         document.getElementById('logout-btn').addEventListener('click', () => {
@@ -1799,6 +2070,7 @@ function showMainApp() {
             }
             let content = '';
             if (currentUserRole === 'admin') {
+                console.log(students);
                 content = `<h1 class="h2 mb-4">Admin Dashboard</h1>
                 <div class="row">
                     <div class="col-xl-3 col-md-6 mb-4"><div class="card border-start-primary shadow h-100 py-2"><div class="card-body"><div class="row no-gutters align-items-center"><div class="col me-2"><div class="text-xs fw-bold text-primary text-uppercase mb-1">Students</div><div class="h5 mb-0 fw-bold text-gray-800">${students.length}</div></div><div class="col-auto"><i class="fas fa-users fa-2x text-body-tertiary"></i></div></div></div></div></div>
@@ -2051,110 +2323,160 @@ function attachSchoolDetailsListeners() {
         }
     });
 }
-        async function renderAdminAttendanceChart() {
-            const ctx = document.getElementById('admin-attendance-chart').getContext('2d');
-            const today = new Date();
-            const monthYear = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
-            const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-            const labels = Array.from({length: daysInMonth}, (_, i) => i + 1);
-            const data = Array(daysInMonth).fill(0);
-            
-            const monthDataDoc = await getDoc(getDocRef('attendance', monthYear));
-            const monthData = monthDataDoc.data() || {};
+        // --- In your <script type="module"> block ---
 
-            for(const day in monthData){
-                const dayIndex = parseInt(day) - 1;
-                if(dayIndex >= 0 && dayIndex < daysInMonth){
-                    const dayRecords = monthData[day];
-                    let absentees = 0;
-                    for(const studentId in dayRecords){
-                        const record = dayRecords[studentId];
-                        if(!record.FN || !record.AN) {
-                            absentees++;
-                        }
+async function renderAdminAttendanceChart() {
+    const ctx = document.getElementById('admin-attendance-chart')?.getContext('2d');
+    if (!ctx) return; // Exit if canvas not found
+
+    const today = new Date();
+    const monthYear = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
+    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    const labels = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+    const data = Array(daysInMonth).fill(0);
+
+    // --- CHANGE 1: Fetch data using the cache-first getData function ---
+    const monthData = await getData('attendance', {key:'id',value:monthYear});
+    console.log(monthData);
+
+    if (monthData) {
+        // --- CHANGE 2: New logic to read "exceptions" ---
+        for (const day in monthData) {
+            // Ensure the key is a day number, not the 'id' field
+            if (isNaN(parseInt(day))) continue;
+
+            const dayIndex = parseInt(day) - 1;
+            if (dayIndex >= 0 && dayIndex < daysInMonth) {
+                const dayRecords = monthData[day]; // This contains all class records for the day
+                let totalAbsenteesForDay = 0;
+
+                // Loop through each class record for the day (e.g., "CLASS10-A", "CLASS10-B")
+                for (const classKey in dayRecords) {
+                    const classData = dayRecords[classKey];
+                    if (classData.status === 'SUBMITTED' && classData.exceptions) {
+                        // The number of absentees is the number of keys in the exceptions object
+                        totalAbsenteesForDay += Object.keys(classData.exceptions).length;
                     }
-                    data[dayIndex] = absentees;
                 }
+                data[dayIndex] = totalAbsenteesForDay;
             }
-
-            attendanceChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Total Absentees',
-                        data: data,
-                        backgroundColor: 'rgba(220, 53, 69, 0.7)',
-                        borderColor: 'rgba(220, 53, 69, 1)',
-                        borderWidth: 1
-                    }]
-                },
-                options: { scales: { y: { beginAtZero: true } } }
-            });
         }
+    }
 
-        async function renderTeacherDashboardData() {
-            const charge = selectedUser.classCharge;
-            if(!charge) return;
-            // Absentees List
-            const todayStr = new Date().toISOString().slice(0, 10);
-            const holiday = holidays.find(h => h.id === todayStr);
-            const listContainer = document.getElementById('today-absent-list');
+    if (attendanceChart) attendanceChart.destroy();
+    attendanceChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Total School-wide Absentees',
+                data: data,
+                backgroundColor: 'rgba(220, 53, 69, 0.7)',
+                borderColor: 'rgba(220, 53, 69, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: { scales: { y: { beginAtZero: true } } }
+    });
+}
 
-            if(holiday){
-                listContainer.innerHTML = `<p class="text-info">Today is a holiday: ${holiday.narration}</p>`;
-            } else {
-                const today = new Date();
-                const monthYear = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
-                const dayStr = today.getDate().toString();
-                const monthDataDoc = await getDoc(getDocRef('attendance', monthYear));
-                const dayRecord = monthDataDoc.data()?.[dayStr] || {};
-                const classStudents = students.filter(s => s.classId === charge.classId && s.division === charge.division);
-                const absentees = classStudents.filter(s => !dayRecord[s.id] || !dayRecord[s.id].FN || !dayRecord[s.id].AN);
+/**
+ * Renders the attendance bar chart for the teacher's dashboard.
+ * @param {object} charge - The teacher's class charge object { classId, division }.
+ */
+async function renderTeacherAttendanceChart(charge) {
+    const ctx = document.getElementById('teacher-attendance-chart')?.getContext('2d');
+    // Exit if the canvas element isn't on the page or if there's no class charge info
+    if (!ctx || !charge) return;
+
+    const today = new Date();
+    const monthYear = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
+    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    const labels = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+    const data = Array(daysInMonth).fill(0);
+
+    // Fetch the month's attendance data using our cache-first function
+    const monthData = await getData('attendance', monthYear);
+    
+    if (monthData) {
+        const classKey = `${charge.classId}-${charge.division}`;
+        
+        // Loop through the days in the fetched data
+        for (const day in monthData) {
+            if (isNaN(parseInt(day))) continue; // Skip non-day fields like 'id'
+
+            const dayIndex = parseInt(day) - 1;
+            if (dayIndex >= 0 && dayIndex < daysInMonth) {
+                const classData = monthData[day]?.[classKey];
                 
-                if(absentees.length > 0) {
-                    listContainer.innerHTML = `<ul class="list-group list-group-flush">${absentees.map(s => `<li class="list-group-item">${s.name}</li>`).join('')}</ul>`;
-                } else {
-                    listContainer.innerHTML = `<p class="text-success">No absentees reported today.</p>`;
+                // If attendance was submitted for this class on this day...
+                if (classData?.status === 'SUBMITTED' && classData.exceptions) {
+                    // ...the number of absentees is the count of students in the exceptions list.
+                    data[dayIndex] = Object.keys(classData.exceptions).length;
                 }
             }
+        }
+    }
 
-            // Chart
-            const ctx = document.getElementById('teacher-attendance-chart').getContext('2d');
+    // Destroy the old chart instance before creating a new one
+    if (attendanceChart) attendanceChart.destroy();
+    
+    attendanceChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [{ 
+                label: `Absentees in ${charge.classId}-${charge.division}`, 
+                data, 
+                backgroundColor: 'rgba(255, 159, 64, 0.7)' 
+            }]
+        },
+        options: { 
+            scales: { 
+                y: { 
+                    beginAtZero: true, 
+                    ticks: { stepSize: 1 } 
+                } 
+            } 
+        }
+    });
+}
+        async function renderTeacherDashboardData() {
+    const charge = selectedUser.classCharge;
+    if (!charge) return; // Nothing to render if teacher has no class charge
+
+    // --- Logic for "Today's Absentees" list (remains the same) ---
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const holiday = holidays.find(h => h.id === todayStr);
+    const listContainer = document.getElementById('today-absent-list');
+
+    if (listContainer) {
+        if (holiday) {
+            listContainer.innerHTML = `<p class="text-info">Today is a holiday: ${holiday.narration}</p>`;
+        } else {
             const today = new Date();
             const monthYear = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
-            const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-            const labels = Array.from({length: daysInMonth}, (_, i) => i + 1);
-            const data = Array(daysInMonth).fill(0);
+            const dayStr = today.getDate().toString();
+            const classKey = `${charge.classId}-${charge.division}`;
             
-            const monthDataDoc = await getDoc(getDocRef('attendance', monthYear));
-            const monthData = monthDataDoc.data() || {};
-            const classStudents = students.filter(s => s.classId === charge.classId && s.division === charge.division);
-
-            for(const day in monthData){
-                const dayIndex = parseInt(day) - 1;
-                if(dayIndex >= 0 && dayIndex < daysInMonth){
-                    const dayRecords = monthData[day];
-                    let absentees = 0;
-                    classStudents.forEach(student => {
-                        const record = dayRecords[student.id];
-                        if(!record || !record.FN || !record.AN){
-                            absentees++;
-                        }
-                    });
-                    data[dayIndex] = absentees;
-                }
+            const monthData = await getData('attendance', monthYear);
+            const todaysExceptions = monthData?.[dayStr]?.[classKey]?.exceptions || {};
+            const absenteeIds = Object.keys(todaysExceptions);
+            
+            if (absenteeIds.length > 0) {
+                const absenteeNames = absenteeIds.map(id => students.find(s => s.id === id)?.name || 'Unknown Student');
+                listContainer.innerHTML = `<ul class="list-group list-group-flush">${absenteeNames.map(name => `<li class="list-group-item">${name}</li>`).join('')}</ul>`;
+            } else {
+                listContainer.innerHTML = `<p class="text-success">No absentees reported today.</p>`;
             }
-             attendanceChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels,
-                    datasets: [{ label: 'Absentees', data, backgroundColor: 'rgba(255, 159, 64, 0.7)' }]
-                },
-                options: { scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
-            });
-            updateAllNotifications();
         }
+    }
+
+    // --- Call the new, separate function to render the chart ---
+    await renderTeacherAttendanceChart(charge);
+    
+    updateAllNotifications();
+}
         
         // --- CLASS MANAGEMENT ---
         window.renderClassManagement = () => {
@@ -4658,7 +4980,11 @@ window.renderExamManagement = () => {
  * and then calling the summary table renderer.
  * @param {string} examId - The ID of the selected exam.
  */
-function generateEntryReport(examId) {
+// Global variable to hold the complete, unfiltered report data
+let reportData = [];
+
+async function generateEntryReport(examId) {
+    //let dat = await getData('marks',null,null);
     const container = document.getElementById('entry-report-container');
     container.innerHTML = `<div class="text-center p-5"><div class="spinner-border text-primary"></div><p class="mt-2">Generating Report...</p></div>`;
 
@@ -4666,11 +4992,8 @@ function generateEntryReport(examId) {
     const isAdminOrController = currentUserRole === 'admin' || (currentUserRole === 'teacher' && selectedUser.roles && selectedUser.roles.includes('exam_controller'));
 
     if (isAdminOrController) {
-        // Admins and controllers see all schedules for the exam
         relevantSchedules = examSchedules.filter(s => s.examId === examId);
     } else if (currentUserRole === 'teacher') {
-        // Teachers see schedules only for subjects they handle
-        console.log(classroomSubjects);
         const teacherAllocations = classroomSubjects.filter(cs => cs.teacherId === selectedUser.id);
         relevantSchedules = examSchedules.filter(s =>
             s.examId === examId && teacherAllocations.some(ta =>
@@ -4683,38 +5006,19 @@ function generateEntryReport(examId) {
         container.innerHTML = `<div class="alert alert-warning">No mark entries found for your allocated subjects in this exam.</div>`;
         return;
     }
-
-    // Generate and display the summary table using the filtered schedules
-    renderMarkEntrySummaryTable(examId, relevantSchedules, container);
-}
-
-
-/**
- * Renders the summary table of mark entry status into a specified container.
- * @param {string} examId - The ID of the exam.
- * @param {Array} schedules - The pre-filtered list of schedules to report on.
- * @param {HTMLElement} container - The DOM element to render the report into.
- */
-async function renderMarkEntrySummaryTable(examId, schedules, container) {
-    let summaryData = [];
     
-    // NOTE: The line `await attachMarksListener(examId, null,null);` is removed.
-    // The marks listener should be triggered by the filter controls, 
-    // and this function will simply render the data that is currently available.
-
-    schedules.forEach(schedule => {
+    // --- MODIFIED: Build the full report data and store it globally ---
+    const rawReportData = [];
+    relevantSchedules.forEach(schedule => {
         const { classId, division, subjectId } = schedule;
         const studentsInClass = students.filter(s => s.classId === classId && s.division === division);
         const totalStudents = studentsInClass.length;
 
         if (totalStudents === 0) return;
 
-        // --- MODIFIED: Logic to count entered marks from an object ---
         let enteredCount = 0;
         studentsInClass.forEach(student => {
-            // Construct the unique key for the mark document
             const markId = `${examId}_${student.id}_${subjectId}`;
-            // Check if that key exists in our marks object
             if (marks[markId]) {
                 enteredCount++;
             }
@@ -4723,9 +5027,11 @@ async function renderMarkEntrySummaryTable(examId, schedules, container) {
         const className = classes.find(c => c.id === classId)?.name || 'N/A';
         const subjectName = subjects.find(sub => sub.id === subjectId)?.name || 'N/A';
         
-        summaryData.push({
+        rawReportData.push({
+            classId,
             className,
             division,
+            subjectId,
             subjectName,
             total: totalStudents,
             entered: enteredCount,
@@ -4733,29 +5039,146 @@ async function renderMarkEntrySummaryTable(examId, schedules, container) {
         });
     });
 
-    if (summaryData.length === 0) {
-        container.innerHTML = '<p class="alert alert-warning">No subjects have been scheduled for this exam.</p>';
+    // Store the data in the global variable and sort it
+    reportData = rawReportData.sort((a,b) => (a.className + a.division + a.subjectName).localeCompare(b.className + b.division + b.subjectName));
+    
+    // Render the filters and the table
+    renderReportControlsAndTable(examId);
+}
+
+/**
+ * Renders the full report UI including filters and the table.
+ * @param {string} examId - The ID of the exam.
+ */
+function renderReportControlsAndTable(examId) {
+    const container = document.getElementById('entry-report-container');
+
+    if (reportData.length === 0) {
+        container.innerHTML = '<div class="alert alert-warning">No subjects have been scheduled for this exam.</div>';
+        return;
+    }
+    
+    // Get unique filter options from the report data
+    const classOptions = [...new Set(reportData.map(d => d.classId))].map(id => {
+        const c = classes.find(c => c.id === id);
+        return c ? `<option value="${c.id}">${c.name}</option>` : '';
+    }).join('');
+    
+    const divisionOptions = [...new Set(reportData.map(d => d.division))].map(d => `<option value="${d}">${d}</option>`).join('');
+    
+    const subjectOptions = [...new Set(reportData.map(d => d.subjectId))].map(id => {
+        const sub = subjects.find(s => s.id === id);
+        return sub ? `<option value="${sub.id}">${sub.name}</option>` : '';
+    }).join('');
+
+    // Render the controls and a container for the table
+    container.innerHTML = `
+        <div class="row g-3 align-items-end mb-3">
+            <div class="col-md-3">
+                <label class="form-label">Class</label>
+                <select id="report-filter-class" class="form-select">
+                    <option value="">All Classes</option>
+                    ${classOptions}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Division</label>
+                <select id="report-filter-division" class="form-select">
+                    <option value="">All Divisions</option>
+                    ${divisionOptions}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Subject</label>
+                <select id="report-filter-subject" class="form-select">
+                    <option value="">All Subjects</option>
+                    ${subjectOptions}
+                </select>
+            </div>
+            <div class="col-md-3 text-md-end">
+                <button id="toggle-pending-btn" class="btn btn-outline-info btn-sm ${showPendingOnly ? 'active' : ''}">
+        <i class="fas fa-exclamation-triangle me-1"></i> Show Pending Only
+    </button>
+
+    <button id="report-export-pdf-btn" class="btn btn-danger"><i class="fas fa-file-pdf me-2"></i>Export as PDF</button>
+                
+            </div>
+        </div>
+        <div id="report-table-container"></div>
+    `;
+
+    // Attach event listeners to the filters
+    document.getElementById('report-filter-class').addEventListener('change', filterAndRenderReport);
+    document.getElementById('report-filter-division').addEventListener('change', filterAndRenderReport);
+    document.getElementById('report-filter-subject').addEventListener('change', filterAndRenderReport);
+    document.getElementById('report-export-pdf-btn').addEventListener('click', () => exportReportToPdf(examId));
+    document.getElementById('toggle-pending-btn').addEventListener('click', () => {
+        showPendingOnly = !showPendingOnly; // Flip the state
+        console.log(showPendingOnly);
+        filterAndRenderReport(examId); // Re-render the table with the new filter
+    });
+
+    // Initial render of the table
+    filterAndRenderReport();
+}
+
+/**
+ * Filters the global reportData and renders the table.
+ */
+function filterAndRenderReport() {
+    const classId = document.getElementById('report-filter-class').value;
+    const division = document.getElementById('report-filter-division').value;
+    const subjectId = document.getElementById('report-filter-subject').value;
+    const examId = document.getElementById('entry-report-exam').value;
+
+    let filteredData = [...reportData];
+
+    if (classId) {
+        filteredData = filteredData.filter(d => d.classId === classId);
+    }
+    if (division) {
+        filteredData = filteredData.filter(d => d.division === division);
+    }
+    if (subjectId) {
+        filteredData = filteredData.filter(d => d.subjectId === subjectId);
+    }
+    if (showPendingOnly) {
+        filteredData = filteredData.filter(row => row.pending > 0);
+    }
+    renderSummaryTableHTML(filteredData, examId);
+}
+
+/**
+ * Renders the HTML for the summary table.
+ * This is now a separate function for reusability.
+ * @param {Array} displayData - The data array to render.
+ * @param {string} examId - The ID of the exam.
+ */
+function renderSummaryTableHTML(displayData, examId) {
+    const container = document.getElementById('report-table-container');
+    if (!container) return;
+
+    if (displayData.length === 0) {
+        container.innerHTML = '<p class="text-muted text-center p-4">No matching entries found for the selected filters.</p>';
         return;
     }
 
-    summaryData.sort((a,b) => (a.className + a.division + a.subjectName).localeCompare(b.className + b.division + b.subjectName));
-
     const tableHTML = `
-        <div class="table-responsive mt-4">
-            <h5 class="mb-3">Mark Entry Status for: <strong>${exams.find(e=>e.id===examId)?.name}</strong></h5>
+        <h5 class="mb-3">Mark Entry Status for: <strong>${exams.find(e=>e.id===examId)?.name}</strong></h5>
+        <div id="report-table-printable" class="table-responsive">
             <table class="table table-bordered table-hover table-sm">
                 <thead class="table-light">
                     <tr>
                         <th>Class</th>
                         <th>Subject</th>
-                        <th>Total Students</th>
-                        <th class="text-success">Entered</th>
-                        <th class="text-danger">Pending</th>
-                        <th style="width: 20%;">Status</th>
+                        <th class="text-center">Total Students</th>
+                        <th class="text-center text-success">Entered</th>
+                        <th class="text-center text-danger">Pending</th>
+                        <th class="text-center" style="width: 20%;">Status</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${summaryData.map(row => {
+                    ${displayData.map(row => {
                         const percentage = row.total > 0 ? (row.entered / row.total) * 100 : 0;
                         const statusClass = percentage === 100 ? 'bg-success' : (percentage > 0 ? 'bg-warning' : 'bg-danger');
                         return `
@@ -4771,7 +5194,8 @@ async function renderMarkEntrySummaryTable(examId, schedules, container) {
                                 </div>
                             </td>
                         </tr>
-                    `}).join('')}
+                        `;
+                    }).join('')}
                 </tbody>
             </table>
         </div>
@@ -4779,6 +5203,7 @@ async function renderMarkEntrySummaryTable(examId, schedules, container) {
 
     container.innerHTML = tableHTML;
 }
+
 /**
  * Renders the UI for the new "Entry Report" tab.
  */
@@ -4804,103 +5229,81 @@ function renderEntryReportTab() {
     document.getElementById('entry-report-exam').addEventListener('change', (e) => {
         if (e.target.value) {
             generateEntryReport(e.target.value);
+        } else {
+            // Clear the report container if no exam is selected
+            document.getElementById('entry-report-container').innerHTML = `<p class="text-muted text-center p-5">Please select an exam to view the detailed entry report.</p>`;
         }
     });
 }
 
+
 /**
- * Generates the detailed entry report based on the user's role.
- * @param {string} examId - The ID of the selected exam.
+ * Exports the currently filtered report table to a PDF.
+ * This requires the html2canvas and jspdf libraries.
  */
-function generateEntryReportDetailed(examId) {
-    const container = document.getElementById('entry-report-container');
-    container.innerHTML = `<div class="text-center p-5"><div class="spinner-border text-primary"></div><p class="mt-2">Generating Report...</p></div>`;
+// --- In your <script type="module"> block ---
+// REPLACE the old exportReportToPdf function with this new, better one.
 
-    let relevantSchedules = [];
-    const isAdminOrController = currentUserRole === 'admin' || (currentUserRole === 'teacher' && selectedUser.roles.includes('exam_controller'));
+// --- In your <script type="module"> block ---
+// REPLACE your exportReportToPdf function with this corrected version
 
-    if (isAdminOrController) {
-        // Admins and controllers see all schedules for the exam
-        relevantSchedules = examSchedules.filter(s => s.examId === examId);
-    } else if (currentUserRole === 'teacher') {
-        // Teachers see schedules only for subjects they handle
-        const teacherAllocations = classroomSubjects.filter(cs => cs.teacherId === selectedUser.id);
-        const teacherScheduleKeys = teacherAllocations.map(ta => `${ta.classId}_${ta.division}_${ta.subjectId}`);
-        
-        relevantSchedules = examSchedules.filter(s => 
-            s.examId === examId && teacherScheduleKeys.includes(`${s.classId}_${s.division}_${s.subjectId}`)
-        );
-    }
+const exportReportToPdf = (examId) => {
+    // 1. --- Basic Setup ---
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const tableElement = document.getElementById('report-table-printable').querySelector('table');
 
-    if (relevantSchedules.length === 0) {
-        container.innerHTML = `<div class="alert alert-warning">No mark entries found for your allocated subjects in this exam.</div>`;
+    if (!tableElement) {
+        showAlert('Error: Report table not found for export.', 'danger');
         return;
     }
 
-    // Group schedules by class and division for report generation
-    const groupedSchedules = relevantSchedules.reduce((acc, s) => {
-        const key = `${s.classId}_${s.division}`;
-        if (!acc[key]) {
-            acc[key] = { classId: s.classId, division: s.division, schedules: [] };
-        }
-        acc[key].schedules.push(s);
-        return acc;
-    }, {});
+    const examName = exams.find(e => e.id === examId)?.name || 'Exam Summary';
+    const reportTitle = `Mark Entry Report for: ${examName}`;
 
-    // Clear container and render a table for each group
-    container.innerHTML = '';
-    for (const key in groupedSchedules) {
-        const group = groupedSchedules[key];
-        renderDetailedMarkEntryTable(container, examId, group.classId, group.division, group.schedules);
-    }
-}
-
-/**
- * Renders a single detailed mark entry table for a specific class/division.
- * @param {HTMLElement} container - The parent container to append the report to.
- * @param {string} examId
- * @param {string} classId
- * @param {string} division
- * @param {Array} schedulesForClass - The filtered schedule objects for this class.
- */
-function renderDetailedMarkEntryTableDetailed(container, examId, classId, division, schedulesForClass) {
-    const studentsInClass = students.filter(s => s.classId === classId && s.division === division);
-    if (studentsInClass.length === 0) return;
-
-    const className = classes.find(c => c.id === classId)?.name || 'N/A';
-    const subjectHeaders = schedulesForClass.map(s => subjects.find(sub => sub.id === s.subjectId)).filter(Boolean);
-
-    let tableHTML = `<h4 class="mt-4">Class: ${className} - ${division}</h4>
-                     <div class="table-responsive">
-                       <table class="table table-bordered table-sm">
-                         <thead class="table-light">
-                           <tr>
-                             <th rowspan="2">Student Name</th>`;
-    subjectHeaders.forEach(sub => {
-        tableHTML += `<th colspan="2" class="text-center">${sub.name}</th>`;
-    });
-    tableHTML += `</tr><tr>`;
-    subjectHeaders.forEach(sub => {
-        const schedule = schedulesForClass.find(s => s.subjectId === sub.id);
-        tableHTML += `<th class="text-center">TE / ${schedule.maxTE || 0}</th><th class="text-center">CE / ${schedule.maxCE || 0}</th>`;
-    });
-    tableHTML += `</tr></thead><tbody>`;
-
-    studentsInClass.forEach(student => {
-        tableHTML += `<tr><td>${student.name}</td>`;
-        subjectHeaders.forEach(subject => {
-            const mark = marks.find(m => m.examId === examId && m.studentId === student.id && m.subjectId === subject.id);
-            const teMark = mark?.te ?? '-';
-            const ceMark = mark?.ce ?? '-';
-            tableHTML += `<td class="text-center ${teMark === 'AB' ? 'absent-mark' : ''}">${teMark}</td>
-                          <td class="text-center ${ceMark === 'AB' ? 'absent-mark' : ''}">${ceMark}</td>`;
-        });
-        tableHTML += `</tr>`;
-    });
+    // 2. --- Prepare Data for AutoTable ---
+    const head = Array.from(tableElement.querySelectorAll('thead tr')).map(tr => 
+        Array.from(tr.querySelectorAll('th')).map(th => th.innerText)
+    );
     
-    tableHTML += `</tbody></table></div>`;
-    container.insertAdjacentHTML('beforeend', tableHTML);
-}
+    const body = Array.from(tableElement.querySelectorAll('tbody tr')).map(tr => 
+        Array.from(tr.querySelectorAll('td')).map(td => td.innerText)
+    );
+
+    // 3. --- Generate the PDF using autoTable ---
+    doc.autoTable({
+        head: head,
+        body: body,
+        // REMOVED startY and ADDED margin. This is the key change.
+        margin: { top: 30 }, // Reserve 30mm space at the top of EVERY page
+        theme: 'striped',
+        styles: {
+            fontSize: 8,
+            cellPadding: 2,
+        },
+        headStyles: {
+            fillColor: [22, 160, 133],
+            textColor: 255,
+            fontStyle: 'bold',
+        },
+        // This hook adds a header and footer to EVERY page.
+        didDrawPage: function (data) {
+            // Header (drawn at 20mm, well within the 30mm margin)
+            doc.setFontSize(16);
+            doc.setTextColor(40);
+            doc.text(reportTitle, data.settings.margin.left, 20);
+
+            // Footer
+            const pageCount = doc.internal.getNumberOfPages();
+            doc.setFontSize(10);
+            doc.text(`Page ${data.pageNumber} of ${pageCount}`, data.settings.margin.left, doc.internal.pageSize.height - 10);
+        }
+    });
+
+    // 4. --- Save the PDF ---
+    doc.save(`Mark_Entry_Report_${examName.replace(/\s/g, '_')}.pdf`);
+    showAlert('PDF export successful!', 'success');
+};
 
 // Reverted and enhanced version of renderExamScheduleTab
 function renderExamScheduleTab() {
@@ -6277,115 +6680,135 @@ function copyColumnData(tableId, colIndex) {
         
 
         function renderMarkEntryTab() {
-            const container = document.getElementById('entry');
-            let classOptions = '';
-            
-            // --- MODIFICATION START ---
-            // If the user is a teacher, populate classes based on their specific allocations.
-            // Otherwise (for admin), show all classes.
-            if (currentUserRole === 'teacher') {
-                const teacherAllocations = classroomSubjects.filter(cs => cs.teacherId === selectedUser.id);
-                const uniqueClassIds = [...new Set(teacherAllocations.map(a => a.classId))];
-                classOptions = uniqueClassIds.map(classId => {
-                    const c = classes.find(cls => cls.id === classId);
-                    return c ? `<option value="${c.id}">${c.name}</option>` : '';
-                }).join('');
-            } else {
-                classOptions = classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-            }
-            // --- MODIFICATION END ---
+    const container = document.getElementById('entry');
+    let classOptions = '';
 
-            container.innerHTML = `
-                <div class="row g-3 align-items-end border-bottom pb-3 mb-3">
-                    <div class="col-md-3"><label class="form-label">Exam</label><select id="mark-entry-exam" class="form-select">${exams.map(ex => `<option value="${ex.id}">${ex.name}</option>`).join('')}</select></div>
-                    <div class="col-md-3"><label class="form-label">Class</label><select id="mark-entry-class" class="form-select">${classOptions}</select></div>
-                    <div class="col-md-3"><label class="form-label">Division</label><select id="mark-entry-division" class="form-select"></select></div>
-                    <div class="col-md-3"><label class="form-label">Subject</label><select id="mark-entry-subject" class="form-select" disabled></select></div>
-                </div>
-                <div id="mark-entry-sheet"></div>
-                <div id="mark-entry-summary-container"></div>
+    // If the user is a teacher, populate classes based on their specific allocations.
+    if (currentUserRole === 'teacher') {
+        const teacherAllocations = classroomSubjects.filter(cs => cs.teacherId === selectedUser.id);
+        const uniqueClassIds = [...new Set(teacherAllocations.map(a => a.classId))];
+        classOptions = uniqueClassIds.map(classId => {
+            const c = classes.find(cls => cls.id === classId);
+            return c ? `<option value="${c.id}">${c.name}</option>` : '';
+        }).join('');
+    } else {
+        classOptions = classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    }
 
-                `;
-            
-            const examSelect = document.getElementById('mark-entry-exam');
-            const classSelect = document.getElementById('mark-entry-class');
-            const divisionSelect = document.getElementById('mark-entry-division');
-            const subjectSelect = document.getElementById('mark-entry-subject');
-            
-            const updateMarkEntryView = () => {
-                const examId = examSelect.value;
-                const classId = classSelect.value;
-                const division = divisionSelect.value;
-                const subjectId = subjectSelect.value;
-                loadMarkEntrySheet(examId, classId, division, subjectId);
-            };
+    container.innerHTML = `
+        <div class="row g-3 align-items-end border-bottom pb-3 mb-3">
+            <div class="col-md-3"><label class="form-label">Exam</label><select id="mark-entry-exam" class="form-select">${exams.map(ex => `<option value="${ex.id}">${ex.name}</option>`).join('')}</select></div>
+            <div class="col-md-3"><label class="form-label">Class</label><select id="mark-entry-class" class="form-select"><option value="">-- Select Class --</option>${classOptions}</select></div>
+            <div class="col-md-3"><label class="form-label">Division</label><select id="mark-entry-division" class="form-select" disabled><option value="">-- Select Division --</option></select></div>
+            <div class="col-md-3"><label class="form-label">Subject</label><select id="mark-entry-subject" class="form-select" disabled><option value="">-- Select Subject --</option></select></div>
+        </div>
+        <div id="mark-entry-sheet"></div>
+        <div id="mark-entry-summary-container"></div>
+    `;
 
-            const populateSubjects = () => {
-                const examId = examSelect.value;
-                const classId = classSelect.value;
-                const division = divisionSelect.value;
-                subjectSelect.innerHTML = '<option value="">-- Select Subject --</option>'; 
-                subjectSelect.disabled = true;
+    const examSelect = document.getElementById('mark-entry-exam');
+    const classSelect = document.getElementById('mark-entry-class');
+    const divisionSelect = document.getElementById('mark-entry-division');
+    const subjectSelect = document.getElementById('mark-entry-subject');
 
-                if (examId && classId && division) {
-                    // Get subjects scheduled for the exam in this class/division
-                    let scheduledSubjects = examSchedules.filter(s => s.examId === examId && s.classId === classId && s.division === division);
-                    
-                    // --- MODIFICATION START ---
-                    // If the user is a teacher, further filter subjects to only those they are allocated to
-                    if (currentUserRole === 'teacher') {
-                        const teacherSubjectIds = classroomSubjects
-                            .filter(cs => cs.teacherId === selectedUser.id && cs.classId === classId && cs.division === division)
-                            .map(cs => cs.subjectId);
-                        
-                        scheduledSubjects = scheduledSubjects.filter(s => teacherSubjectIds.includes(s.subjectId));
-                    }
-                    // --- MODIFICATION END ---
+    // --- NEW: Centralized controller for the view ---
+    const updateMarkEntryView = () => {
+        const examId = examSelect.value;
+        const classId = classSelect.value;
+        const division = divisionSelect.value;
+        const subjectId = subjectSelect.value;
 
-                    if (scheduledSubjects.length > 0) {
-                        subjectSelect.innerHTML += scheduledSubjects.map(schedule => {
-                            const subjectDetails = subjects.find(sub => sub.id === schedule.subjectId);
-                            return subjectDetails ? `<option value="${subjectDetails.id}">${subjectDetails.name}</option>` : '';
-                        }).join('');
-                        subjectSelect.disabled = false;
-                    }
-                }else if (examId) {
-            // Otherwise, if only an exam is selected, show the summary table
-            document.getElementById('mark-entry-summary-container').style.display = 'block';
-            document.getElementById('mark-entry-sheet').innerHTML = '';
+        // Clear both containers to prevent old content from lingering
+        document.getElementById('mark-entry-sheet').innerHTML = '';
+        document.getElementById('mark-entry-summary-container').innerHTML = '';
+        
+        // Decide what to render based on the current selections
+        if (examId && classId && division && subjectId) {
+            // All options selected: Load the mark entry sheet
+            loadMarkEntrySheet(examId, classId, division, subjectId);
+        } else if (examId && !classId) {
+            // Only exam selected: Show the summary table
             renderMarkEntrySummaryTable(examId);
+        } else {
+             // Not enough options selected, show a placeholder
+             document.getElementById('mark-entry-summary-container').innerHTML = '<p class="text-muted p-5 text-center">Select Exam, Class, and Division to see subjects, or just an Exam for a summary.</p>';
+        }
+    };
+
+    // --- REFACTORED: This function now only populates subjects, then updates the view ---
+    const populateSubjects = () => {
+        const examId = examSelect.value;
+        const classId = classSelect.value;
+        const division = divisionSelect.value;
+        
+        subjectSelect.innerHTML = '<option value="">-- Select Subject --</option>';
+        subjectSelect.disabled = true;
+
+        if (examId && classId && division) {
+            let scheduledSubjects = examSchedules.filter(s => s.examId === examId && s.classId === classId && s.division === division);
+
+            if (currentUserRole === 'teacher') {
+                const teacherSubjectIds = classroomSubjects
+                    .filter(cs => cs.teacherId === selectedUser.id && cs.classId === classId && cs.division === division)
+                    .map(cs => cs.subjectId);
+                scheduledSubjects = scheduledSubjects.filter(s => teacherSubjectIds.includes(s.subjectId));
             }
-
-                document.getElementById('mark-entry-sheet').innerHTML = ''; // Clear sheet
-            };
             
-            // --- MODIFICATION START ---
-            // This event listener now populates divisions based on the teacher's allocations for the selected class.
-            classSelect.addEventListener('change', () => {
-                const selectedClassId = classSelect.value;
-                let divisionOptionsHTML = '';
-                if (currentUserRole === 'teacher') {
-                    const teacherAllocationsForClass = classroomSubjects.filter(cs => cs.teacherId === selectedUser.id && cs.classId === selectedClassId);
-                    const uniqueDivisions = [...new Set(teacherAllocationsForClass.map(a => a.division))];
-                    divisionOptionsHTML = uniqueDivisions.map(d => `<option value="${d}">${d}</option>`).join('');
-                } else {
-                    const cls = classes.find(c => c.id === selectedClassId);
-                    divisionOptionsHTML = cls ? cls.divisions.map(d => `<option value="${d}">${d}</option>`).join('') : '';
-                }
-                divisionSelect.innerHTML = divisionOptionsHTML;
-                populateSubjects(); // Refresh subjects based on the new division
-            });
-            // --- MODIFICATION END ---
-
-            divisionSelect.addEventListener('change', populateSubjects);
-            examSelect.addEventListener('change', populateSubjects);
-            subjectSelect.addEventListener('change', updateMarkEntryView);
-            
-            // Trigger the change event on the class dropdown to populate divisions and subjects on initial load
-            if (classSelect.options.length > 0) {
-                 classSelect.dispatchEvent(new Event('change'));
+            if (scheduledSubjects.length > 0) {
+                subjectSelect.innerHTML += scheduledSubjects.map(schedule => {
+                    const subjectDetails = subjects.find(sub => sub.id === schedule.subjectId);
+                    return subjectDetails ? `<option value="${subjectDetails.id}">${subjectDetails.name}</option>` : '';
+                }).join('');
+                subjectSelect.disabled = false;
             }
         }
+        updateMarkEntryView(); // Call the controller to refresh the UI
+    };
+    
+    // --- REFACTORED: A new function to handle both division and subject population ---
+    const populateDivisionsAndSubjects = () => {
+        const selectedClassId = classSelect.value;
+        divisionSelect.innerHTML = '<option value="">-- Select Division --</option>';
+        divisionSelect.disabled = true;
+
+        if (selectedClassId) {
+            let divisionOptionsHTML = '';
+            if (currentUserRole === 'teacher') {
+                const teacherAllocationsForClass = classroomSubjects.filter(cs => cs.teacherId === selectedUser.id && cs.classId === selectedClassId);
+                const uniqueDivisions = [...new Set(teacherAllocationsForClass.map(a => a.division))];
+                divisionOptionsHTML = uniqueDivisions.map(d => `<option value="${d}">${d}</option>`).join('');
+            } else {
+                const cls = classes.find(c => c.id === selectedClassId);
+                divisionOptionsHTML = cls ? cls.divisions.map(d => `<option value="${d}">${d}</option>`).join('') : '';
+            }
+            if(divisionOptionsHTML) {
+                divisionSelect.innerHTML += divisionOptionsHTML;
+                divisionSelect.disabled = false;
+            }
+        }
+        populateSubjects(); // This will trigger the subject population and the view update
+    };
+
+    // --- REFACTORED: Event Listeners now call the new functions ---
+    examSelect.addEventListener('change', populateSubjects);
+    classSelect.addEventListener('change', populateDivisionsAndSubjects);
+    divisionSelect.addEventListener('change', populateSubjects);
+    subjectSelect.addEventListener('change', updateMarkEntryView);
+
+    // Initial population and view setup on page load
+    if (examSelect.options.length > 0) {
+        examSelect.value = examSelect.options[0].value; // Auto-select the first exam
+    }
+    if (classSelect.options.length > 1) { // Check if there's more than the placeholder
+        classSelect.value = classSelect.options[1].value; // Auto-select the first available class
+    }
+    
+    // Dispatch a change event to kick off the whole process
+    examSelect.dispatchEvent(new Event('change'));
+    if (classSelect.value) {
+        classSelect.dispatchEvent(new Event('change'));
+    }
+}
 
         async function loadMarkEntrySheet(examId, classId, division, subjectId) {
     const container = document.getElementById('mark-entry-sheet');
@@ -6533,38 +6956,43 @@ function copyColumnData(tableId, colIndex) {
  * Renders a summary table of mark entry status for a given exam across all classes.
  * @param {string} examId The ID of the exam to summarize.
  */
-window.  renderMarkEntrySummaryTable = (examId) => {
+// Global variable to hold the summary data and filter state
+let currentSummaryData = [];
+let showPendingOnly = false;
+
+window.renderMarkEntrySummaryTable = (examId) => {
     const summaryContainer = document.getElementById('mark-entry-summary-container');
     if (!summaryContainer) return;
 
     if (!examId) {
-        summaryContainer.innerHTML = '<p class="text-muted p-5 text-center">Select an exam to view the mark entry status summary.</p>';
+        summaryContainer.innerHTML = '<p class="text-muted p-5 text-center">Select an exam to view the summary.</p>';
         return;
     }
 
-    let summaryData = [];
-    
-    // Get all unique combinations of class, division, and subject for the selected exam
+    // --- Data Calculation Logic (remains the same) ---
+    let fullSummaryData = [];
     const schedulesForExam = examSchedules.filter(s => s.examId === examId);
-    
+
     schedulesForExam.forEach(schedule => {
         const { classId, division, subjectId } = schedule;
         const studentsInClass = students.filter(s => s.classId === classId && s.division === division);
         const totalStudents = studentsInClass.length;
 
-        if (totalStudents === 0) return; // Skip if class has no students
+        if (totalStudents === 0) return;
 
-        // Get the count of marks entered for this specific group
-        const enteredCount = marks.filter(m => 
-            m.examId === examId &&
-            m.subjectId === subjectId &&
-            studentsInClass.some(s => s.id === m.studentId)
-        ).length;
-        
+        // Corrected logic to check the global 'marks' object
+        let enteredCount = 0;
+        studentsInClass.forEach(student => {
+            const markId = `${examId}_${student.id}_${subjectId}`;
+            if (marks[markId]) { // Check if a key exists in the marks object
+                enteredCount++;
+            }
+        });
+
         const className = classes.find(c => c.id === classId)?.name || 'N/A';
         const subjectName = subjects.find(sub => sub.id === subjectId)?.name || 'N/A';
-        
-        summaryData.push({
+
+        fullSummaryData.push({
             className,
             division,
             subjectName,
@@ -6574,53 +7002,142 @@ window.  renderMarkEntrySummaryTable = (examId) => {
         });
     });
 
-    if (summaryData.length === 0) {
-        summaryContainer.innerHTML = '<p class="text-muted p-5 text-center">No subjects have been scheduled for this exam.</p>';
-        return;
+    fullSummaryData.sort((a,b) => (a.className + a.division + a.subjectName).localeCompare(b.className + b.division + a.subjectName));
+    
+    // Store the full data globally
+    currentSummaryData = fullSummaryData;
+    
+    // Call the new rendering function
+    renderFilteredSummaryTable(examId);
+};
+
+/**
+ * 2. RENDERS the summary table based on the current filter state.
+ */
+const renderFilteredSummaryTable = (examId) => {
+    const summaryContainer = document.getElementById('mark-entry-summary-container');
+    if (!summaryContainer) return;
+    
+    let displayData = currentSummaryData;
+
+    // --- APPLY THE FILTER ---
+    if (showPendingOnly) {
+        displayData = currentSummaryData.filter(row => row.pending > 0);
     }
-
-    // Sort the data for a clean presentation
-    summaryData.sort((a,b) => (a.className + a.division + a.subjectName).localeCompare(b.className + b.division + b.subjectName));
-
+    
+    // --- GENERATE HTML with the new toggle button ---
     const tableHTML = `
-        <div class="table-responsive mt-4">
-            <h5 class="mb-3">Mark Entry Status for: <strong>${exams.find(e=>e.id===examId)?.name}</strong></h5>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0">Mark Entry Status for: <strong>${exams.find(e=>e.id===examId)?.name}</strong></h5>
+           
+        </div>
+        <div id="mark-entry-summary-printable" class="table-responsive">
             <table class="table table-bordered table-hover table-sm">
                 <thead class="table-light">
                     <tr>
                         <th>Class</th>
                         <th>Subject</th>
-                        <th>Total Students</th>
-                        <th class="text-success">Entered</th>
-                        <th class="text-danger">Pending</th>
-                        <th style="width: 20%;">Status</th>
+                        <th class="text-center">Total Students</th>
+                        <th class="text-center text-success">Entered</th>
+                        <th class="text-center text-danger">Pending</th>
+                        <th class="text-center" style="width: 20%;">Status</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${summaryData.map(row => {
+                    ${displayData.map(row => {
                         const percentage = row.total > 0 ? (row.entered / row.total) * 100 : 0;
-                        const statusClass = percentage === 100 ? 'bg-success' : 'bg-warning';
+                        const statusClass = percentage === 100 ? 'bg-success' : (percentage > 0 ? 'bg-warning' : 'bg-danger');
                         return `
                         <tr>
                             <td>${row.className} - ${row.division}</td>
                             <td>${row.subjectName}</td>
                             <td class="text-center">${row.total}</td>
-                            <td class="text-center">${row.entered}</td>
-                            <td class="text-center">${row.pending}</td>
+                            <td class="text-center text-success">${row.entered}</td>
+                            <td class="text-center text-danger">${row.pending}</td>
                             <td>
                                 <div class="progress" style="height: 20px;">
                                     <div class="progress-bar ${statusClass}" role="progressbar" style="width: ${percentage}%;" aria-valuenow="${percentage}" aria-valuemin="0" aria-valuemax="100">${percentage.toFixed(0)}%</div>
                                 </div>
                             </td>
                         </tr>
-                    `}).join('')}
+                        `;
+                    }).join('')}
                 </tbody>
             </table>
+            ${displayData.length === 0 ? '<p class="text-muted text-center py-4">No pending entries for this exam.</p>' : ''}
         </div>
     `;
-
+    
     summaryContainer.innerHTML = tableHTML;
-}
+    
+};
+
+
+
+const exportSummaryToPdf = async (examId) => {
+    const { jsPDF } = window.jspdf;
+    const input = document.getElementById('mark-entry-summary-printable');
+    
+    if (!input) {
+        showAlert('Error: Summary table not found for export.', 'danger');
+        return;
+    }
+
+    // Show a loading message
+    const originalContent = input.innerHTML;
+    input.innerHTML = '<div class="text-center my-5"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">Generating PDF...</p></div>';
+
+    try {
+        const examName = exams.find(e => e.id === examId)?.name || 'Exam Summary';
+
+        // Use html2canvas to convert the HTML table to an image
+        const canvas = await html2canvas(input, {
+            scale: 2, // Increase scale for better resolution
+            useCORS: true,
+            logging: false,
+        });
+
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF('p', 'mm', 'a4'); // 'p' for portrait, 'mm' for units, 'a4' for page size
+        
+        const imgWidth = 210; // A4 width in mm
+        const pageHeight = 297; // A4 height in mm
+        const imgHeight = canvas.height * imgWidth / canvas.width;
+        let heightLeft = imgHeight;
+
+        let position = 0;
+
+        // Add header
+        pdf.setFontSize(18);
+        pdf.text('Mark Entry Summary', 105, 15, null, null, 'center');
+        pdf.setFontSize(12);
+        pdf.text(`Exam: ${examName}`, 105, 25, null, null, 'center');
+        pdf.line(15, 30, 195, 30); // Draw a line
+        position = 35; // Start position for the image after the header
+
+        // Add the image to the PDF
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= (pageHeight - position);
+
+        // Handle multiple pages for long tables
+        while (heightLeft > 0) {
+            position = heightLeft - imgHeight;
+            pdf.addPage();
+            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
+        }
+
+        pdf.save(`Mark_Entry_Summary_${examName.replace(/\s/g, '_')}.pdf`);
+        showAlert('PDF export successful!', 'success');
+        
+    } catch (error) {
+        console.error('PDF generation failed:', error);
+        showAlert('Failed to generate PDF. Please try again.', 'danger');
+    } finally {
+        // Restore the original content of the container
+        input.innerHTML = originalContent;
+    }
+};
 
         /**
  * Main controller for the Rank List tab.
@@ -7095,8 +7612,74 @@ function generateReportCardHTML(studentId, examId, containerId) {
             dateInput.addEventListener('change', loadSheet);
             if(classes.length > 0) classSelect.dispatchEvent(new Event('change'));
         }
+        // --- In your <script type="module"> block ---
+// REPLACE your loadAttendanceSheet function with this new one
 
-        async function loadAttendanceSheet(date, classId, division){
+async function loadAttendanceSheet(date, classId, division) {
+    const container = document.getElementById('attendance-sheet');
+    if (!date || !classId || !division) {
+        container.innerHTML = `<p class="text-center p-5 text-muted">Please select date, class, and division.</p>`;
+        return;
+    }
+
+    const holiday = holidays.find(h => h.id === date);
+    if (holiday) {
+        container.innerHTML = `<div class="alert alert-info text-center">This day is a holiday: <strong>${holiday.narration}</strong>.</div>`;
+        return;
+    }
+
+    const studentsInClass = students.filter(s => s.classId === classId && s.division === division).sort((a, b) => a.name.localeCompare(b.name));
+    if (studentsInClass.length === 0) {
+        container.innerHTML = '<div class="alert alert-warning">No students found.</div>';
+        return;
+    }
+
+    const attendanceYearMonth = date.slice(0, 7);
+    const day = parseInt(date.slice(8, 10)).toString();
+    const classKey = `${classId}-${division}`;
+
+    const attendanceDoc = await getDoc(getDocRef('attendance', attendanceYearMonth));
+    
+    // Get the exceptions for this specific class on this day, or an empty object if none exist
+    const todaysExceptions = attendanceDoc.data()?.[day]?.[classKey]?.exceptions || {};
+
+    let tableHTML = `<div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="mb-0">${studentsInClass.length} Students</h6>
+        <div>
+            <button id="invert-selection" class="btn btn-sm btn-outline-secondary me-2">Invert Selection</button>
+            <button id="mark-all-present" class="btn btn-sm btn-outline-success">Mark All Present</button>
+        </div>
+    </div>
+    <div class="table-responsive"><table class="table table-bordered">
+    <thead class="table-light"><tr><th>Name</th><th>Admission No.</th><th class="text-center">Forenoon (FN)</th><th class="text-center">Afternoon (AN)</th></tr></thead><tbody>`;
+    
+
+    studentsInClass.forEach(s => {
+        // --- NEW LOGIC TO READ EXCEPTIONS ---
+        const studentException = todaysExceptions[s.id];
+
+        // Default to present, then override if an exception exists
+        const isPresentFN = studentException ? studentException.FN : true;
+        const isPresentAN = studentException ? studentException.AN : true;
+
+        tableHTML += `<tr>
+            <td class="fw-bold">${s.name}</td>
+            <td>${s.admissionNumber}</td>
+            <td class="text-center"><input type="checkbox" data-id="${s.id}" data-session="FN" class="form-check-input att-check" ${isPresentFN ? 'checked' : ''}></td>
+            <td class="text-center"><input type="checkbox" data-id="${s.id}" data-session="AN" class="form-check-input att-check" ${isPresentAN ? 'checked' : ''}></td>
+        </tr>`;
+    });
+
+    tableHTML += `</tbody></table></div><div class="text-end mt-3"><button id="save-att-btn" class="btn btn-primary">Save Attendance</button></div>`;
+    container.innerHTML = tableHTML;
+    
+    // Attach listeners (your existing code for this is correct)
+    document.getElementById('mark-all-present').addEventListener('click', () => document.querySelectorAll('.att-check').forEach(c => c.checked = true));
+    document.getElementById('invert-selection').addEventListener('click', () => document.querySelectorAll('.att-check').forEach(c => c.checked = !c.checked));
+    document.getElementById('save-att-btn').addEventListener('click', () => saveAttendance(date, classId, division));
+}
+
+        async function loadAttendanceSheetold(date, classId, division){
             const container = document.getElementById('attendance-sheet');
             if(!date || !classId || !division) { container.innerHTML = `<p class="text-center p-5 text-muted">Please select date, class, and division.</p>`; return; }
             
@@ -7136,7 +7719,7 @@ function generateReportCardHTML(studentId, examId, containerId) {
             document.getElementById('save-att-btn').addEventListener('click', () => saveAttendance(date));
         }
 
-        async function saveAttendance(date) {
+        async function saveAttendanceold(date) {
             const attendanceYearMonth = date.slice(0, 7);
             const day = parseInt(date.slice(8, 10)).toString();
             const records = {};
@@ -7150,6 +7733,57 @@ function generateReportCardHTML(studentId, examId, containerId) {
                 showAlert('Attendance saved successfully!', 'success');
             } catch (error) { console.error("Error saving attendance: ", error); showAlert("Could not save attendance.", "danger");}
         }
+        // --- In your <script type="module"> block ---
+// REPLACE your saveAttendance function with this new one
+
+async function saveAttendance(date, classId, division) { // Pass in class and division
+    const attendanceYearMonth = date.slice(0, 7);
+    const day = parseInt(date.slice(8, 10)).toString();
+    const classKey = `${classId}-${division}`;
+
+    const exceptions = {};
+    const allCheckboxes = document.querySelectorAll('.att-check');
+
+    // Group checkboxes by student ID
+    const studentChecks = {};
+    allCheckboxes.forEach(cb => {
+        const id = cb.dataset.id;
+        if (!studentChecks[id]) studentChecks[id] = {};
+        studentChecks[id][cb.dataset.session] = cb.checked;
+    });
+
+    // Loop through students to find exceptions
+    for (const studentId in studentChecks) {
+        const sessions = studentChecks[studentId];
+        const isFullyPresent = sessions.FN && sessions.AN;
+
+        // If the student is NOT fully present, add them to the exceptions map
+        if (!isFullyPresent) {
+            exceptions[studentId] = {
+                FN: sessions.FN || false,
+                AN: sessions.AN || false
+            };
+        }
+    }
+
+    // The data to be saved for this specific class on this day
+    const attendanceDataForClass = {
+        status: 'SUBMITTED',
+        exceptions: exceptions
+    };
+
+    try {
+        const docRef = getDocRef('attendance', attendanceYearMonth);
+        // Use dot notation to update a specific field within the document without overwriting other days/classes
+        const updatePath = `${day}.${classKey}`;
+        await setDoc(docRef, { [updatePath]: attendanceDataForClass }, { merge: true });
+
+        showAlert('Attendance saved successfully!', 'success');
+    } catch (error) {
+        console.error("Error saving attendance: ", error);
+        showAlert("Could not save attendance.", "danger");
+    }
+}
 
         function renderClassAttendanceReportTab(){ 
             const container = document.getElementById('class-report-att');
@@ -7173,8 +7807,93 @@ function generateReportCardHTML(studentId, examId, containerId) {
             divisionSelect.addEventListener('change', generateReport);
             if(classes.length > 0) classSelect.dispatchEvent(new Event('change'));
         }
+        // --- In your <script type="module"> block ---
 
-        async function generateClassAttendanceReport(monthYear, classId, division){
+async function generateClassAttendanceReport(monthYear, classId, division) {
+    const container = document.getElementById('class-report-container');
+    if (!monthYear || !classId || !division) {
+        container.innerHTML = '<p class="text-muted p-5 text-center">Please select all filters.</p>';
+        return;
+    }
+
+    const studentsInClass = students.filter(s => s.classId === classId && s.division === division).sort((a, b) => a.name.localeCompare(b.name));
+    if (studentsInClass.length === 0) {
+        container.innerHTML = '<div class="alert alert-warning">No students found.</div>';
+        return;
+    }
+
+    const monthDataDoc = await getDoc(getDocRef('attendance', monthYear));
+    const monthData = monthDataDoc.data() || {};
+    const classKey = `${classId}-${division}`;
+
+    // --- NEW: Calculate Total Working Days correctly ---
+    // A working day is a day where attendance status was "SUBMITTED" for this class.
+    let totalWorkingDays = 0;
+    const daysInMonth = new Date(monthYear.split('-')[0], monthYear.split('-')[1], 0).getDate();
+    for (let i = 1; i <= daysInMonth; i++) {
+        const dayStr = i.toString();
+        if (monthData[dayStr]?.[classKey]?.status === 'SUBMITTED') {
+            totalWorkingDays++;
+        }
+    }
+
+    let gridTable = `<h5 class="mt-4">Monthly Grid</h5><table class="table table-bordered table-sm text-center" style="font-size: 0.75rem;"><thead class="table-light"><tr><th class="text-start">Student Name</th>`;
+    for (let i = 1; i <= daysInMonth; i++) { gridTable += `<th>${i}</th>`; }
+    gridTable += `</tr></thead><tbody>`;
+
+    const summaryData = [];
+
+    studentsInClass.forEach(student => {
+        let present = 0, absentSessions = 0; // We'll count absent sessions (FN/AN)
+        gridTable += `<tr><td class="fw-bold text-start">${student.name}</td>`;
+        
+        for (let i = 1; i <= daysInMonth; i++) {
+            const dayStr = i.toString();
+            const dateStr = `${monthYear}-${dayStr.padStart(2, '0')}`;
+            const holiday = holidays.find(h => h.id === dateStr);
+            let status;
+            
+            if (holiday) {
+                status = { symbol: 'H', class: 'att-holiday', title: holiday.narration };
+            } else {
+                const dayClassData = monthData[dayStr]?.[classKey];
+                
+                // --- NEW: Logic to read exceptions ---
+                if (dayClassData?.status === 'SUBMITTED') {
+                    const studentException = dayClassData.exceptions?.[student.id];
+                    // If no exception, student is present. Otherwise, use the exception data.
+                    const record = studentException || { FN: true, AN: true };
+                    status = calculateAttendanceStatus(record);
+
+                    // Update stats
+                    if (record.FN) present++;
+                    if (record.AN) present++;
+                    if (!record.FN) absentSessions++;
+                    if (!record.AN) absentSessions++;
+                } else {
+                    status = { symbol: '', class: '' }; // Not a working day for this class
+                }
+            }
+            gridTable += `<td class="${status.class}" title="${status.title || ''}">${status.symbol}</td>`;
+        }
+        gridTable += `</tr>`;
+        summaryData.push({ name: student.name, presentSessions: present, absentSessions });
+    });
+    gridTable += '</tbody></table>';
+
+    let summaryTable = `<h5 class="mt-4">Summary Report (Total Working Sessions: ${totalWorkingDays * 2})</h5><table class="table table-striped table-bordered">
+        <thead class="table-light"><tr><th>Student Name</th><th>Present Days</th><th>Absent Days</th><th>Total Present %</th></tr></thead><tbody>`;
+    summaryData.forEach(data => {
+        const totalPresentDays = data.presentSessions / 2;
+        const totalAbsentDays = data.absentSessions / 2;
+        const percentage = totalWorkingDays > 0 ? ((totalPresentDays / totalWorkingDays) * 100).toFixed(1) : "0.0";
+        summaryTable += `<tr><td>${data.name}</td><td>${totalPresentDays}</td><td>${totalAbsentDays}</td><td>${percentage}%</td></tr>`;
+    });
+    summaryTable += '</tbody></table>';
+
+    container.innerHTML = summaryTable + gridTable;
+}
+        async function generateClassAttendanceReportold(monthYear, classId, division){
             const container = document.getElementById('class-report-container');
             if(!monthYear || !classId || !division){ container.innerHTML = '<p class="text-muted p-5 text-center">Please select all filters.</p>'; return; }
 
@@ -7270,8 +7989,89 @@ function generateReportCardHTML(studentId, examId, containerId) {
             });
             monthSelect.addEventListener('change', generateCalendar);
         }
+        // --- In your <script type="module"> block ---
 
-        async function generateStudentCalendar(studentId, monthYear, containerId, isDashboard = false){
+async function generateStudentCalendar(studentId, monthYear, containerId, isDashboard = false) {
+    const container = document.getElementById(containerId);
+    if (!studentId || !monthYear) {
+        container.innerHTML = `<p class="text-muted p-5 text-center">Select student and month to view calendar.</p>`;
+        return;
+    }
+
+    const student = students.find(s => s.id === studentId);
+    if (!student) return;
+
+    //const monthDataDoc = await getDoc(getDocRef('attendance', monthYear));
+    //const monthData = monthDataDoc.data() || {};
+    const monthData = await getData('attendance', monthYear);
+
+    const [year, month] = monthYear.split('-').map(Number);
+    const classKey = `${student.classId}-${student.division}`;
+
+    let stats = { present: 0, absent: 0, halfDay: 0, workingDays: 0 };
+    
+    // --- NEW: Calculate stats based on submitted days ---
+    for (const day in monthData) {
+        const classData = monthData[day]?.[classKey];
+        if (classData?.status === 'SUBMITTED') {
+            stats.workingDays++;
+            const studentException = classData.exceptions?.[studentId];
+            const record = studentException || { FN: true, AN: true };
+
+            if (record.FN && record.AN) stats.present++;
+            else if (record.FN || record.AN) stats.halfDay++;
+            else stats.absent++;
+        }
+    }
+
+    // (The calendarHTML generation logic remains largely the same, but the inner loop logic changes)
+    let calendarHTML = `
+            <div class="p-2 border rounded-3 ${isDashboard ? '' : 'p-4'}">
+                <div class="${isDashboard ? 'd-none' : 'd-md-flex justify-content-between align-items-md-center mb-4'}">
+                    <div>
+                        <h5 class="fw-bold">${student.name}</h5>
+                        <p class="text-muted mb-0">Attendance Report for ${new Date(year, month-1).toLocaleString('default', { month: 'long', year: 'numeric' })}</p>
+                    </div>
+                    <div class="d-flex flex-wrap gap-3 mt-2 mt-md-0 small">
+                        <span class="d-flex align-items-center"><span class="d-inline-block rounded-circle me-2" style="width:12px; height:12px; background-color: #d1e7dd;"></span>Present: <strong>${stats.present}</strong></span>
+                        <span class="d-flex align-items-center"><span class="d-inline-block rounded-circle me-2" style="width:12px; height:12px; background-color: #fff3cd;"></span>Half-day: <strong>${stats.halfDay}</strong></span>
+                        <span class="d-flex align-items-center"><span class="d-inline-block rounded-circle me-2" style="width:12px; height:12px; background-color: #f8d7da;"></span>Absent: <strong>${stats.absent}</strong></span>
+                        <span class="d-flex align-items-center"><span class="d-inline-block rounded-circle me-2" style="width:12px; height:12px; background-color: #e2e3e5;"></span>Holiday</span>
+                    </div>
+                </div>
+
+                <div class="calendar-grid text-center small fw-bold text-muted">
+                    <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+                </div>
+                <div class="calendar-grid text-center mt-1">`;
+
+    for (let day = 1; day <= new Date(year, month, 0).getDate(); day++) {
+        const dayStr = day.toString();
+        const dateStr = `${monthYear}-${dayStr.padStart(2, '0')}`;
+        const holiday = holidays.find(h => h.id === dateStr);
+        let status;
+        
+        if (holiday) {
+            status = { symbol: 'H', class: 'att-holiday', title: holiday.narration };
+        } else {
+            const dayClassData = monthData[dayStr]?.[classKey];
+            
+            // --- NEW: Logic to read exceptions for a specific student ---
+            if (dayClassData?.status === 'SUBMITTED') {
+                const studentException = dayClassData.exceptions?.[studentId];
+                const record = studentException || { FN: true, AN: true }; // Assume present if no exception
+                status = calculateAttendanceStatus(record);
+            } else {
+                status = { symbol: '', class: '' }; // Not a working day
+            }
+        }
+        
+        calendarHTML += `<div class="border rounded p-2 ... ${status.class || 'bg-light'}"> ... </div>`;
+    }
+    calendarHTML += `</div></div>`;
+    container.innerHTML = calendarHTML;
+}
+        async function generateStudentCalendarold(studentId, monthYear, containerId, isDashboard = false){
             const container = document.getElementById(containerId);
             if(!studentId || !monthYear){ 
                 container.innerHTML = `<p class="text-muted p-5 text-center">Select student and month to view calendar.</p>`;
@@ -7279,8 +8079,9 @@ function generateReportCardHTML(studentId, examId, containerId) {
             }
             
             const student = students.find(s => s.id === studentId);
-            const monthDataDoc = await getDoc(getDocRef('attendance', monthYear));
-            const monthData = monthDataDoc.data() || {};
+            // const monthDataDoc = await getDoc(getDocRef('attendance', monthYear));
+            // const monthData = monthDataDoc.data() || {};
+            const monthData = await getData('attendance', monthYear);
             const [year, month] = monthYear.split('-').map(Number);
             const firstDayOfMonth = new Date(year, month - 1, 1).getDay();
             const daysInMonth = new Date(year, month, 0).getDate();
@@ -8604,6 +9405,73 @@ window.handleCancelReceipt = async (receiptNo) => {
 
 // Add this event listener inside your main script block
 
+document.getElementById('pay-online-btn')?.addEventListener('click', () => {
+    const setup = studentFeeSetups.find(sfs => sfs.id === selectedUser.id);
+    const payments = receipts.filter(r => r.studentId === selectedUser.id && !r.isCancelled);
+    const totalPaid = payments.reduce((sum, p) => sum + p.totalAmount, 0);
+    const balance = setup ? (setup.totalPayable - totalPaid) : 0;
+
+    document.getElementById('modal-balance-due').textContent = `₹ ${balance.toFixed(2)}`;
+    const amountInput = document.getElementById('payment-amount');
+    amountInput.value = balance.toFixed(2);
+const generateUniqueTransactionId = () => {
+    // This should be as unique as possible, a timestamp plus a random number is a good client-side method.
+    return `TXN${Date.now()}${Math.floor(Math.random() * 10000)}`;
+};
+
+  // This function goes inside the 'pay-online-btn' event listener
+// This function goes inside the 'pay-online-btn' event listener
+const generateQRCode = () => {
+    const amountInput = document.getElementById('payment-amount');
+    const amount = parseFloat(amountInput.value);
+    const qrContainer = document.getElementById('qr-code-container');
+    const upiLinkButton = document.getElementById('pay-with-upi-app-btn');
+    const upiUriDisplay = document.getElementById('upi-uri-display');
+
+    // **IMPROVEMENT**: If amount is invalid, show a message instead of a blank box.
+    if (isNaN(amount) || amount <= 0) {
+        qrContainer.innerHTML = '<p class="text-center text-muted" style="padding-top: 5rem;">Enter a valid amount to generate the QR Code.</p>';
+        upiLinkButton.href = '#'; // Disable the mobile payment link
+        upiLinkButton.classList.add('disabled'); // Add disabled style
+        upiUriDisplay.textContent = 'UPI link will appear here.';
+        return;
+    }
+
+    // If amount is valid, enable the button
+    upiLinkButton.classList.remove('disabled');
+
+    // **CRUCIAL CHANGE:** Use the verified Merchant UPI ID and Merchant Name
+    const merchantUpiId = 'school.payments@icici'; // A new, verified merchant UPI ID
+    const payeeName = 'St. Marys School';       // The official registered name
+    
+    const transactionRefId = generateUniqueTransactionId();
+    const transactionNote = `Fee Payment for Admn No: ${selectedUser.admissionNumber}`;
+    
+    // **CRUCIAL CHANGE:** Use the official Merchant Category Code (MCC)
+    const merchantCode = '8299'; // This is a real MCC for educational services.
+
+    // The UPI deep link with all the correct, verified parameters
+    const upiURI = `upi://pay?pa=${merchantUpiId}&pn=${encodeURIComponent(payeeName)}&am=${amount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(transactionNote)}&tr=${transactionRefId}&mc=${merchantCode}`;
+
+    // --- Update QR Code ---
+    qrContainer.innerHTML = ''; // Clear previous content
+    new QRCode(qrContainer, {
+        text: upiURI,
+        width: 220,
+        height: 220,
+    });
+    upiUriDisplay.textContent = upiURI;
+
+    // --- Update the Mobile Button Link ---
+    upiLinkButton.href = upiURI;
+};
+    // Generate initial QR code and add listener for amount changes
+    generateQRCode();
+    amountInput.addEventListener('input', generateQRCode);
+});
+
+// Add this event listener inside your main script block
+
 document.getElementById('confirm-payment-btn')?.addEventListener('click', async () => {
     const amount = parseFloat(document.getElementById('payment-amount').value);
     const transactionId = document.getElementById('upi-transaction-id').value.trim();
@@ -8752,8 +9620,7 @@ window.rejectPayment = async (transactionId) => {
             const amountInput = document.getElementById('payment-amount');
             amountInput.value = balance.toFixed(2);
             document.getElementById('modal-balance-due').textContent = `₹ ${balance.toFixed(2)}`;
-
-            const generateUniqueTransactionId = () => {
+const generateUniqueTransactionId = () => {
     // This should be as unique as possible, a timestamp plus a random number is a good client-side method.
     return `TXN${Date.now()}${Math.floor(Math.random() * 10000)}`;
 };
@@ -8797,7 +9664,6 @@ window.rejectPayment = async (transactionId) => {
         });
     }
 };
-
 
         function attachFeeStructureFormListeners() {
     const form = document.getElementById('fee-structure-form');
@@ -12859,6 +13725,7 @@ window.renderBulkImportTool = () => {
                             <option value="students">Students</option>
                             <option value="teachers">Teachers</option>
                             <option value="classroomSubjects">Subject Allocations</option>
+                            <option value="books">library Records</option>
                         </select>
                     </div>
                     <div class="col-md-6">
@@ -17712,6 +18579,179 @@ function renderExamControlDutyAssignmentTab() {
             });
         }
 
+        function renderExamControlHallTicketTab() {
+    const container = document.getElementById('exam-control-hall-ticket');
+    if (!container) return;
+
+    const classOptions = classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+
+    container.innerHTML = `
+        <div class="ui-card mb-4">
+            <h5 class="section-header">Generate Hall Tickets</h5>
+            <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label" for="hall-ticket-exam-select">Select Exam</label>
+                    <select id="hall-ticket-exam-select" class="form-select">
+                        <option value="">-- Select Exam --</option>
+                        ${exams.map(e => `<option value="${e.id}">${e.name}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="hall-ticket-class-select">Select Class</label>
+                    <select id="hall-ticket-class-select" class="form-select">
+                        <option value="">-- Select Class --</option>
+                        ${classOptions}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="hall-ticket-division-select">Select Division</label>
+                    <select id="hall-ticket-division-select" class="form-select" disabled>
+                        <option value="">-- Select Division --</option>
+                    </select>
+                </div>
+                <div class="col-md-3 d-grid">
+                    <button id="generate-all-hall-tickets-btn" class="btn btn-primary" disabled>Generate All Hall Tickets</button>
+                </div>
+            </div>
+            <div id="hall-ticket-student-list-container" class="mt-4">
+                <p class="text-muted text-center p-4">Select an exam, class and division to load students.</p>
+            </div>
+        </div>
+        
+        <div class="modal fade" id="hallTicketModal" tabindex="-1" aria-labelledby="hallTicketModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="hallTicketModalLabel">Hall Ticket Preview</h5>
+                        <button type="button" class="btn-close no-print" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body" id="hall-ticket-modal-body">
+                        </div>
+                    <div class="modal-footer no-print">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="button" class="btn btn-primary" id="print-hall-ticket-btn"><i class="fas fa-print me-2"></i>Print Hall Ticket</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    const examSelect = document.getElementById('hall-ticket-exam-select');
+    const classSelect = document.getElementById('hall-ticket-class-select');
+    const divisionSelect = document.getElementById('hall-ticket-division-select');
+    const generateAllBtn = document.getElementById('generate-all-hall-tickets-btn');
+    const studentListContainer = document.getElementById('hall-ticket-student-list-container');
+
+    // --- NEW LOCAL VARIABLE TO STORE THE CURRENTLY DISPLAYED STUDENTS ---
+    let currentStudentsForHallTicket = [];
+
+    const loadStudentsForHallTicket = () => {
+        hallTicketClassId = classSelect.value;
+        hallTicketDivision = divisionSelect.value;
+        hallTicketExamId = examSelect.value;
+
+        if (hallTicketExamId && hallTicketClassId && hallTicketDivision) {
+            // displayHallTicketStudentList will now return the filtered list of students
+            currentStudentsForHallTicket = displayHallTicketStudentList(hallTicketExamId, hallTicketClassId, hallTicketDivision);
+            generateAllBtn.disabled = (currentStudentsForHallTicket.length === 0); // Disable if no students found
+        } else {
+            studentListContainer.innerHTML = `<p class="text-muted text-center p-4">Select an exam, class and division to load students.</p>`;
+            generateAllBtn.disabled = true;
+            currentStudentsForHallTicket = []; // Clear student list
+        }
+    };
+
+    examSelect.addEventListener('change', loadStudentsForHallTicket);
+
+    classSelect.addEventListener('change', () => {
+        const selectedClass = classes.find(c => c.id === classSelect.value);
+        divisionSelect.innerHTML = '<option value="">-- Select Division --</option>';
+        if (selectedClass) {
+            divisionSelect.disabled = false;
+            selectedClass.divisions.forEach(d => {
+                const option = document.createElement('option');
+                option.value = d;
+                option.textContent = d;
+                divisionSelect.appendChild(option);
+            });
+        } else {
+            divisionSelect.disabled = true;
+        }
+        loadStudentsForHallTicket();
+    });
+
+    divisionSelect.addEventListener('change', loadStudentsForHallTicket);
+
+    generateAllBtn.addEventListener('click', () => {
+        if (currentStudentsForHallTicket.length === 0) {
+            showAlert('No students found for generating hall tickets for the selected exam, class, and division.', 'info');
+            return;
+        }
+
+        let allHallTicketsHtml = '';
+        currentStudentsForHallTicket.forEach(student => { // Iterate through the stored list
+            allHallTicketsHtml += generateSingleHallTicketHTML(student.id, hallTicketExamId);
+        });
+
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) { showAlert('Please allow pop-ups to generate and print.', 'warning'); return; }
+        printWindow.document.write(`
+            <!DOCTYPE html><html><head><title>All Hall Tickets</title>
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+            <style>
+                body { font-family: 'Inter', sans-serif; margin: 0; padding: 0; }
+                /* The .hall-ticket-page ensures each ticket is a logical "page" for print */
+                
+                .hall-ticket-page:last-child { page-break-after: avoid; } /* No break after last one */
+                @media print {
+                    .hall-ticket-page {
+                        border: none !important;
+                        margin: 0 !important;
+                        padding: 1.5cm !important;
+                        box-shadow: none !important;
+                    }
+                    /* Ensure headers/footers/logos print correctly */
+                    img, h1, h2, h3, h4, h5, p, table, hr {
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
+                }
+            </style>
+            </head><body>
+            ${allHallTicketsHtml}
+            </body></html>
+        `);
+       // printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => { printWindow.print(); printWindow.close(); }, 500);
+    });
+
+    document.getElementById('print-hall-ticket-btn')?.addEventListener('click', () => {
+        const modalBody = document.getElementById('hall-ticket-modal-body');
+        if (modalBody) {
+            printContentOfDiv('hall-ticket-modal-body', 'Hall Ticket', {
+                pageSize: 'A4 portrait',
+                pageMargins: '0.5cm',
+                extraCss: `
+                    .modal-body { overflow: visible !important; }
+                    .hall-ticket-content { width: 100%; height: auto; margin: 0; padding: 0; }
+                    .hall-ticket-page { /* For individual print from modal, treat the content as a single page */
+                        width: 210mm; 
+                        height: 297mm; 
+                        padding: 1.5cm;
+                        box-sizing: border-box;
+                        page-break-after: auto !important; /* Don't force break after single ticket in modal print */
+                        border: none !important;
+                        margin: 0 !important;
+                        box-shadow: none !important;
+                    }
+                `
+            });
+        }
+    });
+}
+
+
 /**
  * Renders the Examination Control Reports tab content.
  */
@@ -19829,50 +20869,180 @@ const loadTodayAbsentees = (date, session) => {
 
 
 
-/**
- * Renders the top-level "Exam Reports" module.
- * This module contains sub-tabs for Exam Toppers and Grade Distribution.
- */
 window.renderExamReportsModule = () => {
     const mainContent = document.getElementById('main-content');
     if (!mainContent) return;
-
-    // Optional: Add a role-based access check if needed for this module itself
-    // For now, assuming it's visible to Admins and Teachers as per nav.
-    // If you need more granular access (e.g., only specific teachers), implement it here.
 
     mainContent.innerHTML = `
         <h1 class="h2 mb-4">Exam Reports & Analysis</h1>
         <ul class="nav nav-tabs" id="examReportsTab" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#exam-reports-toppers" type="button">Exam Toppers</button>
+                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#exam-reports-toppers" type="button">Overall Toppers</button>
             </li>
+            
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-reports-subject-toppers" type="button">Subject Toppers</button>
+            </li>
+
             <li class="nav-item" role="presentation">
                 <button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-reports-grade-dist" type="button">Grade Distribution</button>
             </li>
         </ul>
         <div class="tab-content card" id="examReportsTabContent">
             <div class="tab-pane fade show active p-4" id="exam-reports-toppers" role="tabpanel"></div>
+            
+            <div class="tab-pane fade p-4" id="exam-reports-subject-toppers" role="tabpanel"></div>
+
             <div class="tab-pane fade p-4" id="exam-reports-grade-dist" role="tabpanel"></div>
         </div>
     `;
 
     // Render content for each sub-tab
-    renderExamReportsToppersTab(); // This function should be your existing renderExamControlToppersTab
-    renderExamReportsGradeDistributionTab(); // This function should be your existing renderExamControlGradeDistributionTab
+    renderExamReportsToppersTab();
+    renderSubjectToppersTab(); // <-- Call the new function
+    renderExamReportsGradeDistributionTab();
 
-    // Attach listener for tab changes to re-render selected sub-tab
+    // Attach listener for tab changes
     document.querySelectorAll('#examReportsTab .nav-link').forEach(tab => {
         tab.addEventListener('shown.bs.tab', (event) => {
             const targetId = event.target.dataset.bsTarget;
             switch(targetId) {
                 case '#exam-reports-toppers': renderExamReportsToppersTab(); break;
+                case '#exam-reports-subject-toppers': renderSubjectToppersTab(); break; // <-- Handle new tab
                 case '#exam-reports-grade-dist': renderExamReportsGradeDistributionTab(); break;
             }
         });
     });
 };
 
+/**
+ * Renders the Subject Toppers tab content and filters.
+ */
+function renderSubjectToppersTab() {
+    const container = document.getElementById('exam-reports-subject-toppers');
+    if (!container) return;
+
+    container.innerHTML = `
+        <div class="ui-card mb-4">
+            <h5 class="section-header">Subject-wise Toppers (Top 3 Positions)</h5>
+            <div class="row g-3 align-items-end">
+                <div class="col-md-6">
+                    <label class="form-label">Select Exam</label>
+                    <select id="subject-toppers-exam-select" class="form-select">
+                        <option value="">-- Select Exam --</option>
+                        ${exams.map(e => `<option value="${e.id}">${e.name}</option>`).join('')}
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div id="subject-toppers-display-container" class="mt-4">
+            <p class="text-muted text-center p-4">Select an exam to view subject-wise toppers.</p>
+        </div>
+    `;
+
+    const examSelect = document.getElementById('subject-toppers-exam-select');
+    examSelect.addEventListener('change', () => {
+        displaySubjectWiseToppers(examSelect.value);
+    });
+
+    // Initial load
+    if (exams.length > 0) {
+        examSelect.value = exams[0].id;
+        displaySubjectWiseToppers(examSelect.value);
+    }
+}
+/**
+ * Calculates and displays the top 3 students for each subject in an exam.
+ * @param {string} examId
+ */
+function displaySubjectWiseToppers(examId) {
+    const container = document.getElementById('subject-toppers-display-container');
+    if (!container) return;
+    if (!examId) {
+        container.innerHTML = `<p class="text-muted text-center p-4">Select an exam to view subject-wise toppers.</p>`;
+        return;
+    }
+
+    container.innerHTML = `<div class="text-center p-4"><div class="spinner-border"></div><p>Calculating subject toppers...</p></div>`;
+
+    const schedulesForExam = examSchedules.filter(s => s.examId === examId);
+    const uniqueSubjectIds = [...new Set(schedulesForExam.map(s => s.subjectId))];
+
+    if (uniqueSubjectIds.length === 0) {
+        container.innerHTML = `<p class="alert alert-info text-center">No subjects are scheduled for this exam.</p>`;
+        return;
+    }
+
+    let subjectToppersHtml = `
+        <div class="text-end mb-3 no-print">
+            <button id="print-subject-toppers-btn" class="btn btn-secondary">
+                <i class="fas fa-print me-2"></i>Print Subject Toppers
+            </button>
+        </div>
+    `;
+
+    uniqueSubjectIds.forEach(subjectId => {
+        const subject = subjects.find(s => s.id === subjectId);
+        if (!subject) return;
+
+        // Get all marks for this specific subject in this exam
+        const subjectMarks = [];
+        students.forEach(student => {
+            const markId = `${examId}_${student.id}_${subjectId}`;
+            if (marks[markId]) {
+                const mark = marks[markId];
+                const schedule = schedulesForExam.find(s => s.subjectId === subjectId && s.classId === student.classId && s.division === student.division);
+                if (schedule) {
+                    const total = (mark.te === 'AB' || mark.ce === 'AB') ? -1 : (Number(mark.te) || 0) + (Number(mark.ce) || 0);
+                    const maxTotal = (schedule.maxTE || 0) + (schedule.maxCE || 0);
+                    const grade = calculateGrade(total, maxTotal);
+
+                    // Add to list only if they did not fail this specific subject
+                    if (grade !== 'E' && grade !== 'F' && total !== -1) {
+                        subjectMarks.push({
+                            studentName: student.name,
+                            photoDriveId: student.photoDriveId,
+                            total,
+                            maxTotal
+                        });
+                    }
+                }
+            }
+        });
+
+        // Sort by total marks (descending) and get top 3
+        const toppers = subjectMarks.sort((a, b) => b.total - a.total).slice(0, 3);
+
+        if (toppers.length > 0) {
+            subjectToppersHtml += `
+                <div class="ui-card mb-4 printable-section">
+                    <h6 class="section-header text-primary">${subject.name}</h6>
+                    <ul class="list-group list-group-flush">
+                        ${toppers.map((topper, index) => `
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <span class="fw-bold me-2">#${index + 1}</span>
+                                    ${topper.studentName}
+                                </div>
+                                <span class="badge bg-success rounded-pill">${topper.total} / ${topper.maxTotal}</span>
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+    });
+
+    if (subjectToppersHtml.includes('ui-card')) {
+        container.innerHTML = subjectToppersHtml;
+        document.getElementById('print-subject-toppers-btn').addEventListener('click', () => {
+            const exam = exams.find(e => e.id === examId);
+            printContentOfDiv('subject-toppers-display-container', `Subject Toppers - ${exam.name}`);
+        });
+    } else {
+        container.innerHTML = `<p class="alert alert-info text-center">No results found to determine subject toppers.</p>`;
+    }
+}
 /**
  * Renders the Exam Toppers tab content.
  */
@@ -19935,22 +21105,24 @@ function renderExamReportsToppersTab() { // Renamed from renderExamControlTopper
  * @param {string} examId
  * @param {string} gradingSystem
  */
+/**
+ * Displays class-wise toppers for a selected exam.
+ * @param {string} examId
+ * @param {string} gradingSystem
+ */
+/**
+ * Displays class-wise toppers for a selected exam.
+ * @param {string} examId
+ * @param {string} gradingSystem
+ */
 function displayClassWiseToppers(examId, gradingSystem) {
     const container = document.getElementById('toppers-display-container');
     if (!container) return;
 
     container.innerHTML = `<div class="text-center p-4"><div class="spinner-border"></div><p>Calculating toppers...</p></div>`;
 
-    const allStudents = students; // Get all students
-    const examSchedulesForExam = examSchedules.filter(s => s.examId === examId);
-
-    if (examSchedulesForExam.length === 0) {
-        container.innerHTML = `<p class="alert alert-info text-center">No subjects scheduled for this exam yet.</p>`;
-        return;
-    }
-
     // Group students by class and division
-    const studentsByClassDiv = allStudents.reduce((acc, student) => {
+    const studentsByClassDiv = students.reduce((acc, student) => {
         const key = `${student.classId}-${student.division}`;
         if (!acc[key]) {
             acc[key] = {
@@ -19963,9 +21135,15 @@ function displayClassWiseToppers(examId, gradingSystem) {
         return acc;
     }, {});
 
-    let toppersHtml = '';
+    let toppersHtml = `
+        <div class="text-end mb-3 no-print">
+            <button id="print-toppers-report-btn" class="btn btn-secondary">
+                <i class="fas fa-print me-2"></i>Print Toppers List
+            </button>
+        </div>
+    `;
 
-    // Sort classes for consistent display
+    // --- COMPLETED: Sorts classes numerically, then divisions alphabetically ---
     const sortedClassDivKeys = Object.keys(studentsByClassDiv).sort((a, b) => {
         const [classA, divA] = a.split('-');
         const [classB, divB] = b.split('-');
@@ -19980,15 +21158,20 @@ function displayClassWiseToppers(examId, gradingSystem) {
         return divA.localeCompare(divB); // Alphabetical division comparison
     });
 
-
     sortedClassDivKeys.forEach(key => {
         const { classId, division, students: studentsInThisClassDiv } = studentsByClassDiv[key];
         const className = classes.find(c => c.id === classId)?.name || classId;
 
-        // Calculate results for all students in this class/division for the given exam
-        const classResults = processExamResultsData(studentsInThisClassDiv, examSchedulesForExam, marks, examId, gradingSystem);
+        // Filter schedules to ONLY include the ones for this specific class and division.
+        const schedulesForThisClass = examSchedules.filter(s =>
+            s.examId === examId &&
+            s.classId === classId &&
+            s.division === division
+        );
 
-        // Filter for PASS status and sort by Grand Percentage (descending)
+        // Call the processing function with the correctly scoped schedules.
+        const classResults = processExamResultsData(studentsInThisClassDiv, schedulesForThisClass, marks, examId, gradingSystem);
+
         const toppers = classResults
             .filter(r => r.finalStatus === 'PASS')
             .sort((a, b) => b.grandPct - a.grandPct)
@@ -19996,10 +21179,13 @@ function displayClassWiseToppers(examId, gradingSystem) {
 
         if (toppers.length > 0) {
             toppersHtml += `
-                <div class="ui-card mb-4">
+                <div class="ui-card mb-4 printable-section">
                     <h6 class="section-header text-primary">Toppers for ${className} - ${division}</h6>
                     <div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-3">
+                        
                         ${toppers.map((topper, index) => {
+                            const student = students.find(s => s.id === topper.studentId);
+                            const exam = exams.find(e => e.id === examId);
                             const studentPhotoSrc = topper.studentId && students.find(s => s.id === topper.studentId)?.photoDriveId
                                 ? `https://drive.google.com/thumbnail?id=${students.find(s => s.id === topper.studentId).photoDriveId}&sz=200`
                                 : 'https://placehold.co/100x120?text=No+Photo';
@@ -20018,6 +21204,12 @@ function displayClassWiseToppers(examId, gradingSystem) {
                                             <h6 class="mb-0">${topper.studentName}</h6>
                                             <p class="text-muted small mb-1">${topper.grandPct?.toFixed(2) || '0.00'}%</p>
                                             <p class="mb-0 small text-success fw-bold">${topper.overallGrade}</p>
+                                            <button class="btn btn-sm btn-outline-primary mt-2" 
+                        onclick="generateTopperPoster('${topper.studentId}', '${examId}', ${index + 1})">
+                    <i class="fas fa-award me-1"></i> Generate Poster
+
+                </button>
+
                                         </div>
                                     </div>
                                 </div>
@@ -20028,14 +21220,18 @@ function displayClassWiseToppers(examId, gradingSystem) {
             `;
         }
     });
-
-    if (toppersHtml === '') {
-        container.innerHTML = `<p class="alert alert-info text-center">No toppers found for this exam (or no students passed).</p>`;
-    } else {
+    
+    // Final rendering and attaching the print listener
+    if (toppersHtml.includes('ui-card')) {
         container.innerHTML = toppersHtml;
+        document.getElementById('print-toppers-report-btn').addEventListener('click', () => {
+            const exam = exams.find(e => e.id === examId);
+            printContentOfDiv('toppers-display-container', `Exam Toppers - ${exam.name}`);
+        });
+    } else {
+        container.innerHTML = `<p class="alert alert-info text-center">No toppers found for this exam (or no students passed).</p>`;
     }
 }
-
 // Variable to hold the Chart.js instance for grade distribution
 let gradeDistributionChart = null;
 
@@ -20275,30 +21471,22 @@ function attachDataListenersnew(collectionsToWatch, main = false) {
             }
     });
 }
-const updateGlobalDataAndCache = async (collectionName, data) => {
-    // 1. Update global JS array (if a setter is defined)
-    // const config = collectionMap[collectionName]; // collectionMap needs to be accessible
-    // if (config && config.setter) {
-    //     config.setter(data);
-    // }
+// --- In your <script type="module"> block ---
+// REPLACE your entire updateGlobalDataAndCache function with this one
 
-    // 2. Write/Update IndexedDB cache
+const updateGlobalDataAndCache = async (collectionName, data) => {
+    // 1. Update the global JavaScript variable for immediate UI updates
+    window[collectionName] = data;
+
+    // 2. Efficiently update the IndexedDB cache
     try {
-        const table = appDb.table(collectionName);
-        await table.clear(); // Clear existing data in the table for a fresh sync
-        await table.bulkAdd(data); // Add new data from snapshot
-        // console.log(`Cached ${collectionName} in IndexedDB.`);
+        // CORRECT: Access the table directly and use bulkPut.
+        // bulkPut will add new items and update existing ones by their primary key ('&id').
+        // This is the correct and most efficient way to sync.
+        await appDb[collectionName].bulkPut(data);
+        console.log(`Synced ${collectionName} with IndexedDB.`);
     } catch (e) {
-        if (e.name === "ConstraintError") {
-            console.warn(`IndexedDB ConstraintError for ${collectionName}. Attempting to bulkPut.`);
-            try {
-                await appDb.table(collectionName).bulkPut(data); // Use bulkPut for upsert
-            } catch (putError) {
-                console.error(`Error with bulkPut for ${collectionName}:`, putError);
-            }
-        } else {
-            console.error(`Error caching ${collectionName} in IndexedDB:`, e);
-        }
+        console.error(`Error caching ${collectionName} in IndexedDB:`, e);
     }
 };
 
@@ -20342,14 +21530,35 @@ const updateGlobalDataAndCache = async (collectionName, data) => {
 'timetable-mgt': window.renderTimetableManagement,
     'class-timetable': window.renderClassTimetableView
 };      
-const appDb = new Dexie("SchoolAppDB");
-appDb.version(3.1).stores({
-    classes: "id,name", // Define primary key 'id' and index 'name'
-    students: "id,classId,division,gender,admissionNumber,name",
-    teachers: "id,name",
-    // ... other collections you want to cache
-});
+// --- In your <script type="module"> block ---
 
+const appDb = new Dexie("SchoolAppDB");
+// Increment the version number if you are changing the schema
+appDb.version(3.6).stores({
+    classes: "&id, name", // &id means primary key and must be unique
+    subjects: "&id, name",
+    students: "&id, classId, division, admissionNumber, name",
+    teachers: "&id, email, name",
+    exams: "&id, name",
+    examSchedules :'&id',
+    examRooms :'&id',
+    examRoomAllocationRules :'&id',
+    examRegistrationSettings :'&id',
+    examAbsentees :'&id',
+    examDuties :'&id',
+    marks: "&id",
+    classroomSubjects: "&id, classId, division, subjectId, teacherId",
+    examSchedules: "&id, examId, classId, division",
+    holidays: "&id",
+    attendance:"&id",
+    // Add any other collections you frequently use
+    books: "&id, title",
+    bookIssuances: "&id, studentId, bookId, status",
+    // You can also cache fee data, but be mindful of financial year changes
+    feeStructures: "&id, financialYear, feeHead, classId, stage",
+    studentFeeSetups: "&id, financialYear, classId, division"
+});
+    
  export async function getStudentsData(studentId = null) {
     if (studentId) {
         let student = null;
@@ -20496,11 +21705,147 @@ window.addEventListener('beforeunload', (event) => {
     }
 });
 
+// --- In your <script type="module"> block ---
+// Add these new functions
+
+/**
+ * The main function to generate and download a topper poster.
+ * @param {string} studentId - The ID of the topper.
+ * @param {string} examId - The ID of the exam.
+ * @param {number} rank - The rank/position of the student.
+ */
+
+window.generateTopperPoster = async (studentId, examId, rank)=> {
+    const student = students.find(s => s.id === studentId);
+    const exam = exams.find(e => e.id === examId);
+    if (!student || !exam) {
+        showAlert('Could not find student or exam data.', 'danger');
+        return;
+    }
+
+    showAlert('Generating poster... please wait.', 'info');
+
+    try {
+        // 1. --- Load Images (This part is the same) ---
+        const backgroundUrl = 'KYHSSLOGO.jpg'; // Example background
+        const studentPhotoUrl = student.photoDriveId ? await getSafeImageFromDrive(student.photoDriveId) : 'https://placehold.co/200x250?text=No+Photo';
+
+        const [bgImage, studentImage] = await Promise.all([
+            loadImage(backgroundUrl),
+            loadImage(studentPhotoUrl)
+        ]);
+
+        // 2. --- Setup Canvas (This part is the same) ---
+        const canvas = document.createElement('canvas');
+        canvas.width = 1080;
+        canvas.height = 1920;
+        const ctx = canvas.getContext('2d');
+
+        // 3. --- Draw on Canvas (This part is the same) ---
+        ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(540, 550, 200, 0, Math.PI * 2, true);
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(studentImage, 340, 350, 400, 500);
+        ctx.restore();
+
+        const rankText = `${rank}${rank === 1 ? 'st' : rank === 2 ? 'nd' : rank === 3 ? 'rd' : 'th'}`;
+        ctx.font = 'bold 120px Inter';
+        ctx.fillStyle = '#FFD700';
+        ctx.textAlign = 'center';
+        ctx.strokeStyle = '#8B4513';
+        ctx.lineWidth = 5;
+        ctx.strokeText(rankText, 540, 950);
+        ctx.fillText(rankText, 540, 950);
+        
+        ctx.font = 'bold 72px Inter';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillText(student.name.toUpperCase(), 540, 1100);
+
+        const className = classes.find(c => c.id === student.classId)?.name || '';
+        ctx.font = '50px Inter';
+        ctx.fillStyle = '#E0E0E0';
+        ctx.fillText(`${className} - ${student.division}`, 540, 1180);
+        
+        ctx.font = 'italic 40px Inter';
+        ctx.fillText(exam.name, 540, 1250);
+
+        // 4. --- 👇 NEW: Display Poster in Modal (Replaces old download logic) 👇 ---
+        const dataUrl = canvas.toDataURL('image/png');
+
+        // Get the modal elements we created in the HTML
+        const posterImageEl = document.getElementById('poster-image-display');
+        const saveBtnEl = document.getElementById('save-poster-btn');
+        const posterModalEl = document.getElementById('poster-modal');
+
+        if (posterImageEl && saveBtnEl && posterModalEl) {
+            // Set the image source in the modal
+            posterImageEl.src = dataUrl;
+
+            // Set the download attributes on the save button
+            saveBtnEl.href = dataUrl;
+            saveBtnEl.download = `${student.name}_Topper_Poster.png`;
+
+            // Use Bootstrap's JS to show the modal
+            const modal = new bootstrap.Modal(posterModalEl);
+            modal.show();
+        } else {
+            // Fallback in case modal elements are not found
+            console.error('Poster modal elements not found!');
+            showAlert('Could not display poster preview.', 'danger');
+        }
+
+    } catch (error) {
+        console.error('Error generating poster:', error);
+        showAlert(`Failed to generate poster. Error: ${error.message}`, 'danger');
+    }
+}
+
+/**
+ * Helper function to fetch a Google Drive image safely using our Apps Script proxy.
+ * @param {string} fileId - The Google Drive file ID.
+ * @returns {Promise<string>} A promise that resolves to the Base64 image data URL.
+ */
+export async function getSafeImageFromDrive(fileId) {
+    // 👇 PASTE THE GOOGLE APPS SCRIPT URL YOU COPIED IN STEP 1 HERE 👇
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyBkmSNI8H6eotJjuQabNL5EpMaQbVNTru3w_06onbOSXbGboJ3WvwBWbwwfaGnK6ktjg/exec';
+    
+    const response = await fetch(`${SCRIPT_URL}?fileId=${fileId}`);
+    if (!response.ok) {
+        throw new Error('Network response from Apps Script was not ok.');
+    }
+    const result = await response.json();
+    if (result.success) {
+        return result.imageData;
+    } else {
+        throw new Error(`Apps Script Error: ${result.error}`);
+    }
+}
+/**
+ * Helper function to load an image and return it as a promise.
+ * @param {string} src - The source URL or Base64 data of the image.
+ * @returns {Promise<Image>}
+ */
+function loadImage(src) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous"; // Important for external images
+        img.onload = () => resolve(img);
+        img.onerror = (err) => reject(new Error(`Failed to load image: ${src}`));
+        img.src = src;
+    });
+}
+
         // Start App
         initializeAppAndAuth();
 
         
     </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+ <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
     <script src="https://cdn.jsdelivr.net/npm/davidshimjs-qrcodejs/qrcode.min.js"></script>
      <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <!-- Cropper CSS -->
@@ -20509,6 +21854,13 @@ window.addEventListener('beforeunload', (event) => {
 <!-- Bootstrap & Cropper JS (at end of body) -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.5.13/dist/cropper.min.js"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/davidshimjs-qrcodejs/qrcode.min.js"></script>
 
 </body>
 </html>
