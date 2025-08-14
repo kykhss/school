@@ -516,11 +516,12 @@
         
         let classes = [], teachers = [], subjects = [],  exams = [], classroomSubjects = [], examSchedules = [], 
         // marks = [], 
+        // Add this near your other global variables
         
         
         attendance = [], holidays = [], syllabuses = [], syllabusCompletion = [], chapters = [],books = [], bookIssuances = [];
         let feeStructures = [], studentFeeSetups = [], receipts = [];
-        
+        let currentViewId = null;
         let unsubscribeListeners = [];
         let unsubscribeFeeListeners = [];
         
@@ -592,72 +593,79 @@ schoolDetails = {
             schoolSealPng: 'SEAL.jpg'
         };
 
-        // REPLACE your existing getData function with this improved version
-
-// A cleaner, more robust, and more efficient version of your getData function.
-async function getData(storeName, queryObj = null, viewId = null) {
+        // A final, unified function to handle all data fetching needs.
+async function getData(storeName, idOrQueryObj = null) {
     try {
         const store = appDb[storeName];
         if (!store) {
             console.error(`Store "${storeName}" does not exist in the database.`);
-            return [];
+            return null;
         }
 
-        // 1. --- Query the Local Cache (IndexedDB) ---
-        // Let Dexie do the filtering if a query is provided. It's much faster.
-        let localData = queryObj ? await store.where(queryObj).toArray() : await store.toArray();
+        const isById = typeof idOrQueryObj === 'string';
+        attachDataListeners([storeName]);
+        // --- PATH 1: Fetch by ID ---
+        if (isById) {
+            const docId = idOrQueryObj;
+            let localDoc = await store.get(docId);
 
-        // 2. --- Cache Hit: Data Found Locally ---
-        if (localData.length > 0) {
-            console.log(`IndexedDB Cache HIT for "${storeName}"`);
-            
-            // Hydrate the appropriate global variable (marks object or window[storeName] array)
-            if (storeName === 'marks') {
-                marks = localData.reduce((obj, item) => { obj[item.id] = item; return obj; }, {});
-            } else {
-                window[storeName] = localData;
+            if (localDoc) return localDoc;
+
+            if (navigator.onLine) {
+                try {
+                    // const docSnap = await getDoc(getDocRef(storeName, docId));
+                    // if (docSnap.exists()) {
+                    //     const firestoreDoc = { id: docSnap.id, ...docSnap.data() };
+                    //     await store.put(firestoreDoc);
+                    //     return firestoreDoc;
+                   // }
+                    attachDataListeners([storeName]);
+
+                } catch (err) {
+                    console.warn(`Firestore fetch failed for ${docId}`, err);
+                }
             }
-            return localData; // Always return the array for consistency
+
+            // Not found — better to return null instead of all docs
+            return null;
         }
 
-        // 3. --- Cache Miss: Fetch from Network if Online ---
+        // --- PATH 2: Query data from cache ---
+        let localData = idOrQueryObj
+            ? await store.where(idOrQueryObj).toArray()
+            : await store.toArray();
+
+        if (localData.length > 0) return localData;
+
+        // --- Try online fetch if offline cache is empty ---
         if (navigator.onLine) {
-            if (viewId) showAlert(`Fetching fresh data for ${viewId.replace(/-/g, ' ')}...`, 'info');
+            try {
+                if (storeName === 'marks') {
+                    await syncDataForUser();
+                } else {
+                    attachDataListeners([storeName]);
+                }
 
-            // Trigger the appropriate listener to sync data from Firestore
-            if (storeName === 'marks') {
-                syncDataForUser();
-            } else {
-                attachDataListeners([storeName]);
+                await waitForCollectionLoad(storeName);
+
+                // re-fetch from IndexedDB after sync
+                localData = idOrQueryObj
+                    ? await store.where(idOrQueryObj).toArray()
+                    : await store.toArray();
+
+                return localData;
+            } catch (err) {
+                console.error(`Error fetching ${storeName} from Firestore:`, err);
             }
-            
-            // Wait for the initial sync to complete
-            await waitForCollectionLoad(storeName);
-            
-            if (viewId) showAlert(`Data for ${viewId.replace(/-/g, ' ')} loaded.`, 'success');
-            
-            // Now that the cache is populated, read from it again, applying the query
-            let freshData = queryObj ? await store.where(queryObj).toArray() : await store.toArray();
-
-            // Hydrate the global variable with the fresh data
-            if (storeName === 'marks') {
-                marks = freshData.reduce((obj, item) => { obj[item.id] = item; return obj; }, {});
-            } else {
-                window[storeName] = freshData;
-            }
-            return freshData;
-
-        } else {
-            // 4. --- Offline and no data in cache ---
-            showAlert(`You are offline and data for this section is not cached.`, 'warning');
-            return [];
         }
 
+        return [];
     } catch (error) {
         console.error(`Error fetching data from "${storeName}":`, error);
-        return [];
+        return null;
     }
 }
+
         // exams = [
         //     { id: 'EXAM001', name: 'Term Exam 2025' },
         //     { id: 'EXAM002', name: 'Annual Exam 2025' }
@@ -798,6 +806,7 @@ function waitForCollectionLoad(collectionName) {
   { id: 'bulk-import', icon: 'fa-file-import', text: 'Bulk Import' },
   { id: 'fest-mgt', icon: 'fa-trophy', text: 'Fest Management' },
   { id: 'timetable-mgt', icon: 'fa-calendar-alt', text: 'Timetable Mgt' },
+  { id: 'birthdays', icon: 'fa-birthday-cake', text: 'Today\'s Birthdays' }, // 🎂 Add this line
 
 { id: 'fest-scoreboard', icon: 'fa-chart-line', text: 'Live Scoreboard' },
 
@@ -818,6 +827,7 @@ const teacherNav = [
   { id: 'exam-reports', icon: 'fa-chart-pie', text: 'Exam Toppers' }, // <-- NEW TOP-LEVEL MODULE
   { id: 'class-timetable', icon: 'fa-calendar-days', text: 'Class Timetable' },{ id: 'library-mgt', icon: 'fa-book-reader', text: 'Library Management' },
 { id: 'class-timetable', icon: 'fa-calendar-days', text: 'Class Timetable' },
+{ id: 'birthdays', icon: 'fa-birthday-cake', text: 'Today\'s Birthdays' }, // 🎂 Add this line
 
 { id: 'library-status', icon: 'fa-books', text: 'Library Status' },
 { id: 'fest-registration', icon: 'fa-user-check', text: 'Fest Registration' },
@@ -864,12 +874,15 @@ const studentNav = [
             setTimeout(() => { alertEl.style.display = 'none'; }, 3000);
         }
     
-// This function needs to be called after 'classroomSubjects' and 'teachers' data are available
-function updateTeacherAssignedClasses() {
-    if (currentUserRole === 'teacher' && selectedUser && classroomSubjects.length > 0) {
+// This function processes existing data, it does not fetch new data.
+// It should be called after `classroomSubjects` and `teachers` are loaded.
+async function updateTeacherAssignedClasses() {
+    // Check if the user is a teacher and the required data is ready
+    if (currentUserRole === 'teacher' && selectedUser && classroomSubjects) {
         const uniquePairs = new Set();
         teacherAssignedClasses = [];
 
+        // First, add all the classes where the teacher teaches a subject
         classroomSubjects.forEach(cs => {
             if (cs.teacherId === selectedUser.id) {
                 const key = `${cs.classId}|${cs.division}`;
@@ -879,6 +892,22 @@ function updateTeacherAssignedClasses() {
                 }
             }
         });
+
+        // --- NEW LOGIC START ---
+        // Now, also add the teacher's class charge, if it exists and isn't already in the list.
+        if (selectedUser.classCharge && selectedUser.classCharge.classId) {
+            const { classId, division } = selectedUser.classCharge;
+            const key = `${classId}|${division}`;
+            
+            // Add it only if it's not already there from a subject allocation
+            if (!uniquePairs.has(key)) {
+                uniquePairs.add(key);
+                teacherAssignedClasses.push({ classId, division });
+            }
+        }
+        // --- NEW LOGIC END ---
+        console.log('classroomSubjects',classroomSubjects);
+        console.log('classroomSubjects',teacherAssignedClasses);
     } else {
         teacherAssignedClasses = []; // Clear if not a teacher or data not ready
     }
@@ -889,6 +918,7 @@ function updateTeacherAssignedClasses() {
 // REPLACE your entire onLoginSuccess function with this one
 
 async function onLoginSuccess(role, user) {
+    //console.log('mythreestudents',await getData('students')); 
     currentUserRole = role;
     selectedUser = user;
     unsubscribeAllListeners();
@@ -899,20 +929,36 @@ async function onLoginSuccess(role, user) {
         // --- ONLINE: Fetch all data and populate the cache ---
         showAlert('Syncing latest data from server...', 'info');
         try {
-            const collectionsToCache = ['classes', 'subjects', 'students', 'teachers', 'exams', 'classroomSubjects', 'examSchedules', 'holidays', 'books', 'bookIssuances', 'feeStructures', 'studentFeeSetups', 'attendance']; // Added 'attendance'
+           // await getData('classroomSubjects');
+            
+    
 
-            // Create an array of promises to fetch all data concurrently
-            const dataPromises = collectionsToCache.map(name => getData(name));
-            
-            // CORRECT: Wait for all data fetching to complete
-            await Promise.all(dataPromises);
-            
+            const collectionsToCache = [
+  'classes', 'subjects', 'classroomSubjects', 'teachers', 'exams', 'examSchedules', 'holidays', 
+  'books', 'bookIssuances', 'feeStructures', 
+  'studentFeeSetups', 'attendance'
+];
+
+// Fetch all collections in parallel, but also assign resolved results to window
+const dataPromises = collectionsToCache.map(async (name) => {
+  const data = await getData(name);
+  window[name] = data;
+  console.log(name,data);
+  return data;
+});
+
+// Wait for all collections to populate
+await Promise.all(dataPromises);
+
+// ✅ Now safe to run dependent logic
+updateTeacherAssignedClasses();
+
             showAlert('Data sync complete!', 'success');
 
             // CORRECT: Now that the cache is warm, attach real-time listeners for future updates
-            attachDataListeners(collectionsToCache);
+         attachDataListeners(collectionsToCache);
             // You can re-add your other specific listeners here if needed
-            // attachFeeDataListeners(activeFinancialYear, role, user);
+        attachFeeDataListeners(activeFinancialYear, role, user);
             // syncDataForUser();
             
         } catch (error) {
@@ -951,7 +997,7 @@ async function onLoginSuccessold (role, user) {
 
     // Define core essential collections that *must* be loaded before any view is rendered.
     // Ensure 'classroomSubjects' is in this list as 'updateTeacherAssignedClasses' depends on it.
-    const coreCollections = ['classes', 'subjects', 'exams', 'holidays', 'schoolDetails', 'festSettings', 'festHouses', 'fests', 'festEvents', 'classroomSubjects', 'students', 'teachers','examRooms', 'examDuties', 'examAbsentees', 'examRegistrationSettings'];
+    const coreCollections = ['classes','subjects', 'exams', 'holidays', 'schoolDetails', 'festSettings','classroomSubjects', 'teachers', 'examDuties', 'examAbsentees', 'examRegistrationSettings'];
 
     try {
         showAlert(`Loading essential school data...`, 'info');
@@ -999,7 +1045,7 @@ async function onLoginSuccessold (role, user) {
 // Add this new object to your script
 const viewDependencies = {
     // Admin & General Views
-    'dashboard': ['students', 'teachers', 'classes', 'subjects', 'attendance','classroomSubjects'],
+    'dashboard': ['schoolDetails','students', 'teachers', 'classes', 'subjects', 'attendance','classroomSubjects'],
     'add-student': ['classes', 'students'],
     'student-mgt': ['students', 'classes'],
     'teacher-mgt': ['teachers', 'classes'],
@@ -1035,7 +1081,7 @@ const viewDependencies = {
     // Student Views
     'my-results': ['exams', 'examSchedules', 'subjects'],
     'my-attendance': ['holidays', 'attendance'],
-    'my-fees': ['studentFeeSetups', 'receipts','schoolDetails'],
+    'my-fees': ['schoolDetails','studentFeeSetups', 'receipts'],
     'forms': ['forms', 'formResponses','schoolDetails'],
     'my-forms': ['forms', 'formResponses'],
     'my-library': ['bookIssuances'],
@@ -1097,7 +1143,7 @@ const collectionMap = {
     
     
     };
-function attachDataListeners(collectionsToWatch ,main=false) { // No longer `async` and returns void
+async function attachDataListeners(collectionsToWatch ,main=false) { // No longer `async` and returns void
     if (!collectionsToWatch || collectionsToWatch.length === 0) {
         return; // Nothing to watch
     }
@@ -1105,9 +1151,7 @@ if (!navigator.onLine) {
         showAlert('Offline admin login failed. Credentials do not match cached data.', 'danger');
         return; // Definitive failure if offline.
     }
-    
 
-    
     collectionsToWatch.forEach(name => {
 
         
@@ -1139,10 +1183,11 @@ if (!navigator.onLine) {
         const collectionsWithSingleDivisionField = ['students', 'examSchedules', 'syllabusCompletion'];
         // --- Collections where division is stored in an 'appliesToDivisions' array ---
         const collectionsWithDivisionArrayField = ['chapters', 'syllabuses'];
-
-        if (currentUserRole === 'teacher' &&
-            (collectionsWithSingleDivisionField.includes(name) || collectionsWithDivisionArrayField.includes(name))) {
-
+        console.log('currentUserRole',currentUserRole);
+        console.log('teacherAssignedClasses',teacherAssignedClasses);
+        
+        if (currentUserRole === 'teacher' && (collectionsWithSingleDivisionField.includes(name) || collectionsWithDivisionArrayField.includes(name))) {
+            console.log('teacherAssignedClasses',teacherAssignedClasses);
             if (teacherAssignedClasses.length > 0) {
                 teacherAssignedClasses.forEach(({ classId, division }) => {
                     let currentQuery;
@@ -1157,6 +1202,7 @@ if (!navigator.onLine) {
                             where('classId', '==', classId),
                             where('division', '==', division)
                         );
+                        
                         }
                     } else if (collectionsWithDivisionArrayField.includes(name)) {
                         // For collections with appliesToDivisions array
@@ -1165,6 +1211,7 @@ if (!navigator.onLine) {
                             where('appliesToDivisions', 'array-contains', division) // <-- KEY CHANGE HERE
                         );
                     }
+                    console.log(currentQuery);
                     if (currentQuery) {
                         queriesToExecuteForCollection.push({
                             key: `${name}_${classId}_${division}`,
@@ -1207,39 +1254,61 @@ if (!navigator.onLine) {
         const currentCollectionUnsubs = []; // To store unsubscribe functions for this specific collection
 
         queriesToExecuteForCollection.forEach(qInfo => {
-            const unsub = onSnapshot(qInfo.query, snapshot => {
-                snapshot.docChanges().forEach(change => {
-                    if (change.type === "removed") {
-                        delete collectedData[change.doc.id];
-                    } else {
-                        collectedData[change.doc.id] = { id: change.doc.id, ...change.doc.data() };
+            const unsub = onSnapshot(qInfo.query, async snapshot => {
+               const changes = snapshot.docChanges();
+            if (changes.length === 0) return; // No changes to process
+
+            // Prepare arrays for batch database operations for this snapshot
+            const toAddOrUpdate = [];
+            const toDelete = [];
+
+            changes.forEach(change => {
+                const docData = { id: change.doc.id, ...change.doc.data() };
+                
+                if (change.type === "added" || change.type === "modified") {
+                    // For both adds and modifications, we update our temporary object
+                    collectedData[change.doc.id] = docData;
+                    toAddOrUpdate.push(docData);
+                } else if (change.type === "removed") {
+                    // For removals, we delete from our temporary object
+                    delete collectedData[change.doc.id];
+                    toDelete.push(change.doc.id);
+                }
+            });
+
+            // Update the main global data array with the complete, merged data
+            config.setter(Object.values(collectedData));
+
+            // Now, perform efficient, incremental updates to IndexedDB
+            try {
+                const store = appDb[name];
+                await appDb.transaction('rw', store, async () => {
+                    if (toDelete.length > 0) {
+                        await store.bulkDelete(toDelete);
+                    }
+                    if (toAddOrUpdate.length > 0) {
+                        await store.bulkPut(toAddOrUpdate);
                     }
                 });
+                console.log(`Applied ${changes.length} change(s) to '${name}' in IndexedDB.`);
+            } catch (error) {
+                console.error(`Error applying incremental updates to ${name}:`, error);
+            }
 
-                // Update the main global data array for this collection
-                
-               // Set the global variable (like `window.students`)
-                config.setter(Object.values(collectedData));
-
-                // Sync the entire updated collection to IndexedDB
-                updateGlobalDataAndCache(name, Object.values(collectedData));
-
-                // Check if this is the initial snapshot for all queries for this collection
-                if (!dataLoadStatus[name]) {
-                    queriesCompletedInitialSnapshot++;
-                    if (queriesCompletedInitialSnapshot === expectedInitialSnapshots) {
-                        dataLoadStatus[name] = true; // Mark as initially loaded
-                        // Resolve the promise for this collection if it exists
-                        if (collectionLoadPromises[name] && collectionLoadPromises[name].resolve) {
-                            collectionLoadPromises[name].resolve();
-                        }
+            // --- The rest of the logic for initial load and renderers remains the same ---
+            if (!dataLoadStatus[name]) {
+                queriesCompletedInitialSnapshot++;
+                if (queriesCompletedInitialSnapshot === expectedInitialSnapshots) {
+                    dataLoadStatus[name] = true;
+                    if (collectionLoadPromises[name] && collectionLoadPromises[name].resolve) {
+                        collectionLoadPromises[name].resolve();
                     }
                 }
+            }
+            if (config.renderer) {
+                config.renderer();
+            }
 
-                // Trigger renderer if configured (for live updates after initial load)
-                if (config.renderer) {
-                    config.renderer();
-                }
             }, (error) => {
                 console.error(`[Firestore] Error listening to ${name} (query ${qInfo.key}): `, error);
                 // Ensure the promise resolves even on error to unblock Promise.all
@@ -1649,48 +1718,66 @@ function attachFeeDataListeners(financialYear, role, user) {
 // REPLACE your existing navigateTo function with this optimized version
 
 async function navigateTo(viewId, pushState = true) {
+    currentViewId = viewId; // <-- ADD THIS LINE to track the active view
     const mainContent = document.getElementById('main-content');
     if (!mainContent) return;
 
-    // Show a loading spinner immediately
-    mainContent.innerHTML = `<div class="d-flex justify-content-center align-items-center" style="height: 80vh;"><div class="spinner-border text-primary" role="status"></div></div>`;
+    // 1. Show a loading spinner for better user experience
+    mainContent.innerHTML = `
+        <div class="d-flex justify-content-center align-items-center" style="height: 80vh;">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    `;
 
+    // Update sidebar active link and browser history
     document.querySelectorAll('#sidebar-nav .nav-link').forEach(link => link.classList.remove('active'));
     const navLink = document.getElementById(`nav-${viewId}`);
     if (navLink) navLink.classList.add('active');
-    if (pushState) history.pushState({ viewId: viewId }, viewId, `#${viewId}`);
+    if (pushState) history.pushState({ viewId }, viewId, `#${viewId}`);
 
-    const requiredCollections = viewDependencies[viewId] || [];
+    const collectionsToCache = viewDependencies[viewId] || [];
 
     try {
-        // --- THIS IS THE OPTIMIZED LOGIC ---
+        // This creates an array of promises, but does NOT wait for them.
+        const dataPromises = collectionsToCache.map(name => getData(name));
+    
+    // 1. Capture the results from all promises (this is correct)
+    const resolvedDataArray = await Promise.all(dataPromises);
 
-        // 1. Create a list of promises for ONLY the collections that are not yet loaded into memory.
-        const dataPromises = requiredCollections
-            .filter(name => !window[name] || window[name].length === 0) // Check if global variable is empty
-            .map(name => getData(name, null, viewId)); // Create a getData() promise only for those that are empty
-
-        // 2. If there are any collections that need fetching, wait for them all to complete.
-        if (dataPromises.length > 0) {
-            console.log(`Fetching missing data for view: ${viewId}`, requiredCollections.filter(name => !window[name] || window[name].length === 0));
-            await Promise.all(dataPromises);
+    // 2. Loop through the results and use your 'collectionMap' setter to update the correct variable
+    collectionsToCache.forEach((name, index) => {
+        const data = resolvedDataArray[index]; // Get the data for the current collection
+        const config = collectionMap[name];   // <-- Get the config for this collection
+        
+        if (data && config && config.setter) {
+            config.setter(data); // <-- Use the setter to update the correct variable directly!
+            console.log(`Successfully cached '${name}' with ${Array.isArray(data) ? data.length : 1} records.`);
         }
+    });
+    
+    // Now you can safely call functions that depend on this data
+    updateTeacherAssignedClasses();
+    showAlert('Data sync complete!', 'success');
 
-        // By this point, all required data is guaranteed to be in the global variables (e.g., window.students)
-        // because getData() populates them.
+        // This code will ONLY run after all data is fetched and assigned.
+        console.log("All data loaded. Ready to render.");
+        console.log("Students array now contains:",students); // Now it will have data
 
+        // Now, it is safe to render the view.
         const renderFunc = window.viewRenderers[viewId];
         if (renderFunc) {
-            renderFunc(); // Call the render function
+            renderFunc();
         } else {
-            mainContent.innerHTML = `<h1 class="h3">${viewId.replace(/-/g, ' ')}</h1><p>UI under construction or renderer not found.</p>`;
+            mainContent.innerHTML = `<p>UI under construction or renderer not found.</p>`;
         }
+
     } catch (error) {
         console.error(`Failed to load data for view ${viewId}:`, error);
-        mainContent.innerHTML = `<div class="alert alert-danger">Failed to load data for this section. Please try again.</div>`;
+        mainContent.innerHTML = `<div class="alert alert-danger">Failed to load data.</div>`;
     }
-    
-    // Hide mobile sidebar
+
+
+    // Hide mobile sidebar if it's open
     const sidebar = document.getElementById('sidebar');
     const sidebarOverlay = document.getElementById('sidebar-overlay');
     if (sidebar && sidebar.classList.contains('show')) {
@@ -1699,8 +1786,6 @@ async function navigateTo(viewId, pushState = true) {
         document.body.style.overflow = '';
     }
 }
-
-
     function attachAdminDataListeners(collectionsToWatch) {
     collectionsToWatch.forEach(name => {
         if (!activeListeners[name]) {
@@ -2032,10 +2117,18 @@ else if (activeRole === 'admin') {
 
         if (adminData.role === 'admin') {
             if (password === (adminData.mobile || '').slice(-5)) {
-                // 5. --- SERVER LOGIN SUCCESS & CACHE UPDATE ---
-                // The user was found on the server, so we update our local cache for their next login.
-                await appDb.teachers.put(adminData);
-                showAlert('Logged in successfully from server.', 'success');
+                // 1. Unsubscribe from all active Firestore listeners to stop data syncing
+    unsubscribeAllListeners();
+
+    // 2. Clear all data from every table in your IndexedDB database
+    try {
+        const clearPromises = appDb.tables.map(table => table.clear());
+        await Promise.all(clearPromises);
+        console.log('IndexedDB has been cleared successfully.');
+    } catch (error) {
+        console.error('Failed to clear IndexedDB:', error);
+        showAlert('Could not clear local data.', 'danger');
+    }
                 onLoginSuccess('admin', adminData);
             } else {
                 showAlert('Incorrect password for admin.', 'danger');
@@ -2053,12 +2146,35 @@ else if (activeRole === 'admin') {
 });
 
 
-        document.getElementById('logout-btn').addEventListener('click', () => {
+        document.getElementById('logout-btn').addEventListener('click', async () => {
     // Unsubscribe from all active Firestore listeners
-    unsubscribeAllListeners(); // <<< ADD THIS LINE
+// 1. Unsubscribe from all active Firestore listeners to stop data syncing
+    unsubscribeAllListeners();
 
-    currentUserRole = null; 
-    selectedUser = null;
+    // 2. Clear all data from every table in your IndexedDB database
+    try {
+        const clearPromises = appDb.tables.map(table => table.clear());
+        Promise.all(clearPromises);
+        console.log('IndexedDB has been cleared successfully.');
+    } catch (error) {
+        console.error('Failed to clear IndexedDB:', error);
+        showAlert('Could not clear local data.', 'danger');
+    }
+        try {
+        // --- THIS IS THE KEY CHANGE ---
+        // This command deletes the entire 'SchoolAppDB' database from the browser.
+        await appDb.delete();
+        console.log('IndexedDB database has been deleted successfully.');
+
+        // After deleting the database, it's best to reload the page
+        // to ensure a completely fresh start for the next login.
+        window.location.reload();
+
+    } catch (error) {
+        console.error('Failed to delete IndexedDB:', error);
+        showAlert('Error during logout. You may need to clear your browser cache manually.', 'danger');
+    }
+
     if(attendanceChart) { 
         attendanceChart.destroy(); 
         attendanceChart = null; 
@@ -2075,7 +2191,7 @@ else if (activeRole === 'admin') {
             }
             let content = '';
             if (currentUserRole === 'admin') {
-                console.log(students);
+                console.log(window.students);
                 content = `<h1 class="h2 mb-4">Admin Dashboard</h1>
                 <div class="row">
                     <div class="col-xl-3 col-md-6 mb-4"><div class="card border-start-primary shadow h-100 py-2"><div class="card-body"><div class="row no-gutters align-items-center"><div class="col me-2"><div class="text-xs fw-bold text-primary text-uppercase mb-1">Students</div><div class="h5 mb-0 fw-bold text-gray-800">${students.length}</div></div><div class="col-auto"><i class="fas fa-users fa-2x text-body-tertiary"></i></div></div></div></div></div>
@@ -2097,36 +2213,76 @@ else if (activeRole === 'admin') {
                 updateAllNotifications();
                 renderAdminAttendanceChart();
             } else if (currentUserRole === 'teacher') {
-                const chargeText = selectedUser.classCharge?.classId ? `${classes.find(c => c.id === selectedUser.classCharge.classId)?.name || ''} - ${selectedUser.classCharge.division}` : 'None';
-                const subjectsTaught = classroomSubjects.filter(cs => cs.teacherId === selectedUser.id)
-                .map(cs => subjects.find(s => s.id === cs.subjectId)?.name).join(', ');
+    const chargeText = selectedUser.classCharge?.classId ? `${classes.find(c => c.id === selectedUser.classCharge.classId)?.name || ''} - ${selectedUser.classCharge.division}` : 'None';
+    const subjectsTaught = classroomSubjects
+        .filter(cs => cs.teacherId === selectedUser.id)
+        .map(cs => {
+            const subject = subjects.find(s => s.id === cs.subjectId);
+            const aClass = classes.find(c => c.id === cs.classId); // Use 'aClass' to avoid conflict with 'class' keyword
+            if (subject && aClass) {
+                return `${subject.name} (${aClass.name} - ${cs.division})`;
+            }
+            return null; // Return null if subject or class isn't found
+        })
+        .filter(Boolean) // This will remove any null entries
+        .join(', ');
 
+    // --- NEW LOGIC START ---
+    // Check for additional roles and create HTML to display them as badges
+    let additionalRolesHtml = '';
+    if (selectedUser.roles && selectedUser.roles.length > 0) {
+        
+        additionalRolesHtml = `<hr class="my-3"><p class="mb-2"><strong>Additional Roles:</strong></p>`;
+        
+        additionalRolesHtml += selectedUser.roles.map(role => {
+            // Format the role name for display (e.g., 'exam_controller' -> 'Exam Controller')
+            const prettyName = role.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+            
+            // Assign a color based on the role for better visuals
+            let badgeColor = 'bg-secondary';
+            if (role.includes('exam_controller')) badgeColor = 'bg-info text-dark';
+            if (role.includes('librarian')) badgeColor = 'bg-success';
+            if (role.includes('fest')) badgeColor = 'bg-warning text-dark';
+            
+            return `<span class="badge ${badgeColor} me-1 fs-6">${prettyName}</span>`;
+        }).join('');
+    }
+    // --- NEW LOGIC END ---
 
-                content = `<h1 class="h2 mb-4">Welcome, ${selectedUser.name}!</h1>
-<div class="row">
-    <div class="col-lg-7">
-        <div class="card shadow mb-4">
-             <div class="card-header fw-bold text-primary">This Month's Class Absentee Trend</div>
-             <div class="card-body"><canvas id="teacher-attendance-chart"></canvas></div>
+    content = `<h1 class="h2 mb-4">Welcome, ${selectedUser.name}!</h1>
+    <div class="row">
+        <div class="col-lg-7">
+            <div class="card shadow mb-4">
+                 <div class="card-header fw-bold text-primary">This Month's Class Absentee Trend</div>
+                 <div class="card-body"><canvas id="teacher-attendance-chart"></canvas></div>
+            </div>
         </div>
+        <div class="col-lg-5">
+             <div class="card shadow mb-4">
+    <div class="card-header fw-bold text-danger">Absentees List</div>
+    <div class="card-body">
+        <label for="absentee-list-date-selector" class="form-label small">Select Date</label>
+        <input type="date" id="absentee-list-date-selector" class="form-control mb-3">
+        
+        <div id="absentee-list-display"></div>
     </div>
-    <div class="col-lg-5">
-         <div class="card shadow mb-4">
-             <div class="card-header fw-bold text-danger">Today's Absentees</div>
-             <div class="card-body" id="today-absent-list"></div>
-         </div>
-         <div class="card shadow mb-4">
-             <div class="card-header fw-bold text-primary">My Responsibilities</div>
-             <div class="card-body">
-                 <p><strong>Class Charge:</strong> ${chargeText}</p>
-                 <p><strong>Subjects Taught:</strong> ${subjectsTaught || 'None'}</p>
-             </div>
-         </div>
-    </div>
-</div>`;
-mainContent.innerHTML = content;
+</div>
 
-                renderTeacherDashboardData();
+             <div class="card shadow mb-4">
+                 <div class="card-header fw-bold text-primary">My Responsibilities</div>
+                 <div class="card-body">
+                     <p><strong>Class Charge:</strong> ${chargeText}</p>
+                     <p><strong>Subjects Taught:</strong> ${subjectsTaught || 'None'}</p>
+                     
+                     ${additionalRolesHtml}
+
+                 </div>
+             </div>
+        </div>
+    </div>`;
+    mainContent.innerHTML = content;
+    renderTeacherDashboardData();
+
             } else if (currentUserRole === 'student') {
                 const className = classes.find(c => c.id === selectedUser.classId) ? `${classes.find(c => c.id === selectedUser.classId).name} - ${selectedUser.division}` : 'N/A';
                  const setup = studentFeeSetups.find(sfs => sfs.id === selectedUser.id);
@@ -2170,6 +2326,48 @@ mainContent.innerHTML = content;
                  updateAllNotifications();
             }
         };
+
+        async function renderTeacherDashboardData() {
+            //console.log('mythreestudents',await getData('students')); 
+    const charge = selectedUser.classCharge;
+    if (!charge) return;
+
+    // --- RENDER THE NEW UI SHELL ---
+    // The "Today's Absentees" card has been replaced with the new "Absentees List" card
+    const listCardContainer = document.getElementById('today-absent-list')?.parentElement; // Find the card body's parent
+    if (listCardContainer) {
+        listCardContainer.innerHTML = `
+            <div class="card-header fw-bold text-danger">Absentees List</div>
+            <div class="card-body">
+                <label for="absentee-list-date-selector" class="form-label small">Select Date</label>
+                <input type="date" id="absentee-list-date-selector" class="form-control mb-3">
+                <div id="absentee-list-display"></div>
+            </div>
+        `;
+    }
+
+    // --- ATTACH LISTENERS AND LOAD INITIAL DATA ---
+    const dateSelector = document.getElementById('absentee-list-date-selector');
+    if (dateSelector) {
+        // Set the initial date to today
+        const today = new Date();
+        today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
+        dateSelector.value = today.toISOString().slice(0, 10);
+
+        // Load the absentee list for today
+        displayAbsenteesForDate(dateSelector.value);
+
+        // Add a listener to reload the list when the date changes
+        dateSelector.addEventListener('change', () => {
+            displayAbsenteesForDate(dateSelector.value);
+        });
+    }
+
+    // --- RENDER THE CHART (This part remains the same) ---
+    await renderTeacherAttendanceChart(charge);
+    
+    updateAllNotifications();
+}
 // --- SCHOOL DETAILS MODULE ---
 
 /**
@@ -2341,7 +2539,7 @@ async function renderAdminAttendanceChart() {
     const data = Array(daysInMonth).fill(0);
 
     // --- CHANGE 1: Fetch data using the cache-first getData function ---
-    const monthData = await getData('attendance', {'id':monthYear});
+    const monthData = await getData('attendance',monthYear);
     console.log(monthData);
 
     if (monthData) {
@@ -2446,50 +2644,143 @@ async function renderTeacherAttendanceChart(charge) {
         }
     });
 }
-        async function renderTeacherDashboardData() {
+
+/**
+ * Fetches and displays the list of absentees for a given date.
+ * @param {string} dateString - The selected date in "YYYY-MM-DD" format.
+ */
+async function displayAbsenteesForDate(dateString) {
+    const container = document.getElementById('absentee-list-display');
+    if (!container) return;
+
+    container.innerHTML = `<div class="text-center"><div class="spinner-border spinner-border-sm"></div></div>`;
+
     const charge = selectedUser.classCharge;
-    if (!charge) return; // Nothing to render if teacher has no class charge
+    const monthYear = dateString.slice(0, 7);
+    const dayStr = new Date(dateString + 'T00:00:00').getDate().toString();
+    const classKey = `${charge.classId}-${charge.division}`;
 
-    // --- Logic for "Today's Absentees" list (remains the same) ---
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const holiday = holidays.find(h => h.id === todayStr);
-    const listContainer = document.getElementById('today-absent-list');
+    const monthData = await getData('attendance', monthYear);
+    const dayData = monthData?.[dayStr]?.[classKey];
 
-    if (listContainer) {
-        if (holiday) {
-            listContainer.innerHTML = `<p class="text-info">Today is a holiday: ${holiday.narration}</p>`;
-        } else {
-            const today = new Date();
-            const monthYear = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
-            const dayStr = today.getDate().toString();
-            const classKey = `${charge.classId}-${charge.division}`;
-            
-            const monthData = await getData('attendance', monthYear);
-            const todaysExceptions = monthData?.[dayStr]?.[classKey]?.exceptions || {};
-            const absenteeIds = Object.keys(todaysExceptions);
-            
-            if (absenteeIds.length > 0) {
-                const absenteeNames = absenteeIds.map(id => students.find(s => s.id === id)?.name || 'Unknown Student');
-                listContainer.innerHTML = `<ul class="list-group list-group-flush">${absenteeNames.map(name => `<li class="list-group-item">${name}</li>`).join('')}</ul>`;
-            } else {
-                listContainer.innerHTML = `<p class="text-success">No absentees reported today.</p>`;
-            }
-        }
+    // 1. Check if attendance was submitted
+    if (dayData?.status !== 'SUBMITTED') {
+        container.innerHTML = `<p class="text-muted text-center p-2">Attendance not yet submitted for this date.</p>`;
+        return;
     }
 
-    // --- Call the new, separate function to render the chart ---
-    await renderTeacherAttendanceChart(charge);
-    
-    updateAllNotifications();
+    const exceptions = dayData.exceptions || {};
+    const absenteeIds = Object.keys(exceptions);
+
+    // 2. Check if there were any absentees
+    if (absenteeIds.length === 0) {
+        container.innerHTML = `<p class="text-success text-center p-2">No absentees reported for this date.</p>`;
+        return;
+    }
+
+    // 3. Build the list of absentees with notification buttons
+    let listHtml = '<ul class="list-group list-group-flush">';
+    absenteeIds.forEach(id => {
+        const student = students.find(s => s.id === id);
+        const record = exceptions[id];
+        let status = '';
+        if (!record.FN && !record.AN) status = 'Absent (Full Day)';
+        else if (!record.FN) status = 'Absent (FN)';
+        else if (!record.AN) status = 'Absent (AN)';
+
+        if (student) {
+            listHtml += `
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>${student.name}</strong><br>
+                        <small class="text-muted">${status}</small>
+                    </div>
+                    <button class="btn btn-sm btn-outline-success" onclick="notifyParentOfAbsence('${student.id}', '${dateString}')" title="Notify Parent via WhatsApp">
+                        <i class="fab fa-whatsapp"></i> Notify
+                    </button>
+                </li>
+            `;
+        }
+    });
+    listHtml += '</ul>';
+
+    container.innerHTML = listHtml;
 }
+
+/**
+ * Opens WhatsApp to notify a parent of their child's absence.
+ * @param {string} studentId - The ID of the absent student.
+ * @param {string} dateString - The date of the absence.
+ */
+window.notifyParentOfAbsence = (studentId, dateString) => {
+    const student = students.find(s => s.id === studentId);
+    if (!student) return;
+
+    // Use parent's mobile number, defaulting to mobile1
+    const parentNumber = student.mobile1 || student.whatsappNo;
+    if (!parentNumber) {
+        showAlert('No contact number found for this student\'s parent.', 'warning');
+        return;
+    }
+
+    const schoolName = schoolDetails.name || 'the school';
+    const formattedDate = new Date(dateString + 'T00:00:00').toLocaleDateString('en-GB');
+
+    const message = `Dear Parent,\nThis is to inform you that your child, ${student.name} of class ${student.classId}-${student.division}, was marked absent from ${schoolName} today, ${formattedDate}.\n\nPlease contact the school office for any queries.\nThank you.`;
+    const encodedMessage = encodeURIComponent(message);
+    const whatsappUrl = `https://wa.me/${parentNumber}?text=${encodedMessage}`;
+
+    window.open(whatsappUrl, '_blank');
+};
+
+//         async function renderTeacherDashboardData() {
+//     const charge = selectedUser.classCharge;
+//     if (!charge) return; // Nothing to render if teacher has no class charge
+
+//     // --- Logic for "Today's Absentees" list (remains the same) ---
+//     const todayStr = new Date().toISOString().slice(0, 10);
+//     const holiday = holidays.find(h => h.id === todayStr);
+//     const listContainer = document.getElementById('today-absent-list');
+
+//     if (listContainer) {
+//         if (holiday) {
+//             listContainer.innerHTML = `<p class="text-info">Today is a holiday: ${holiday.narration}</p>`;
+//         } else {
+//             const today = new Date();
+//             const monthYear = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
+//             const dayStr = today.getDate().toString();
+//             const classKey = `${charge.classId}-${charge.division}`;
+            
+//             const monthData = await getData('attendance', monthYear);
+//             const todaysExceptions = monthData?.[dayStr]?.[classKey]?.exceptions || {};
+//             const absenteeIds = Object.keys(todaysExceptions);
+            
+//             if (absenteeIds.length > 0) {
+//                 const absenteeNames = absenteeIds.map(id => students.find(s => s.id === id)?.name || 'Unknown Student');
+//                 listContainer.innerHTML = `<ul class="list-group list-group-flush">${absenteeNames.map(name => `<li class="list-group-item">${name}</li>`).join('')}</ul>`;
+//             } else {
+//                 listContainer.innerHTML = `<p class="text-success">No absentees reported today.</p>`;
+//             }
+//         }
+//     }
+
+//     // --- Call the new, separate function to render the chart ---
+//     await renderTeacherAttendanceChart(charge);
+    
+//     updateAllNotifications();
+// }
         
         // --- CLASS MANAGEMENT ---
         window.renderClassManagement = () => {
             const isEditMode = classToEdit !== null;
-            mainContent.innerHTML = `<h1 class="h2 mb-4">Class Management</h1><div class="row"><div class="col-lg-4"><div class="card shadow mb-4"><div class="card-header py-3"><h6 class="m-0 fw-bold text-primary">${isEditMode ? "Edit Class" : "Add New Class"}</h6></div><div class="card-body"><form id="class-form"><div class="mb-3"><label class="form-label">Academic Year</label><input id="academic-year" required class="form-control" ${isEditMode ? 'readonly' : ''}></div><div class="mb-3"><label class="form-label">Class Name</label><input id="class-name" placeholder="E.G., CLASS X" required class="form-control" ${isEditMode ? 'readonly' : ''}></div><div class="mb-3"><label class="form-label">Divisions (comma-separated)</label><input id="class-divisions" placeholder="A,B,C" required class="form-control"></div><div class="d-flex justify-content-end gap-2"><button type="button" id="cancel-edit-btn" class="btn btn-secondary ${!isEditMode ? 'd-none' : ''}">Cancel</button><button type="submit" class="btn btn-primary">${isEditMode ? "Update Class" : "Add Class"}</button></div></form></div></div></div><div class="col-lg-8"><div class="card shadow mb-4"><div class="card-header py-3"><h6 class="m-0 fw-bold text-primary">Existing Classes</h6></div><div class="card-body" id="classes-list-container"></div></div></div></div>`;
+            mainContent.innerHTML = `<h1 class="h2 mb-4">Class Management</h1><div class="row"><div class="col-lg-4"><div class="card shadow mb-4"><div class="card-header py-3"><h6 class="m-0 fw-bold text-primary">${isEditMode ? "Edit Class" : "Add New Class"}</h6></div><div class="card-body"><form id="class-form"><div class="mb-3"><label class="form-label">Academic Year</label><input id="academic-year" required class="form-control" ${isEditMode ? 'readonly' : ''}></div><div class="mb-3"><label class="form-label">Class Name</label><input id="class-name" placeholder="E.G., CLASS X" required class="form-control" ${isEditMode ? 'readonly' : ''}></div>
+                <div class="mb-3"><label class="form-label">Class Alias</label><input id="class-alias" placeholder="E.G., CLASS X" required class="form-control"}></div>
+                <div class="mb-3"><label class="form-label">Divisions (comma-separated)</label><input id="class-divisions" placeholder="A,B,C" required class="form-control"></div><div class="d-flex justify-content-end gap-2"><button type="button" id="cancel-edit-btn" class="btn btn-secondary ${!isEditMode ? 'd-none' : ''}">Cancel</button><button type="submit" class="btn btn-primary">${isEditMode ? "Update Class" : "Add Class"}</button></div></form></div></div></div><div class="col-lg-8"><div class="card shadow mb-4"><div class="card-header py-3"><h6 class="m-0 fw-bold text-primary">Existing Classes</h6></div><div class="card-body" id="classes-list-container"></div></div></div></div>`;
             renderClassesList();
-            const form = document.getElementById('class-form'), yearInput = document.getElementById('academic-year'), nameInput = document.getElementById('class-name'), divInput = document.getElementById('class-divisions');
-            if (isEditMode) { yearInput.value = classToEdit.year; nameInput.value = classToEdit.name; divInput.value = (classToEdit.divisions || []).join(', '); } 
+            const form = document.getElementById('class-form'), yearInput = document.getElementById('academic-year'), 
+            aliasInput = document.getElementById('class-alias'),
+            nameInput = document.getElementById('class-name'), divInput = document.getElementById('class-divisions');
+            if (isEditMode) { yearInput.value = classToEdit.year; nameInput.value = classToEdit.name;aliasInput.value = classToEdit.alias; divInput.value = (classToEdit.divisions || []).join(', '); } 
             else { yearInput.value = `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`; }
             document.getElementById('cancel-edit-btn').addEventListener('click', () => { classToEdit = null; renderClassManagement(); });
             form.addEventListener('submit', async (e) => {
@@ -2503,7 +2794,7 @@ async function renderTeacherAttendanceChart(charge) {
     submitButton.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Signing In...`;
 
                 const docId = isEditMode ? classToEdit.id : `${yearInput.value}_${nameInput.value.toUpperCase().replace(/\s+/g, '_')}`;
-                const data = { id: docId, year: yearInput.value, name: nameInput.value.toUpperCase(), divisions: divInput.value.split(',').map(d => d.trim().toUpperCase()).filter(Boolean) };
+                const data = { id: docId, year: yearInput.value, name: nameInput.value.toUpperCase(),alias: aliasInput.value.toUpperCase(), divisions: divInput.value.split(',').map(d => d.trim().toUpperCase()).filter(Boolean) };
                 await setDoc(getDocRef('classes', docId), data);
                 showAlert(`Class '${data.name}' ${isEditMode ? 'updated' : 'saved'}.`, 'success');
                 classToEdit = null; renderClassManagement();
@@ -3593,15 +3884,51 @@ window.handleEditAllocation = (id) => {
     // Generate Admission Number (if not in edit mode)
     
         const generateAdmnNo = async () => {
-                if(isEditMode) return;
-                const q = query(getCollectionRef('students'), where('admissionSector', '==', admnSector.value));
-                console.log(q);
-                const snapshot = await getDocs(q);
-                console.log(snapshot);
-                admnId.value = `${admnSector.value}_${new Date().getFullYear().toString().slice(-2)}_${(snapshot.size + 1).toString().padStart(4, '0')}`;
-                admnNum.value = (snapshot.size + 1).toString().padStart(4, '0');
-            updateDivisions();
-            };
+    if (isEditMode) return;
+
+    const sector = admnSector.value;
+    if (!sector) return;
+
+    // 1. Determine the start of the current academic year (e.g., June 1st).
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const academicYearStartMonth = 5; // June (0-indexed)
+    const academicYearStartDate = new Date(now.getMonth() < academicYearStartMonth ? currentYear - 1 : currentYear, academicYearStartMonth, 1);
+
+    // 2. Fetch all students for the selected sector.
+    const q = query(getCollectionRef('students'), where('admissionSector', '==', sector));
+    const snapshot = await getDocs(q);
+
+    // 3. Filter on the client-side to find only students admitted in the current academic year.
+    const studentsInCurrentYear = snapshot.docs.filter(doc => {
+        const admissionDateStr = doc.data().admissionDate;
+        if (!admissionDateStr) return false;
+        // Convert DD/MM/YYYY string to a valid Date object for comparison.
+        const parts = admissionDateStr.split('/');
+        if (parts.length !== 3) return false; // Invalid date format
+        const admissionDate = new Date(parts[2], parts[1] - 1, parts[0]);
+        return admissionDate >= academicYearStartDate;
+    });
+
+    // 4. Find the highest existing admission number from this year's students.
+    // This is more reliable than just counting, as it handles deleted records correctly.
+    let maxAdmnNum = 0;
+    studentsInCurrentYear.forEach(studentDoc => {
+        const admnNum = parseInt(studentDoc.data().admissionNumber, 10);
+        if (!isNaN(admnNum) && admnNum > maxAdmnNum) {
+            maxAdmnNum = admnNum;
+        }
+    });
+
+    // 5. The next admission number is the highest number found, plus one.
+    const nextAdmnNum = maxAdmnNum + 1;
+
+    // 6. Generate the new ID and Admission Number using this corrected count.
+    admnId.value = `${sector}_${new Date().getFullYear().toString().slice(-2)}_${nextAdmnNum.toString().padStart(4, '0')}`;
+    admnNum.value = nextAdmnNum.toString().padStart(4, '0');
+
+    updateDivisions();
+};
 
             // --- NEW: Guardian Type Listener ---
     guardianTypeSelect.addEventListener('change', () => {
@@ -4121,7 +4448,6 @@ window.formatAadhaar = (input) => {
         const filterDivision = filterDivisionDropdown.value;
         const searchTerm = studentSearchInput.value.toLowerCase();
         const isNewAdmissionsFiltered = newAdmissionsBtn.classList.contains('btn-info');
-        
         let studentsToFilter = currentUserRole === 'teacher' ?
             students.filter(s => s.classId === selectedUser.classCharge?.classId && s.division === selectedUser.classCharge?.division) :
             students;
@@ -4947,7 +5273,8 @@ window.renderExamManagement = () => {
         ${isAdmin ? `<li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#schedule" type="button">Schedule</button></li>` : '<li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#schedule" type="button">Schedule</button></li>'}
         <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#timetable-view" type="button">Timetable</button></li>
         <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#entry" type="button">Mark Entry</button></li>
-        
+        <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#consolidated-view" type="button">Consolidated View</button></li>
+    
         <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#entry-report" type="button">Entry Report</button></li>
 
         <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#results" type="button">Results</button></li>
@@ -4957,7 +5284,8 @@ window.renderExamManagement = () => {
         ${isAdmin ? `<div class="tab-pane fade p-4" id="schedule" role="tabpanel"></div>` : '<div class="tab-pane fade p-4" id="schedule" role="tabpanel"></div>'}
         <div class="tab-pane fade p-4" id="timetable-view" role="tabpanel"></div>
         <div class="tab-pane fade p-4" id="entry" role="tabpanel"></div>
-
+        <div class="tab-pane fade p-4" id="consolidated-view" role="tabpanel"></div>
+    
         <div class="tab-pane fade p-4" id="entry-report" role="tabpanel"></div>
 
         <div class="tab-pane fade p-4" id="results" role="tabpanel"></div>
@@ -4972,6 +5300,7 @@ window.renderExamManagement = () => {
     renderMarkEntryTab();
     renderEntryReportTab(); // <-- Call the new function
     renderResultsTab();
+    renderConsolidatedTimetableView(); 
     
     const firstVisibleTab = mainContent.querySelector('#examTab .nav-link');
     if(firstVisibleTab) {
@@ -5624,7 +5953,160 @@ function renderExamTimetableView() {
     if (exams.length > 0 && classes.length > 0) displayTimetable();
 }
 
+/**
+ * Renders the filters (Exam, Division) for the Consolidated Timetable view.
+ */
 
+function renderConsolidatedTimetableView() {
+    const container = document.getElementById('consolidated-view');
+    if (!container) return;
+
+    const allDivisions = [...new Set(classes.flatMap(c => c.divisions))].sort();
+
+    container.innerHTML = `
+        <div class="row g-3 align-items-end border-bottom pb-3 mb-3">
+            <div class="col-md-4">
+                <label class="form-label fw-bold">Select Exam</label>
+                <select id="consolidated-exam" class="form-select">${exams.map(ex => `<option value="${ex.id}">${ex.name}</option>`).join('')}</select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-bold">Select Division to View</label>
+                <select id="consolidated-division" class="form-select">
+                    ${allDivisions.map(d => `<option value="${d}">${d}</option>`).join('')}
+                </select>
+            </div>
+            
+            <div class="col-md-4 d-flex align-items-end">
+                <button class="btn btn-secondary w-100" onclick="window.printConsolidatedTimetable()">
+                    <i class="fas fa-print me-2"></i>Print Timetable
+                </button>
+            </div>
+        </div>
+        <div id="consolidated-timetable-container" class="mt-4 table-responsive">
+            </div>
+    `;
+
+    const examSelect = document.getElementById('consolidated-exam');
+    const divisionSelect = document.getElementById('consolidated-division');
+
+    const displayTable = () => {
+        displayConsolidatedTimetable(examSelect.value, divisionSelect.value);
+    };
+
+    examSelect.addEventListener('change', displayTable);
+    divisionSelect.addEventListener('change', displayTable);
+
+    if (exams.length > 0 && allDivisions.length > 0) {
+        displayTable();
+    }
+}
+/**
+ * Gathers data and prints the consolidated exam timetable.
+ */
+window.printConsolidatedTimetable = () => {
+    const container = document.getElementById('consolidated-timetable-container');
+    const examSelect = document.getElementById('consolidated-exam');
+    const divisionSelect = document.getElementById('consolidated-division');
+
+    // Check if there is content to print
+    if (!container || !container.querySelector('table')) {
+        showAlert('Please generate a timetable before printing.', 'warning');
+        return;
+    }
+
+    const examName = examSelect.options[examSelect.selectedIndex].text;
+    const division = divisionSelect.value;
+    const reportTitle = "Consolidated Examination Timetable";
+    const subTitle = `Exam: ${examName} | Division: ${division}`;
+
+    // Create a professional header for the printout
+    const headerHtml = `
+        <div style='text-align: center; margin-bottom: 20px;'>
+            ${schoolDetails.logoUrl ? `<img src="${schoolDetails.logoUrl}" alt="School Logo" style="max-height: 70px;">` : ''}
+            <h3>${schoolDetails.name || 'School Name'}</h3>
+            <h4>${reportTitle}</h4>
+            <p>${subTitle}</p>
+        </div>
+    `;
+
+    // Use your existing print utility
+    printContentOfDiv('consolidated-timetable-container', reportTitle, {
+        customHeaderHtml: headerHtml,
+        pageSize: 'A4 landscape', // Landscape is better for wide tables
+        extraCss: `
+            table { font-size: 0.8rem !important; }
+            th, td { padding: 4px 6px !important; }
+        `
+    });
+};
+
+/**
+ * Gathers data and renders the consolidated timetable grid.
+ * @param {string} examId The selected exam.
+ * @param {string} division The selected division to display for all classes.
+ */
+function displayConsolidatedTimetable(examId, division) {
+    const container = document.getElementById('consolidated-timetable-container');
+    if (!examId || !division) {
+        container.innerHTML = '<p class="text-muted p-5 text-center">Please select an exam and a division.</p>';
+        return;
+    }
+
+    // 1. Filter schedules for the selected exam and division
+    const relevantSchedules = examSchedules.filter(s => s.examId === examId && s.division === division);
+    
+    // 2. Get a sorted list of unique dates from these schedules
+    const uniqueDates = [...new Set(relevantSchedules.map(s => s.date))].sort();
+
+    // 3. Get all classes that actually have the selected division
+    const classesWithDivision = classes.filter(c => c.divisions.includes(division));
+
+    if (uniqueDates.length === 0 || classesWithDivision.length === 0) {
+        container.innerHTML = `<p class="alert alert-info">No exams scheduled for Division '${division}' in this exam.</p>`;
+        return;
+    }
+
+    // 4. Transform the data into an easy-to-use map for rendering: { classId: { date: { FN: "Subject", AN: "Subject" } } }
+    const timetableMap = {};
+    relevantSchedules.forEach(s => {
+        if (!timetableMap[s.classId]) timetableMap[s.classId] = {};
+        if (!timetableMap[s.classId][s.date]) timetableMap[s.classId][s.date] = {};
+        const subjectName = subjects.find(sub => sub.id === s.subjectId)?.name || 'N/A';
+        timetableMap[s.classId][s.date][s.session] = subjectName;
+    });
+
+    // 5. Build the HTML table
+    let tableHTML = `<table class="table table-bordered table-sm text-center" style="font-size: 0.8rem;">
+                        <thead class="table-light align-middle">
+                            <tr>
+                                <th rowspan="2">Class</th>`;
+    
+    // Header Row 1: Dates with Colspan
+    uniqueDates.forEach(date => {
+        tableHTML += `<th colspan="2">${new Date(date).toLocaleDateString('en-GB', {weekday: 'short', day: '2-digit', month: 'short'})}</th>`;
+    });
+    tableHTML += `</tr><tr>`;
+
+    // Header Row 2: FN/AN for each date
+    uniqueDates.forEach(() => {
+        tableHTML += `<th>FN</th><th>AN</th>`;
+    });
+    tableHTML += `</tr></thead><tbody>`;
+
+    // Body Rows: One row for each class
+    classesWithDivision.forEach(classData => {
+        tableHTML += `<tr><td class="fw-bold">${classData.name}</td>`;
+        uniqueDates.forEach(date => {
+            const fnSubject = timetableMap[classData.id]?.[date]?.FN || '-';
+            const anSubject = timetableMap[classData.id]?.[date]?.AN || '-';
+            tableHTML += `<td>${fnSubject}</td><td>${anSubject}</td>`;
+        });
+        tableHTML += `</tr>`;
+    });
+
+    tableHTML += `</tbody></table>`;
+    container.innerHTML = tableHTML;
+}
 
 // --- RESULTS TAB OVERHAUL ---
 
@@ -7270,7 +7752,7 @@ function renderReportCardTab(initialStudentId = null, initialExamId = null) {
 
     container.innerHTML = `
         <div class="row g-3 no-print">
-            <div class="col-md-5"><label class="form-label">Exam</label><select id="rc-exam" class="form-select">${exams.map(e => `<option value="${e.id}">${e.name}</option>`).join('')}</select></div>
+            <div class="col-md-5"><label class="form-label">Exam</label><select id="rc-exam" class="form-select" multiple>${exams.map(e => `<option value="${e.id}">${e.name}</option>`).join('')}</select></div>
             <div class="col-md-5"><label class="form-label">Search Student (Name or Admn No.)</label><input type="text" id="rc-student-search" class="form-control" placeholder="Start typing..."><div id="rc-student-suggestions" class="position-relative"></div></div>
 
             <div class="col-md-2 d-flex align-items-end"><button id="rc-print-btn" class="btn btn-secondary w-100" disabled><i class="fas fa-print me-2"></i>Print Card</button></div>
@@ -7290,6 +7772,10 @@ function renderReportCardTab(initialStudentId = null, initialExamId = null) {
 
     const generateCard = () => {
         const examId = examSelect.value;
+        const examIds = Array.from(examSelect.options)
+  .filter(option => option.selected)
+  .map(option => option.value);
+
         const studentIdToRender = currentSelectedStudentId; // Use the locally managed ID
 
         if (studentIdToRender && examId) {
@@ -7298,7 +7784,8 @@ function renderReportCardTab(initialStudentId = null, initialExamId = null) {
                 // Attach marks listener for this student's class and exam
                 // attachMarksListener(examId, student.classId, student.division);
                 // Render the report card
-                generateReportCardHTML(studentIdToRender, examId, 'rc-results-container');
+              //  generateReportCardHTML(studentIdToRender, examId, 'rc-results-container');
+                generateReportCardHTML_Comparison(studentIdToRender, examIds, 'rc-results-container')
             }
             printBtn.disabled = false;
         } else {
@@ -7374,7 +7861,37 @@ function renderReportCardTab(initialStudentId = null, initialExamId = null) {
     }
 }
 
+function printReportCard(reportTitle) {
+    const contentToPrint = document.getElementById('report-card-printable');
+    if (!contentToPrint) {
+        showAlert('Report card content not found for printing.', 'danger');
+        return;
+    }
 
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+        <html>
+            <head>
+                <title>${reportTitle}</title>
+                <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+                <style>
+                    body { font-family: 'Inter', sans-serif; }
+                    @page { size: A4; margin: 1.5cm; }
+                </style>
+            </head>
+            <body>
+                ${contentToPrint.innerHTML}
+            </body>
+        </html>
+    `);
+
+    printWindow.document.close();
+    setTimeout(() => {
+        printWindow.focus();
+        printWindow.print();
+        printWindow.close();
+    }, 250);
+}
 
 function renderRankListTab() {
             const container = document.getElementById('pills-ranklist');
@@ -7496,13 +8013,13 @@ function generateReportCardHTML(studentId, examId, containerId) {
     <div id="report-card-printable" class="p-4 border bg-white mx-auto" style="max-width: 210mm;">
         <div class="report-header text-center mb-4">
             ${schoolDetails.logoUrl ? `<img src="${schoolDetails.logoUrl}" alt="School Logo" style="max-height: 80px; margin-bottom: 1rem;">` : ''}
-            <h3>${schoolDetails.name || 'School Name'}</h3>
-            <p class="lead mb-0">${schoolDetails.address || 'School Address'}</p>
+            <h3>${schoolDetails.address || 'School Name'}</h3>
+            <p class="lead mb-0">${schoolDetails.name || 'School Address'}</p>
             <h5 class="mt-3">PROGRESS REPORT - ${exam.name.toUpperCase()}</h5>
         </div>
 
         <div class="row mb-4 align-items-center">
-            <div class="col-md-9">
+            <div class="col-md-8">
                 <table class="table table-sm table-borderless">
                     <tbody>
                         <tr><th style="width: 150px;">Student Name</th><td>: ${student.name}</td></tr>
@@ -7519,7 +8036,7 @@ function generateReportCardHTML(studentId, examId, containerId) {
         </div>
 
         <table class="table table-bordered table-sm">
-            <thead class="table-light text-center"><tr><th>SUBJECT</th><th>THEORY</th><th>INTERNAL</th><th>TOTAL</th><th>MAX</th><th>GRADE</th></tr></thead>
+            <thead class="table-light text-center fs-6"><tr><th>SUBJECT</th><th>THEORY</th><th>INTERNAL</th><th>TOTAL</th><th>MAX</th><th>GRADE</th></tr></thead>
             <tbody>
                 ${subjectResults.map(res => {
                     const subjectName = subjects.find(s => s.id === res.subjectId)?.name || 'N/A'; // Use subjectId directly
@@ -7528,19 +8045,19 @@ function generateReportCardHTML(studentId, examId, containerId) {
                     return `
                         <tr class="text-center">
                             <td class="text-start">${subjectName}</td>
-                            <td>${res.te}</td>
-                            <td>${res.ce}</td>
-                            <td>${res.total}</td>
-                            <td>${res.maxTE + res.maxCE}</td>
-                            <td>${totalGrade}</td>
+                            <td class="text-center">${res.te}</td>
+                            <td class="text-center">${res.ce}</td>
+                            <td class="text-center">${res.total}</td>
+                            <td class="text-center">${res.maxTE + res.maxCE}</td>
+                            <td class="text-center">${totalGrade}</td>
                         </tr>`;
                 }).join('')}
             </tbody>
             <tfoot class="fw-bold text-center">
                 <tr>
                     <td colspan="2" class="text-end">GRAND TOTAL</td>
-                    <td>${grandTotalMarks}</td>
-                    <td>${grandMaxMarks}</td>
+                    <td class="text-center">${grandTotalMarks}</td>
+                    <td class="text-center">${grandMaxMarks}</td>
                     <td colspan="2"></td>
                 </tr>
             </tfoot>
@@ -7554,6 +8071,179 @@ function generateReportCardHTML(studentId, examId, containerId) {
             <div class="col-6"><hr class="mx-auto w-50">Principal</div>
         </div>
     </div>`;
+}
+function generateReportCardHTML_Comparison(studentId, examIds, containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const student = students.find(s => s.id === studentId);
+    if (!student) return;
+
+    const studentClass = classes.find(c => c.id === student?.classId);
+    const gradingSystem = document.getElementById('shared-grading-system')?.value || 'type1';
+    
+    // Construct photo URL: use thumbnail if photoDriveId exists, otherwise a placeholder
+    const studentPhotoSrc = student.photoDriveId
+        ? `https://drive.google.com/thumbnail?id=${student.photoDriveId}&sz=400`
+        : 'https://placehold.co/150x200?text=No+Photo&font=roboto';
+
+
+    // Process data for all exams
+    const examsData = examIds.map(eId => {
+        const exam = exams.find(e => e.id === eId);
+        if (!exam) return null;
+
+        const schedules = examSchedules.filter(s =>
+            s.examId === eId &&
+            s.classId === student.classId &&
+            s.division === student.division
+        );
+
+        const processedData = processExamResultsData([student], schedules, marks, eId, gradingSystem);
+        const report = processedData[0] || {};
+
+        // Calculate rank for student in this exam
+        const allStudentsInClass = students.filter(s => s.classId === student.classId && s.division === student.division);
+        const allProcessed = processExamResultsData(allStudentsInClass, schedules, marks, eId, gradingSystem);
+        allProcessed.sort((a, b) => b.grandTotalMarks - a.grandTotalMarks);
+        const rank = allProcessed.findIndex(s => s.studentId === student.id) + 1;
+
+        return {
+            exam,
+            report,
+            rank
+        };
+    }).filter(Boolean);
+
+    // Collect all unique subjectIds
+    const allSubjectIds = [
+        ...new Set(examsData.flatMap(e => e.report.subjectResults?.map(r => r.subjectId) || []))
+    ];
+
+    // Build table header
+    let headerRow1 = `<tr><th rowspan="2">Subject</th>`;
+    let headerRow2 = ``;
+    examsData.forEach(ed => {
+        headerRow1 += `<th colspan="4" class="text-center">${ed.exam.name}</th>`;
+        headerRow2 += `<th>TE/MaxTE</th><th>CE/MaxCE</th><th>Total/Max</th><th>Grade</th>`;
+    });
+    headerRow1 += `</tr>`;
+    headerRow2 = `<tr>${headerRow2}</tr>`;
+
+    // Build body
+    let bodyRows = ``;
+    allSubjectIds.forEach(subId => {
+        const subjectName = subjects.find(s => s.id === subId)?.name || "N/A";
+        let rowHtml = `<tr><td>${subjectName}</td>`;
+        examsData.forEach(ed => {
+            const res = ed.report.subjectResults?.find(r => r.subjectId === subId);
+            if (res) {
+                const totalMax = res.maxTE + res.maxCE;
+                const grade = gradingSystem === 'type1'
+                    ? calculateGrade(res.total, totalMax)
+                    : calculateGradeType2(res.total, totalMax);
+                rowHtml += `
+                    <td class="text-center">${res.te}/${res.maxTE}</td>
+                    <td class="text-center">${res.ce}/${res.maxCE}</td>
+                    <td class="text-center">${res.total}/${totalMax}</td>
+                    <td class="text-center">${grade}</td>
+                `;
+            } else {
+                rowHtml += `<td>-</td><td>-</td><td>-</td><td>-</td>`;
+            }
+        });
+        rowHtml += `</tr>`;
+        bodyRows += rowHtml;
+    });
+
+    // Summary rows: Percentage / Grade / Pass-Fail / Rank
+    let summaryRow = `<tr><th>Overall %</th>`;
+    examsData.forEach(ed => {
+        summaryRow += `<td colspan="4" class="text-center">${ed.report.grandPct?.toFixed(2) || "0"}%</td>`;
+    });
+    summaryRow += `</tr>`;
+
+    let gradeRow = `<tr><th>Overall Grade</th>`;
+    examsData.forEach(ed => {
+        gradeRow += `<td colspan="4" class="text-center">${ed.report.overallGrade || "-"}</td>`;
+    });
+    gradeRow += `</tr>`;
+
+    let resultRow = `<tr><th>Result</th>`;
+    examsData.forEach(ed => {
+        const status = ed.report.finalStatus || 'N/A';
+        resultRow += `<td colspan="4" class="text-center text-${status === 'PASS' ? 'success' : 'danger'}">${status}</td>`;
+    });
+    resultRow += `</tr>`;
+
+    let rankRow = `<tr><th>Rank</th>`;
+    examsData.forEach(ed => {
+        rankRow += `<td colspan="4" class="text-center">${ed.rank}</td>`;
+    });
+    rankRow += `</tr>`;
+
+    // Teacher remarks based on comparison
+    let remark = "Performance is consistent.";
+    if (examsData.length > 1) {
+        const first = examsData[0].report.grandPct || 0;
+        const last = examsData[examsData.length - 1].report.grandPct || 0;
+        if (last > first) {
+            remark = "Excellent! Performance has improved.";
+        } else if (last < first) {
+            remark = "Performance has declined. Needs more effort.";
+        }
+    }
+
+    // Render final HTML
+    container.innerHTML = `
+    <div id="report-card-printable" class="p-4 border bg-white mx-auto" style="max-width: 100%;">
+        <div class="report-header text-center mb-4">
+            ${schoolDetails.logoUrl ? `<img src="${schoolDetails.logoUrl}" style="max-height: 80px; margin-bottom: 1rem;">` : ''}
+            <h3>${schoolDetails.address.toUpperCase() || 'School Name'}</h3>
+            <p>${schoolDetails.name || ''}</p>
+            <h4>Progress Report Comparison</h4>
+        </div>
+        <div class="row mb-4 align-items-center">
+            <div class="col-md-8">
+                <table class="table table-sm table-borderless">
+                    <tbody>
+                        <tr><th style="width: 150px;">Student Name</th><td>: ${student.name}</td></tr>
+                        <tr><th>Admission No</th><td>: ${student.admissionNumber || 'N/A'}</td></tr>
+                        <tr><th>Class</th><td>: ${studentClass?.name || 'N/A'} - ${student.division || 'N/A'}</td></tr>
+                        <tr><th>Date of Birth</th><td>: ${new Date(student.dob).toLocaleDateString('en-GB') || 'N/A'}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="col-md-4 text-center">
+                <img src="${studentPhotoSrc}"
+                     alt="Student Photo" class="img-thumbnail rounded-3 shadow-sm" style="width: 130px; height: 170px; object-fit: cover; border: 2px solid #ddd;">
+            </div>
+        </div>
+
+        <table class="table table-bordered table-sm">
+            <thead class="table-light text-center">
+                ${headerRow1}
+                ${headerRow2}
+            </thead>
+            <tbody>
+                ${bodyRows}
+                ${summaryRow}
+                ${gradeRow}
+                ${resultRow}
+                ${rankRow}
+            </tbody>
+        </table>
+
+        <div class="mt-4">
+            <strong>Teacher's Remark:</strong> ${remark}
+        </div>
+
+        <div class="row mt-5 text-center text-muted" style="font-size: 0.9rem;">
+            <div class="col-6"><hr class="mx-auto w-50">Class Teacher</div>
+            <div class="col-6"><hr class="mx-auto w-50">Headmaster / Principal</div>
+        </div>
+    </div>
+    `;
 }
 
         function calculateGrade(score, maxScore) {
@@ -7738,18 +8428,16 @@ async function loadAttendanceSheet(date, classId, division) {
                 showAlert('Attendance saved successfully!', 'success');
             } catch (error) { console.error("Error saving attendance: ", error); showAlert("Could not save attendance.", "danger");}
         }
-        // --- In your <script type="module"> block ---
-// REPLACE your saveAttendance function with this new one
+       // --- In your <script type="module"> block ---
 
-async function saveAttendance(date, classId, division) { // Pass in class and division
+async function saveAttendance(date, classId, division) {
     const attendanceYearMonth = date.slice(0, 7);
     const day = parseInt(date.slice(8, 10)).toString();
     const classKey = `${classId}-${division}`;
 
     const exceptions = {};
     const allCheckboxes = document.querySelectorAll('.att-check');
-
-    // Group checkboxes by student ID
+    
     const studentChecks = {};
     allCheckboxes.forEach(cb => {
         const id = cb.dataset.id;
@@ -7757,13 +8445,9 @@ async function saveAttendance(date, classId, division) { // Pass in class and di
         studentChecks[id][cb.dataset.session] = cb.checked;
     });
 
-    // Loop through students to find exceptions
     for (const studentId in studentChecks) {
         const sessions = studentChecks[studentId];
-        const isFullyPresent = sessions.FN && sessions.AN;
-
-        // If the student is NOT fully present, add them to the exceptions map
-        if (!isFullyPresent) {
+        if (!sessions.FN || !sessions.AN) {
             exceptions[studentId] = {
                 FN: sessions.FN || false,
                 AN: sessions.AN || false
@@ -7771,7 +8455,6 @@ async function saveAttendance(date, classId, division) { // Pass in class and di
         }
     }
 
-    // The data to be saved for this specific class on this day
     const attendanceDataForClass = {
         status: 'SUBMITTED',
         exceptions: exceptions
@@ -7779,9 +8462,17 @@ async function saveAttendance(date, classId, division) { // Pass in class and di
 
     try {
         const docRef = getDocRef('attendance', attendanceYearMonth);
-        // Use dot notation to update a specific field within the document without overwriting other days/classes
-        const updatePath = `${day}.${classKey}`;
-        await setDoc(docRef, { [updatePath]: attendanceDataForClass }, { merge: true });
+
+        // --- 👇 THIS IS THE CORRECTED LOGIC 👇 ---
+        // Instead of creating a flat path, we create a nested object.
+        const dataToSave = {
+            [day]: { // The day is the top-level key
+                [classKey]: attendanceDataForClass // The class is nested inside the day
+            }
+        };
+
+        // setDoc with merge:true will correctly create or update this nested structure.
+        await setDoc(docRef, dataToSave, { merge: true });
 
         showAlert('Attendance saved successfully!', 'success');
     } catch (error) {
@@ -7886,11 +8577,11 @@ async function generateClassAttendanceReport(monthYear, classId, division) {
     });
     gridTable += '</tbody></table>';
 
-    let summaryTable = `<h5 class="mt-4">Summary Report (Total Working Sessions: ${totalWorkingDays * 2})</h5><table class="table table-striped table-bordered">
+    let summaryTable = `<h5 class="mt-4">Summary Report (Total Working Days: ${totalWorkingDays})</h5><table class="table table-striped table-bordered">
         <thead class="table-light"><tr><th>Student Name</th><th>Present Days</th><th>Absent Days</th><th>Total Present %</th></tr></thead><tbody>`;
     summaryData.forEach(data => {
-        const totalPresentDays = data.presentSessions / 2;
-        const totalAbsentDays = data.absentSessions / 2;
+        const totalPresentDays = data.presentSessions ;
+        const totalAbsentDays = data.absentSessions;
         const percentage = totalWorkingDays > 0 ? ((totalPresentDays / totalWorkingDays) * 100).toFixed(1) : "0.0";
         summaryTable += `<tr><td>${data.name}</td><td>${totalPresentDays}</td><td>${totalAbsentDays}</td><td>${percentage}%</td></tr>`;
     });
@@ -7996,6 +8687,8 @@ async function generateClassAttendanceReport(monthYear, classId, division) {
         }
         // --- In your <script type="module"> block ---
 
+// In your <script type="module"> block
+
 async function generateStudentCalendar(studentId, monthYear, containerId, isDashboard = false) {
     const container = document.getElementById(containerId);
     if (!studentId || !monthYear) {
@@ -8006,23 +8699,21 @@ async function generateStudentCalendar(studentId, monthYear, containerId, isDash
     const student = students.find(s => s.id === studentId);
     if (!student) return;
 
-    //const monthDataDoc = await getDoc(getDocRef('attendance', monthYear));
-    //const monthData = monthDataDoc.data() || {};
-    let  monthData = await getData('attendance', {'id':monthYear});
-       // monthData = Object.values(monthData);
+    // --- 👇 CHANGE 1: Call getData with a simple string ID ---
+    // The upgraded getData function is designed to handle this correctly.
+    const monthData = await getData('attendance', monthYear) || {};
+    
     const [year, month] = monthYear.split('-').map(Number);
     const classKey = `${student.classId}-${student.division}`;
 
     let stats = { present: 0, absent: 0, halfDay: 0, workingDays: 0 };
     
-    // --- NEW: Calculate stats based on submitted days ---
-    for(const data in monthData){
+    // --- CHANGE 2: Loop correctly, skipping the 'id' property ---
+    for (const day in monthData) {
+        // This check prevents trying to process the 'id' field as a day of the month.
+        if (isNaN(parseInt(day))) continue;
 
-    }
-    for (const day in data) {
-        console.log(day);
         const classData = monthData[day]?.[classKey];
-        console.log(classData);
         if (classData?.status === 'SUBMITTED') {
             stats.workingDays++;
             const studentException = classData.exceptions?.[studentId];
@@ -8034,28 +8725,32 @@ async function generateStudentCalendar(studentId, monthYear, containerId, isDash
         }
     }
 
-    // (The calendarHTML generation logic remains largely the same, but the inner loop logic changes)
+    // (The rest of your calendarHTML generation is correct)
     let calendarHTML = `
-            <div class="p-2 border rounded-3 ${isDashboard ? '' : 'p-4'}">
-                <div class="${isDashboard ? 'd-none' : 'd-md-flex justify-content-between align-items-md-center mb-4'}">
-                    <div>
-                        <h5 class="fw-bold">${student.name}</h5>
-                        <p class="text-muted mb-0">Attendance Report for ${new Date(year, month-1).toLocaleString('default', { month: 'long', year: 'numeric' })}</p>
-                    </div>
-                    <div class="d-flex flex-wrap gap-3 mt-2 mt-md-0 small">
-                        <span class="d-flex align-items-center"><span class="d-inline-block rounded-circle me-2" style="width:12px; height:12px; background-color: #d1e7dd;"></span>Present: <strong>${stats.present}</strong></span>
-                        <span class="d-flex align-items-center"><span class="d-inline-block rounded-circle me-2" style="width:12px; height:12px; background-color: #fff3cd;"></span>Half-day: <strong>${stats.halfDay}</strong></span>
-                        <span class="d-flex align-items-center"><span class="d-inline-block rounded-circle me-2" style="width:12px; height:12px; background-color: #f8d7da;"></span>Absent: <strong>${stats.absent}</strong></span>
-                        <span class="d-flex align-items-center"><span class="d-inline-block rounded-circle me-2" style="width:12px; height:12px; background-color: #e2e3e5;"></span>Holiday</span>
-                    </div>
+        <div class="p-2 border rounded-3 ${isDashboard ? '' : 'p-4'}">
+            <div class="${isDashboard ? 'd-none' : 'd-md-flex justify-content-between align-items-md-center mb-4'}">
+                <div>
+                    <h5 class="fw-bold">${student.name}</h5>
+                    <p class="text-muted mb-0">Attendance Report for ${new Date(year, month-1).toLocaleString('default', { month: 'long', year: 'numeric' })}</p>
                 </div>
-
-                <div class="calendar-grid text-center small fw-bold text-muted">
-                    <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+                <div class="d-flex flex-wrap gap-3 mt-2 mt-md-0 small">
+                    <span class="d-flex align-items-center"><span class="d-inline-block rounded-circle me-2" style="width:12px; height:12px; background-color: #d1e7dd;"></span>Present: <strong>${stats.present}</strong></span>
+                    <span class="d-flex align-items-center"><span class="d-inline-block rounded-circle me-2" style="width:12px; height:12px; background-color: #fff3cd;"></span>Half-day: <strong>${stats.halfDay}</strong></span>
+                    <span class="d-flex align-items-center"><span class="d-inline-block rounded-circle me-2" style="width:12px; height:12px; background-color: #f8d7da;"></span>Absent: <strong>${stats.absent}</strong></span>
+                    <span class="d-flex align-items-center"><span class="d-inline-block rounded-circle me-2" style="width:12px; height:12px; background-color: #e2e3e5;"></span>Holiday</span>
                 </div>
-                <div class="calendar-grid text-center mt-1">`;
+            </div>
 
-    for (let day = 1; day <= new Date(year, month, 0).getDate(); day++) {
+            <div class="calendar-grid text-center small fw-bold text-muted">
+                <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+            </div>
+            <div class="calendar-grid text-center mt-1">`;
+            const firstDayOfMonth = new Date(year, month - 1, 1).getDay();
+            const daysInMonth = new Date(year, month, 0).getDate();
+
+    for (let i = 0; i < firstDayOfMonth; i++) { calendarHTML += `<div></div>`; }
+
+    for (let day = 1; day <= daysInMonth; day++) {
         const dayStr = day.toString();
         const dateStr = `${monthYear}-${dayStr.padStart(2, '0')}`;
         const holiday = holidays.find(h => h.id === dateStr);
@@ -8066,21 +8761,24 @@ async function generateStudentCalendar(studentId, monthYear, containerId, isDash
         } else {
             const dayClassData = monthData[dayStr]?.[classKey];
             
-            // --- NEW: Logic to read exceptions for a specific student ---
             if (dayClassData?.status === 'SUBMITTED') {
                 const studentException = dayClassData.exceptions?.[studentId];
-                const record = studentException || { FN: true, AN: true }; // Assume present if no exception
+                const record = studentException || { FN: true, AN: true };
                 status = calculateAttendanceStatus(record);
             } else {
                 status = { symbol: '', class: '' }; // Not a working day
             }
         }
         
-        calendarHTML += `<div class="border rounded p-2 ... ${status.class || 'bg-light'}"> ... </div>`;
+        calendarHTML += `<div class="border rounded p-2 d-flex flex-column justify-content-between ${status.class || 'bg-light'}" style="min-height: 50px;" title="${status.title || ''}">
+            <strong class="align-self-start small">${day}</strong>
+            <span class="fs-5 fw-bold">${status.symbol || ''}</span>
+        </div>`;
     }
     calendarHTML += `</div></div>`;
     container.innerHTML = calendarHTML;
 }
+
         async function generateStudentCalendarold(studentId, monthYear, containerId, isDashboard = false){
             const container = document.getElementById(containerId);
             if(!studentId || !monthYear){ 
@@ -9461,8 +10159,8 @@ const generateQRCode = () => {
     const merchantCode = '8299'; // This is a real MCC for educational services.
 
     // The UPI deep link with all the correct, verified parameters
-    const upiURI = `upi://pay?pa=${merchantUpiId}&pn=${encodeURIComponent(payeeName)}&am=${amount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(transactionNote)}&tr=${transactionRefId}&mc=${merchantCode}`;
-
+    //const upiURI = `upi://pay?pa=${merchantUpiId}&pn=${encodeURIComponent(payeeName)}&am=${amount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(transactionNote)}&tr=${transactionRefId}&mc=${merchantCode}`;
+const upiURI = "upi://pay?pa=9744405521@sbi&pn=Najmul%20Huda%20Sangham%20Orphanage%20Committee&mc=8211&tr=&tn=&am=&cu=INR&url=&mode=02&purpose=00&orgid=159002&sign=MEUCIQDB7Ng+eGLXexdeCM/d1S9mRTs/x1BeIl5jCnvByiKxFgIgRThcUDqeS5ktFwHwQzMCEe0sVQcpHaLGe+iJe6SElh8="
     // --- Update QR Code ---
     qrContainer.innerHTML = ''; // Clear previous content
     new QRCode(qrContainer, {
@@ -9656,12 +10354,12 @@ const generateUniqueTransactionId = () => {
                 const transactionRefId = generateUniqueTransactionId();
                 const transactionNote = `Fee Payment for Admn No: ${selectedUser.admissionNumber}`;
     
-    // **CRUCIAL CHANGE:** Use the official Merchant Category Code (MCC)
-    const merchantCode = '8299'; // This is a real MCC for educational services.
+                // **CRUCIAL CHANGE:** Use the official Merchant Category Code (MCC)
+                const merchantCode = '8299'; // This is a real MCC for educational services.
 
                 //const transactionNote = `ADMN${selectedUser.admissionNumber}-PYMT-${Date.now()}`;
                 //const upiURI = `upi://pay?pa=${schoolDetails.upiId}&pn=${encodeURIComponent(schoolDetails.upiPayeeName)}&am=${amount.toFixed(2)}&cu=INR&tn=${transactionNote}`;
-                const upiURI = `upi://pay?pa=${schoolDetails.upiId}&pn=${encodeURIComponent(schoolDetails.upiPayeeName)}&am=${amount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(transactionNote)}&tr=${transactionRefId}&mc=${merchantCode}`;
+                const upiURI = `upi://pay?pa=${schoolDetails.upiId}&pn=${encodeURIComponent(schoolDetails.upiPayeeName)}&am=${amount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(transactionNote)}`; //&tr=${transactionRefId}&mc=${merchantCode}
 
                 qrContainer.innerHTML = '';
                 new QRCode(qrContainer, { text: upiURI, width: 220, height: 220 });
@@ -18727,8 +19425,10 @@ function renderExamControlDutyAssignmentTab() {
                     .hall-ticket-page {
                         border: none !important;
                         margin: 0 !important;
-                        padding: 1.5cm !important;
+                        padding: .5cm !important;
                         box-shadow: none !important;
+                        page-break-after: always !important; /* Don't force break after single ticket in modal print */
+                        
                     }
                     /* Ensure headers/footers/logos print correctly */
                     img, h1, h2, h3, h4, h5, p, table, hr {
@@ -18743,7 +19443,7 @@ function renderExamControlDutyAssignmentTab() {
         `);
        // printWindow.document.close();
         printWindow.focus();
-        setTimeout(() => { printWindow.print(); printWindow.close(); }, 500);
+        // setTimeout(() => { printWindow.print(); printWindow.close(); }, 500);
     });
 
     document.getElementById('print-hall-ticket-btn')?.addEventListener('click', () => {
@@ -18756,15 +19456,21 @@ function renderExamControlDutyAssignmentTab() {
                     .modal-body { overflow: visible !important; }
                     .hall-ticket-content { width: 100%; height: auto; margin: 0; padding: 0; }
                     .hall-ticket-page { /* For individual print from modal, treat the content as a single page */
-                        width: 210mm; 
-                        height: 297mm; 
-                        padding: 1.5cm;
+                        min-width: 210mm; 
+                        min-height: 297mm; 
+                        padding: .5cm;
                         box-sizing: border-box;
-                        page-break-after: auto !important; /* Don't force break after single ticket in modal print */
+                        page-break-after: always !important; /* Don't force break after single ticket in modal print */
                         border: none !important;
                         margin: 0 !important;
                         box-shadow: none !important;
                     }
+                    .tabledetails table,
+.tabledetails table th,
+.tabledetails table td {
+    border: none !important;
+}
+
                 `
             });
         }
@@ -18775,6 +19481,8 @@ function renderExamControlDutyAssignmentTab() {
 /**
  * Renders the Examination Control Reports tab content.
  */
+// REPLACE your existing renderExamControlReportsTab function with this one
+
 function renderExamControlReportsTab() {
     const container = document.getElementById('exam-control-reports');
     if (!container) return;
@@ -18783,71 +19491,316 @@ function renderExamControlReportsTab() {
         <div class="ui-card mb-4">
             <h5 class="section-header">Examination Reports</h5>
             <div class="row g-3 align-items-end">
-                <div class="col-md-6">
-                    <label class="form-label">Select Exam</label>
+                <div class="col-md-4">
+                    <label class="form-label">Exam</label>
                     <select id="report-exam-select" class="form-select">
                         <option value="">-- Select Exam --</option>
                         ${exams.map(e => `<option value="${e.id}">${e.name}</option>`).join('')}
                     </select>
                 </div>
-                <div class="col-md-6">
+                
+                <div class="col-md-4">
                     <label class="form-label">Date</label>
-                    <input type="date" id="report-date-select" class="form-control" value="${new Date().toISOString().slice(0, 10)}">
+                    <select id="report-date-select" class="form-select" disabled>
+                        <option value="">-- Select Exam First --</option>
+                    </select>
                 </div>
-                <!-- Removed Session Dropdown -->
+
+                <div class="col-md-4">
+                    <label class="form-label">Session</label>
+                    <select id="report-session-select" class="form-select">
+                        <option value="FN">Forenoon</option>
+                        <option value="AN">Afternoon</option>
+                    </select>
+                </div>
             </div>
             <div class="row g-3 mt-3 justify-content-center">
                 <div class="col-md-6 d-grid">
                     <button id="print-full-day-duty-report-btn" class="btn btn-outline-primary">
-                        <i class="fas fa-print me-2"></i>Print Full Day Duty Report <!-- NEW BUTTON TEXT -->
+                        <i class="fas fa-user-shield me-2"></i>Print Duty Report
                     </button>
                 </div>
                 <div class="col-md-6 d-grid">
-                    <button id="print-room-alloc-report-btn" class="btn btn-outline-info">
-                        <i class="fas fa-print me-2"></i>Print Room Allocation Report
+                    <button id="print-rule-summary-report-btn" class="btn btn-outline-info">
+                        <i class="fas fa-list-ol me-2"></i>Print Allocation Summary
                     </button>
                 </div>
             </div>
         </div>
-        <div id="exam-reports-preview" class="ui-card mt-4">
-            <p class="text-muted text-center p-4">Select filters and generate a report.</p>
+    `;
+
+    // This new function will attach the necessary event listeners
+    attachReportsTabListeners();
+}
+/**
+ * Attaches event listeners for the Examination Reports tab.
+ */
+function attachReportsTabListeners() {
+    const examSelect = document.getElementById('report-exam-select');
+    const dateSelect = document.getElementById('report-date-select');
+    
+    // When the user selects an exam, update the date dropdown
+    examSelect.addEventListener('change', () => {
+        const examId = examSelect.value;
+        dateSelect.innerHTML = '<option value="">-- Select Date --</option>'; // Clear previous dates
+        
+        if (examId) {
+            // Find all unique dates from the schedules for the selected exam
+            const uniqueDates = [...new Set(examSchedules.filter(s => s.examId === examId).map(s => s.date))];
+            uniqueDates.sort(); // Sort the dates chronologically
+            
+            // Populate the date dropdown with the found dates
+            uniqueDates.forEach(date => {
+                dateSelect.innerHTML += `<option value="${date}">${new Date(date).toLocaleDateString('en-GB')}</option>`;
+            });
+            dateSelect.disabled = false;
+        } else {
+            dateSelect.innerHTML = '<option value="">-- Select Exam First --</option>';
+            dateSelect.disabled = true;
+        }
+    });
+
+    // Attach listeners to the print buttons
+    document.getElementById('print-full-day-duty-report-btn').addEventListener('click', () => {
+        const examId = document.getElementById('report-exam-select').value;
+        const date = document.getElementById('report-date-select').value;
+        generateAndPrintDutyReport(examId, date);
+    });
+
+    document.getElementById('print-rule-summary-report-btn').addEventListener('click', () => {
+        const examId = document.getElementById('report-exam-select').value;
+        const date = document.getElementById('report-date-select').value;
+        const session = document.getElementById('report-session-select').value;
+        generateAndPrintRuleSummaryReport(examId, date, session);
+    });
+}
+/**
+ * Generates and prints a summary report of allocation RULES and their student counts.
+ * @param {string} examId
+ * @param {string} date
+ * @param {string} session
+ */
+function generateAndPrintRuleSummaryReport(examId, date, session) {
+    if (!examId || !date || !session) {
+        showAlert('Please select Exam, Date, and Session to generate the report.', 'danger');
+        return;
+    }
+
+    // 1. Find all rules for the selected session
+    const rulesForSession = examRoomAllocationRules.filter(rule =>
+        rule.examId === examId && rule.date === date && rule.session === session
+    ).sort((a, b) => (examRooms.find(r => r.id === a.roomId)?.name || '').localeCompare(examRooms.find(r => r.id === b.roomId)?.name || ''));
+
+    if (rulesForSession.length === 0) {
+        showAlert('No allocation rules found for this session.', 'info');
+        return;
+    }
+
+    const examName = exams.find(e => e.id === examId)?.name || examId;
+    const reportTitle = `Room Allocation Summary: ${examName}`;
+    const subTitle = `Date: ${new Date(date).toLocaleDateString('en-GB', { dateStyle: 'long' })} | Session: ${session === 'FN' ? 'Forenoon' : 'Afternoon'}`;
+
+    let tableRowsHtml = '';
+
+    // 2. For each rule, calculate the ACTUAL number of students it allocated
+    rulesForSession.forEach(rule => {
+        const regNoRegex = /^([A-Z0-9]+)_(\d+)$/;
+        const affectedRegNos = new Set();
+        const lines = (rule.regNoRangeText || '').split('\n').map(line => line.trim()).filter(Boolean);
+
+        lines.forEach(line => {
+            const rangeParts = line.split('-').map(p => p.trim());
+            const startMatch = rangeParts[0].match(regNoRegex);
+            const endMatch = (rangeParts[1] || rangeParts[0]).match(regNoRegex);
+            if (startMatch && endMatch && startMatch[1] === endMatch[1]) {
+                const prefix = startMatch[1];
+                for (let i = parseInt(startMatch[2]); i <= parseInt(endMatch[2]); i++) {
+                    affectedRegNos.add(`${prefix}_${i.toString().padStart(3, '0')}`);
+                }
+            }
+        });
+
+        // Cross-reference with the main students list to get an accurate count
+        const studentCount = students.filter(s => affectedRegNos.has(s.examRegNumbers?.[examId])).length;
+        const roomName = examRooms.find(r => r.id === rule.roomId)?.name || rule.roomId;
+
+        tableRowsHtml += `
+            <tr>
+                <td>${roomName}</td>
+                <td>${rule.regNoRangeText.replace(/\n/g, ', ')}</td>
+                <td class="text-center fw-bold">${studentCount}</td>
+            </tr>
+        `;
+    });
+    
+    // 3. Build the final HTML for printing
+    const reportHtml = `
+        <table class="table table-bordered table-sm">
+            <thead class="table-light">
+                <tr>
+                    <th>Room</th>
+                    <th>Allocation Rule (Reg. No. Range)</th>
+                    <th class="text-center">Student Count</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${tableRowsHtml}
+            </tbody>
+        </table>
+    `;
+
+    const customHeader = `
+        <div style="text-align: center; margin-bottom: 20px;">
+            <h3>${schoolDetails.name || 'School Name'}</h3>
+            <h4>${reportTitle}</h4>
+            <p>${subTitle}</p>
         </div>
     `;
 
-    const examSelect = document.getElementById('report-exam-select');
-    const dateSelect = document.getElementById('report-date-select');
-    // const sessionSelect = document.getElementById('report-session-select'); // Removed
-    const printFullDayDutyBtn = document.getElementById('print-full-day-duty-report-btn'); // Renamed
-    const printRoomAllocBtn = document.getElementById('print-room-alloc-report-btn');
-    const previewContainer = document.getElementById('exam-reports-preview');
+    const tempDiv = document.createElement('div');
+    tempDiv.id = 'temp-rule-summary-report';
+    tempDiv.innerHTML = reportHtml;
+    document.body.appendChild(tempDiv);
+    
+    printContentOfDiv('temp-rule-summary-report', reportTitle, {
+        customHeaderHtml: customHeader,
+        pageSize: 'A4 portrait',
+    });
+    
+    document.body.removeChild(tempDiv);
+}
+/**
+ * Generates a flexible seating plan summary, grouped by either Room or Class.
+ * @param {string} examId
+ * @param {string} date
+ * @param {string} reportType - 'room' or 'class'
+ * @param {string} [classIdFilter] - Optional class ID to filter by when grouping by class.
+ */
+function generateAndPrintSeatingPlanSummary(examId, date, reportType, classIdFilter) {
+    if (!examId || !date) {
+        showAlert('Please select an Exam and Date.', 'danger');
+        return;
+    }
 
-    const updateReportPreview = () => {
-        const examId = examSelect.value;
-        const date = dateSelect.value;
-        // const session = sessionSelect.value; // Removed
-        if (examId && date) { // Only examId and date are needed
-            previewContainer.innerHTML = `<p class="text-muted text-center p-4">Click 'Print Full Day Duty Report' or 'Print Room Allocation Report' to generate.</p>`;
-        } else {
-            previewContainer.innerHTML = `<p class="text-muted text-center p-4">Select exam and date for reports.</p>`;
+    // 1. Get all students allocated for ANY session on the selected date and sort them by Reg. No.
+    const allStudentsForDate = students.filter(s => 
+        Object.keys(s.examRoomAllocations || {}).some(key => key.startsWith(`${examId}_${date.replace(/-/g, '')}`))
+    ).sort((a, b) => {
+        const regNoA = a.examRegNumbers?.[examId] || '';
+        const regNoB = b.examRegNumbers?.[examId] || '';
+        return regNoA.localeCompare(regNoB, undefined, { numeric: true });
+    });
+
+    if (allStudentsForDate.length === 0) {
+        showAlert('No students have been allocated to rooms for this date.', 'info');
+        return;
+    }
+
+    let reportHtml = '';
+    const examName = exams.find(e => e.id === examId)?.name || examId;
+    let reportTitle = `Seating Plan: ${examName}`;
+    let subTitle = `Date: ${new Date(date).toLocaleDateString('en-GB', { dateStyle: 'long' })}`;
+
+    // --- LOGIC FOR GROUPING BY ROOM ---
+    if (reportType === 'room') {
+        const dataByRoom = {};
+        allStudentsForDate.forEach(student => {
+            const fnRoomId = student.examRoomAllocations[`${examId}_${date.replace(/-/g, '')}_FN`];
+            const anRoomId = student.examRoomAllocations[`${examId}_${date.replace(/-/g, '')}_AN`];
+            
+            // Add student to FN room data
+            if (fnRoomId) {
+                if (!dataByRoom[fnRoomId]) dataByRoom[fnRoomId] = { roomName: examRooms.find(r => r.id === fnRoomId)?.name || fnRoomId, studentsFN: [], studentsAN: [] };
+                dataByRoom[fnRoomId].studentsFN.push(student);
+            }
+            // Add student to AN room data
+            if (anRoomId) {
+                if (!dataByRoom[anRoomId]) dataByRoom[anRoomId] = { roomName: examRooms.find(r => r.id === anRoomId)?.name || anRoomId, studentsFN: [], studentsAN: [] };
+                dataByRoom[anRoomId].studentsAN.push(student);
+            }
+        });
+        
+        Object.keys(dataByRoom).sort((a,b) => dataByRoom[a].roomName.localeCompare(dataByRoom[b].roomName)).forEach(roomId => {
+            const roomData = dataByRoom[roomId];
+            reportHtml += `<div class="room-summary-item">
+                <h5 class="section-header">${roomData.roomName}</h5>
+                <div class="row">
+                    <div class="col-6"><h6>Forenoon (FN) - Total: ${roomData.studentsFN.length}</h6>${renderStudentListTable(roomData.studentsFN, examId, date, 'FN')}</div>
+                    <div class="col-6"><h6>Afternoon (AN) - Total: ${roomData.studentsAN.length}</h6>${renderStudentListTable(roomData.studentsAN, examId, date, 'AN')}</div>
+                </div>
+            </div>`;
+        });
+
+    // --- LOGIC FOR GROUPING BY CLASS ---
+    } else if (reportType === 'class') {
+        if (!classIdFilter) {
+            showAlert('Please select a class to generate this report.', 'warning');
+            return;
         }
+        const studentsInClass = allStudentsForDate.filter(s => s.classId === classIdFilter);
+        const className = classes.find(c => c.id === classIdFilter)?.name || classIdFilter;
+        subTitle += ` | Class: ${className}`;
+
+        const dataByDivision = {};
+        studentsInClass.forEach(student => {
+            if (!dataByDivision[student.division]) dataByDivision[student.division] = [];
+            dataByDivision[student.division].push(student);
+        });
+
+        Object.keys(dataByDivision).sort().forEach(division => {
+            reportHtml += `<div class="room-summary-item">
+                <h5 class="section-header">Division: ${division}</h5>
+                <div class="row">
+                    <div class="col-6"><h6>Forenoon (FN) Seating</h6>${renderStudentListTable(dataByDivision[division], examId, date, 'FN', true)}</div>
+                    <div class="col-6"><h6>Afternoon (AN) Seating</h6>${renderStudentListTable(dataByDivision[division], examId, date, 'AN', true)}</div>
+                </div>
+            </div>`;
+        });
+    }
+
+    const customHeader = `... (your existing customHeaderHtml logic) ...`;
+    const tempDiv = document.createElement('div');
+    tempDiv.id = 'temp-seating-plan';
+    tempDiv.innerHTML = reportHtml;
+    document.body.appendChild(tempDiv);
+    printContentOfDiv('temp-seating-plan', reportTitle, { /* your print options */ });
+    document.body.removeChild(tempDiv);
+}
+
+/**
+ * Helper function to render a table of students for the seating plan.
+ * @param {Array} studentList - The list of students to render.
+ * @param {string} examId
+ * @param {string} date
+ * @param {string} session
+ * @param {boolean} [showRoom=false] - Whether to show the 'Room' column.
+ * @returns {string} The HTML string for the table.
+ */
+function renderStudentListTable(studentList, examId, date, session, showRoom = false) {
+    if (studentList.length === 0) return '<p class="text-muted small">No students allocated.</p>';
+    
+    const sessionKey = `${examId}_${date.replace(/-/g, '')}_${session}`;
+    const males = studentList.filter(s => s.gender === 'M' && s.examRoomAllocations[sessionKey]);
+    const females = studentList.filter(s => s.gender === 'F' && s.examRoomAllocations[sessionKey]);
+
+    const createTable = (students, gender) => {
+        if (students.length === 0) return '';
+        return `
+            <h6 class="mt-3">${gender} (${students.length})</h6>
+            <table class="table table-sm table-bordered" style="font-size: 0.8em;">
+                <thead><tr><th>Reg. No</th><th>Name</th>${showRoom ? '<th>Room</th>' : ''}</tr></thead>
+                <tbody>
+                    ${students.map(s => `
+                    <tr>
+                        <td>${s.examRegNumbers?.[examId] || 'N/A'}</td>
+                        <td>${s.name}</td>
+                        ${showRoom ? `<td>${examRooms.find(r => r.id === s.examRoomAllocations[sessionKey])?.name || 'N/A'}</td>` : ''}
+                    </tr>`).join('')}
+                </tbody>
+            </table>`;
     };
 
-    examSelect.addEventListener('change', updateReportPreview);
-    dateSelect.addEventListener('change', updateReportPreview);
-    // sessionSelect.addEventListener('change', updateReportPreview); // Removed
-
-    printFullDayDutyBtn.addEventListener('click', () => generateAndPrintDutyReport(examSelect.value, dateSelect.value)); // Only pass examId, date
-    printRoomAllocBtn.addEventListener('click', () => generateAndPrintRoomAllocationReport(examSelect.value, dateSelect.value, 'FN')); // Room allocation still needs session, defaulting to FN for example
-    // NOTE: For `printRoomAllocBtn`, you need to decide if it should print for FN, AN, or both.
-    // If it's for a specific session, you'll need to re-add a session dropdown for *that* report.
-    // For now, I'll default it to FN for simplicity, but you might want a separate dropdown for it.
-
-    // Initial load
-    dateSelect.value = new Date().toISOString().slice(0, 10);
-    if (exams.length > 0) {
-        examSelect.value = exams[0].id;
-        updateReportPreview();
-    }
+    return createTable(males, 'Males') + createTable(females, 'Females');
 }
 /**
  * Generates and prints the Full Day Duty Assignment Report, showing room allocations,
@@ -19826,12 +20779,12 @@ async function generateAndSaveExamRegNumbers2(examId, classId, maleStart, female
     const maleStudents = studentsInClass.filter(s => s.gender === 'M').sort((a, b) => a.name.localeCompare(b.name));
     const femaleStudents = studentsInClass.filter(s => s.gender === 'F').sort((a, b) => a.name.localeCompare(b.name));
 
-    const classNameAbbr = classes.find(c => c.id === classId)?.name.replace(/\s+/g, '').toUpperCase().slice(0, 5) || classId.slice(0, 5).toUpperCase();
+    const classNameAbbr = classes.find(c => c.id === classId)?.alias.replace(/\s+/g, '').toUpperCase()|| classId.slice(0, 5).toUpperCase();
     const batch = writeBatch(db);
     let updatedCount = 0;
 
     maleStudents.forEach(student => {
-        if (!student.examRegNumbers?.[examId]) {
+        if (!student.examRegNumbers?.[examId]||student.examRegNumbers?.[examId]) {
             const regNo = `M${classNameAbbr}_${nextMaleSeq.toString().padStart(3, '0')}`;
             const studentRef = getDocRef('students', student.id);
             let updatedRegNumbers = { ...(student.examRegNumbers || {}), [examId]: regNo };
@@ -19842,7 +20795,7 @@ async function generateAndSaveExamRegNumbers2(examId, classId, maleStart, female
     });
 
     femaleStudents.forEach(student => {
-        if (!student.examRegNumbers?.[examId]) {
+        if (!student.examRegNumbers?.[examId] || student.examRegNumbers?.[examId]) {
             const regNo = `F${classNameAbbr}_${nextFemaleSeq.toString().padStart(3, '0')}`;
             const studentRef = getDocRef('students', student.id);
             let updatedRegNumbers = { ...(student.examRegNumbers || {}), [examId]: regNo };
@@ -19949,7 +20902,7 @@ function displayRegNoStatus2(examId, classId, division) {
  * @param {string} division
  */
 async function generateAndSaveExamRegNumbers(examId, classId, division) {
-    const studentsInClass = students.filter(s => s.classId === classId && s.division === division);
+    const studentsInClass = students.filter(s => s.classId === classId);
     if (studentsInClass.length === 0) {
         showAlert('No students found to generate numbers for.', 'info');
         return;
@@ -19965,12 +20918,12 @@ async function generateAndSaveExamRegNumbers(examId, classId, division) {
     const maleStudents = studentsInClass.filter(s => s.gender === 'M').sort((a, b) => a.name.localeCompare(b.name));
     const femaleStudents = studentsInClass.filter(s => s.gender === 'F').sort((a, b) => a.name.localeCompare(b.name));
 
-    const classNameAbbr = classes.find(c => c.id === classId)?.name.replace(/\s+/g, '').toUpperCase().slice(0, 5) || classId.slice(0, 5).toUpperCase();
+    const classNameAbbr = classes.find(c => c.id === classId)?.alias.toUpperCase() || classId.slice(0, 5).toUpperCase();
     const batch = writeBatch(db);
     let updatedCount = 0;
 
     maleStudents.forEach(student => {
-        if (!student.examRegNumbers?.[examId]) { // Only assign if not already assigned for this exam
+        if (!student.examRegNumbers?.[examId]|| student.examRegNumbers?.[examId]) { // Only assign if not already assigned for this exam
             const regNo = `M${classNameAbbr}_${nextMaleSeq.toString().padStart(3, '0')}`;
             const studentRef = getDocRef('students', student.id);
             let updatedRegNumbers = { ...student.examRegNumbers, [examId]: regNo };
@@ -19981,7 +20934,7 @@ async function generateAndSaveExamRegNumbers(examId, classId, division) {
     });
 
     femaleStudents.forEach(student => {
-        if (!student.examRegNumbers?.[examId]) { // Only assign if not already assigned for this exam
+        if (!student.examRegNumbers?.[examId]|| student.examRegNumbers?.[examId]) { // Only assign if not already assigned for this exam
             const regNo = `F${classNameAbbr}_${nextFemaleSeq.toString().padStart(3, '0')}`;
             const studentRef = getDocRef('students', student.id);
             let updatedRegNumbers = { ...student.examRegNumbers, [examId]: regNo };
@@ -20016,9 +20969,8 @@ async function generateAndSaveExamRegNumbers(examId, classId, division) {
 let currentAllocationExamId = null;
 let currentAllocationDate = null;
 let currentAllocationSession = null;
-
 /**
- * Renders the tab for student-wise exam room allocation, primarily by Exam Reg. No. ranges.
+ * Renders the tab for student-wise exam room allocation with all advanced features.
  */
 function renderExamControlRoomAllocationTab() {
     const container = document.getElementById('exam-control-room-alloc');
@@ -20026,194 +20978,467 @@ function renderExamControlRoomAllocationTab() {
 
     container.innerHTML = `
         <div class="ui-card mb-4">
-            <h5 class="section-header">Assign Students to Exam Rooms</h5>
+            <h5 class="section-header">Allocate Students to Exam Rooms</h5>
             <div class="row g-3 align-items-end">
-                <div class="col-md-3">
-                    <label class="form-label">Select Exam</label>
-                    <select id="alloc-exam-select" class="form-select">
-                        <option value="">-- Select Exam --</option>
-                        ${exams.map(e => `<option value="${e.id}">${e.name}</option>`).join('')}
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Date</label>
-                    <input type="date" id="alloc-date-select" class="form-control" value="${new Date().toISOString().slice(0, 10)}">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Session</label>
-                    <select id="alloc-session-select" class="form-select">
-                        <option value="FN">Forenoon</option>
-                        <option value="AN">Afternoon</option>
-                    </select>
-                </div>
-                 <div class="col-md-3">
-                    <label class="form-label">Select Room</label>
-                    <select id="alloc-room-select" class="form-select">
-                        <option value="">-- Select Room --</option>
-                        ${examRooms.map(r => `<option value="${r.id}">${r.name} (Cap: ${r.capacity})</option>`).join('')}
-                    </select>
-                </div>
+                <div class="col-md-6"><label class="form-label">1. Select Exam</label><select id="alloc-exam-select" class="form-select">${exams.map(e => `<option value="${e.id}">${e.name}</option>`).join('')}</select></div>
+                <div class="col-md-6"><label class="form-label">2. Select Session(s)</label><select id="alloc-session-select" class="form-select" multiple size="5" disabled><option>-- Select an Exam --</option></select></div>
             </div>
-            <div class="row g-3 mt-3">
-                <div class="col-md-12">
-                    <label class="form-label">Student Exam Reg. No. Ranges / IDs</label>
-                    <textarea id="alloc-reg-no-input" class="form-control" rows="8" placeholder="e.g., MV_101-MV_135&#10;FV_101,FV_103"></textarea>
-                    <div class="form-text text-muted">Enter Exam Registration Numbers (e.g., FV_101). Use hyphens for ranges (e.g., FV_101-FV_135). Use commas for multiple specific IDs on a single line. Each line represents a new range/list.</div>
-                </div>
-            </div>
-            <div class="text-end mt-3">
-                <button id="assign-room-btn" class="btn btn-primary">Assign Room</button>
-            </div>
+            <div class="form-text text-muted mt-2">Hold Ctrl (or Cmd) to select multiple sessions. The same rules will be applied to all.</div>
+            <div id="allocation-summary" class="mt-4"></div>
         </div>
-        <div id="room-allocation-list-container" class="ui-card mt-4">
-            <h5 class="section-header">Current Room Allocations</h5>
-            <div id="current-room-allocations-table">
-                 <p class="text-muted text-center p-4">Select exam, date, and session to view allocations.</p>
+
+        <div id="allocation-rules-grid" class="ui-card mb-4 d-none">
+            <h5 class="section-header">Define Allocation Rules</h5>
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Room</th>
+                            <th>Capacity</th>
+                            <th>Remaining</th>
+                            <th>Start Reg No.</th>
+                            <th>Count</th>
+                            <th>Available</th>
+                            <th>End Reg No.</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="allocation-rules-tbody"></tbody>
+                </table>
             </div>
+            <div class="mt-2"><button id="add-alloc-rule-btn" class="btn btn-sm btn-outline-primary"><i class="fas fa-plus me-1"></i>Add Rule</button></div>
+            <div class="text-end mt-4"><button id="save-all-allocations-btn" class="btn btn-success btn-lg">Save All Allocations</button></div>
+        </div>
+
+        <div id="room-allocation-list-container" class="ui-card mt-4">
+            <h5 class="section-header">Current Room Allocations for First Selected Session</h5>
+            <div id="current-room-allocations-table"></div>
         </div>
     `;
-
-    const examSelect = document.getElementById('alloc-exam-select');
-    const dateSelect = document.getElementById('alloc-date-select');
-    const sessionSelect = document.getElementById('alloc-session-select');
-    const roomSelect = document.getElementById('alloc-room-select');
-    const regNoInput = document.getElementById('alloc-reg-no-input');
-    const assignBtn = document.getElementById('assign-room-btn');
-    const allocationsTableContainer = document.getElementById('current-room-allocations-table');
-
-    const loadAllocations = () => {
-        currentAllocationExamId = examSelect.value;
-        currentAllocationDate = dateSelect.value;
-        currentAllocationSession = sessionSelect.value;
-        displayRoomAllocations(currentAllocationExamId, currentAllocationDate, currentAllocationSession);
-    };
-
-    examSelect.addEventListener('change', loadAllocations);
-    dateSelect.addEventListener('change', loadAllocations);
-    sessionSelect.addEventListener('change', loadAllocations);
-
-    assignBtn.addEventListener('click', async () => {
-        const examId = examSelect.value;
-        const date = dateSelect.value;
-        const session = sessionSelect.value;
-        const roomId = roomSelect.value;
-        const regNoText = regNoInput.value.trim();
-
-        if (!examId || !date || !session || !roomId || !regNoText) {
-            showAlert('Please select exam, date, session, room, and provide Exam Reg. Numbers.', 'danger');
-            return;
-        }
-
-        await assignStudentsToRoom(examId, date, session, roomId, regNoText);
-    });
-
-    // Initial load
-    dateSelect.value = new Date().toISOString().slice(0, 10);
-    if (exams.length > 0) {
-        examSelect.value = exams[0].id;
-        loadAllocations();
-    }
+    attachAllocationTabListeners();
 }
 
 /**
- * Assigns students to a specific exam room for a session based on criteria.
- * It now works by explicitly provided Exam Reg. No. ranges/IDs, with gender/class prefixes.
- * @param {string} examId
- * @param {string} date
- * @param {string} session
- * @param {string} roomId
- * @param {string} regNoText - multi-line string of reg. numbers or ranges
+ * Adds a new row to the allocation table, including a "Remaining" capacity cell.
  */
-async function assignStudentsToRoom(examId, date, session, roomId, regNoText) {
-    // Regex for Exam Reg. No. like FV_101 or MV_101-MV_135
-    // Captures: 1: gender+classPrefix (e.g., FV), 2: start sequence, 3: end gender+classPrefix (optional), 4: end sequence (optional)
-    const regNoLineRegex = /^([MF][A-Z]+)_(\d+)(?:-([MF][A-Z]+)_(\d+))?$/;
+function addAllocationRuleRow() {
+    const tbody = document.getElementById('allocation-rules-tbody');
+    let nextStartRegNo = '';
 
-    let specificRegNos = new Set();
-    let regNoLines = regNoText.split('\n').map(line => line.trim()).filter(Boolean);
+    // --- NEW: LOGIC TO FIND THE NEXT REGISTRATION NUMBER ---
+    const lastRow = tbody.querySelector('tr:last-child');
+    if (lastRow) {
+        // 1. Get the 'End Reg No.' from the last row in the table.
+        const lastEndRegNo = lastRow.querySelector('.end-reg-no').textContent;
+        const regNoRegex = /^([A-Z0-9]+)_(\d+)$/;
+        const match = lastEndRegNo.match(regNoRegex);
 
-    regNoLines.forEach(line => {
-        const parts = line.split(','); // Check for comma-separated IDs on one line
-        if (parts.length > 1) { // Handle "ID1,ID2,ID3" format
-            parts.forEach(part => specificRegNos.add(part.trim()));
-        } else { // Handle "START-END" or single ID format
-            const match = line.match(regNoLineRegex);
-            if (!match) {
-                showAlert(`Invalid Exam Reg. No. format on line: ${line}. Expected 'GENDERCLASS_NUMBER' or 'GENDERCLASS_START-GENDERCLASS_END'. Skipping.`, 'danger');
-                return;
-            }
+        // 2. If it's a valid registration number, calculate the next one.
+        if (match) {
+            const prefix = match[1];
+            const lastNum = parseInt(match[2], 10);
+            const nextNum = lastNum + 1;
+            nextStartRegNo = `${prefix}_${nextNum.toString().padStart(3, '0')}`;
+        }
+    }
+    // --- END OF NEW LOGIC ---
 
-            const prefixStart = match[1]; // e.g., FV or MV
-            const startSeq = parseInt(match[2], 10);
-            const prefixEnd = match[3] || prefixStart; // If no end prefix, use start prefix
-            const endSeq = match[4] ? parseInt(match[4], 10) : startSeq;
+    const newRow = document.createElement('tr');
+    const roomOptions = examRooms.map(r => `<option value="${r.id}" data-capacity="${r.capacity}">${r.name}</option>`).join('');
 
-            if (prefixStart !== prefixEnd) {
-                showAlert(`Range spans different prefixes on line: ${line}. Only ranges within the same gender/class prefix are supported. Skipping.`, 'danger');
-                return;
-            }
+    // The 'value' attribute of the start-reg-no input is now pre-filled
+    newRow.innerHTML = `
+        <td><select class="form-select form-select-sm room-select">${roomOptions}</select></td>
+        <td class="room-capacity text-center align-middle fw-bold"></td>
+        <td class="room-remaining text-center align-middle fw-bold"></td>
+        <td><input type="text" class="form-control form-control-sm start-reg-no" placeholder="e.g., MV_101" value="${nextStartRegNo}"></td>
+        <td><input type="number" class="form-control form-control-sm count" min="1" value="1"></td>
+        <td class="available-count text-center align-middle fw-bold"></td>
+        <td class="end-reg-no text-muted"></td>
+        <td class="status"></td>
+        <td><button type="button" class="btn btn-sm btn-outline-danger remove-rule-btn">&times;</button></td>
+    `;
+    tbody.appendChild(newRow);
 
-            for (let i = startSeq; i <= endSeq; i++) {
-                specificRegNos.add(`${prefixStart}_${i.toString().padStart(3, '0')}`);
-            }
+    // This function will now run on the new row and automatically validate
+    // the pre-filled registration number.
+    recalculateAllocationGrid();
+}
+
+/**
+ * Attaches event listeners, now delegating all calculations to a central function.
+ */
+function attachAllocationTabListeners() {
+    const examSelect = document.getElementById('alloc-exam-select');
+    const sessionSelect = document.getElementById('alloc-session-select');
+    const rulesGrid = document.getElementById('allocation-rules-grid');
+    const rulesTbody = document.getElementById('allocation-rules-tbody');
+
+    examSelect.addEventListener('change', () => {
+        const examId = examSelect.value;
+        sessionSelect.innerHTML = '';
+        if (examId) {
+            const uniqueSessions = new Set(examSchedules.filter(s => s.examId === examId).map(s => `${s.date}_${s.session}`));
+            Array.from(uniqueSessions).sort().forEach(sessionKey => {
+                const [date, session] = sessionKey.split('_');
+                const sessionText = session === 'FN' ? 'Forenoon' : 'Afternoon';
+                sessionSelect.innerHTML += `<option value="${sessionKey}">${new Date(date).toLocaleDateString('en-GB')} (${sessionText})</option>`;
+            });
+            sessionSelect.disabled = false;
+        } else {
+            sessionSelect.innerHTML = '<option>-- Select an Exam First --</option>';
+            sessionSelect.disabled = true;
+        }
+        loadDataForSession();
+    });
+
+    const loadDataForSession = () => {
+        const examId = examSelect.value;
+        const selectedSessions = Array.from(sessionSelect.selectedOptions).map(opt => opt.value);
+        updateAllocationStatusSummary(examId, selectedSessions);
+
+        if (examId && selectedSessions.length > 0) {
+            rulesGrid.classList.remove('d-none');
+            rulesTbody.innerHTML = '';
+            addAllocationRuleRow();
+            const [firstDate, firstSession] = selectedSessions[0].split('_');
+            displayRoomAllocations(examId, firstDate, firstSession);
+        } else {
+            rulesGrid.classList.add('d-none');
+            displayRoomAllocations(null, null, null);
+        }
+    };
+
+    sessionSelect.addEventListener('change', loadDataForSession);
+    
+    // All input/change events now trigger a full grid recalculation
+    rulesTbody.addEventListener('input', recalculateAllocationGrid);
+    rulesTbody.addEventListener('change', recalculateAllocationGrid); // For select dropdowns
+
+    rulesTbody.addEventListener('click', (e) => {
+        if (e.target.closest('.remove-rule-btn')) {
+            e.target.closest('tr').remove();
+            recalculateAllocationGrid(); // Recalculate after removing a row
         }
     });
 
-    if (specificRegNos.size === 0) {
-        showAlert('No valid Exam Reg. Numbers found in the input.', 'danger');
+    document.getElementById('add-alloc-rule-btn').addEventListener('click', addAllocationRuleRow);
+    document.getElementById('save-all-allocations-btn').addEventListener('click', saveAllAllocations);
+}
+async function updateAllocationStatusSummary(examId, selectedSessions) {
+    const summaryContainer = document.getElementById('allocation-summary');
+    if (!summaryContainer || !examId || selectedSessions.length === 0) {
+        summaryContainer.innerHTML = '';
         return;
     }
 
-    // Filter `students` to only include those whose examRegNumber matches `specificRegNos` for the current exam
-    let studentsToAllocate = students.filter(student => specificRegNos.has(student.examRegNumbers?.[examId]));
+    const uniqueStudentIdsForSessions = new Set();
+    let totalSlotsToFill = 0;
+    let totalAllocatedSlots = 0;
 
-    if (studentsToAllocate.length === 0) {
-        showAlert('No students found matching the provided Exam Reg. Numbers for the selected exam.', 'warning');
+    for (const sessionKeyString of selectedSessions) {
+        const [date, session] = sessionKeyString.split('_');
+        
+        // Find students scheduled for this specific session
+        const schedulesForSession = examSchedules.filter(s => s.examId === examId && s.date === date && s.session === session);
+        let studentsInThisSession = 0;
+        schedulesForSession.forEach(schedule => {
+            studentsInThisSession += students.filter(student => student.classId === schedule.classId && student.division === schedule.division).length;
+        });
+        totalSlotsToFill += studentsInThisSession;
+
+        // Find students already allocated for this specific session
+        const firestoreSessionKey = `${examId}_${date.replace(/-/g, '')}_${session}`;
+        students.forEach(student => {
+            if (student.examRoomAllocations?.[firestoreSessionKey]) {
+                totalAllocatedSlots++;
+            }
+        });
+    }
+
+    const balance = totalSlotsToFill - totalAllocatedSlots;
+
+    summaryContainer.innerHTML = `
+        <div class="row text-center g-3">
+            <div class="col"><div class="p-3 border rounded bg-light"><h6 class="text-muted mb-1">Total Slots to Fill</h6><h4 class="fw-bold mb-0">${totalSlotsToFill}</h4></div></div>
+            <div class="col"><div class="p-3 border rounded bg-light"><h6 class="text-muted mb-1">Slots Allocated</h6><h4 class="fw-bold mb-0 text-success">${totalAllocatedSlots}</h4></div></div>
+            <div class="col"><div class="p-3 border rounded ${balance > 0 ? 'bg-danger text-white' : 'bg-success text-white'}"><h6 class="mb-1">Balance</h6><h4 class="fw-bold mb-0">${balance}</h4></div></div>
+        </div>`;
+}
+
+function recalculateAllocationGrid() {
+    const examId = document.getElementById('alloc-exam-select').value;
+    const selectedSessions = Array.from(document.getElementById('alloc-session-select').selectedOptions).map(opt => opt.value);
+    
+    // We only validate against the FIRST selected session for the UI feedback.
+    const [date, session] = selectedSessions[0] ? selectedSessions[0].split('_') : [null, null];
+    if (!date || !session) return;
+    
+    const sessionKey = `${examId}_${date.replace(/-/g, '')}_${session}`;
+
+    // --- THE FIX STARTS HERE ---
+
+    // 1. First, calculate room usage from students already SAVED in the database for this session.
+    const roomUsageFromDB = {};
+    students.forEach(student => {
+        const roomId = student.examRoomAllocations?.[sessionKey];
+        if (roomId) {
+            roomUsageFromDB[roomId] = (roomUsageFromDB[roomId] || 0) + 1;
+        }
+    });
+
+    // 2. These will be updated as we loop through the rows in the current grid.
+    const roomUsageInGrid = {}; // Tracks seats used by rows above in THIS grid.
+    const allocatedRegNosInGrid = new Set(); // Tracks reg numbers used by rows above.
+
+    // Get a baseline of allocated reg numbers from the DB.
+    const allocatedRegNosFromDB = new Set(students.filter(s => s.examRoomAllocations?.[sessionKey]).map(s => s.examRegNumbers?.[examId]));
+
+    const rows = document.querySelectorAll('#allocation-rules-tbody tr');
+    rows.forEach(row => {
+        // Create a combined set of all numbers allocated so far (from DB + rows above).
+        const combinedAllocatedNos = new Set([...allocatedRegNosFromDB, ...allocatedRegNosInGrid]);
+        
+        // Update the current row's status, passing all necessary context.
+        const countForThisRow = updateAllocationRow(row, roomUsageInGrid, roomUsageFromDB, combinedAllocatedNos);
+        
+        // After updating, add this row's data to our running tallies for the *next* row to use.
+        const roomId = row.querySelector('.room-select').value;
+        roomUsageInGrid[roomId] = (roomUsageInGrid[roomId] || 0) + countForThisRow.count;
+        countForThisRow.regNos.forEach(regNo => allocatedRegNosInGrid.add(regNo));
+    });
+}
+
+
+
+
+/**
+ * Updates a SINGLE row based on its own data, usage from rows above, and saved data.
+ * Returns the count and reg numbers used by this row.
+ */
+function updateAllocationRow(rowElement, roomUsageInGrid, roomUsageFromDB, combinedAllocatedNos) {
+    
+    // This function's setup remains the same...
+    const roomSelect = rowElement.querySelector('.room-select');
+    const capacityCell = rowElement.querySelector('.room-capacity');
+    const remainingCell = rowElement.querySelector('.room-remaining');
+    const startRegNoInput = rowElement.querySelector('.start-reg-no');
+    const countInput = rowElement.querySelector('.count');
+    const availableCountCell = rowElement.querySelector('.available-count');
+    const endRegNoCell = rowElement.querySelector('.end-reg-no');
+    const statusCell = rowElement.querySelector('.status');
+
+    const totalCapacity = parseInt(roomSelect.options[roomSelect.selectedIndex]?.dataset.capacity) || 0;
+    capacityCell.textContent = totalCapacity;
+
+    // --- THE FIX FOR REMAINING CAPACITY CALCULATION ---
+    const usedInDB = roomUsageFromDB[roomSelect.value] || 0;
+    const usedInGridAbove = roomUsageInGrid[roomSelect.value] || 0;
+    const remainingCapacity = totalCapacity - usedInDB - usedInGridAbove;
+    remainingCell.textContent = remainingCapacity;
+    remainingCell.className = `room-remaining text-center align-middle fw-bold ${remainingCapacity < 0 ? 'text-danger' : ''}`;
+    
+    // The rest of the validation logic continues as before, but is now more accurate...
+    const startRegNo = startRegNoInput.value.trim().toUpperCase();
+    const count = parseInt(countInput.value) || 0;
+    const regNoRegex = /^([A-Z0-9]+)_(\d+)$/;
+    const match = startRegNo.match(regNoRegex);
+
+    if (!match || count <= 0) {
+        endRegNoCell.textContent = '';
+        statusCell.innerHTML = '';
+        availableCountCell.textContent = '';
+        return { count: 0, regNos: [] };
+    }
+
+    const prefix = match[1], startNum = parseInt(match[2], 10);
+    const endNum = startNum + count - 1;
+    endRegNoCell.textContent = `${prefix}_${endNum.toString().padStart(3, '0')}`;
+
+    const examId = document.getElementById('alloc-exam-select').value;
+    const rangeRegNos = Array.from({length: count}, (_, i) => `${prefix}_${(startNum + i).toString().padStart(3, '0')}`);
+    
+    // It now uses the fully combined set of allocated numbers for validation
+    const alreadyAllocated = rangeRegNos.filter(regNo => combinedAllocatedNos.has(regNo));
+    const nonExistent = rangeRegNos.filter(regNo => !students.some(s => s.examRegNumbers?.[examId] === regNo));
+    
+    const availableCount = count - nonExistent.length - alreadyAllocated.length;
+    availableCountCell.textContent = availableCount;
+    availableCountCell.className = `available-count text-center align-middle fw-bold ${availableCount < count ? 'text-danger' : 'text-success'}`;
+
+    let statusHtml = '';
+    if (count > remainingCapacity) {
+        statusHtml = `<span class="badge bg-danger">Capacity Exceeded</span>`;
+    } else if (alreadyAllocated.length > 0) {
+        statusHtml = `<span class="badge bg-danger" title="${alreadyAllocated.join(', ')}">${alreadyAllocated.length} Already Allocated</span>`;
+    } else if (nonExistent.length > 0) {
+        statusHtml = `<span class="badge bg-warning text-dark" title="${nonExistent.join(', ')}">${nonExistent.length} Do Not Exist</span>`;
+    } else {
+        statusHtml = `<span class="badge bg-success">OK</span>`;
+    }
+    statusCell.innerHTML = statusHtml;
+    
+    return { count: count, regNos: rangeRegNos };
+}
+
+/**
+ * Reads all valid rules from the grid and saves them to ALL selected sessions,
+ * now generating a UNIQUE ID for each rule.
+ */
+async function saveAllAllocations() {
+    const examId = document.getElementById('alloc-exam-select').value;
+    const selectedSessions = Array.from(document.getElementById('alloc-session-select').selectedOptions).map(opt => opt.value);
+    
+    if (!examId || selectedSessions.length === 0) {
+        showAlert('Please select an exam and at least one session.', 'danger');
         return;
     }
 
     const batch = writeBatch(db);
-    let allocatedCount = 0;
+    let totalStudentsAllocated = 0;
+    const rows = document.querySelectorAll('#allocation-rules-tbody tr');
 
-    studentsToAllocate.forEach(student => {
-        const studentRef = getDocRef('students', student.id);
-        const sessionKey = `${examId}_${date.replace(/-/g, '')}_${session}`;
-        let currentRoomAllocations = { ...student.examRoomAllocations, [sessionKey]: roomId };
-        batch.update(studentRef, { examRoomAllocations: currentRoomAllocations });
-        allocatedCount++;
-    });
+    for (const sessionKeyString of selectedSessions) {
+        const [date, session] = sessionKeyString.split('_');
+        const firestoreSessionKey = `${examId}_${date.replace(/-/g, '')}_${session}`;
 
-    // --- Save the Allocation Rule (based on the entered text) ---
-    const allocationRuleId = `${examId}_${date.replace(/-/g, '')}_${session}_${roomId}`;
-    const ruleRef = getDocRef('examRoomAllocationRules', allocationRuleId);
+        for (const row of rows) {
+            const status = row.querySelector('.status .badge')?.textContent;
+            if (status !== 'OK') continue;
 
-    const ruleData = {
-        id: allocationRuleId,
-        examId, date, session, roomId,
-        regNoRangeText: regNoText, // Store the raw text for display
-        allocatedBy: selectedUser.id,
-        allocatedAt: serverTimestamp()
-    };
-    batch.set(ruleRef, ruleData, { merge: true });
+            const roomId = row.querySelector('.room-select').value;
+            const startRegNo = row.querySelector('.start-reg-no').value.trim().toUpperCase();
+            const count = parseInt(row.querySelector('.count').value);
+            const regNoRegex = /^([A-Z0-9]+)_(\d+)$/;
+            const match = startRegNo.match(regNoRegex);
+            if (!match) continue;
+            
+            const prefix = match[1];
+            const startNum = parseInt(match[2], 10);
+            const endNum = startNum + count - 1;
 
-    try {
-        await batch.commit();
-        showAlert(`${allocatedCount} student(s) assigned to room ${roomId} for ${examId} ${date} ${session}.`, 'success');
-        document.getElementById('alloc-reg-no-input').value = ''; // Clear reg no input
-        displayRoomAllocations(examId, date, session); // Refresh allocations list
-    } catch (error) {
-        console.error("Error assigning students to room:", error);
-        showAlert('Failed to assign students to room. See console.', 'danger');
+            const studentsToAllocate = [];
+            for (let i = startNum; i <= endNum; i++) {
+                const regNo = `${prefix}_${i.toString().padStart(3, '0')}`;
+                const student = students.find(s => s.examRegNumbers?.[examId] === regNo);
+                if (student) studentsToAllocate.push(student);
+            }
+
+            if (studentsToAllocate.length > 0) {
+                // Apply the allocation to the students
+                studentsToAllocate.forEach(student => {
+                    const studentRef = getDocRef('students', student.id);
+                    const updatedAllocations = { ...student.examRoomAllocations, [firestoreSessionKey]: roomId };
+                    batch.update(studentRef, { examRoomAllocations: updatedAllocations });
+                });
+                totalStudentsAllocated += studentsToAllocate.length;
+                
+                // --- THE FIX IS HERE ---
+
+                // 1. Generate a new, unique document reference for EACH rule.
+                const newRuleRef = doc(collection(db, `/artifacts/${appId}/public/data/examRoomAllocationRules`));
+
+                // 2. Create the rule data, making sure to include the new unique ID inside the document.
+                const ruleData = {
+                    id: newRuleRef.id, // This is the auto-generated ID.
+                    examId, 
+                    date, 
+                    session, 
+                    roomId,
+                    regNoRangeText: `${startRegNo} - ${row.querySelector('.end-reg-no').textContent}`,
+                    allocatedBy: selectedUser.id,
+                    allocatedAt: serverTimestamp()
+                };
+                
+                // 3. Use the new reference in the batch operation.
+                batch.set(newRuleRef, ruleData);
+            }
+        }
+    }
+
+    if (totalStudentsAllocated > 0) {
+        try {
+            await batch.commit();
+            showAlert(`${totalStudentsAllocated} student allocations saved successfully for ${selectedSessions.length} session(s)!`, 'success');
+            // Refresh the view
+            document.getElementById('alloc-session-select').dispatchEvent(new Event('change'));
+        } catch (error) {
+            console.error("Error saving allocations:", error);
+            showAlert('Failed to save allocations.', 'danger');
+        }
+    } else {
+        showAlert('No valid allocation rules to save.', 'info');
     }
 }
-/**
- * Displays current room allocations for a specific exam date and session.
- * Includes the allocation rule (class range/reg. no. range).
- * @param {string} examId
- * @param {string} date
- * @param {string} session
- */
 function displayRoomAllocations(examId, date, session) {
+    const container = document.getElementById('current-room-allocations-table');
+    if (!container || !examId || !date || !session) {
+        container.innerHTML = `<p class="text-muted text-center p-4">Select exam, date, and session to view allocations.</p>`;
+        return;
+    }
+
+    // 1. Find the allocation RULES for the current session
+    const rulesForSession = examRoomAllocationRules.filter(rule =>
+        rule.examId === examId && rule.date === date && rule.session === session
+    ).sort((a, b) => {
+        // Sort by room name for a consistent order
+        const roomNameA = examRooms.find(r => r.id === a.roomId)?.name || '';
+        const roomNameB = examRooms.find(r => r.id === b.roomId)?.name || '';
+        return roomNameA.localeCompare(roomNameB);
+    });
+
+    if (rulesForSession.length === 0) {
+        container.innerHTML = `<p class="alert alert-info text-center">No allocation rules have been created for this session yet.</p>`;
+        return;
+    }
+
+    // 2. To get the student counts, we still need to check the student data
+    const sessionKey = `${examId}_${date.replace(/-/g, '')}_${session}`;
+    const studentCountsByRoom = students.reduce((acc, student) => {
+        const roomId = student.examRoomAllocations?.[sessionKey];
+        if (roomId) {
+            acc[roomId] = (acc[roomId] || 0) + 1;
+        }
+        return acc;
+    }, {});
+
+    // 3. Build the new, simpler table focused on rules
+    let html = `
+        <h5>Allocations for ${new Date(date).toLocaleDateString()} (${session})</h5>
+        <div class="table-responsive">
+            <table class="table table-striped table-hover table-sm">
+                <thead class="table-light">
+                    <tr>
+                        <th>Room</th>
+                        <th>Allocation Rule (Reg. No. Range)</th>
+                        <th>Student Count</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rulesForSession.map(rule => {
+                        const roomName = examRooms.find(r => r.id === rule.roomId)?.name || rule.roomId;
+                        const studentCount = studentCountsByRoom[rule.roomId] || 0;
+                        return `
+                            <tr>
+                                <td><strong>${roomName}</strong></td>
+                                <td>${rule.regNoRangeText.replace(/\n/g, ', ')}</td>
+                                <td>${studentCount}</td>
+                                <td class="text-end">
+                                    <button class="btn btn-sm btn-outline-primary me-2" onclick="editAllocationRule('${rule.id}')" title="Edit Rule">Edit</button>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="deleteAllocationRule('${rule.id}')" title="Delete Rule">Delete</button>
+                                </td>
+                            </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+    container.innerHTML = html;
+}
+function displayRoomAllocationsSTUWUISE(examId, date, session) {
     const container = document.getElementById('current-room-allocations-table');
     if (!container || !examId || !date || !session) {
         container.innerHTML = `<p class="text-muted text-center p-4">Select exam, date, and session to view allocations.</p>`;
@@ -20321,6 +21546,129 @@ function displayRoomAllocations(examId, date, session) {
         }
     };
 }
+
+/**
+ * Deletes an allocation rule and de-allocates all associated students.
+ * @param {string} ruleId - The ID of the examRoomAllocationRules document.
+ * @param {boolean} [confirmDelete=true] - Whether to show a confirmation prompt.
+ */
+window.deleteAllocationRule = async(ruleId, confirmDelete = true) => {
+    if (confirmDelete && !confirm('Are you sure you want to delete this rule and de-allocate its students?')) {
+        return;
+    }
+
+    const rule = examRoomAllocationRules.find(r => r.id === ruleId);
+    if (!rule) {
+        showAlert('Allocation rule not found.', 'danger');
+        return;
+    }
+
+    // Deconstruct the rule to get context
+    const { examId, date, session, regNoRangeText } = rule;
+    const sessionKey = `${examId}_${date.replace(/-/g, '')}_${session}`;
+
+    // Find all student registration numbers affected by this rule
+    const regNoRegex = /^([A-Z0-9]+)_(\d+)$/;
+    const affectedRegNos = new Set();
+    const lines = regNoRangeText.split('\n').map(line => line.trim()).filter(Boolean);
+
+    lines.forEach(line => {
+        const parts = line.split(',');
+        if (parts.length > 1) {
+            parts.forEach(part => affectedRegNos.add(part.trim()));
+        } else {
+            const rangeParts = line.split('-').map(p => p.trim());
+            const startMatch = rangeParts[0].match(regNoRegex);
+            const endMatch = (rangeParts[1] || rangeParts[0]).match(regNoRegex);
+            if (startMatch && endMatch && startMatch[1] === endMatch[1]) {
+                const prefix = startMatch[1];
+                for (let i = parseInt(startMatch[2]); i <= parseInt(endMatch[2]); i++) {
+                    affectedRegNos.add(`${prefix}_${i.toString().padStart(3, '0')}`);
+                }
+            }
+        }
+    });
+
+    // Find the actual student objects to update
+    const studentsToDeallocate = students.filter(s => affectedRegNos.has(s.examRegNumbers?.[examId]));
+    const batch = writeBatch(db);
+
+    // De-allocate students
+    studentsToDeallocate.forEach(student => {
+        const studentRef = getDocRef('students', student.id);
+        let updatedAllocations = { ...student.examRoomAllocations };
+        delete updatedAllocations[sessionKey];
+        batch.update(studentRef, { examRoomAllocations: updatedAllocations });
+    });
+
+    // Delete the rule itself
+    batch.delete(getDocRef('examRoomAllocationRules', ruleId));
+
+    try {
+        await batch.commit();
+        showAlert('Allocation rule and student assignments have been removed.', 'success');
+        displayRoomAllocations(examId, date, session); // Refresh the view
+    } catch (error) {
+        console.error("Error deleting allocation rule:", error);
+        showAlert('Failed to delete the rule.', 'danger');
+    }
+}
+
+
+/**
+ * Prepares the UI for editing an allocation rule by first deleting the old one
+ * and then repopulating the input grid with its values.
+ * @param {string} ruleId - The ID of the rule to edit.
+ */
+window.editAllocationRule = async(ruleId) =>{
+    const rule = examRoomAllocationRules.find(r => r.id === ruleId);
+    if (!rule) return;
+
+    // Store the rule's details before deleting it
+    const { roomId, regNoRangeText } = rule;
+
+    // Delete the existing rule and its allocations without a confirmation prompt
+    await deleteAllocationRule(ruleId, false);
+
+    // Scroll to the top to see the input grid
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    // Find an empty row or create a new one in the input grid
+    const tbody = document.getElementById('allocation-rules-tbody');
+    let targetRow = Array.from(tbody.querySelectorAll('tr')).find(row => !row.querySelector('.start-reg-no').value);
+    if (!targetRow) {
+        addAllocationRuleRow();
+        targetRow = tbody.lastElementChild;
+    }
+
+    // Populate the row with the old rule's data
+    targetRow.querySelector('.room-select').value = roomId;
+    const startRegNoInput = targetRow.querySelector('.start-reg-no');
+    
+    // Simplified logic: Put the entire rule text into the start reg no field for manual editing/splitting.
+    // A more complex parser could split ranges into start/count, but this is safer.
+    const firstRegNo = regNoRangeText.split(/[,-]/)[0].trim();
+    startRegNoInput.value = firstRegNo;
+
+    // You might need a more sophisticated way to recalculate the 'count' if the rule is complex.
+    // For a simple range "MV_101-MV_110", we can calculate the count.
+    const rangeParts = regNoRangeText.split('-').map(p => p.trim());
+    const regNoRegex = /^([A-Z0-9]+)_(\d+)$/;
+    const startMatch = rangeParts[0]?.match(regNoRegex);
+    const endMatch = rangeParts[1]?.match(regNoRegex);
+    
+    if(startMatch && endMatch) {
+         const count = parseInt(endMatch[2]) - parseInt(startMatch[2]) + 1;
+         targetRow.querySelector('.count').value = count;
+    } else {
+         targetRow.querySelector('.count').value = 1; // Default to 1 if not a clear range
+    }
+
+    // Trigger an update to validate the repopulated row
+    updateAllocationRow(targetRow);
+}
+
+
 
 // Local variables to store selected filters for Hall Ticket generation
 let hallTicketClassId = null;
@@ -20432,12 +21780,23 @@ function displayHallTicketStudentList(examId, classId, division) {
                 sch.examId === examId && // Filter by selected exam
                 sch.classId === student.classId &&
                 sch.division === student.division
-            ).sort((a,b) => new Date(a.date) - new Date(b.date) || a.session.localeCompare(b.session));
+            ).sort((a, b) => {
+  // Primary: sort by date
+  const dateDiff = new Date(a.date) - new Date(b.date);
+  if (dateDiff !== 0) return dateDiff;
+
+  // Secondary: custom session order
+  const order = { FN: 0, AN: 1 }; // Lower number comes first
+  return order[a.session] - order[b.session];
+});
+
 
             relevantSchedules.forEach(schedule => {
                 const subjectName = subjects.find(s => s.id === schedule.subjectId)?.name || schedule.subjectId;
                 const classTeacher = teachers.find(s => s.classCharge === schedule.classId&&s.division===schedule.division)?.name || 'iqbal c';
                 const examDate = new Date(schedule.date).toLocaleDateString('en-GB');
+                const examDay = new Date(schedule.date).toLocaleString('en-GB', { weekday: 'long' });
+
                 const session = schedule.session === 'FN' ? 'Forenoon' : 'Afternoon';
                 
                 const sessionKey = `${schedule.examId}_${schedule.date.replace(/-/g, '')}_${schedule.session}`;
@@ -20446,10 +21805,10 @@ function displayHallTicketStudentList(examId, classId, division) {
                 
                 examScheduleHtml += `
                     <tr>
-                        <td>${subjectName}</td>
-                        <td>${examDate}</td>
-                        <td>${session}</td>
-                        <td>${roomName}</td>
+                        <td >${subjectName}</td>
+                        <td >${examDate}/( ${examDay} )</td>
+                        <td class="text-center">${session}</td>
+                        <td class="text-center">${''}</td>
                     </tr>
                 `;
             });
@@ -20464,23 +21823,25 @@ function displayHallTicketStudentList(examId, classId, division) {
 
             return `
                 <div class="hall-ticket-page">
-                    <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 2px solid #333; box-sizing: border-box; padding: 10mm;">
+                    <div style="position: relative; top: 0; left: 0; width:21cm; height: 27cm; border: 2px solid #333; box-sizing: border-box; padding: 10mm;">
                         <div class="text-center mb-4">
                             ${schoolDetails.logoUrl ? `<img src="${schoolDetails.logoUrl}" alt="School Logo" style="max-height: 70px; margin-bottom: 0.5rem;">` : ''}
-                            <h4 class="mb-0 text-primary">${schoolDetails.name || 'School Name'}</h4>
-                            <p class="text-muted" style="font-size: 0.8em; margin-bottom: 5px;">${schoolDetails.address || 'School Address'}</p>
-                            <h5 class="mt-2" style="font-weight: bold;">EXAMINATION HALL TICKET - ${exam.name.toUpperCase()}</h5>
+                            <h4 class="mb-0 text-primary">${schoolDetails.address.toUpperCase() || 'School Name'}</h4>
+                            <p class="text-muted" style="font-size: 0.8em; margin-bottom: 5px;">${schoolDetails.name || 'School Address'}</p>
+                            <h5 class="mt-2 p-2 text-white text-uppercase fw-bold"  style="background-color: black; border-radius: 4px;">EXAMINATION HALL TICKET</h5>
+                            <h5 class="mt-0" style="font-weight: bold;">${exam.name} ( 25-26 )</h5>
                         </div>
                         
                         <div class="row mb-4 align-items-center">
-                            <div class="col-8">
+                            <div class="col-8 tabledetails">
                                 <table class="table table-sm table-borderless" style="font-size: 0.9em;">
                                     <tbody>
+                                        <tr><th colspan="2" class="text-center">Exam Reg. No. ${student.examRegNumbers?.[examId] || 'Not Assigned'}</th></tr>
+                                
                                         <tr><th style="width: 120px;">Student Name</th><td>: ${student.name}</td></tr>
                                         <tr><th>Admission No</th><td>: ${student.admissionNumber || 'N/A'}</td></tr>
-                                        <tr><th>Exam Reg. No.</th><tdclass="tex">: ${student.examRegNumbers?.[examId] || 'Not Assigned'}</td></tr>
                                         <tr><th>Class / Div</th><td>: ${className} - ${student.division || 'N/A'}</td></tr>
-                                        <tr><th>Signature of the Student / Div</th><td>: </td></tr>
+                                        <tr><th colspan="2">Signature of the Student ................ </th></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -20496,10 +21857,10 @@ function displayHallTicketStudentList(examId, classId, division) {
                             <table class="table table-bordered table-sm" style="font-size: 0.85em;">
                                 <thead>
                                     <tr>
-                                        <th>Subject</th>
-                                        <th>Date</th>
-                                        <th>Session</th>
-                                        <th>Room</th>
+                                        <th class="text-center">Subject</th>
+                                        <th class="text-center">Date</th>
+                                        <th class="text-center">Session</th>
+                                        <th class="text-center">Invigilator Sign</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -20508,20 +21869,18 @@ function displayHallTicketStudentList(examId, classId, division) {
                             </table>
                         </div>
 
-                        <div class="row mt-9" style="position: absolute; bottom: 30mm; left: 5mm; right: 5mm; font-size: 0.85em;">
+                        <div class="row mt-9" style="position: absolute; bottom: 10mm; left: 5mm; right: 5mm; font-size: 0.85em;">
                             <div class="col-4 text-center">
-                                <img src="${hmSignPng}" alt="HM Sign" style="max-height: 80px; opacity: 0.7;"><br>
+                                <img src="sign3.jpg" alt="HM Sign" style="max-height: 80px; opacity: 0.7;"><br>
                                 <hr class="mx-auto w-50 my-1">
                                 <p>Signature of H.M. / Principal</p>
                             </div>
                             <div class="col-4 text-center">
-                                <img src="${schoolSealPng}" alt="School Seal" style="max-height: 90px; opacity: 0.8;"><br>
+                                <img src="SEAL.jpg" alt="School Seal" style="max-height: 90px; opacity: 0.8;"><br>
                                 <p class="mt-1">School Seal</p>
                             </div>
                             <div class="col-4 text-center">
                                 <br>
-                                <p></p>
-                                <br style="max-height: 9px;">
                                 <hr class="mx-auto w-50 my-1">
                                 <span style="gap:0px;">
                                     <p  class="mx-auto w-90 my-1">Signature of classTeacher</p>
@@ -21495,21 +22854,230 @@ function attachDataListenersnew(collectionsToWatch, main = false) {
 // REPLACE your entire updateGlobalDataAndCache function with this one
 
 const updateGlobalDataAndCache = async (collectionName, data) => {
-    // 1. Update the global JavaScript variable for immediate UI updates
-    window[collectionName] = data;
-
-    // 2. Efficiently update the IndexedDB cache
     try {
-        // CORRECT: Access the table directly and use bulkPut.
-        // bulkPut will add new items and update existing ones by their primary key ('&id').
-        // This is the correct and most efficient way to sync.
+        // Step 1: Clear the entire table first.
+        // This ensures no data from a previous user (like an admin) remains.
+        await appDb[collectionName].clear();
+        console.log(`Cleared IndexedDB table: ${collectionName}.`);
+
+        // Step 2: Add the new, freshly fetched data.
+        // This populates the empty table with only the data for the current user.
         await appDb[collectionName].bulkPut(data);
-        console.log(`Synced ${collectionName} with IndexedDB.`);
+        console.log(`Synced ${data.length} records to ${collectionName}.`);
+
     } catch (e) {
-        console.error(`Error caching ${collectionName} in IndexedDB:`, e);
+        console.error(`Error during full refresh of ${collectionName} in IndexedDB:`, e);
     }
 };
 
+/**
+ * Main function to render the "Birthdays" module shell, including the date selector.
+ */
+window.renderBirthdaysModule = () => {
+    const mainContent = document.getElementById('main-content');
+
+    // Get today's date in YYYY-MM-DD format, which is required for the date input value
+    const today = new Date();
+    // Adjust for timezone offset to prevent yesterday's date
+    today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
+    const todayString = today.toISOString().slice(0, 10);
+
+    mainContent.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="h2 mb-0">Birthday Finder</h1>
+            <div class="d-flex align-items-center">
+                <label for="birthday-date-selector" class="form-label me-2 mb-0">Select Date:</label>
+                <input type="date" id="birthday-date-selector" class="form-control" style="width: auto;">
+            </div>
+        </div>
+        
+        <div id="birthday-list-container"></div>
+    `;
+
+    const dateSelector = document.getElementById('birthday-date-selector');
+    
+    // Set the initial value to today and load the list
+    dateSelector.value = todayString;
+    displayBirthdayList(todayString);
+
+    // Add a listener to update the list whenever the date changes
+    dateSelector.addEventListener('change', () => {
+        displayBirthdayList(dateSelector.value);
+    });
+};
+
+/**
+ * Finds and displays the list of students with birthdays on the selected date.
+ * @param {string} dateString - The selected date in "YYYY-MM-DD" format.
+ */
+function displayBirthdayList(dateString) {
+    const container = document.getElementById('birthday-list-container');
+    if (!container) return;
+
+    // Convert the input string to a Date object
+    // Adding 'T00:00:00' ensures the date is parsed in the local timezone
+    const selectedDate = new Date(`${dateString}T00:00:00`);
+    const birthdaysOnDate = getBirthdaysForDate(selectedDate);
+    
+    let content = '';
+
+    if (birthdaysOnDate.length === 0) {
+        content = `<p class="alert alert-info">No student birthdays on this date.</p>`;
+    } else {
+        content += `<div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">`;
+        birthdaysOnDate.forEach(student => {
+            const studentPhotoSrc = student.photoDriveId
+                ? `https://drive.google.com/thumbnail?id=${student.photoDriveId}&sz=200`
+                : 'https://placehold.co/100x100?text=No+Photo';
+            
+            const className = classes.find(c => c.id === student.classId)?.name || 'N/A';
+            
+            content += `
+                <div class="col">
+                    <div class="card h-100 text-center shadow-sm">
+                        <div class="card-body">
+                            <img src="${studentPhotoSrc}" alt="${student.name}" class="rounded-circle mb-3" style="width: 100px; height: 100px; object-fit: cover;">
+                            <h5 class="card-title">${student.name}</h5>
+                            <p class="card-text text-muted">${className} - ${student.division}</p>
+                        </div>
+                        <div class="card-footer bg-white border-0 pb-3">
+                            <button class="btn btn-success me-2" onclick="sendBirthdayWhatsapp('${student.id}')">
+                                <i class="fab fa-whatsapp"></i> Wish
+                            </button>
+                            <button class="btn btn-primary" onclick="generateBirthdayPoster('${student.id}')">
+                                <i class="fas fa-paint-brush"></i> Poster
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        content += `</div>`;
+    }
+    container.innerHTML = content;
+}
+/**
+ * Helper function to filter students for birthdays on a specific date.
+ * @param {Date} selectedDate - A JavaScript Date object for the date to check.
+ * @returns {Array<object>} An array of student objects.
+ */
+function getBirthdaysForDate(selectedDate) {
+    const checkMonth = selectedDate.getMonth() + 1; // getMonth() is 0-indexed
+    const checkDay = selectedDate.getDate();
+
+    return students.filter(student => {
+        if (!student.dob) return false;
+        try {
+            // Adding 'T00:00:00' to the DOB string also helps prevent timezone issues
+            const dob = new Date(`${student.dob}T00:00:00`); 
+            const dobMonth = dob.getMonth() + 1;
+            const dobDay = dob.getDate();
+            return dobMonth === checkMonth && dobDay === checkDay;
+        } catch (e) {
+            return false;
+        }
+    });
+}
+
+/**
+ * Opens WhatsApp with a pre-filled birthday message.
+ * @param {string} studentId - The ID of the student to wish.
+ */
+window.sendBirthdayWhatsapp = (studentId) => {
+    const student = students.find(s => s.id === studentId);
+    if (!student) return;
+
+    // Use student's WhatsApp number or fallback to mobile1
+    const whatsAppNumber = student.whatsappNo || student.mobile1;
+    if (!whatsAppNumber) {
+        showAlert('No WhatsApp number found for this student.', 'warning');
+        return;
+    }
+
+    const schoolName = schoolDetails.name || 'Our School';
+    const message = `Happy Birthday, ${student.name}! 🎉🎂\n\nWishing you a fantastic day from everyone at ${schoolName}.`;
+    const encodedMessage = encodeURIComponent(message);
+    const whatsappUrl = `https://wa.me/${whatsAppNumber}?text=${encodedMessage}`;
+    
+    window.open(whatsappUrl, '_blank');
+};
+
+
+/**
+ * Generates a birthday poster on a canvas and shows it in the preview modal.
+ * @param {string} studentId - The ID of the birthday student.
+ */
+window.generateBirthdayPoster = async (studentId) => {
+    const student = students.find(s => s.id === studentId);
+    if (!student) return;
+
+    showAlert('Generating birthday poster...', 'info');
+    
+    // A few simple quotes to choose from
+    const quotes = [
+        "May your day be as bright as your smile.",
+        "Wishing you a year full of success and happiness.",
+        "Hope your special day brings you all that your heart desires!"
+    ];
+    const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
+
+    try {
+        // --- Load Images ---
+        const backgroundUrl ='KYHSSLOGO.jpg';//  'https://i.imgur.com/L5nLrlf.png'; // A sample birthday background
+        const studentPhotoUrl = student.photoDriveId ? await getSafeImageFromDrive(student.photoDriveId) : 'https://placehold.co/200x250?text=No+Photo';
+
+        const [bgImage, studentImage] = await Promise.all([
+            loadImage(backgroundUrl),
+            loadImage(studentPhotoUrl)
+        ]);
+
+        // --- Setup and Draw on Canvas ---
+        const canvas = document.createElement('canvas');
+        canvas.width = 1080;
+        canvas.height = 1920;
+        const ctx = canvas.getContext('2d');
+
+        ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
+
+        // Draw student photo
+        ctx.drawImage(studentImage, 340, 450, 400, 500);
+
+        // Draw Text
+        ctx.textAlign = 'center';
+        
+        ctx.font = 'bold 100px Inter';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillText("Happy Birthday", 540, 250);
+
+        ctx.font = 'bold 80px Inter';
+        ctx.fillStyle = '#FFD700'; // Gold
+        ctx.fillText(student.name.toUpperCase(), 540, 1100);
+
+        ctx.font = 'italic 45px Inter';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillText(`"${randomQuote}"`, 540, 1250);
+
+        // --- Display in the Reusable Modal ---
+        const dataUrl = canvas.toDataURL('image/png');
+        const posterImageEl = document.getElementById('poster-image-display');
+        const saveBtnEl = document.getElementById('save-poster-btn');
+        const posterModalEl = document.getElementById('poster-modal');
+        const posterModalLabel = document.getElementById('posterModalLabel');
+
+        if (posterImageEl && saveBtnEl && posterModalEl) {
+            posterModalLabel.textContent = `Birthday Poster for ${student.name}`;
+            posterImageEl.src = dataUrl;
+            saveBtnEl.href = dataUrl;
+            saveBtnEl.download = `HappyBirthday_${student.name}.png`;
+            const modal = new bootstrap.Modal(posterModalEl);
+            modal.show();
+        }
+
+    } catch (error) {
+        console.error('Error generating birthday poster:', error);
+        showAlert(`Failed to generate poster. Error: ${error.message}`, 'danger');
+    }
+};
         // --- View Renderers ---
 
 
@@ -21517,6 +23085,7 @@ const updateGlobalDataAndCache = async (collectionName, data) => {
             'exam-control': window.renderExamControlModule, // <-- ADD THIS LINE
             'dashboard': window.renderDashboard, 'add-student': window.renderAddStudentForm,
             'student-mgt': window.renderStudentManagement, 'teacher-mgt': window.renderTeacherManagement,
+            'birthdays': window.renderBirthdaysModule, // 🎂 Add this line
             'class-mgt': window.renderClassManagement, 'subject-mgt': window.renderSubjectManagement,
             'subject-allocation': window.renderSubjectAllocation, 'exam-mgt': window.renderExamManagement,
             'attendance-mgt': window.renderAttendanceManagement, 'holiday-mgt': window.renderHolidayManagement, 'my-results': window.renderMyResults,
@@ -21554,7 +23123,7 @@ const updateGlobalDataAndCache = async (collectionName, data) => {
 
 const appDb = new Dexie("SchoolAppDB");
 // Increment the version number if you are changing the schema
-appDb.version(3.7).stores({
+appDb.version(4.2).stores({
     classes: "&id, name", // &id means primary key and must be unique
     subjects: "&id, name",
     students: "&id, classId, division, admissionNumber, name",
@@ -21577,6 +23146,8 @@ appDb.version(3.7).stores({
     // You can also cache fee data, but be mindful of financial year changes
     feeStructures: "&id, financialYear, feeHead, classId, stage",
     studentFeeSetups: "&id, financialYear, classId, division",
+    pendingPayments:"&id",
+    receipts:"&id",
     //festAssociates
     fests:"&id",
     festHouses:"&id",
@@ -21584,7 +23155,17 @@ appDb.version(3.7).stores({
     festSettings:"&id",
     festRegistrations:"&id",
     festResults:"&id",
+    //vehicles
+    vehicles:"&id",
+    //syllabus
+    timetables:"&id",
+    syllabuses:"&id",
+    chapters:"&id",
+    syllabusCompletion:"&id",
+    schoolDetails:"&id"
 });
+    
+
     
  export async function getStudentsData(studentId = null) {
     if (studentId) {
@@ -21703,7 +23284,7 @@ export function handleOnline() {
     // Re-initialize data listeners if a user is logged in to get the latest data
     if (currentUserRole) {
         console.log('Re-attaching Firebase listeners...');
-        attachDataListeners();
+        //attachDataListeners();
         attachFeeDataListeners(activeFinancialYear);
     }
 }
@@ -21865,6 +23446,166 @@ function loadImage(src) {
     });
 }
 
+function printContentOfDiv(divId, title = 'Report', options = {}) {
+    const {
+        customHeaderHtml = '',
+        customFooterHtml = '',
+        extraCss = '',
+        pageSize = 'A4 portrait', // Default to A4 portrait
+        pageMargins = '0.5cm' // Default to 1cm margins
+    } = options;
+
+    const contentEl = document.getElementById(divId);
+    if (!contentEl) {
+        showAlert('Could not find content to print.', 'danger');
+        return;
+    }
+
+    // Clone the content to avoid modifying the live DOM
+    const contentToPrint = contentEl.cloneNode(true);
+
+    // Handle .printable-group for page breaks (if used, e.g., in Reports module)
+    const groups = contentToPrint.querySelectorAll('.printable-group');
+    if (groups.length > 0) {
+        groups.forEach(group => {
+            const headerNode = document.createElement('div');
+            headerNode.innerHTML = customHeaderHtml;
+            group.insertBefore(headerNode, group.firstChild);
+        });
+    }
+
+    // Create a new window for printing
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+        showAlert('Please allow pop-ups for this website to print the report.', 'warning');
+        return;
+    }
+
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>${title}</title>
+                <!-- Include Bootstrap CSS for consistent styling -->
+                <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+                <style>
+                    /* --- General Print Styles --- */
+                    body {
+                        font-family: 'Inter', sans-serif; /* Use your app's font */
+                        margin: 0; /* Reset default body margin */
+                        padding: 0; /* Reset default body padding */
+                        color: #333; /* Darker text for print clarity */
+                    }
+                    
+                    /* Page setup for print */
+                    @page {
+                        size: ${pageSize}; /* A4 portrait, Letter landscape, etc. */
+                        margin: ${pageMargins}; /* Minimal margins for more content */
+                        /* Optional: Add headers/footers for print here */
+                        /* @top-center { content: "${title}"; } */
+                        /* @bottom-center { content: counter(page); } */
+                    }
+
+                    /* Ensure all elements are visible and print correctly */
+                    * {
+                        box-sizing: border-box;
+                        -webkit-print-color-adjust: exact !important; /* Forces background colors/images to print */
+                        print-color-adjust: exact !important;
+                    }
+
+                    /* Hide elements not meant for print */
+                    .no-print {
+                        display: none !important;
+                    }
+
+                    /* --- Table Specific Styles --- */
+                    table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        font-size: 0.85rem; /* Slightly larger for readability than 0.8rem */
+                        margin-bottom: 1rem; /* Space after tables */
+                    }
+                    th, td {
+                        border: 1px solid #ccc; /* Lighter border */
+                        padding: 0.5rem 0.75rem; /* More padding for readability */
+                        text-align: left;
+                        vertical-align: top; /* Align text to top in cells */
+                    }
+                    thead th {
+                        background-color: #e9ecef; /* Lighter header background */
+                        font-weight: bold;
+                        color: #495057;
+                    }
+                    tbody tr:nth-child(even) {
+                        background-color: #f8f9fa; /* Zebra striping for readability */
+                    }
+                    /* Ensure borders are visible on print */
+                    table, th, td {
+                        border-color: #dee2e6 !important;
+                    }
+
+                    /* --- Header/Footer/Group Specific Styles --- */
+                    .report-header {
+                        text-align: center;
+                        margin-bottom: 2rem;
+                        padding-bottom: 1rem;
+                        border-bottom: 1px solid #eee;
+                    }
+                    .report-header h1, .report-header h2, .report-header h3, .report-header h4, .report-header h5 {
+                        margin-top: 0;
+                        margin-bottom: 0.5rem;
+                        color: #343a40;
+                    }
+                    .report-header p {
+                        margin-bottom: 0.25rem;
+                        font-size: 0.95rem;
+                        color: #6c757d;
+                    }
+                    
+                    /* Page breaks for groups (if applicable) */
+                    .printable-group {
+                        page-break-before: always; /* Start each group on a new page */
+                        padding-top: 1rem; /* Padding at top of new page */
+                    }
+                    .printable-group:first-child {
+                        page-break-before: auto; /* Don't break before the very first group */
+                        padding-top: 0;
+                    }
+                    
+                    /* Ensure no content is cut off */
+                    img, table, pre, blockquote {
+                        page-break-inside: avoid;
+                    }
+
+                    /* Additional custom CSS passed in options */
+                    ${extraCss}
+                </style>
+            </head>
+            <body>
+                <div style="padding: ${pageMargins};"> <!-- Apply padding to body content for consistent margins -->
+                    ${groups.length === 0 ? customHeaderHtml : ''} <!-- Render header only if no groups, otherwise groups handle it -->
+                    ${contentToPrint.innerHTML}
+                    ${customFooterHtml}
+                </div>
+            </body>
+        </html>
+    `);
+
+    printWindow.document.close();
+    printWindow.focus(); // Focus the new window
+    // Use a slightly longer timeout to ensure all assets (like images) are loaded before printing
+    setTimeout(() => {
+        try {
+            printWindow.print();
+            printWindow.close(); // Close the print window after printing
+        } catch (e) {
+            console.error("Error during print:", e);
+            showAlert("Printing failed. Please check your browser's print settings.", "danger");
+        }
+    }, 500); // Increased timeout for better reliability
+}
         // Start App
         initializeAppAndAuth();
 
