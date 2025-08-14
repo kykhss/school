@@ -21828,8 +21828,10 @@ function displayHallTicketStudentList(examId, classId, division) {
                             ${schoolDetails.logoUrl ? `<img src="${schoolDetails.logoUrl}" alt="School Logo" style="max-height: 70px; margin-bottom: 0.5rem;">` : ''}
                             <h4 class="mb-0 text-primary">${schoolDetails.address.toUpperCase() || 'School Name'}</h4>
                             <p class="text-muted" style="font-size: 0.8em; margin-bottom: 5px;">${schoolDetails.name || 'School Address'}</p>
-                            <h5 class="mt-2 p-2 text-white text-uppercase fw-bold"  style="background-color: black; border-radius: 4px;">EXAMINATION HALL TICKET</h5>
-                            <h5 class="mt-0" style="font-weight: bold;">${exam.name} ( 25-26 )</h5>
+                            <h5 class="mt-2 p-2 text-white text-uppercase fw-bold" style="background-color: black; border-radius: 4px; width:fit-content">
+  HALL TICKET
+</h5>
+<h5 class="mt-0" style="font-weight: bold;">${exam.name} ( 25-26 )</h5>
                         </div>
                         
                         <div class="row mb-4 align-items-center">
