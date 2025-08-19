@@ -24865,15 +24865,15 @@ function printContentOfDiv(divId, title = 'Report', options = {}) {
     printWindow.document.close();
     printWindow.focus(); // Focus the new window
     // Use a slightly longer timeout to ensure all assets (like images) are loaded before printing
-    setTimeout(() => {
-        try {
-            printWindow.print();
-            printWindow.close(); // Close the print window after printing
-        } catch (e) {
-            console.error("Error during print:", e);
-            showAlert("Printing failed. Please check your browser's print settings.", "danger");
-        }
-    }, 500); // Increased timeout for better reliability
+    // setTimeout(() => {
+    //     try {
+    //         printWindow.print();
+    //         printWindow.close(); // Close the print window after printing
+    //     } catch (e) {
+    //         console.error("Error during print:", e);
+    //         showAlert("Printing failed. Please check your browser's print settings.", "danger");
+    //     }
+    // }, 500); // Increased timeout for better reliability
 }
         // Start App
         initializeAppAndAuth();
