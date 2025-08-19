@@ -255,6 +255,71 @@
     margin-right: 0.5rem;
 }
 
+@media (max-width: 768px) {
+    .tabs-container {
+        width: 100%;
+        overflow-x: auto;  /* Creates the horizontal scrollbar if needed */
+        -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS devices */
+    }
+
+    .nav-tabs {
+        flex-wrap: nowrap; /* Prevents Bootstrap tabs from stacking vertically */
+        white-space: nowrap; /* Ensures all tabs stay in a single line */
+    }
+
+    /* Optional: Hide the scrollbar for a cleaner look */
+    .tabs-container::-webkit-scrollbar {
+        display: none; /* For Chrome, Safari, and Opera */
+    }
+    .tabs-container {
+        -ms-overflow-style: none;  /* For IE and Edge */
+        scrollbar-width: none;  /* For Firefox */
+    }
+    /* ========================================================================= */
+/* --- 📱 MOBILE TABLE ENHANCEMENTS --- */
+/* ========================================================================= */
+
+/* This targets screens smaller than 768px (tablets and phones) */
+
+    /* 1. Reduce the font size for all tables to make them more compact */
+    .table {
+        font-size: 0.85em; /* Adjust this value as needed */
+    }
+
+    /* 2. Ensure the table's container can scroll horizontally */
+    .table-responsive {
+        overflow-x: auto;
+    }
+
+    /* 3. Make the FIRST header cell (TH) of each row sticky */
+    .table th:first-child {
+        position: -webkit-sticky; /* For Safari */
+        position: sticky;
+        left: 0;
+        z-index: 2; /* Ensures it stays on top of other content */
+        
+        /* Add a background color to prevent text from showing through */
+        background-color: #f8f9fa; /* Matches Bootstrap's default light header */
+    }
+
+    /* 4. Make the FIRST data cell (TD) of each row sticky */
+    .table td:first-child {
+        position: -webkit-sticky; /* For Safari */
+        position: sticky;
+        left: 0;
+        z-index: 1;
+
+        /* Add a background color to prevent text from showing through */
+        background-color: #ffffff; /* White for standard table rows */
+    }
+
+    /* Optional: Add a subtle shadow to the sticky column to show it's layered */
+    .table th:first-child,
+    .table td:first-child {
+        box-shadow: 5px 0 5px -5px rgba(0,0,0,0.1);
+    }
+}
+
     </style>
 </head>
 <body class="bg-light">
@@ -5271,12 +5336,10 @@ window.renderExamManagement = () => {
 
     mainContent.innerHTML = `<h1 class="h2 mb-4">Exam Management</h1>
     <ul class="nav nav-tabs" id="examTab" role="tablist">
-        ${isAdmin ? `<li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#add-exam" type="button">Add Exam</button></li>` : ''}
         ${isAdmin ? `<li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#schedule" type="button">Schedule</button></li>` : '<li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#schedule" type="button">Schedule</button></li>'}
         <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#timetable-view" type="button">Timetable</button></li>
         <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#entry" type="button">Mark Entry</button></li>
-        <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#consolidated-view" type="button">Consolidated View</button></li>
-    
+        
         <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#entry-report" type="button">Entry Report</button></li>
 
         <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#results" type="button">Results</button></li>
@@ -5285,9 +5348,10 @@ window.renderExamManagement = () => {
         ${isAdmin ? `<div class="tab-pane fade p-4" id="add-exam" role="tabpanel"></div>` : ''}
         ${isAdmin ? `<div class="tab-pane fade p-4" id="schedule" role="tabpanel"></div>` : '<div class="tab-pane fade p-4" id="schedule" role="tabpanel"></div>'}
         <div class="tab-pane fade p-4" id="timetable-view" role="tabpanel"></div>
-        <div class="tab-pane fade p-4" id="entry" role="tabpanel"></div>
         <div class="tab-pane fade p-4" id="consolidated-view" role="tabpanel"></div>
     
+        <div class="tab-pane fade p-4" id="entry" role="tabpanel"></div>
+        
         <div class="tab-pane fade p-4" id="entry-report" role="tabpanel"></div>
 
         <div class="tab-pane fade p-4" id="results" role="tabpanel"></div>
@@ -5299,10 +5363,11 @@ window.renderExamManagement = () => {
     }
     renderExamScheduleTab();
     renderExamTimetableView();
+    renderConsolidatedTimetableView(); 
     renderMarkEntryTab();
     renderEntryReportTab(); // <-- Call the new function
     renderResultsTab();
-    renderConsolidatedTimetableView(); 
+    
     
     const firstVisibleTab = mainContent.querySelector('#examTab .nav-link');
     if(firstVisibleTab) {
@@ -18775,6 +18840,9 @@ let selectedExamForControl = null;
          * Access is restricted to Admins and Teachers with 'exam_controller' role.
          */
         window.renderExamControlModule = () => {
+            const isAdmin = currentUserRole === 'admin';
+            const isExamController = currentUserRole === 'teacher' || selectedUser.roles && selectedUser.roles.includes('exam_controller');
+
             const mainContent = document.getElementById('main-content');
             if (!mainContent) return;
 
@@ -18791,7 +18859,13 @@ let selectedExamForControl = null;
 
             mainContent.innerHTML = `
                 <h1 class="h2 mb-4">Examination Control</h1>
+                <div class="tabs-container">
                 <ul class="nav nav-tabs" id="examControlTab" role="tablist">
+                ${isAdmin ? `<li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#add-exam" type="button">Add Exam</button></li>` : ''}
+                ${isAdmin ? `<li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#schedule" type="button">Schedule</button></li>` : '<li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#schedule" type="button">Schedule</button></li>'}
+                <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#consolidated-view" type="button">Consolidated View</button></li>
+                <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#timetable-view" type="button">Timetable</button></li>
+                
                     <li class="nav-item" role="presentation">
                         <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#exam-control-overview" type="button" role="tab" aria-controls="exam-control-overview" aria-selected="true">Exam Overview</button>
                     </li>
@@ -18820,20 +18894,33 @@ let selectedExamForControl = null;
                         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-notifications" type="button" role="tab" aria-controls="exam-control-notifications" aria-selected="false">Notifications</button>
                     </li>
                 </ul>
+                </div>
                 <div class="tab-content card" id="examControlTabContent">
-                    <div class="tab-pane fade p-4" id="exam-control-overview" role="tabpanel" aria-labelledby="exam-control-overview-tab"></div>
-                    <div class="tab-pane fade p-4" id="exam-control-rooms" role="tabpanel" aria-labelledby="exam-control-rooms-tab"></div>
-                    <div class="tab-pane fade p-4" id="exam-control-duty" role="tabpanel" aria-labelledby="exam-control-duty-tab"></div>
-                    <div class="tab-pane fade p-4" id="exam-control-absentee" role="tabpanel" aria-labelledby="exam-control-absentee-tab"></div>
-                    <div class="tab-pane fade p-4" id="exam-control-reg-no" role="tabpanel" aria-labelledby="exam-control-reg-no-tab"></div>
-                    <div class="tab-pane fade p-4" id="exam-control-room-alloc" role="tabpanel" aria-labelledby="exam-control-room-alloc-tab"></div>
-                    <div class="tab-pane fade show active p-4" id="exam-control-hall-ticket" role="tabpanel" aria-labelledby="exam-control-hall-ticket-tab"></div>
-                    <div class="tab-pane fade p-4" id="exam-control-reports" role="tabpanel" aria-labelledby="exam-control-reports-tab"></div>
-                    <div class="tab-pane fade p-4" id="exam-control-notifications" role="tabpanel" aria-labelledby="exam-control-notifications-tab"></div>
+                     ${isAdmin ? `<div class="tab-pane fade p-2" id="add-exam" role="tabpanel"></div>` : ''}
+        ${isAdmin ? `<div class="tab-pane fade p-2" id="schedule" role="tabpanel"></div>` : '<div class="tab-pane fade p-4" id="schedule" role="tabpanel"></div>'}
+        <div class="tab-pane fade p-2" id="timetable-view" role="tabpanel"></div>
+        <div class="tab-pane fade p-2" id="consolidated-view" role="tabpanel"></div>
+    
+                    <div class="tab-pane fade show active p-4" id="exam-control-overview" role="tabpanel" aria-labelledby="exam-control-overview-tab"></div>
+                    <div class="tab-pane fade p-2" id="exam-control-rooms" role="tabpanel" aria-labelledby="exam-control-rooms-tab"></div>
+                    <div class="tab-pane fade p-3" id="exam-control-duty" role="tabpanel" aria-labelledby="exam-control-duty-tab"></div>
+                    <div class="tab-pane fade p-2" id="exam-control-absentee" role="tabpanel" aria-labelledby="exam-control-absentee-tab"></div>
+                    <div class="tab-pane fade p-2" id="exam-control-reg-no" role="tabpanel" aria-labelledby="exam-control-reg-no-tab"></div>
+                    <div class="tab-pane fade p-2" id="exam-control-room-alloc" role="tabpanel" aria-labelledby="exam-control-room-alloc-tab"></div>
+                    <div class="tab-pane fade p-2" id="exam-control-hall-ticket" role="tabpanel" aria-labelledby="exam-control-hall-ticket-tab"></div>
+                    <div class="tab-pane fade p-2" id="exam-control-reports" role="tabpanel" aria-labelledby="exam-control-reports-tab"></div>
+                    <div class="tab-pane fade p-2" id="exam-control-notifications" role="tabpanel" aria-labelledby="exam-control-notifications-tab"></div>
                 </div>
             `;
 
             // Render content for each sub-tab
+            if (isAdmin) {
+        renderExamAddTab();
+        
+    }
+    renderExamScheduleTab();
+    renderExamTimetableView();
+    renderConsolidatedTimetableView(); 
             renderExamControlOverviewTab();
             renderExamControlRoomManagementTab();
             renderExamControlDutyAssignmentTab();
@@ -19956,7 +20043,7 @@ function generateClassSeatingSummary(examId, date, classIds, session) {
             rules.sort((a, b) => a.range.localeCompare(b.range, undefined, { numeric: true }));
             return `
                 <h6 class="mt-3">${gender}</h6>
-                <table class="table table-sm table-bordered">
+                <table class="table table-sm table-bordered" style="font-size: 1.85em;">
                     <thead class="table-light"><tr><th>Reg. No. Range</th><th>Exam Room</th><th class="text-center">Count</th></tr></thead>
                     <tbody>${rules.map(r => `<tr><td>${r.range}</td><td>${r.room}</td><td class="text-center">${r.count}</td></tr>`).join('')}</tbody>
                 </table>`;
@@ -19968,10 +20055,12 @@ function generateClassSeatingSummary(examId, date, classIds, session) {
         if (boysTable || girlsTable) {
             combinedHtml += `
                 <div class="class-summary-section">
+                    <div class="class-summary-section2">
                     <h4 class="class-title">${className}</h4>
-                    <div class="row">
-                        <div class="col-6 border-end pe-4">${boysTable || '<p class="text-muted">No boys allocated.</p>'}</div>
-                        <div class="col-6 ps-4">${girlsTable || '<p class="text-muted">No girls allocated.</p>'}</div>
+                    <div class="column class-summary-section2">
+                        <div class="border-end pe-4">${boysTable || '<p class="text-muted">No boys allocated.</p>'}</div>
+                        <div class="ps-4">${girlsTable || '<p class="text-muted">No girls allocated.</p>'}</div>
+                    </div>
                     </div>
                 </div>`;
         }
@@ -19984,7 +20073,7 @@ function generateClassSeatingSummary(examId, date, classIds, session) {
     const reportTitle = `Seating Arrangement Summary`;
     const subTitle = `Exam: ${exams.find(e => e.id === examId).name} | Date: ${new Date(date).toLocaleDateString('en-GB')} | Session: ${session}`;
     const customHeaderHtml = `<div class='text-center'><h3>${reportTitle}</h3><p class="text-muted">${subTitle}</p></div>`;
-    const extraCss = `.class-summary-section { margin-top: 25px; page-break-inside: avoid; } .class-title { text-align: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #eee; }`;
+    const extraCss = `.class-summary-section2 { margin-top: 20px; page-break-inside: avoid; } .class-title { text-align: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #eee; }`;
 
     printReport({ contentHtml: combinedHtml, title: reportTitle, customHeaderHtml, extraCss });
 }
@@ -20847,79 +20936,376 @@ function renderExamControlAbsenteeReportingTabold() {
 
 }
 
-// Update displayTodayAbsentees to show Exam Reg. No. (if desired)
-function displayTodayAbsentees(date, session) {
-    const container = document.getElementById('today-absentees-table');
+
+/**
+ * Renders a dedicated "Mark Absentee" module for teachers,
+ * enforcing duty assignment checks.
+ */
+window.renderTeacherMarkAbsenteeModule = () => {
+    const mainContent = document.getElementById('main-content');
+    if (!mainContent) return;
+
+    // Default values for date and session
+    const defaultDate = new Date().toISOString().slice(0, 10);
+    const defaultSession = 'FN';
+
+    mainContent.innerHTML = `
+        <h1 class="h2 mb-4">Mark Student Absentee (Exams)</h1>
+        <div class="ui-card mb-4">
+            <h5 class="section-header">Report Absentees</h5>
+            <div class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label">Exam Date</label>
+                    <input type="date" id="absentee-date" class="form-control" value="${defaultDate}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Session</label>
+                    <select id="absentee-session" class="form-select">
+                        <option value="FN" ${defaultSession === 'FN' ? 'selected' : ''}>Forenoon</option>
+                        <option value="AN" ${defaultSession === 'AN' ? 'selected' : ''}>Afternoon</option>
+                    </select>
+                </div>
+                 <div class="col-md-4">
+                    <label class="form-label">Select Exam (For your duty)</label>
+                    <select id="absentee-exam-select" class="form-select">
+                        <option value="">-- Select Exam --</option>
+                                ${exams
+            .filter(e => e.isActive) // This line only keeps active exams
+            .map(e => `<option value="${e.id}">${e.name}</option>`)
+            .join('')}
+                    </select>
+                </div>
+            </div>
+            <div id="absentee-reporting-interface" class="mt-4">
+                <p class="text-muted text-center p-4">Select Exam Date, Session, and Exam to check your duty assignment and report absentees.</p>
+            </div>
+        </div>
+        <div id="absentee-list-container" class="ui-card">
+            <h5 class="section-header">Today's Reported Absentees</h5>
+            <div id="today-absentees-table">
+                <p class="text-muted text-center p-4">No absentees reported for today yet.</p>
+            </div>
+        </div>
+    `;
+
+    const dateInput = document.getElementById('absentee-date');
+    const sessionSelect = document.getElementById('absentee-session');
+    const examSelect = document.getElementById('absentee-exam-select');
+    const reportingInterface = document.getElementById('absentee-reporting-interface');
+
+    const updateReportingInterface = () => {
+        const selectedDate = dateInput.value;
+        const selectedSession = sessionSelect.value;
+        const selectedExamId = examSelect.value;
+
+        // For regular teachers, strict check for duty
+        if (selectedExamId && selectedDate && selectedSession) {
+            const hasDuty = checkCurrentUserDuty(selectedExamId, selectedDate, selectedSession); // Use helper
+            if (hasDuty) {
+                // Render the actual absentee input form
+                renderAbsenteeInputForm(reportingInterface, selectedExamId, selectedDate, selectedSession, false); // Pass false for no admin override
+            } else {
+                reportingInterface.innerHTML = `<p class="alert alert-warning text-center">You are not assigned duty for Exam: ${exams.find(e=>e.id===selectedExamId)?.name || selectedExamId} on ${new Date(selectedDate).toLocaleDateString()} (${selectedSession === 'FN' ? 'Forenoon' : 'Afternoon'}).</p>`;
+            }
+        } else {
+            reportingInterface.innerHTML = `<p class="text-muted text-center p-4">Select Exam Date, Session, and Exam to check your duty assignment and report absentees.</p>`;
+        }
+        loadTodayAbsentees(selectedDate, selectedSession); // Always load today's absentees regardless of duty check
+    };
+
+    // Attach listeners for filter changes
+    dateInput.addEventListener('change', updateReportingInterface);
+    sessionSelect.addEventListener('change', updateReportingInterface);
+    examSelect.addEventListener('change', updateReportingInterface);
+
+    // Initial load of the interface
+    updateReportingInterface();
+};
+
+// --- Re-usable functions that are called by both Exam Control and Mark Absentee modules ---
+// (These are assumed to be defined globally already or in a shared utility file)
+
+// currentUserDuty (global variable)
+// checkCurrentUserDuty(examId, date, session) (helper function)
+// renderAbsenteeInputForm(container, examId, date, session, isAdminOverride)
+// displayTodayAbsentees(date, session)
+// loadTodayAbsentees(date, session) // (This simply calls displayTodayAbsentees)
+// This variable will hold the user's specific duty if they select it
+let currentUserDuty = null;
+
+// Helper to check if the current user has duty for selected date/session
+// And to store that duty for later use (e.g., for filtering the Absentee tab view)
+function checkCurrentUserDuty(examId, date, session) {
+    if (currentUserRole !== 'teacher' || !selectedUser?.id) {
+        currentUserDuty = null; // Admins don't have specific "duty" here
+        return false;
+    }
+
+    const duty = examDuties.find(d =>
+        d.dutyTeacherId === selectedUser.id &&
+        d.date === date &&
+        d.session === session
+    );
+    currentUserDuty = duty; // Store the found duty object
+    return !!duty; // Returns true if duty found, false otherwise
+}
+
+// =========================================================================
+// --- ⚙️ ABSENTEE REPORTING MODULE (FINAL PROFESSIONAL VERSION) ---
+// =========================================================================
+
+/**
+ * Renders the enhanced Absentee Reporting tab with a user-friendly workflow.
+ */
+function renderExamControlAbsenteeReportingTab() {
+    const container = document.getElementById('exam-control-absentee');
     if (!container) return;
 
-    const absenteesForSession = examAbsentees.filter(a => a.date === date && a.session === session);
+    container.innerHTML = `
+        <div class="ui-card mb-4">
+            <h5 class="section-header">Report Absentees</h5>
+            <div class="row g-3">
+                <div class="col-md-4"><label class="form-label">Exam</label><select id="absentee-exam-select" class="form-select">${exams.filter(e=>e.isActive).map(e => `<option value="${e.id}">${e.name}</option>`).join('')}</select></div>
+                <div class="col-md-4"><label class="form-label">Date</label><select id="absentee-date-select" class="form-select" disabled><option>-- Select Exam --</option></select></div>
+                <div class="col-md-4"><label class="form-label">Session</label><select id="absentee-session-select" class="form-select"><option value="FN">Forenoon</option><option value="AN">Afternoon</option></select></div>
+            </div>
+        </div>
 
-    if (absenteesForSession.length === 0) {
-        container.innerHTML = `<p class="text-muted text-center p-4">No absentees reported for ${new Date(date).toLocaleDateString()} (${session}) yet.</p>`;
+        <div class="row g-4">
+            <div class="col-lg-5">
+                <div class="ui-card h-100">
+                    <h5 class="section-header">Find Student</h5>
+                    <div class="input-group">
+                        <select id="absentee-search-type" class="form-select" style="max-width: 150px;"><option value="regNo">Exam Reg. No.</option><option value="admnNo">Admission No.</option></select>
+                        <input type="text" id="absentee-search-input" class="form-control" placeholder="Enter Exam Reg. No.">
+                        <button id="find-student-btn" class="btn btn-primary">Find</button>
+                    </div>
+                    <div id="absentee-student-details" class="mt-4"></div>
+                </div>
+            </div>
+            <div class="col-lg-7">
+                <div id="absentee-list-container" class="ui-card h-100"></div>
+            </div>
+        </div>
+    `;
+    
+    attachAbsenteeTabListeners();
+}
+
+/**
+ * Attaches all event listeners for the Absentee Reporting tab.
+ */
+function attachAbsenteeTabListeners() {
+    const examSelect = document.getElementById('absentee-exam-select');
+    const dateSelect = document.getElementById('absentee-date-select');
+    const sessionSelect = document.getElementById('absentee-session-select');
+    const searchType = document.getElementById('absentee-search-type');
+    const searchInput = document.getElementById('absentee-search-input');
+    const findBtn = document.getElementById('find-student-btn');
+
+    const loadData = () => {
+        displayAbsenteesForSession(examSelect.value, dateSelect.value, sessionSelect.value);
+        document.getElementById('absentee-student-details').innerHTML = '';
+    };
+
+    examSelect.addEventListener('change', () => {
+        const examId = examSelect.value;
+        dateSelect.innerHTML = '<option value="">-- Select Date --</option>';
+        if (examId) {
+            const uniqueDates = [...new Set(examSchedules.filter(s => s.examId === examId).map(s => s.date))].sort();
+            uniqueDates.forEach(d => dateSelect.innerHTML += `<option value="${d}">${new Date(d).toLocaleDateString('en-GB')}</option>`);
+            dateSelect.disabled = false;
+        } else {
+            dateSelect.disabled = true;
+        }
+        loadData();
+    });
+
+    dateSelect.addEventListener('change', loadData);
+    sessionSelect.addEventListener('change', loadData);
+
+    searchType.addEventListener('change', () => {
+        searchInput.placeholder = searchType.value === 'regNo' ? 'Enter Exam Reg. No.' : 'Enter Admission No.';
+    });
+
+    findBtn.addEventListener('click', () => {
+        findAndDisplayStudentForAbsence(examSelect.value, searchType.value, searchInput.value);
+    });
+
+    if (exams.length > 0) {
+        examSelect.value = exams.find(e=>e.isActive)?.id || '';
+        examSelect.dispatchEvent(new Event('change'));
+    }
+}
+
+/**
+ * Finds a student and displays their details for confirmation.
+ */
+function findAndDisplayStudentForAbsence(examId, searchType, searchValue) {
+    const detailsContainer = document.getElementById('absentee-student-details');
+    if (!examId || !searchValue) {
+        detailsContainer.innerHTML = `<p class="alert alert-warning">Please select an exam and enter a search value.</p>`;
+        return;
+    }
+    
+    searchValue = searchValue.trim().toUpperCase();
+    let student = students.find(s => searchType === 'regNo' ? s.examRegNumbers?.[examId] === searchValue : s.admissionNumber === searchValue);
+
+    if (!student) {
+        detailsContainer.innerHTML = `<p class="alert alert-danger">No student found with the provided ID.</p>`;
+        return;
+    }
+    
+    const studentPhoto = student.photoDriveId ? `https://drive.google.com/thumbnail?id=${student.photoDriveId}` : 'https://placehold.co/100x120';
+    const className = classes.find(c => c.id === student.classId)?.name || 'N/A';
+    
+    detailsContainer.innerHTML = `
+        <div class="card bg-light"><div class="card-body">
+            <div class="d-flex">
+                <img src="${studentPhoto}" class="img-thumbnail me-3" style="width: 100px;">
+                <div>
+                    <h6 class="card-title">${student.name}</h6>
+                    <p class="card-text small mb-1"><strong>Class:</strong> ${className} - ${student.division}</p>
+                    <p class="card-text small"><strong>Exam Reg. No:</strong> ${student.examRegNumbers?.[examId] || 'N/A'}</p>
+                </div>
+            </div>
+            <div class="d-grid mt-3"><button class="btn btn-danger" onclick="window.markStudentAbsent('${student.id}', '${examId}')">Confirm & Mark Absent</button></div>
+        </div></div>`;
+}
+
+/**
+ * The final logic to mark a student absent after confirmation.
+ */
+window.markStudentAbsent = async function(studentId, examId) {
+    const date = document.getElementById('absentee-date-select').value;
+    const session = document.getElementById('absentee-session-select').value;
+    const student = students.find(s => s.id === studentId);
+    if (!student) return showAlert('Student not found.', 'danger');
+
+    const isAdminOrController = currentUserRole === 'admin' || (selectedUser?.roles?.includes('exam_controller'));
+    if (!isAdminOrController) {
+        const sessionKey = `${examId}_${date.replace(/-/g, '')}_${session}`;
+        const studentRoomId = student.examRoomAllocations?.[sessionKey];
+        if (!studentRoomId) return showAlert(`Student ${student.name} is not allocated to a room.`, 'warning');
+        const teacherIsOnDutyInRoom = examDuties.some(d => d.dutyTeacherId === selectedUser.id && d.date === date && d.session === session && d.roomId === studentRoomId);
+        if (!teacherIsOnDutyInRoom) return showAlert(`You are not assigned duty in Room ${examRooms.find(r=>r.id===studentRoomId)?.name}. Cannot mark absent.`, 'danger');
+    }
+
+    const relevantSchedules = examSchedules.filter(sch => sch.examId === examId && sch.date === date && sch.session === session && sch.classId === student.classId && sch.division === student.division);
+    if (relevantSchedules.length === 0) return showAlert(`No exam scheduled for ${student.name} in this session.`, 'warning');
+
+    const batch = writeBatch(db);
+    let absenteesToCreate = 0;
+    relevantSchedules.forEach(sch => {
+        const absenteeId = `${sch.examId}_${student.id}_${date.replace(/-/g, '')}_${session}_${sch.subjectId}`;
+        if (!examAbsentees.some(a => a.id === absenteeId)) {
+            batch.set(getDocRef('examAbsentees', absenteeId), {
+                id: absenteeId, examId, classId: student.classId, division: student.division,
+                subjectId: sch.subjectId, date, session, studentId, studentName: student.name,
+                admissionNumber: student.admissionNumber, reportedByTeacherId: selectedUser.id,
+                reportedAt: serverTimestamp()
+            });
+            absenteesToCreate++;
+        }
+    });
+
+    if (absenteesToCreate > 0) {
+        await batch.commit();
+        showAlert(`Student ${student.name} marked absent.`, 'success');
+        document.getElementById('absentee-search-input').value = '';
+        document.getElementById('absentee-student-details').innerHTML = '';
+    } else {
+        showAlert('Student already marked absent for all subjects in this session.', 'info');
+    }
+}
+
+/**
+ * Displays the list of absentees for the selected session with checkboxes for deletion.
+ */
+function displayAbsenteesForSession(examId, date, session) {
+    const container = document.getElementById('absentee-list-container');
+    if (!container || !examId || !date || !session) { container.innerHTML = ''; return; }
+
+    const absentees = examAbsentees.filter(a => a.examId === examId && a.date === date && a.session === session);
+    
+    container.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="section-header mb-0">Absentees on ${new Date(date).toLocaleDateString()} (${session})</h5>
+            <div>
+                <button class="btn btn-sm btn-danger me-2" id="remove-selected-absentees-btn" disabled><i class="fas fa-trash-alt me-1"></i>Remove Selected</button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="window.printAbsenteesList('${examId}', '${date}', '${session}')" ${absentees.length === 0 ? 'disabled' : ''}><i class="fas fa-print me-1"></i>Print List</button>
+            </div>
+        </div>
+        <div id="today-absentees-table" class="mt-3 table-responsive"></div>`;
+    
+    const tableContainer = document.getElementById('today-absentees-table');
+    if (absentees.length === 0) {
+        tableContainer.innerHTML = `<p class="text-muted text-center p-4">No absentees reported yet.</p>`;
         return;
     }
 
-    // Group by student, then show subjects
-    const groupedAbsentees = absenteesForSession.reduce((acc, abs) => {
+    const grouped = absentees.reduce((acc, abs) => {
         if (!acc[abs.studentId]) {
+            const student = students.find(s => s.id === abs.studentId);
             acc[abs.studentId] = {
-                studentName: abs.studentName,
-                studentId:abs.studentId,
-                admissionNumber: abs.admissionNumber,
-                classId: abs.classId,
-                division: abs.division,
-                examRegNo: students.find(s => s.id === abs.studentId)?.examRegNumbers?.[abs.examId] || 'N/A', // Fetch exam reg no
-                subjectsAbsent: []
+                studentId: abs.studentId, studentName: abs.studentName,
+                examRegNo: student?.examRegNumbers?.[examId] || 'N/A',
+                className: classes.find(c => c.id === abs.classId)?.name + ' - ' + abs.division,
+                subjects: []
             };
         }
-        const subjectName = subjects.find(s => s.id === abs.subjectId)?.name || abs.subjectId;
-        acc[abs.studentId].subjectsAbsent.push(subjectName);
+        acc[abs.studentId].subjects.push(subjects.find(s => s.id === abs.subjectId)?.name || 'Unknown');
         return acc;
     }, {});
-    console.log(Object.values(groupedAbsentees));
-    let tableHtml = `
-        <table class="table table-striped table-sm">
-            <thead><tr><th>Student Name</th><th>Admn No.</th><th>Exam Reg. No.</th><th>Class</th><th>Subjects Absent</th><th class="text-end">Actions</th></tr></thead>
-            <tbody>
-                ${Object.values(groupedAbsentees).map(studentData => {
-                    const classInfo = classes.find(c => c.id === studentData.classId);
-                    const className = classInfo ? `${classInfo.name} - ${studentData.division}` : 'N/A';
-                    return `
-                        <tr>
-                            <td>${studentData.studentName}</td>
-                            <td>${studentData.admissionNumber}/${studentData.studentId}</td>
-                            <td>${studentData.examRegNo}</td>
-                            <td>${className}</td>
-                            <td>${studentData.subjectsAbsent.join(', ')}</td>
-                            <td class="text-end">
-                                <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="window.removeAbsenteeReport('${date}', '${session}', '${studentData.studentId}')">Remove All</button>
-                            </td>
-                        </tr>
-                    `;
-                }).join('')}
-            </tbody>
-        </table>
-    `;
-    container.innerHTML = tableHtml;
+    
+    tableContainer.innerHTML = `<table class="table table-striped table-sm">
+        <thead><tr>
+            <th><input class="form-check-input" type="checkbox" id="select-all-absentees"></th>
+            <th>Exam Reg. No.</th><th>Student Name</th><th>Class</th><th>Subjects Absent</th>
+        </tr></thead>
+        <tbody>${Object.values(grouped).map(data => `<tr>
+            <td><input class="form-check-input absentee-select-checkbox" type="checkbox" value="${data.studentId}"></td>
+            <td>${data.examRegNo}</td><td>${data.studentName}</td><td>${data.className}</td><td>${data.subjects.join(', ')}</td>
+        </tr>`).join('')}</tbody>
+    </table>`;
 
-    // Helper to remove absentee reports (defined globally for onclick)
-    window.removeAbsenteeReport = async (date, session, studentId) => {
-        if (confirm(`Are you sure you want to remove all absentee reports for ${studentId} on ${date} (${session})?`)) {
-            const batch = writeBatch(db);
-            const toDelete = examAbsentees.filter(a => a.date === date && a.session === session && a.studentId === studentId);
-            toDelete.forEach(abs => {
-                batch.delete(getDocRef('examAbsentees', abs.id));
-            });
-            try {
-                await batch.commit();
-                showAlert('Absentee report(s) removed.', 'success');
-                displayTodayAbsentees(date, session); // Refresh list
-            } catch (error) {
-                console.error("Error removing absentee:", error);
-                showAlert('Failed to remove absentee report. See console.', 'danger');
-            }
-        }
+    // Add listeners for the new checkboxes and button
+    const removeBtn = document.getElementById('remove-selected-absentees-btn');
+    const selectAll = document.getElementById('select-all-absentees');
+    const checkboxes = tableContainer.querySelectorAll('.absentee-select-checkbox');
+
+    const updateButtonState = () => {
+        const anyChecked = tableContainer.querySelector('.absentee-select-checkbox:checked');
+        removeBtn.disabled = !anyChecked;
     };
+
+    selectAll.addEventListener('change', () => {
+        checkboxes.forEach(cb => cb.checked = selectAll.checked);
+        updateButtonState();
+    });
+    checkboxes.forEach(cb => cb.addEventListener('change', updateButtonState));
+
+    removeBtn.addEventListener('click', () => {
+        const selectedStudentIds = Array.from(tableContainer.querySelectorAll('.absentee-select-checkbox:checked')).map(cb => cb.value);
+        window.removeSelectedAbsentees(examId, date, session, selectedStudentIds);
+    });
+}
+
+/**
+ * Removes all absentee records for multiple students in a given session.
+ */
+window.removeSelectedAbsentees = async function(examId, date, session, studentIds) {
+    if (studentIds.length === 0 || !confirm(`Are you sure you want to remove all absentee reports for ${studentIds.length} selected student(s)?`)) return;
+
+    const batch = writeBatch(db);
+    const absenteesToDelete = examAbsentees.filter(a => a.examId === examId && a.date === date && a.session === session && studentIds.includes(a.studentId));
+    
+    if (absenteesToDelete.length === 0) return showAlert('Could not find absentee records to delete.', 'warning');
+    
+    absenteesToDelete.forEach(absentee => batch.delete(getDocRef('examAbsentees', absentee.id)));
+
+    await batch.commit();
+    showAlert('Selected absentee reports removed successfully.', 'success');
 }
 
 /**
@@ -21942,19 +22328,22 @@ async function saveAllAllocations() {
  * @param {string} date
  * @param {string} session
  */
+/**
+ * Displays current room allocation rules with bulk-deletion and a "destructive delete" toggle.
+ * @param {string} examId
+ * @param {string} date
+ * @param {string} session
+ */
 function displayCurrentAllocations(examId, date, session) {
+    
     const container = document.getElementById('current-room-allocations-table');
     if (!container || !examId || !date || !session) {
         container.innerHTML = `<p class="text-muted text-center p-4">Select an exam and session to view current allocations.</p>`;
         return;
     }
 
-    // --- KEY FIX IS HERE: The .sort() logic is updated ---
     const rulesForSession = examRoomAllocationRules.filter(r => r.examId === examId && r.date === date && r.session === session)
-        .sort((a, b) => {
-            // Use localeCompare with numeric option for smart sorting of strings like "MV_101"
-            return (a.regNoRangeText || '').localeCompare(b.regNoRangeText || '', undefined, { numeric: true });
-        });
+        .sort((a, b) => (a.regNoRangeText || '').localeCompare(b.regNoRangeText || '', undefined, { numeric: true }));
 
     if (rulesForSession.length === 0) {
         container.innerHTML = `<p class="alert alert-info text-center">No allocation rules saved for this session yet.</p>`;
@@ -21968,7 +22357,7 @@ function displayCurrentAllocations(examId, date, session) {
         const [startStr, endStr] = (rule.regNoRangeText || '').split('-').map(s => s.trim());
         const regNoRegex = /^([A-Z0-9]+)_(\d+)$/;
         const startMatch = startStr.match(regNoRegex);
-        const endMatch = (endStr || startStr).match(regNoRegex); // Use startStr if endStr is missing
+        const endMatch = (endStr || startStr).match(regNoRegex);
 
         if(startMatch && endMatch && startMatch[1] === endMatch[1]) {
             const prefix = startMatch[1];
@@ -21984,25 +22373,146 @@ function displayCurrentAllocations(examId, date, session) {
 
     container.innerHTML = `
         <div class="table-responsive">
-            <table class="table table-hover table-sm">
+            <table class="table table-hover table-sm" id="allocation-rules-table">
                 <thead class="table-light">
-                    <tr><th>Room</th><th>Allocation Rule (Reg. No. Range)</th><th>Students Allocated</th><th class="text-end">Actions</th></tr>
+                    <tr>
+                        <th style="width: 40px;"><input class="form-check-input" type="checkbox" id="select-all-rules"></th>
+                        <th>Room</th>
+                        <th>Allocation Rule (Reg. No. Range)</th>
+                        <th>Students Allocated</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
                 </thead>
                 <tbody>
                     ${rulesForSession.map(rule => `
                         <tr>
+                            <td><input class="form-check-input rule-select-checkbox" type="checkbox" value="${rule.id}"></td>
                             <td><strong>${examRooms.find(r => r.id === rule.roomId)?.name || 'N/A'}</strong></td>
                             <td><code>${rule.regNoRangeText}</code></td>
                             <td class="text-center">${studentCountsByRule[rule.id] || 0}</td>
                             <td class="text-end">
-                                <button class="btn btn-sm btn-outline-primary me-2" onclick="editAllocationRule('${rule.id}')" title="Edit Rule"><i class="fas fa-pencil-alt"></i></button>
-                                <button class="btn btn-sm btn-outline-danger" onclick="deleteAllocationRule('${rule.id}')" title="Delete Rule"><i class="fas fa-trash-alt"></i></button>
+                                <button class="btn btn-sm btn-outline-primary" onclick="editAllocationRule('${rule.id}')" title="Edit Rule"><i class="fas fa-pencil-alt"></i></button>
                             </td>
                         </tr>
                     `).join('')}
                 </tbody>
             </table>
-        </div>`;
+        </div>
+        <div class="d-flex justify-content-end align-items-center mt-3 p-2 border-top">
+            <div class="form-check form-switch me-3">
+                <input class="form-check-input" type="checkbox" id="destructive-delete-toggle">
+                <label class="form-check-label" for="destructive-delete-toggle">Un-assign Students on Delete</label>
+            </div>
+            <button class="btn btn-sm btn-danger" id="delete-selected-rules-btn" disabled>
+                <i class="fas fa-trash-alt me-2"></i>Delete Selected
+            </button>
+        </div>
+    `;
+
+    // Attach listeners for the new bulk-delete functionality
+    const table = container.querySelector('#allocation-rules-table');
+    const selectAll = container.querySelector('#select-all-rules');
+    const checkboxes = container.querySelectorAll('.rule-select-checkbox');
+    const deleteBtn = container.querySelector('#delete-selected-rules-btn');
+
+    const updateButtonState = () => {
+        const anyChecked = container.querySelector('.rule-select-checkbox:checked');
+        deleteBtn.disabled = !anyChecked;
+    };
+
+    selectAll.addEventListener('change', () => {
+        checkboxes.forEach(cb => cb.checked = selectAll.checked);
+        updateButtonState();
+    });
+    checkboxes.forEach(cb => cb.addEventListener('change', updateButtonState));
+
+    deleteBtn.addEventListener('click', () => {
+        const selectedRuleIds = Array.from(container.querySelectorAll('.rule-select-checkbox:checked')).map(cb => cb.value);
+        const isDestructive = container.querySelector('#destructive-delete-toggle').checked;
+        deleteSelectedAllocationRules(selectedRuleIds, isDestructive);
+    });
+}
+
+
+/**
+ * Deletes selected allocation rules. If 'isDestructive' is true, it also
+ * de-allocates all associated students.
+ * @param {Array<string>} ruleIds - An array of rule IDs to delete.
+ * @param {boolean} isDestructive - Whether to un-assign students.
+ */
+async function deleteSelectedAllocationRules(ruleIds, isDestructive) {
+    if (ruleIds.length === 0) return;
+
+    let confirmMessage = `Are you sure you want to delete ${ruleIds.length} rule(s)?`;
+    if (isDestructive) {
+        confirmMessage += `\n\nDANGER: You have chosen to also un-assign all students covered by these rules. This action cannot be undone.`;
+    }
+
+    if (!confirm(confirmMessage)) return;
+
+    const batch = writeBatch(db);
+    let totalStudentsAffected = 0;
+
+    for (const ruleId of ruleIds) {
+        const rule = examRoomAllocationRules.find(r => r.id === ruleId);
+        if (!rule) continue;
+
+        // If in destructive mode, find and de-allocate all affected students
+        if (isDestructive) {
+            const { examId, date, session, regNoRangeText } = rule;
+            const sessionKey = `${examId}_${date.replace(/-/g, '')}_${session}`;
+            const affectedRegNos = new Set();
+            const [startStr, endStr] = (regNoRangeText || '').split('-').map(s => s.trim());
+            const regNoRegex = /^([A-Z0-9]+)_(\d+)$/;
+            const startMatch = startStr.match(regNoRegex);
+            const endMatch = (endStr || startStr).match(regNoRegex);
+
+            if (startMatch && endMatch && startMatch[1] === endMatch[1]) {
+                const prefix = startMatch[1];
+                for (let i = parseInt(startMatch[2]); i <= parseInt(endMatch[2]); i++) {
+                    affectedRegNos.add(`${prefix}_${i.toString().padStart(3, '0')}`);
+                }
+            }
+            
+            const studentsToDeallocate = students.filter(s => 
+                affectedRegNos.has(s.examRegNumbers?.[examId]) && 
+                s.examRoomAllocations?.[sessionKey] === rule.roomId
+            );
+
+            studentsToDeallocate.forEach(student => {
+                const studentRef = getDocRef('students', student.id);
+                let updatedAllocations = { ...student.examRoomAllocations };
+                delete updatedAllocations[sessionKey];
+                batch.update(studentRef, { examRoomAllocations: updatedAllocations });
+            });
+            totalStudentsAffected += studentsToDeallocate.length;
+        }
+        
+        // Always delete the rule document itself
+        batch.delete(getDocRef('examRoomAllocationRules', ruleId));
+    }
+
+    try {
+        await batch.commit();
+        let successMessage = `${ruleIds.length} rule(s) deleted successfully.`;
+        if (isDestructive && totalStudentsAffected > 0) {
+            successMessage += ` ${totalStudentsAffected} student allocations were removed.`;
+        }
+        showAlert(successMessage, 'success');
+        // The real-time listener will refresh the data and UI automatically.
+        const examSelect = document.getElementById('alloc-exam-select');
+        const sessionSelect = document.getElementById('alloc-session-select');
+        const selectedSessions = Array.from(sessionSelect.selectedOptions).map(opt => opt.value);
+        const [firstDate, firstSession] = selectedSessions[0].split('_');
+
+        displayCurrentAllocations(examId, firstDate, firstSession);
+        updateAllocationStatusSummary(examId, [firstDate + '_' + firstSession]);
+
+
+    } catch (error) {
+        console.error("Error deleting allocation rules:", error);
+        showAlert('Failed to delete the selected rules. See console for details.', 'danger');
+    }
 }
 /**
  * Displays a detailed, student-wise allocation report with checkboxes for bulk removal.
@@ -22550,353 +23060,6 @@ function displayHallTicketStudentList(examId, classId, division) {
         // });
 // Re-use currentUserDuty variable and checkCurrentUserDuty helper
 // These are assumed to be available globally or moved to a utility scope.
-
-/**
- * Renders a dedicated "Mark Absentee" module for teachers,
- * enforcing duty assignment checks.
- */
-window.renderTeacherMarkAbsenteeModule = () => {
-    const mainContent = document.getElementById('main-content');
-    if (!mainContent) return;
-
-    // Default values for date and session
-    const defaultDate = new Date().toISOString().slice(0, 10);
-    const defaultSession = 'FN';
-
-    mainContent.innerHTML = `
-        <h1 class="h2 mb-4">Mark Student Absentee (Exams)</h1>
-        <div class="ui-card mb-4">
-            <h5 class="section-header">Report Absentees</h5>
-            <div class="row g-3 align-items-end">
-                <div class="col-md-4">
-                    <label class="form-label">Exam Date</label>
-                    <input type="date" id="absentee-date" class="form-control" value="${defaultDate}">
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">Session</label>
-                    <select id="absentee-session" class="form-select">
-                        <option value="FN" ${defaultSession === 'FN' ? 'selected' : ''}>Forenoon</option>
-                        <option value="AN" ${defaultSession === 'AN' ? 'selected' : ''}>Afternoon</option>
-                    </select>
-                </div>
-                 <div class="col-md-4">
-                    <label class="form-label">Select Exam (For your duty)</label>
-                    <select id="absentee-exam-select" class="form-select">
-                        <option value="">-- Select Exam --</option>
-                                ${exams
-            .filter(e => e.isActive) // This line only keeps active exams
-            .map(e => `<option value="${e.id}">${e.name}</option>`)
-            .join('')}
-                    </select>
-                </div>
-            </div>
-            <div id="absentee-reporting-interface" class="mt-4">
-                <p class="text-muted text-center p-4">Select Exam Date, Session, and Exam to check your duty assignment and report absentees.</p>
-            </div>
-        </div>
-        <div id="absentee-list-container" class="ui-card">
-            <h5 class="section-header">Today's Reported Absentees</h5>
-            <div id="today-absentees-table">
-                <p class="text-muted text-center p-4">No absentees reported for today yet.</p>
-            </div>
-        </div>
-    `;
-
-    const dateInput = document.getElementById('absentee-date');
-    const sessionSelect = document.getElementById('absentee-session');
-    const examSelect = document.getElementById('absentee-exam-select');
-    const reportingInterface = document.getElementById('absentee-reporting-interface');
-
-    const updateReportingInterface = () => {
-        const selectedDate = dateInput.value;
-        const selectedSession = sessionSelect.value;
-        const selectedExamId = examSelect.value;
-
-        // For regular teachers, strict check for duty
-        if (selectedExamId && selectedDate && selectedSession) {
-            const hasDuty = checkCurrentUserDuty(selectedExamId, selectedDate, selectedSession); // Use helper
-            if (hasDuty) {
-                // Render the actual absentee input form
-                renderAbsenteeInputForm(reportingInterface, selectedExamId, selectedDate, selectedSession, false); // Pass false for no admin override
-            } else {
-                reportingInterface.innerHTML = `<p class="alert alert-warning text-center">You are not assigned duty for Exam: ${exams.find(e=>e.id===selectedExamId)?.name || selectedExamId} on ${new Date(selectedDate).toLocaleDateString()} (${selectedSession === 'FN' ? 'Forenoon' : 'Afternoon'}).</p>`;
-            }
-        } else {
-            reportingInterface.innerHTML = `<p class="text-muted text-center p-4">Select Exam Date, Session, and Exam to check your duty assignment and report absentees.</p>`;
-        }
-        loadTodayAbsentees(selectedDate, selectedSession); // Always load today's absentees regardless of duty check
-    };
-
-    // Attach listeners for filter changes
-    dateInput.addEventListener('change', updateReportingInterface);
-    sessionSelect.addEventListener('change', updateReportingInterface);
-    examSelect.addEventListener('change', updateReportingInterface);
-
-    // Initial load of the interface
-    updateReportingInterface();
-};
-
-// --- Re-usable functions that are called by both Exam Control and Mark Absentee modules ---
-// (These are assumed to be defined globally already or in a shared utility file)
-
-// currentUserDuty (global variable)
-// checkCurrentUserDuty(examId, date, session) (helper function)
-// renderAbsenteeInputForm(container, examId, date, session, isAdminOverride)
-// displayTodayAbsentees(date, session)
-// loadTodayAbsentees(date, session) // (This simply calls displayTodayAbsentees)
-// This variable will hold the user's specific duty if they select it
-let currentUserDuty = null;
-
-// Helper to check if the current user has duty for selected date/session
-// And to store that duty for later use (e.g., for filtering the Absentee tab view)
-function checkCurrentUserDuty(examId, date, session) {
-    if (currentUserRole !== 'teacher' || !selectedUser?.id) {
-        currentUserDuty = null; // Admins don't have specific "duty" here
-        return false;
-    }
-
-    const duty = examDuties.find(d =>
-        d.dutyTeacherId === selectedUser.id &&
-        d.date === date &&
-        d.session === session
-    );
-    currentUserDuty = duty; // Store the found duty object
-    return !!duty; // Returns true if duty found, false otherwise
-}
-
-/**
- * Renders the Absentee Reporting tab content.
- * This tab's content dynamically changes based on duty assignment.
- */
-function renderExamControlAbsenteeReportingTab() {
-    const container = document.getElementById('exam-control-absentee');
-    if (!container) return;
-
-    // Default values for date and session
-    const defaultDate = new Date().toISOString().slice(0, 10);
-    const defaultSession = 'FN';
-
-    container.innerHTML = `
-        <div class="ui-card mb-4">
-            <h5 class="section-header">Report Absentees</h5>
-            <div class="row g-3 align-items-end">
-                <div class="col-md-4">
-                    <label class="form-label">Exam Date</label>
-                    <input type="date" id="absentee-date" class="form-control" value="${defaultDate}">
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">Session</label>
-                    <select id="absentee-session" class="form-select">
-                        <option value="FN" ${defaultSession === 'FN' ? 'selected' : ''}>Forenoon</option>
-                        <option value="AN" ${defaultSession === 'AN' ? 'selected' : ''}>Afternoon</option>
-                    </select>
-                </div>
-                 <div class="col-md-4">
-                    <label class="form-label">Select Exam (If you have duty)</label>
-                    <select id="absentee-exam-select" class="form-select">
-                        <option value="">-- Select Exam --</option>
-                                ${exams
-            .filter(e => e.isActive) // This line only keeps active exams
-            .map(e => `<option value="${e.id}">${e.name}</option>`)
-            .join('')}
-                    </select>
-                </div>
-            </div>
-            <div id="absentee-reporting-interface" class="mt-4">
-                <p class="text-muted text-center p-4">Select Exam Date, Session, and Exam to check your duty assignment and report absentees.</p>
-            </div>
-        </div>
-        <div id="absentee-list-container" class="ui-card">
-            <h5 class="section-header">Today's Reported Absentees</h5>
-            <div id="today-absentees-table">
-                <p class="text-muted text-center p-4">No absentees reported for today yet.</p>
-            </div>
-        </div>
-    `;
-
-    const dateInput = document.getElementById('absentee-date');
-    const sessionSelect = document.getElementById('absentee-session');
-    const examSelect = document.getElementById('absentee-exam-select');
-    const reportingInterface = document.getElementById('absentee-reporting-interface');
-    const todayAbsenteesTable = document.getElementById('today-absentees-table'); // Keep this for display regardless of duty
-
-    // Function to update the reporting interface based on duty status
-    const updateReportingInterface = () => {
-        const selectedDate = dateInput.value;
-        const selectedSession = sessionSelect.value;
-        const selectedExamId = examSelect.value;
-
-        // Admins and Exam Controllers always see the full interface
-        const isAdminOrExamController = currentUserRole === 'admin' || (selectedUser?.roles && selectedUser.roles.includes('exam_controller'));
-
-        if (isAdminOrExamController) {
-            currentUserDuty = { /* Mock duty for admin access */ }; // Indicate access
-            renderAbsenteeInputForm(reportingInterface, selectedExamId, selectedDate, selectedSession, true); // Pass true for admin override
-            loadTodayAbsentees(selectedDate, selectedSession);
-            return;
-        }
-
-        // For regular teachers, check for duty
-        if (selectedExamId && selectedDate && selectedSession) {
-            const hasDuty = checkCurrentUserDuty(selectedExamId, selectedDate, selectedSession);
-            if (hasDuty) {
-                renderAbsenteeInputForm(reportingInterface, selectedExamId, selectedDate, selectedSession, false); // Pass false for no admin override
-            } else {
-                reportingInterface.innerHTML = `<p class="alert alert-warning text-center">You are not assigned duty for Exam: ${exams.find(e=>e.id===selectedExamId)?.name || selectedExamId} on ${new Date(selectedDate).toLocaleDateString()} (${selectedSession === 'FN' ? 'Forenoon' : 'Afternoon'}).</p>`;
-            }
-        } else {
-            reportingInterface.innerHTML = `<p class="text-muted text-center p-4">Select Exam Date, Session, and Exam to check your duty assignment and report absentees.</p>`;
-        }
-        loadTodayAbsentees(selectedDate, selectedSession); // Always load today's absentees regardless of duty check
-    };
-
-    // Attach listeners for filter changes
-    dateInput.addEventListener('change', updateReportingInterface);
-    sessionSelect.addEventListener('change', updateReportingInterface);
-    examSelect.addEventListener('change', updateReportingInterface);
-
-    // Initial load of the interface
-    updateReportingInterface(); // This will default to today's date/FN session
-}
-
-/**
- * Renders the actual input form for marking absentees if duty is assigned/overridden.
- * @param {HTMLElement} container - The div to render the form into.
- * @param {string} examId - The selected exam ID.
- * @param {string} date - The selected date.
- * @param {string} session - The selected session.
- * @param {boolean} isAdminOverride - True if rendering for an admin/exam_controller bypassing duty check.
- */
-function renderAbsenteeInputForm(container, examId, date, session, isAdminOverride) {
-    container.innerHTML = `
-        <div class="row g-3 align-items-end">
-            <div class="col-md-8">
-                <label class="form-label">Student Exam Reg. No.</label>
-                <input type="text" id="absentee-reg-no" class="form-control" placeholder="Enter Exam Reg. No." autofocus>
-                <div class="form-text text-muted">For Exam: ${exams.find(e=>e.id===examId)?.name || examId} | Date: ${new Date(date).toLocaleDateString()} | Session: ${session}</div>
-            </div>
-            <div class="col-md-4 d-grid">
-                <button id="mark-absent-btn-submit" class="btn btn-danger">Mark Absent</button>
-            </div>
-        </div>
-    `;
-
-    const regNoInput = document.getElementById('absentee-reg-no');
-    const markAbsentBtn = document.getElementById('mark-absent-btn-submit');
-
-    markAbsentBtn.addEventListener('click', async () => {
-        const examRegNo = regNoInput.value.trim().toUpperCase();
-        if (!examRegNo) {
-            showAlert('Please provide student Exam Reg. No.', 'danger');
-            return;
-        }
-
-        let student = null;
-        let studentExamId = null; // Exam ID associated with the found reg number
-        for (const s of students) {
-            if (s.examRegNumbers) {
-                for (const exId in s.examRegNumbers) {
-                    if (s.examRegNumbers[exId] === examRegNo) {
-                        student = s;
-                        studentExamId = exId;
-                        break;
-                    }
-                }
-            }
-            if (student) break;
-        }
-
-        if (!student) {
-            showAlert('Student not found with this Exam Reg. No. for any exam.', 'danger');
-            return;
-        }
-
-        // Ensure the reg number matches the *currently selected exam in the dropdown*
-        if (studentExamId !== examId) {
-             showAlert(`Exam Reg. No. ${examRegNo} belongs to Exam ${exams.find(e=>e.id===studentExamId)?.name || studentExamId}, not the selected Exam ${exams.find(e=>e.id===examId)?.name || examId}.`, 'danger');
-             return;
-        }
-
-
-        // --- Duty Teacher / Room Check (Only if not admin/exam_controller override) ---
-        if (!isAdminOverride) {
-            const sessionKey = `${examId}_${date.replace(/-/g, '')}_${session}`;
-            const studentAllocatedRoomId = student.examRoomAllocations?.[sessionKey];
-            const teacherAssignedRoomId = currentUserDuty?.roomId; // From the duty object found by checkCurrentUserDuty
-
-            if (!studentAllocatedRoomId) {
-                showAlert(`Student ${student.name} is not allocated to any room for Exam ${examId} on this session. Cannot mark absent.`, 'warning');
-                return;
-            }
-            if (studentAllocatedRoomId !== teacherAssignedRoomId) {
-                showAlert(`Student ${student.name} is allocated to Room ${studentAllocatedRoomId}, but you are assigned duty to Room ${teacherAssignedRoomId}.`, 'danger');
-                return;
-            }
-        }
-        // --- End Duty Teacher / Room Check ---
-
-
-        // Find relevant exam schedules for this student on this date/session
-        const relevantSchedules = examSchedules.filter(sch =>
-            sch.examId === examId && // Use the selected examId from dropdown
-            sch.date === date && sch.session === session &&
-            sch.classId === student.classId && sch.division === student.division
-        );
-
-        if (relevantSchedules.length === 0) {
-            showAlert(`No exam scheduled for student ${student.name} for the selected exam, date, and session.`, 'warning');
-            return;
-        }
-
-        const batch = writeBatch(db);
-        let absenteeismRecorded = false;
-
-        relevantSchedules.forEach(sch => {
-            const absenteeId = `${sch.examId}_${student.id}_${date.replace(/-/g, '')}_${session}_${sch.subjectId}`;
-            const existingAbsentee = examAbsentees.find(a => a.id === absenteeId);
-
-            if (!existingAbsentee) {
-                const absenteeData = {
-                    id: absenteeId,
-                    examId: sch.examId,
-                    classId: sch.classId,
-                    division: sch.division,
-                    subjectId: sch.subjectId,
-                    date: date,
-                    session: session,
-                    studentId: student.id,
-                    studentName: student.name,
-                    admissionNumber: student.admissionNumber,
-                    reportedByTeacherId: selectedUser.id,
-                    reportedAt: serverTimestamp(),
-                    notifiedToClassCharge: false
-                };
-                batch.set(getDocRef('examAbsentees', absenteeId), absenteeData);
-                absenteeismRecorded = true;
-            }
-        });
-
-        if (absenteeismRecorded) {
-            try {
-                await batch.commit();
-                showAlert(`Student ${student.name} marked absent for relevant subjects.`, 'success');
-                regNoInput.value = '';
-                // No need to call loadTodayAbsentees here, the listener on examAbsentees will trigger it.
-            } catch (error) {
-                console.error("Error marking absent:", error);
-                showAlert('Failed to mark absent. See console.', 'danger');
-            }
-        } else {
-            showAlert('Student was already marked absent for all relevant subjects on this session.', 'info');
-        }
-    });
-}
-
-// Function to load and display today's absentees (triggered by listener)
-const loadTodayAbsentees = (date, session) => {
-    displayTodayAbsentees(date, session);
-};
-
 
 
 window.renderExamReportsModule = () => {
@@ -24740,5 +24903,3 @@ function printContentOfDiv(divId, title = 'Report', options = {}) {
 
 </body>
 </html>
-
-      
