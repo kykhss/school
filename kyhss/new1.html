@@ -20365,8 +20365,7 @@ function printReport({ contentHtml, title, customHeaderHtml = '', extraCss = '',
     printWindow.document.close();
     printWindow.onload = function() {
         printWindow.focus();
-        printWindow.print();
-        printWindow.close();
+        
     };
 }
 /**
