@@ -648,6 +648,7 @@ let examDuties = [];
 let examAbsentees = [];
 let examRegistrationSettings = {}; // Single document
 
+let roomToEdit = null; // Local state for editing a room (can be global if preferred)
 
 schoolDetails = {
             fullname: 'KATTILANGADI YATHEEMKHANA HIGHER SECONDARY SCHOOL',
@@ -4304,10 +4305,6 @@ removePhotoBtn.addEventListener('click', async () => {
             // Save Student Data to Firestore (studentData contains only URL and ID, not the actual image)
             await setDoc(getDocRef('students', studentData.id), studentData);
 
-
-
-            // Save Student Data to Firestore
-            await setDoc(getDocRef('students', studentData.id), studentData);
             
             showAlert(`Student ${isEditMode ? 'updated' : 'added'} successfully.`, 'success');
             
@@ -4528,11 +4525,18 @@ window.formatAadhaar = (input) => {
         }
 
         if (searchTerm) {
-            studentsToFilter = studentsToFilter.filter(s =>
-                (s.admissionNumber && s.admissionNumber.toLowerCase().includes(searchTerm)) ||
-                (s.name && s.name.toLowerCase().includes(searchTerm))
-            );
-        }
+        const lowerCaseSearchTerm = searchTerm.toLowerCase();
+        filteredStudents = filteredStudents.filter(s => {
+            const name = s.name?.toLowerCase() || '';
+            
+            // --- KEY FIX IS HERE ---
+            // Convert admissionNumber to a string before calling .includes()
+            const admnNo = String(s.admissionNumber || ''); 
+            
+            return name.includes(lowerCaseSearchTerm) || admnNo.includes(lowerCaseSearchTerm);
+        });
+    }
+
 
         if (isNewAdmissionsFiltered) {
             const currentYear = new Date().getFullYear();
@@ -19047,8 +19051,7 @@ function renderExamControlRoomManagementTab() {
     const container = document.getElementById('exam-control-rooms');
     if (!container) return;
 
-    let roomToEdit = null; // Local state for editing a room (can be global if preferred)
-
+    
     container.innerHTML = `
         <div class="row">
             <div class="col-lg-5">
@@ -19056,6 +19059,10 @@ function renderExamControlRoomManagementTab() {
                     <div class="card-header py-3"><h6 class="m-0 fw-bold text-primary">Add/Edit Exam Room</h6></div>
                     <div class="card-body">
                         <form id="exam-room-form">
+                            <div class="mb-3">
+                                <label class="form-label">Room No</label>
+                                <input type="text" id="room-number" class="form-control" placeholder="e.g., 01" required ${roomToEdit ? '' : ''} value="${roomToEdit?.roomNumber || ''}">
+                            </div>
                             <div class="mb-3">
                                 <label class="form-label">Room ID</label>
                                 <input type="text" id="room-id" class="form-control" placeholder="e.g., HALL-A" required ${roomToEdit ? 'readonly' : ''} value="${roomToEdit?.id || ''}">
@@ -19103,10 +19110,11 @@ function renderExamControlRoomManagementTab() {
         listContainer.innerHTML = `
             <div class="table-responsive">
                 <table class="table table-striped table-hover table-sm">
-                    <thead><tr><th>ID</th><th>Name</th><th>Capacity</th><th>Type</th><th class="text-end">Actions</th></tr></thead>
+                    <thead><tr><th>No</th><th>ID</th><th>Name</th><th>Capacity</th><th>Type</th><th class="text-end">Actions</th></tr></thead>
                     <tbody>
                         ${examRooms.map(room => `
                             <tr>
+                                <td>${room.roomNumber}</td>
                                 <td>${room.id}</td>
                                 <td>${room.name}</td>
                                 <td>${room.capacity}</td>
@@ -19126,6 +19134,7 @@ function renderExamControlRoomManagementTab() {
     // Attach form submission listener
     document.getElementById('exam-room-form')?.addEventListener('submit', async (e) => {
         e.preventDefault();
+        const roomNumber = document.getElementById('room-number').value.trim().toUpperCase();
         const id = document.getElementById('room-id').value.trim().toUpperCase();
         const name = document.getElementById('room-name').value.trim();
         const capacity = parseInt(document.getElementById('room-capacity').value);
@@ -19138,7 +19147,7 @@ function renderExamControlRoomManagementTab() {
         }
 
         try {
-            await setDoc(getDocRef('examRooms', id), { id, name, capacity, isLab, description }, { merge: true });
+            await setDoc(getDocRef('examRooms', id), { id, name, capacity, isLab, description,roomNumber }, { merge: true });
             showAlert('Exam room saved successfully!', 'success');
             roomToEdit = null; // Clear edit state
             renderExamControlRoomManagementTab(); // Re-render the tab
@@ -19499,7 +19508,7 @@ function displayDutyAssignmentGrid(examId, date) {
         });
     });
     
-    container.querySelector('#duty-assignment-table').addEventListener('change', () => displayDutyAssignmentGrid(examId, date));
+    //container.querySelector('#duty-assignment-table').addEventListener('change', () => displayDutyAssignmentGrid(examId, date));
 }
 /**
  * Clears saved duties for a day from the database.
@@ -19517,31 +19526,76 @@ async function clearSavedDutiesForDay(examId, date) {
 
 /**
  * Saves all duties for a specific day from the grid.
+ * This function first deletes all existing duties for the day, then adds back
+ * only the ones currently assigned in the UI, correctly handling un-assignments.
  */
 window.saveAllDuties = async function(examId, date) {
+    // 1. Get all the assignments from the UI
+    const rows = document.querySelectorAll('#duty-assignment-table tbody tr');
+    if (!rows || rows.length === 0) {
+        return showAlert('No duty roster to save.', 'info');
+    }
+
+    if (!confirm('Are you sure you want to save these assignments? This will overwrite any previously saved duties for this day.')) {
+        return;
+    }
+
     const batch = writeBatch(db);
-    examDuties.filter(d => d.examId === examId && d.date === date).forEach(oldDuty => batch.delete(getDocRef('examDuties', oldDuty.id)));
-    document.querySelectorAll('#duty-assignment-table tbody tr').forEach(row => {
-        const roomId = row.dataset.roomId;
-        ['FN', 'AN'].forEach(session => {
-            const teacherId = row.querySelector(`select[data-session="${session}"]`)?.value;
-            if (teacherId) {
-                const dutyId = `${examId}_${date.replace(/-/g, '')}_${session}_${roomId}`;
-                const teacherName = teachers.find(t => t.id === teacherId)?.name || 'Unknown';
-                batch.set(getDocRef('examDuties', dutyId), { id: dutyId, examId, date, session, roomId, dutyTeacherId: teacherId, dutyTeacherName: teacherName });
-            }
-        });
+
+    // 2. Clear all previously saved duties for this specific day and exam.
+    // This is the key step that handles un-assignments.
+    const dutiesToClear = examDuties.filter(d => d.examId === examId && d.date === date);
+    dutiesToClear.forEach(oldDuty => {
+        batch.delete(getDocRef('examDuties', oldDuty.id));
     });
-    await batch.commit();
-    showAlert('Duty assignments saved!', 'success');
-    displayDutyConsolidation(examId);
-}
+
+    // 3. Loop through the UI and add the currently assigned duties to the batch.
+    rows.forEach(row => {
+        const roomId = row.dataset.roomId;
+
+        // Process Forenoon Session
+        const fnTeacherId = row.querySelector('select[data-session="FN"]').value;
+        if (fnTeacherId) { // Only create a record if a teacher is selected
+            const dutyId = `${examId}_${date.replace(/-/g, '')}_FN_${roomId}`;
+            const teacherName = teachers.find(t => t.id === fnTeacherId)?.name || 'Unknown';
+            batch.set(getDocRef('examDuties', dutyId), { 
+                id: dutyId, examId, date, session: 'FN', roomId, 
+                dutyTeacherId: fnTeacherId, dutyTeacherName: teacherName 
+            });
+        }
+
+        // Process Afternoon Session
+        const anTeacherId = row.querySelector('select[data-session="AN"]').value;
+        if (anTeacherId) { // Only create a record if a teacher is selected
+            const dutyId = `${examId}_${date.replace(/-/g, '')}_AN_${roomId}`;
+            const teacherName = teachers.find(t => t.id === anTeacherId)?.name || 'Unknown';
+            batch.set(getDocRef('examDuties', dutyId), { 
+                id: dutyId, examId, date, session: 'AN', roomId, 
+                dutyTeacherId: anTeacherId, dutyTeacherName: teacherName 
+            });
+        }
+    });
+
+    try {
+        // 4. Commit all changes to the database in one operation
+        await batch.commit();
+        showAlert('Duty assignments for this day have been saved successfully!', 'success');
+        
+        // Refresh the consolidation stats to reflect the changes
+        displayDutyConsolidation(examId);
+
+    } catch (error) {
+        console.error("Error saving duties:", error);
+        showAlert('Failed to save duty assignments. See console for details.', 'danger');
+    }
+};
+
 window.clearDutiesFromUI = function(examId, date) {
     if (!confirm(`This will clear all unsaved assignments from the screen. It will not affect saved data. Continue?`)) return;
     document.querySelectorAll('#duty-assignment-table .duty-teacher-select').forEach(select => {
         select.value = '';
     });
-    displayDutyAssignmentGrid(examId, date);
+    //displayDutyAssignmentGrid(examId, date);
 };
 
 
@@ -19881,8 +19935,12 @@ function attachReportsTabListeners() {
  * REPORT 4: Generates enhanced printable labels for question paper bundles.
  */
 /**
- * Generates printable labels for QP bundles, now including the Duty Teacher
- * and corrected logic for special instruction mediums.
+ * Generates enhanced, professional labels for Question Paper bundles.
+ * - Groups students by Class and Subject.
+ * - Creates dynamic columns for each Instruction Medium.
+ * - Shows registration number ranges for each class.
+ * - Includes the Duty Teacher's name.
+ * - NEW: Adds an empty column for handwriting absentee registration numbers.
  * @param {string} examId
  * @param {string} date
  * @param {string} session
@@ -19900,7 +19958,6 @@ function generateQuestionPaperLabels(examId, date, session) {
             acc[roomId] = { 
                 room: examRooms.find(r => r.id === roomId), 
                 students: [],
-                // Find the duty teacher for this specific room and session
                 duty: examDuties.find(d => d.examId === examId && d.date === date && d.session === session && d.roomId === roomId)
             };
         }
@@ -19909,44 +19966,60 @@ function generateQuestionPaperLabels(examId, date, session) {
     }, {});
 
     const contentHtml = Object.values(dataByRoom).map(data => {
-        const counts = data.students.reduce((acc, s) => {
+        // --- 1. Advanced Grouping Logic ---
+        const countsByClassAndSubject = data.students.reduce((acc, s) => {
             const schedule = examSchedules.find(sch => sch.examId === examId && sch.date === date && sch.session === session && sch.classId === s.classId && sch.division === s.division);
             if (!schedule) return acc;
             
             const subjectId = schedule.subjectId;
+            const classId = s.classId;
+            const key = `${classId}_${subjectId}`;
             
-            // --- CORRECTED LOGIC FOR INSTRUCTION MEDIUM ---
-            // Note: Adjust the class IDs in this set to match your database exactly.
-            const specialMediumClasses = new Set([
-                '2025-2026_VIII_C',
-                '2025-2026_IX_B',
-                '2025-2026_X_C'
-            ]);
-
+            const specialMediumClasses = new Set(['2025-2026_VIII_C', '2025-2026_IX_B', '2025-2026_X_C']);
             const studentClassKey = `${s.classId}_${s.division}`;
-            let medium;
-            if (specialMediumClasses.has(studentClassKey)) {
-                medium = 'Malayalam'; // The medium for the special classes
-            } else {
-                medium = 'English'; //s.instructionMedium || 'English'; // Default for all other classes
-            }
-            // --- END OF CORRECTED LOGIC ---
+            const medium = specialMediumClasses.has(studentClassKey) ? 'Malayalam' : ('English');
 
-            const key = `${s.classId}_${subjectId}_${medium}`;
             if (!acc[key]) {
                 acc[key] = {
-                    className: classes.find(c => c.id === s.classId)?.name,
+                    className: classes.find(c => c.id === classId)?.name,
                     subjectName: subjects.find(sub => sub.id === subjectId)?.name,
-                    medium: medium, M: 0, F: 0, Total: 0
+                    regNos: [],
+                    mediums: {}
                 };
             }
-            acc[key][s.gender]++;
-            acc[key].Total++;
+
+            if (!acc[key].mediums[medium]) {
+                acc[key].mediums[medium] = { M: 0, F: 0, Total: 0 };
+            }
+            
+            acc[key].regNos.push(s.examRegNumbers?.[examId]);
+            acc[key].mediums[medium][s.gender]++;
+            acc[key].mediums[medium].Total++;
             return acc;
         }, {});
-        
-        const dutyTeacherName = data.duty?.dutyTeacherName || 'Not Assigned';
 
+        // --- 2. Build the Dynamic Table ---
+        const allMediumsInRoom = [...new Set(Object.values(countsByClassAndSubject).flatMap(c => Object.keys(c.mediums)))].sort();
+        const mediumHeaderHtml = allMediumsInRoom.map(m => `<th colspan="3" class="text-center">${m}</th>`).join('');
+        const subHeaderHtml = allMediumsInRoom.map(() => `<th>M</th><th>F</th><th>Total</th>`).join('');
+
+        const tableBodyHtml = Object.values(countsByClassAndSubject).map(data => {
+            const regNoSummary = generateCompactRegNoRanges(data.regNos.filter(Boolean));
+            const classDisplay = `${data.className}<br><small class="text-bold">${regNoSummary}</small>`;
+            
+            const mediumCellsHtml = allMediumsInRoom.map(medium => {
+                const mediumData = data.mediums[medium];
+                if (mediumData) {
+                    return `<td>${mediumData.M}</td><td>${mediumData.F}</td><td><b>${mediumData.Total}</b></td>`;
+                }
+                return `<td>0</td><td>0</td><td><b>0</b></td>`;
+            }).join('');
+
+            return `<tr><td>${classDisplay}</td><td>${data.subjectName}</td>${mediumCellsHtml}<td></td></tr>`;
+        }).join('');
+
+        const dutyTeacherName = data.duty?.dutyTeacherName || 'Not Assigned';
+        
         return `
             <div class="qp-label">
                 <h6>${exams.find(e=>e.id===examId).name} - ${new Date(date).toLocaleDateString('en-GB')} (${session})</h6>
@@ -19955,20 +20028,26 @@ function generateQuestionPaperLabels(examId, date, session) {
                     <span class="small"><strong>Duty:</strong> ${dutyTeacherName}</span>
                 </div>
                 <table class="table table-sm table-bordered">
-                <thead style="font-size: 0.7em;"><tr><th>Class</th><th>Subject</th><th>Medium</th><th>M</th><th>F</th><th>Total</th></tr></thead>
-                <tbody style="font-size: 0.7em;">
-                ${Object.values(counts).map(c => `<tr><td>${c.className}</td><td>${c.subjectName}</td><td>${c.medium}</td><td>${c.M}</td><td>${c.F}</td><td><b>${c.Total}</b></td></tr>`).join('')}
-                </tbody>
+                    <thead style="font-size: 0.7em;">
+                        <tr>
+                            <th rowspan="2" class="align-middle">Class & Reg. Nos</th>
+                            <th rowspan="2" class="align-middle">Subject</th>
+                            ${mediumHeaderHtml}
+                            <th rowspan="2" class="align-middle">Absentees (Reg. No.)</th>
+                        </tr>
+                        <tr>${subHeaderHtml}</tr>
+                    </thead>
+                    <tbody style="font-size: 0.7em;">${tableBodyHtml}</tbody>
                 </table>
                 <p class="total-count"><strong>Total Question Papers: ${data.students.length}</strong></p>
             </div>`;
     }).join('');
 
     const extraCss = `
-        .qp-label { width: 48%; float: left; margin: 1%; padding: 15px; border: 1px dashed black; box-sizing: border-box; page-break-inside: avoid; }
-        .qp-label h4 { font-size: 0.9rem; } .total-count { text-align: right; font-size: 0.9rem; }
+        .qp-label { width: 100%; padding: 15px; border: 1px dashed black; box-sizing: border-box; page-break-inside: avoid; margin-bottom: 15px; }
+        .qp-label h5 { font-size: 1.2rem; } .total-count { text-align: right; font-size: 1rem; margin-top: 10px; }
     `;
-    printReport({ contentHtml, title: 'Question Paper Labels', extraCss, pageSize: 'A4 portrait' });
+    printReport({ contentHtml, title: 'Question Paper Labels', extraCss, pageSize: 'A4' });
 }
 
 /**
@@ -20343,7 +20422,7 @@ function printReport({ contentHtml, title, customHeaderHtml = '', extraCss = '',
                 }
                 @page {
                     size: ${pageSize};
-                    margin: 1cm;
+                    margin: 0.5cm;
                 }
                 @media print {
                     body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -20365,8 +20444,157 @@ function printReport({ contentHtml, title, customHeaderHtml = '', extraCss = '',
     printWindow.document.close();
     printWindow.onload = function() {
         printWindow.focus();
-        
     };
+}
+/**
+ * A robust, centralized function for generating a PDF with professional tables
+ * using jsPDF and the jsPDF-AutoTable plugin.
+ * @param {object} options - The printing options.
+ * @param {string} options.tableHtml - An HTML string containing the <table> to be printed.
+ * @param {string} options.title - The title for the downloaded PDF file.
+ * @param {string} [options.customHeaderHtml=''] - Optional HTML for a header.
+ * @param {string} [options.pageSize='A4 portrait'] - Page size and orientation.
+ */
+async function printReporttab({ tableHtml, title, customHeaderHtml = '', pageSize = 'A4 portrait' }) {
+    showAlert('Generating PDF... please wait.', 'info');
+
+    const { jsPDF } = window.jspdf;
+    const orientation = pageSize.includes('landscape') ? 'l' : 'p';
+    const doc = new jsPDF(orientation, 'mm', 'a4');
+
+    // Create a temporary, off-screen div to parse the HTML
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = tableHtml;
+    const table = tempDiv.querySelector('table');
+    if (!table) {
+        showAlert('No table found in the content to generate a PDF.', 'danger');
+        return;
+    }
+
+    // --- Header ---
+    if (customHeaderHtml) {
+        const headerDiv = document.createElement('div');
+        headerDiv.innerHTML = customHeaderHtml;
+        // You can add more complex header rendering here if needed
+        doc.html(headerDiv, {
+            callback: function(doc) {
+                // Once the header is rendered, add the table
+                addTableToPdf(doc, table, title);
+            },
+            x: 10,
+            y: 10
+        });
+    } else {
+        addTableToPdf(doc, table, title);
+    }
+}
+
+/**
+ * Helper function to parse an HTML table and add it to a jsPDF document.
+ */
+function addTableToPdf(doc, tableElement, title) {
+    // Extract headers and body from the HTML table
+    const head = Array.from(tableElement.querySelectorAll('thead tr')).map(row => 
+        Array.from(row.cells).map(cell => cell.innerText)
+    );
+    const body = Array.from(tableElement.querySelectorAll('tbody tr')).map(row => 
+        Array.from(row.cells).map(cell => cell.innerText)
+    );
+
+    doc.autoTable({
+        head: head,
+        body: body,
+        startY: doc.autoTable.previous.finalY ? doc.autoTable.previous.finalY + 10 : 25,
+        theme: 'grid',
+        styles: {
+            fontSize: 8,
+            cellPadding: 2,
+        },
+        headStyles: {
+            fillColor: [22, 160, 133], // A professional green
+            textColor: 255,
+            fontStyle: 'bold'
+        }
+    });
+
+    // Save the PDF
+    doc.save(`${title.replace(/\s+/g, '_')}.pdf`);
+    showAlert('PDF generated successfully!', 'success');
+}
+/**
+ * A robust, centralized function for generating a PDF from HTML content.
+ * It intelligently uses jsPDF-AutoTable for reports containing tables,
+ * and falls back to html2canvas for non-tabular content like labels.
+ *
+ * @param {object} options - The printing options.
+ * @param {string} options.contentHtml - The HTML string of the main content to print.
+ * @param {string} options.title - The title for the downloaded PDF file.
+ * @param {string} [options.customHeaderHtml=''] - Optional HTML for a header.
+ * @param {string} [options.extraCss=''] - Optional additional CSS styles for html2canvas.
+ * @param {string} [options.pageSize='A4 portrait'] - Page size and orientation.
+ */
+async function printReportcanva({ contentHtml, title, customHeaderHtml = '', extraCss = '', pageSize = 'A4 portrait' }) {
+    showAlert('Generating PDF... please wait.', 'info');
+
+    const { jsPDF } = window.jspdf;
+    const orientation = pageSize.includes('landscape') ? 'l' : 'p';
+    const doc = new jsPDF(orientation, 'mm', 'a4');
+
+    // Create a temporary, off-screen div to parse the HTML
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = contentHtml;
+    const tableElement = tempDiv.querySelector('table');
+
+    // --- Add Header ---
+    if (customHeaderHtml) {
+        // We use html2canvas for the header to preserve its rich styling
+        const headerDiv = document.createElement('div');
+        headerDiv.style.width = orientation === 'p' ? '210mm' : '297mm';
+        headerDiv.style.padding = '10mm';
+        headerDiv.innerHTML = customHeaderHtml;
+        document.body.appendChild(headerDiv);
+
+        const headerCanvas = await window.html2canvas(headerDiv, { scale: 2, useCORS: true });
+        const headerImgData = headerCanvas.toDataURL('image/png');
+        const headerImgWidth = doc.internal.pageSize.getWidth() - 20; // with margin
+        const headerImgHeight = (headerCanvas.height * headerImgWidth) / headerCanvas.width;
+        doc.addImage(headerImgData, 'PNG', 10, 10, headerImgWidth, headerImgHeight);
+        
+        document.body.removeChild(headerDiv);
+        doc.autoTableSetDefaults({ startY: headerImgHeight + 15 });
+    } else {
+        doc.autoTableSetDefaults({ startY: 15 });
+    }
+
+
+    // --- INTELLIGENTLY CHOOSE THE RENDERING METHOD ---
+
+    if (tableElement) {
+        // METHOD 1: If a table is found, use jsPDF-AutoTable for a clean, high-quality result.
+        console.log("Table detected. Generating PDF with jsPDF-AutoTable.");
+        
+        doc.autoTable({
+            html: tableElement,
+            theme: 'grid',
+            styles: { fontSize: 8, cellPadding: 2 },
+            headStyles: { fillColor: [41, 128, 185], textColor: 255, fontStyle: 'bold' }
+        });
+
+    } else {
+        // METHOD 2: If no table is found, use html2canvas. This is perfect for labels.
+        console.log("No table found. Generating PDF with html2canvas.");
+        
+        const contentCanvas = await window.html2canvas(tempDiv, { scale: 2, useCORS: true });
+        const contentImgData = contentCanvas.toDataURL('image/png');
+        const contentImgWidth = doc.internal.pageSize.getWidth() - 20;
+        const contentImgHeight = (contentCanvas.height * contentImgWidth) / contentCanvas.width;
+        
+        doc.addImage(contentImgData, 'PNG', 10, doc.autoTable.previous.finalY || 15, contentImgWidth, contentImgHeight);
+    }
+
+    // Save the final PDF
+    doc.save(`${title.replace(/\s+/g, '_')}.pdf`);
+    showAlert('PDF generated successfully!', 'success');
 }
 /**
  * Helper function to render a table of students for the seating plan.
@@ -20409,161 +20637,134 @@ function renderStudentListTable(studentList, examId, date, session, showRoom = f
  * @param {string} examId - The ID of the exam.
  * @param {string} date - The date of the exam session.
  */
-function generateAndPrintDutyReport(examId, date) { // Removed session parameter
+/**
+ * Generates and prints the Full Day Duty Assignment Report with dynamic styling
+ * to fit content onto an A4 page and correctly displays all allocation rules.
+ * @param {string} examId - The ID of the exam.
+ * @param {string} date - The date of the exam session.
+ */
+function generateAndPrintDutyReport(examId, date) {
     if (!examId || !date) {
         showAlert('Please select Exam and Date to generate Full Day Duty Report.', 'danger');
         return;
     }
 
     const examName = exams.find(e => e.id === examId)?.name || examId;
-    const reportTitle = `Duty Assignment Report: ${examName}`;
-    const reportSubTitle = `Date: ${new Date(date).toLocaleDateString('en-GB', { dateStyle: 'long' })}`;
+    const reportTitle = `Duty Assignment Report`;
+    const reportSubTitle = `Exam: ${examName} | Date: ${new Date(date).toLocaleDateString('en-GB', { dateStyle: 'long' })}`;
 
-    // 1. Get ALL duties for the specific date (FN and AN)
-    const dutiesForDate = examDuties.filter(d =>
-        d.examId === examId && d.date === date
-    );
+    // 1. Get all duties for the specific date
+    const dutiesForDate = examDuties.filter(d => d.examId === examId && d.date === date);
+    
+    // 2. Get all rooms that have either a duty or an allocation on this day
+    const roomsInvolvedIds = new Set();
+    dutiesForDate.forEach(d => roomsInvolvedIds.add(d.roomId));
+    examRoomAllocationRules.filter(r => r.examId === examId && r.date === date).forEach(r => roomsInvolvedIds.add(r.roomId));
 
-    // 2. Get ALL allocation rules for the specific date
-    const allocationRulesForDate = examRoomAllocationRules.filter(rule =>
-        rule.examId === examId && rule.date === date
-    );
+    const roomsConsolidatedData = Array.from(roomsInvolvedIds).map(roomId => {
+        const room = examRooms.find(r => r.id === roomId);
+        return {
+            roomId: roomId,
+            roomName: room?.name || roomId,
+            capacity: room?.capacity || 'N/A',
+            dutyFN: dutiesForDate.find(d => d.roomId === roomId && d.session === 'FN'),
+            dutyAN: dutiesForDate.find(d => d.roomId === roomId && d.session === 'AN')
+        };
+    }).sort((a, b) => a.roomName.localeCompare(b.roomName));
 
-    // 3. Prepare data structured for the new table layout
-    // Map of { roomId: { roomName: "", capacity: N, dutyFN: {}, dutyAN: {}, allocationRule: {} } }
-    const roomsConsolidatedData = {};
-
-    examRooms.forEach(room => {
-        const dutyFN = dutiesForDate.find(d => d.roomId === room.id && d.session === 'FN');
-        const dutyAN = dutiesForDate.find(d => d.roomId === room.id && d.session === 'AN');
-        const allocationRule = allocationRulesForDate.find(r => r.roomId === room.id);
-
-        // Only include rooms that have a duty assigned or an allocation rule defined
-        if (dutyFN || dutyAN || allocationRule) {
-            roomsConsolidatedData[room.id] = {
-                roomName: room.name || room.id,
-                capacity: room.capacity || 'N/A',
-                dutyFN: dutyFN || null,
-                dutyAN: dutyAN || null,
-               // allocationRule: allocationRule || null
-            };
-        }
-    });
-
-    // Sort rooms by room name for consistent display
-    const sortedRoomsConsolidated = Object.values(roomsConsolidatedData).sort((a, b) => a.roomName.localeCompare(b.roomName));
-
-    let reportHtml = `
-        <!-- <h4 style="text-align: center; margin-bottom: 15px;">Duty Assignment & Room Allocations</h4> -->
-        <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+    // 3. Build the report's HTML content
+    const reportHtml = `
+        <table class="report-table">
             <thead>
-                <tr style="background-color: #f0f0f0; border-bottom: 2px solid #ccc;">
-                    <th rowspan="2" style="padding: 8px; text-align: left; border: 1px solid #ddd; width: 10%;">Room</th>
-                    <th rowspan="2" style="padding: 8px; text-align: left; border: 1px solid #ddd; width: 5%;">Capacity</th>
-                    <th colspan="2" style="padding: 8px; text-align: center; border: 1px solid #ddd; width: 25%;">Forenoon (FN) Duty</th>
-                    <th colspan="2" style="padding: 8px; text-align: center; border: 1px solid #ddd; width: 25%;">Afternoon (AN) Duty</th>
-                    <th rowspan="2" style="padding: 8px; text-align: left; border: 1px solid #ddd; width: 10%;">REMARKS</th>
+                <tr>
+                    <th rowspan="2">Room</th>
+                    <th rowspan="2">Cap.</th>
+                    <th colspan="2">Forenoon (FN) Duty</th>
+                    <th colspan="2">Afternoon (AN) Duty</th>
+                  <!---  <th rowspan="2">Allocation Rules</th> --->
                 </tr>
-                <tr style="background-color: #f0f0f0; border-bottom: 2px solid #ccc;">
-                    <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">Teacher</th>
-                    <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">Sign</th>
-                    <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">Teacher</th>
-                    <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">Sign</th>
+                <tr>
+                    <th>Teacher</th>
+                    <th>Sign</th>
+                    <th>Teacher</th>
+                    <th>Sign</th>
                 </tr>
             </thead>
             <tbody>
-                ${sortedRoomsConsolidated.length > 0 ? sortedRoomsConsolidated.map(room => {
-                    const rule = room.allocationRule;
-                    let allocationRuleDisplay = 'No rule defined';
-
-                    if (rule) {
-                        const ruleParts = [];
-                        if (rule.classId && rule.division) {
-                            const className = classes.find(c => c.id === rule.classId)?.name || rule.classId;
-                            ruleParts.push(`Class: ${className} - ${rule.division}`);
-                        } else if (rule.classRangeStart && rule.classRangeEnd) {
-                            const startName = classes.find(c => c.id === rule.classRangeStart.split('-')[0])?.name + '-' + rule.classRangeStart.split('-')[1];
-                            const endName = classes.find(c => c.id === rule.classRangeEnd.split('-')[0])?.name + '-' + rule.classRangeEnd.split('-')[1];
-                            ruleParts.push(`Class Range: ${startName} to ${endName}`);
-                        }
-                        if (rule.regNoRangeText) {
-                            ruleParts.push(`Reg. Nos: ${rule.regNoRangeText.replace(/\n/g, ', ')}`);
-                        }
-                        if (ruleParts.length > 0) {
-                            allocationRuleDisplay = ruleParts.join('; ');
-                        } else {
-                            allocationRuleDisplay = 'Rule defined, but no specific ranges/classes found.';
-                        }
-                    }
+                ${roomsConsolidatedData.map(room => {
+                    // Find all allocation rules for each session in this room
+                    const rulesFN = examRoomAllocationRules.filter(r => r.examId === examId && r.date === date && r.session === 'FN' && r.roomId === room.roomId);
+                    const rulesAN = examRoomAllocationRules.filter(r => r.examId === examId && r.date === date && r.session === 'AN' && r.roomId === room.roomId);
+                    
+                    const fnRulesHtml = rulesFN.map(r => `<div>${r.regNoRangeText}</div>`).join('');
+                    const anRulesHtml = rulesAN.map(r => `<div>${r.regNoRangeText}</div>`).join('');
 
                     return `
                         <tr>
-                            <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">${room.roomName}</td>
-                            <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${room.capacity}</td>
-                            <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${room.dutyFN?.dutyTeacherName || '-'}</td>
-                            <td style="padding: 8px; border: 1px solid #ddd; text-align: center; width: 12%;"></td> <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${room.dutyAN?.dutyTeacherName || '-'}</td>
-                            <td style="padding: 8px; border: 1px solid #ddd; text-align: center;"></td> <td style="padding: 8px; border: 1px solid #ddd; font-size: 0.85em; color: #0056b3;">${""}</td>
-                        </tr>
-                    `;
-                }).join('') : `<tr><td colspan="7" style="padding: 8px; text-align: center; border: 1px solid #ddd;">No duties or allocations for this date.</td></tr>`}
+                            <td>${room.roomName}</td>
+                            <td class="text-center">${room.capacity}</td>
+                            <td>${room.dutyFN?.dutyTeacherName || '–'}</td>
+                            <td class="sign-cell"></td>
+                            <td>${room.dutyAN?.dutyTeacherName || '–'}</td>
+                            <td class="sign-cell"></td>
+                             <!--- <td class="rule-cell">
+                                ${fnRulesHtml ? `<strong>FN:</strong> ${fnRulesHtml}` : ''}
+                                ${anRulesHtml ? `<strong>AN:</strong> ${anRulesHtml}` : ''}
+                            </td> -->
+                        </tr>`;
+                }).join('')}
             </tbody>
         </table>
     `;
 
-    const customHeader = `
-    <div style="display: flex; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px;">
-        
-        <div style="flex: 0 0 80px;"> ${schoolDetails.logoUrl ? `<img src="${schoolDetails.logoUrl}" alt="School Logo" style="max-height: 70px; width: auto;">` : ''}
-        </div>
-        
-        <div style="flex-grow: 1; text-align: center;">
-            <h4 style="margin-bottom: 0px; color: #333; font-weight: 600;">${schoolDetails.name || 'School Name'}</h4>
-            <p style="font-size: 0.9em; color: #555; margin-bottom: 0;">${schoolDetails.address || 'School Address'}</p>
-        </div>
-        
-        <div style="flex: 0 0 80px;"></div>
+    // --- 4. DYNAMIC STYLING LOGIC ---
+    const rowCount = roomsConsolidatedData.length;
+    let dynamicFontSize = "0.85em";
+    let dynamicPadding = "6px";
 
-    </div>
+    if (rowCount > 25) { // Threshold for when to shrink content
+        dynamicFontSize = "0.75em"; // Smaller font
+        dynamicPadding = "4px";  // Tighter padding
+    }
     
-    <div style="text-align: center;">
-        <h5 style="font-weight: bold; margin-bottom: 5px; color: #0056b3;">${reportTitle}</h5>
-        <p style="font-size: 0.85em; color: #666; margin: 0;">${reportSubTitle}</p>
-    </div>
-`;
+    const extraCss = `
+        .report-table { width: 100%; border-collapse: collapse; }
+        .report-table th, .report-table td { 
+            border: 1px solid #aaa !important; 
+            padding: ${dynamicPadding} !important; 
+            font-size: ${dynamicFontSize} !important;
+            vertical-align: middle;
+        }
+        .report-table thead tr { background-color: #f0f0f0; }
+        .report-table th { text-align: center; }
+        .sign-cell { width: 12%; }
+        .rule-cell { font-size: 0.9em; text-align: left; }
+    `;
 
-    const tempDiv = document.createElement('div');
-    tempDiv.id = 'temp-duty-report';
-    tempDiv.innerHTML = reportHtml;
-    document.body.appendChild(tempDiv);
+    const customHeader = `
+        <div style="display: flex; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 5px;">
+            <div style="flex: 0 0 80px;">${schoolDetails.logoUrl ? `<img src="${schoolDetails.logoUrl}" alt="School Logo" style="max-height: 70px;">` : ''}</div>
+            <div style="flex-grow: 1; text-align: center;">
+                <h4 style="margin-bottom: 0px;">${schoolDetails.name || 'School Name'}</h4>
+                <p style="font-size: 0.9em; margin-bottom: 0;">${schoolDetails.address || 'School Address'}</p>
+            </div>
+            <div style="flex: 0 0 80px;"></div>
+        </div>
+        <div style="text-align: center;">
+            <h5 style="font-weight: bold;">${reportTitle}</h5>
+            <p style="font-size: 0.85em;">${reportSubTitle}</p>
+        </div>
+    `;
 
-    printContentOfDiv('temp-duty-report', reportTitle, {
+    // Use your centralized print function
+    printReport({
+        contentHtml: reportHtml,
+        title: 'Full_Day_Duty_Report',
         customHeaderHtml: customHeader,
-        pageSize: 'A4', // Landscape often better for wider tables
-        pageMargins: '0.5cm', // Adjust margins as needed
-        extraCss: `
-            table, th, td { border-color: #aaa !important; }
-            th, td { font-size: 0.85em !important; } /* Make fonts smaller to fit more */
-            h4, h5 { color: #000 !important; }
-            img { display: block; margin: 0 auto 10px; }
-            hr { border-top: 1px solid #333 !important; }
-            /* Specific width adjustments for columns */
-            th:nth-child(1), td:nth-child(1) { width: 10%; } /* Room */
-            th:nth-child(2), td:nth-child(2) { width: 5%; }  /* Capacity */
-            th:nth-child(3), td:nth-child(3) { width: 15.5%; } /* FN Teacher */
-            th:nth-child(4), td:nth-child(4) { width: 12.5%; } /* FN Sign */
-            th:nth-child(5), td:nth-child(5) { width: 15.5%; } /* AN Teacher */
-            th:nth-child(6), td:nth-child(6) { width: 12.5%; } /* AN Sign */
-            th:nth-child(7), td:nth-child(7) { width: 10%; } /* Allocation Rule */
-
-            /* Ensure text inside cells doesn't break table layout */
-            td { white-space: normal; word-break: break-word; }
-            th { white-space: nowrap; } /* Keep headers from wrapping unless necessary */
-        `
+        pageSize: 'A4',
+        extraCss: extraCss
     });
-
-    document.body.removeChild(tempDiv);
 }
-
 /**
  * Generates and prints the Room Allocation Report, summarizing allocations by room with gender-specific registration number ranges.
  * This version is designed for a simplified notice board view, without listing individual students.
@@ -20755,7 +20956,7 @@ function generateCompactRegNoRanges(regNos) {
         }
     }
     // Add the last range
-    ranges.push(currentRangeStart === currentRangeEnd ? currentRangeStart : `${currentRangeStart}-${currentRangeEnd}`);
+    ranges.push(currentRangeStart === currentRangeEnd ? currentRangeStart : `${currentRangeStart}------${currentRangeEnd}`);
 
     return ranges.join(', ');
 }
@@ -21590,16 +21791,21 @@ function renderExamControlRegNoAssignmentTab() {
  * @param {string} examId
  * @param {string} classId
  */
+/**
+ * Displays the student list for a class with their exam registration numbers.
+ * Now includes an inline editing feature to manually assign/change a Reg. No.
+ * @param {string} examId
+ * @param {string} classId
+ */
 function displayRegNoStatus(examId, classId) {
     const container = document.getElementById('reg-no-assignment-list');
     if (!container || !examId || !classId) {
-        container.innerHTML = `<p class="text-muted text-center p-4">Select an exam and class to generate registration numbers.</p>`;
+        container.innerHTML = `<p class="text-muted text-center p-4">Select an exam and class to view.</p>`;
         return;
     }
 
-    const studentsInClass = students.filter(s => s.classId === classId) // All divisions of the class
+    const studentsInClass = students.filter(s => s.classId === classId)
         .sort((a, b) => {
-            // Sort by division, then gender, then name
             const divCompare = (a.division || '').localeCompare(b.division || '');
             if (divCompare !== 0) return divCompare;
             const genderCompare = (a.gender || '').localeCompare(b.gender || '');
@@ -21612,33 +21818,89 @@ function displayRegNoStatus(examId, classId) {
         return;
     }
 
-    let tableHtml = `
+    // --- RENDER THE MAIN TABLE STRUCTURE ---
+    container.innerHTML = `
         <h5>Students in ${classes.find(c => c.id === classId)?.name || ''} for Exam: ${exams.find(e => e.id === examId)?.name || ''}</h5>
         <div class="table-responsive">
-            <table class="table table-bordered table-sm">
-                <thead><tr><th>Student Name</th><th>Division</th><th>Admn No.</th><th>Gender</th><th>Exam Reg. No.</th></tr></thead>
+            <table class="table table-bordered table-sm" id="reg-no-table">
+                <thead><tr><th>Student Name</th><th>Division</th><th>Admn No.</th><th>Gender</th><th>Exam Reg. No.</th><th class="text-end">Actions</th></tr></thead>
                 <tbody>
                     ${studentsInClass.map(student => {
                         const regNo = student.examRegNumbers?.[examId] || 'N/A';
                         return `
-                            <tr>
+                            <tr data-student-id="${student.id}">
                                 <td>${student.name}</td>
                                 <td>${student.division}</td>
                                 <td>${student.admissionNumber}</td>
                                 <td>${student.gender === 'M' ? 'Male' : 'Female'}</td>
-                                <td class="${regNo !== 'N/A' ? 'fw-bold text-primary' : 'text-muted'}">${regNo}</td>
-                            </tr>
-                        `;
+                                <td class="reg-no-cell ${regNo !== 'N/A' ? 'fw-bold text-primary' : 'text-muted'}">${regNo}</td>
+                                <td class="actions-cell text-end">
+                                    <button class="btn btn-sm btn-outline-primary py-0 px-1 edit-reg-no-btn">Edit</button>
+                                </td>
+                            </tr>`;
                     }).join('')}
                 </tbody>
             </table>
         </div>
         <div class="text-end mt-3">
             <button id="clear-reg-nos-btn" class="btn btn-warning">Clear All Reg. Nos. for this Exam/Class</button>
-        </div>
-    `;
-    container.innerHTML = tableHtml;
+        </div>`;
 
+    // --- ATTACH ALL EVENT LISTENERS FOR THIS TABLE ---
+    const table = container.querySelector('#reg-no-table');
+    
+    table.addEventListener('click', async (e) => {
+        const target = e.target;
+
+        // --- EDIT BUTTON LOGIC ---
+        if (target.classList.contains('edit-reg-no-btn')) {
+            const row = target.closest('tr');
+            const regNoCell = row.querySelector('.reg-no-cell');
+            const actionsCell = row.querySelector('.actions-cell');
+            const currentRegNo = regNoCell.textContent;
+
+            // Switch to edit mode
+            regNoCell.innerHTML = `<input type="text" class="form-control form-control-sm" value="${currentRegNo === 'N/A' ? '' : currentRegNo}">`;
+            actionsCell.innerHTML = `<button class="btn btn-sm btn-success py-0 px-1 save-reg-no-btn">Save</button>`;
+            
+            regNoCell.querySelector('input').focus();
+        }
+
+        // --- SAVE BUTTON LOGIC ---
+        if (target.classList.contains('save-reg-no-btn')) {
+            const row = target.closest('tr');
+            const studentId = row.dataset.studentId;
+            const student = students.find(s => s.id === studentId);
+            const input = row.querySelector('.reg-no-cell input');
+            const newRegNo = input.value.trim().toUpperCase();
+
+            if (!student) {
+                showAlert('Could not find student data.', 'danger');
+                return;
+            }
+
+            // Prepare the updated registration numbers object
+            let updatedRegNumbers = { ...student.examRegNumbers };
+            if (newRegNo) {
+                updatedRegNumbers[examId] = newRegNo; // Add or update the reg no
+            } else {
+                delete updatedRegNumbers[examId]; // Remove the reg no if the input is empty
+            }
+
+            try {
+                const studentRef = getDocRef('students', student.id);
+                await updateDoc(studentRef, { examRegNumbers: updatedRegNumbers });
+                showAlert('Registration number updated successfully!', 'success');
+                // The real-time listener will handle the UI update automatically,
+                // but an explicit refresh ensures it's instant.
+                displayRegNoStatus(examId, classId);
+            } catch (error) {
+                console.error("Error updating registration number:", error);
+                showAlert('Failed to save the registration number.', 'danger');
+            }
+        }
+    });
+    
     document.getElementById('clear-reg-nos-btn')?.addEventListener('click', async () => {
         if (confirm("Are you sure you want to clear all exam registration numbers for this class/exam? This will also reset the starting sequence for future assignments.")) {
             const batch = writeBatch(db);
@@ -22027,15 +22289,29 @@ function attachAllocationTabListeners() {
     });
 }
 
+
 /**
- * Adds a new row to the allocation table, intelligently suggesting the next registration number.
+ * Adds a new row to the allocation table with several UI enhancements:
+ * - Moves the remove button to the left.
+ * - Auto-selects the next available exam room.
+ * - Auto-fills the next sequential registration number.
+ * - Auto-focuses the 'Start Reg No.' input field.
  */
 function addAllocationRuleRow() {
     const tbody = document.getElementById('allocation-rules-tbody');
     let nextStartRegNo = '';
+    let nextRoomId = null;
+    // --- KEY CHANGE IS HERE: Sort exam rooms by roomNumber ---
+    const sortedExamRooms = [...examRooms].sort((a, b) => {
+        // Ensure roomNumber is treated as a number for correct sorting
+        const numA = parseInt(a.roomNumber, 10) || 0;
+        const numB = parseInt(b.roomNumber, 10) || 0;
+        return numA - numB;
+    });
 
     const lastRow = tbody.querySelector('tr:last-child');
     if (lastRow) {
+        // 1. Get the next sequential registration number from the previous row
         const lastEndRegNo = lastRow.querySelector('.end-reg-no').textContent;
         const regNoRegex = /^([A-Z0-9]+)_(\d+)$/;
         const match = lastEndRegNo.match(regNoRegex);
@@ -22044,12 +22320,28 @@ function addAllocationRuleRow() {
             const nextNum = parseInt(match[2], 10) + 1;
             nextStartRegNo = `${prefix}_${nextNum.toString().padStart(3, '0')}`;
         }
+
+        // 2. Get the next room in the sequence
+        const lastRoomId = lastRow.querySelector('.room-select').value;
+        const lastRoomIndex = sortedExamRooms.findIndex(r => r.id === lastRoomId);
+        if (lastRoomIndex > -1) {
+            // Modulo operator (%) ensures it wraps around to the start if at the end
+            const nextRoomIndex = (lastRoomIndex + 1) % sortedExamRooms.length;
+            nextRoomId = sortedExamRooms[nextRoomIndex].id;
+        }
     }
 
-    const newRow = document.createElement('tr');
-    const roomOptions = examRooms.map(r => `<option value="${r.id}" data-capacity="${r.capacity}">${r.name}</option>`).join('');
 
+    const newRow = document.createElement('tr');
+    
+    // Create room options, pre-selecting the next room if available
+    const roomOptions = examRooms.map(r => 
+        `<option value="${r.id}" data-capacity="${r.capacity}" ${r.id === nextRoomId ? 'selected' : ''}>${r.name}</option>`
+    ).join('');
+
+    // 3. Update the HTML structure with the remove button on the left
     newRow.innerHTML = `
+        <td><button type="button" class="btn btn-sm btn-outline-danger remove-rule-btn">&times;</button></td>
         <td><select class="form-select form-select-sm room-select">${roomOptions}</select></td>
         <td class="room-capacity text-center align-middle fw-bold"></td>
         <td class="room-remaining text-center align-middle fw-bold"></td>
@@ -22058,9 +22350,16 @@ function addAllocationRuleRow() {
         <td class="available-count text-center align-middle fw-bold"></td>
         <td class="end-reg-no text-muted"></td>
         <td class="status"></td>
-        <td><button type="button" class="btn btn-sm btn-outline-danger remove-rule-btn">&times;</button></td>
     `;
     tbody.appendChild(newRow);
+
+    // 4. Auto-focus the 'Start Reg No.' input field for immediate typing
+    const startRegNoInput = newRow.querySelector('.count');
+    if (startRegNoInput) {
+        startRegNoInput.focus();
+    }
+
+    // Refresh the entire grid to update all calculations
     recalculateAllocationGrid();
 }
 
@@ -22340,7 +22639,6 @@ function displayCurrentAllocations(examId, date, session) {
         container.innerHTML = `<p class="text-muted text-center p-4">Select an exam and session to view current allocations.</p>`;
         return;
     }
-
     const rulesForSession = examRoomAllocationRules.filter(r => r.examId === examId && r.date === date && r.session === session)
         .sort((a, b) => (a.regNoRangeText || '').localeCompare(b.regNoRangeText || '', undefined, { numeric: true }));
 
@@ -22348,6 +22646,13 @@ function displayCurrentAllocations(examId, date, session) {
         container.innerHTML = `<p class="alert alert-info text-center">No allocation rules saved for this session yet.</p>`;
         return;
     }
+
+    // --- NEW: Get other sessions for the "Copy To" dropdown ---
+    const otherSessions = [...new Set(examSchedules.filter(s => s.examId === examId).map(s => `${s.date}_${s.session}`))]
+        .filter(sKey => sKey !== `${date}_${session}`)
+        .sort();
+
+
 
     const sessionKey = `${examId}_${date.replace(/-/g, '')}_${session}`;
     const studentCountsByRule = {};
@@ -22398,6 +22703,17 @@ function displayCurrentAllocations(examId, date, session) {
             </table>
         </div>
         <div class="d-flex justify-content-end align-items-center mt-3 p-2 border-top">
+            <div class="me-auto d-flex align-items-center">
+                <select id="copy-to-session-select" class="form-select form-select-sm me-2" style="width: 250px;">
+                    <option value="">-- Copy selected to another session --</option>
+                    ${otherSessions.map(sKey => {
+                        const [sDate, sSession] = sKey.split('_');
+                        return `<option value="${sKey}">${new Date(sDate).toLocaleDateString('en-GB')} (${sSession})</option>`
+                    }).join('')}
+                </select>
+                <button class="btn btn-sm btn-info" id="copy-selected-rules-btn" disabled>Copy</button>
+            </div>
+
             <div class="form-check form-switch me-3">
                 <input class="form-check-input" type="checkbox" id="destructive-delete-toggle">
                 <label class="form-check-label" for="destructive-delete-toggle">Un-assign Students on Delete</label>
@@ -22408,15 +22724,17 @@ function displayCurrentAllocations(examId, date, session) {
         </div>
     `;
 
-    // Attach listeners for the new bulk-delete functionality
+    // Attach listeners for the bulk-action functionality
     const table = container.querySelector('#allocation-rules-table');
     const selectAll = container.querySelector('#select-all-rules');
     const checkboxes = container.querySelectorAll('.rule-select-checkbox');
     const deleteBtn = container.querySelector('#delete-selected-rules-btn');
+    const copyBtn = container.querySelector('#copy-selected-rules-btn');
 
     const updateButtonState = () => {
         const anyChecked = container.querySelector('.rule-select-checkbox:checked');
         deleteBtn.disabled = !anyChecked;
+        copyBtn.disabled = !anyChecked;
     };
 
     selectAll.addEventListener('change', () => {
@@ -22430,8 +22748,82 @@ function displayCurrentAllocations(examId, date, session) {
         const isDestructive = container.querySelector('#destructive-delete-toggle').checked;
         deleteSelectedAllocationRules(selectedRuleIds, isDestructive);
     });
+
+    copyBtn.addEventListener('click', () => {
+        const selectedRuleIds = Array.from(container.querySelectorAll('.rule-select-checkbox:checked')).map(cb => cb.value);
+        const targetSessionKey = container.querySelector('#copy-to-session-select').value;
+        copySelectedAllocationRules(examId,selectedRuleIds, targetSessionKey);
+    });
+
 }
 
+/**
+ * NEW: Copies selected allocation rules and their student assignments to a new session.
+ */
+async function copySelectedAllocationRules(examId,ruleIds, targetSessionKey) {
+    if (ruleIds.length === 0 || !targetSessionKey) {
+        showAlert('Please select one or more rules and a target session to copy to.', 'warning');
+        return;
+    }
+
+    const [targetDate, targetSession] = targetSessionKey.split('_');
+    const targetFirestoreSessionKey = `${examId}_${targetDate.replace(/-/g, '')}_${targetSession}`;
+
+    if (!confirm(`Are you sure you want to copy ${ruleIds.length} rule(s) to the session on ${new Date(targetDate).toLocaleDateString()}? This will also allocate the corresponding students.`)) {
+        return;
+    }
+
+    const batch = writeBatch(db);
+    let totalStudentsAffected = 0;
+
+    for (const ruleId of ruleIds) {
+        const originalRule = examRoomAllocationRules.find(r => r.id === ruleId);
+        if (!originalRule) continue;
+
+        // Create a new rule for the target session
+        const newRuleRef = doc(collection(db, `artifacts/${appId}/public/data/examRoomAllocationRules`));
+        const newRuleData = {
+            ...originalRule,
+            id: newRuleRef.id,
+            date: targetDate,
+            session: targetSession,
+            allocatedAt: serverTimestamp()
+        };
+        batch.set(newRuleRef, newRuleData);
+
+        // Find and allocate students for the new rule
+        const affectedRegNos = new Set();
+        const [startStr, endStr] = (originalRule.regNoRangeText || '').split('-').map(s => s.trim());
+        const regNoRegex = /^([A-Z0-9]+)_(\d+)$/;
+        const startMatch = startStr.match(regNoRegex);
+        const endMatch = (endStr || startStr).match(regNoRegex);
+
+        if (startMatch && endMatch && startMatch[1] === endMatch[1]) {
+            const prefix = startMatch[1];
+            for (let i = parseInt(startMatch[2]); i <= parseInt(endMatch[2]); i++) {
+                affectedRegNos.add(`${prefix}_${i.toString().padStart(3, '0')}`);
+            }
+        }
+        
+        const studentsToAllocate = students.filter(s => affectedRegNos.has(s.examRegNumbers?.[originalRule.examId]));
+        studentsToAllocate.forEach(student => {
+            const studentRef = getDocRef('students', student.id);
+            const updatedAllocations = { ...student.examRoomAllocations, [targetFirestoreSessionKey]: originalRule.roomId };
+            batch.update(studentRef, { examRoomAllocations: updatedAllocations });
+        });
+        totalStudentsAffected += studentsToAllocate.length;
+    }
+
+    try {
+        await batch.commit();
+        showAlert(`Successfully copied ${ruleIds.length} rule(s) and allocated ${totalStudentsAffected} students to the new session.`, 'success');
+        // The real-time listener will refresh the data, but you might want to switch views
+        // to the new session to see the results immediately.
+    } catch (error) {
+        console.error("Error copying allocation rules:", error);
+        showAlert('Failed to copy the selected rules. See console for details.', 'danger');
+    }
+}
 
 /**
  * Deletes selected allocation rules. If 'isDestructive' is true, it also
@@ -24867,8 +25259,8 @@ function printContentOfDiv(divId, title = 'Report', options = {}) {
     // Use a slightly longer timeout to ensure all assets (like images) are loaded before printing
     // setTimeout(() => {
     //     try {
-    //         printWindow.print();
-    //         printWindow.close(); // Close the print window after printing
+    //         // printWindow.print();
+    //         // printWindow.close(); // Close the print window after printing
     //     } catch (e) {
     //         console.error("Error during print:", e);
     //         showAlert("Printing failed. Please check your browser's print settings.", "danger");
