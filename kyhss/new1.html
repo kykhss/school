@@ -18141,9 +18141,21 @@ function renderFestEventsTab() {
                         <select id="event-categories" class="form-select" multiple size="5">${categoryOptions}</select>
                     </div>
                     <div class="form-check mb-3">
-                        <input type="checkbox" id="event-is-group" class="form-check-input" ${state.eventToEdit?.isGroupEvent ? 'checked' : ''}>
-                        <label class="form-check-label" for="event-is-group">Is Group Event?</label>
-                    </div>
+    <input type="checkbox" id="event-is-group" class="form-check-input" ${state.eventToEdit?.isGroupEvent ? 'checked' : ''}>
+    <label class="form-check-label" for="event-is-group">Is Group Event?</label>
+</div>
+
+<div class="mb-3">
+    <label class="form-label d-block">Event Type</label>
+    <div class="form-check form-check-inline">
+        <input class="form-check-input" type="radio" name="eventType" id="event-type-onstage" value="onStage" ${state.eventToEdit?.type !== 'offStage' ? 'checked' : ''}>
+        <label class="form-check-label" for="event-type-onstage">On-Stage</label>
+    </div>
+    <div class="form-check form-check-inline">
+        <input class="form-check-input" type="radio" name="eventType" id="event-type-offstage" value="offStage" ${state.eventToEdit?.type === 'offStage' ? 'checked' : ''}>
+        <label class="form-check-label" for="event-type-offstage">Off-Stage</label>
+    </div>
+</div>
                     <div class="text-end">
                         ${state.eventToEdit ? `<button type="button" class="btn btn-secondary me-2" onclick="window.clearEventEdit()">Cancel</button>` : ''}
                         <button type="submit" class="btn btn-primary">${state.eventToEdit ? 'Update Event' : 'Save Event'}</button>
@@ -18177,6 +18189,9 @@ function attachEventsTabListeners() {
         if (selectedCategories.length === 0) return showAlert('Please select at least one category.', 'danger');
 
         const isGroupEvent = document.getElementById('event-is-group').checked;
+        // NEW WAY (for radio buttons):
+        const type = document.querySelector('input[name="eventType"]:checked')?.value;
+        
         const festId = state.managingFest.id;
         const baseEventId = state.eventToEdit?.baseEventId || `EVT_${Date.now()}`;
         
@@ -18207,6 +18222,7 @@ function attachEventsTabListeners() {
                 batch.delete(getDocRef('festEvents', oldEvent.id));
             });
         }
+        
 
         // Loop through selected categories and create a separate document for each one.
         selectedCategories.forEach(category => {
@@ -18217,7 +18233,9 @@ function attachEventsTabListeners() {
                 festId: festId,
                 name: name,
                 category: category,
-                isGroupEvent: isGroupEvent
+                isGroupEvent: isGroupEvent,
+                type: type // The new value is saved here
+
             };
             batch.set(getDocRef('festEvents', uniqueId), eventData);
         });
@@ -18479,6 +18497,23 @@ function renderBulkRegistrationView(festId) {
             </table>
         </div>
         <button class="btn btn-outline-primary mt-2" id="add-reg-row-btn"><i class="fas fa-plus me-1"></i>Add Participant Row</button>
+        <div class="modal fade" id="eventSelectionModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="event-modal-title">Select Events</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="event-modal-body">
+                    </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" id="event-modal-save-btn" class="btn btn-primary">Confirm Events</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     `;
     // Re-attach listeners specifically for this view
     attachBulkRegistrationListeners(festId);
@@ -18489,7 +18524,7 @@ function renderBulkRegistrationView(festId) {
  * Attaches event listeners for the new bulk registration table.
  */
 function attachBulkParticipantsTabListeners() {
-    c//onst festFilter = document.getElementById('bulk-reg-fest-filter');
+    //const festFilter = document.getElementById('bulk-reg-fest-filter');
     const addRowBtn = document.getElementById('add-reg-row-btn');
     const tableBody = document.querySelector('#bulk-reg-table tbody');
     const saveAllBtn = document.getElementById('save-all-regs-btn');
@@ -18537,6 +18572,12 @@ function addParticipantRow(reg = null) {
     
     newRow.dataset.studentid = student?.id || '';
     newRow.dataset.events = reg?.events.join(',') || '';
+     // --- NEW: Generate the list of event name badges ---
+    const eventBadgesHTML = reg?.events.map(id => {
+        const event = festEvents.find(e => e.id === id);
+        return event ? `<span class="badge bg-secondary me-1 mb-1">${event.name}</span>` : '';
+    }).join('') || '<span class="text-muted small">No events selected</span>';
+
     
     newRow.innerHTML = `
         <td><input type="text" class="form-control form-control-sm admn-no-input" value="${student?.admissionNumber || ''}"></td>
@@ -18546,6 +18587,7 @@ function addParticipantRow(reg = null) {
         <td class="events-cell">
             <button class="btn btn-sm btn-outline-secondary manage-events-btn" disabled>Manage Events</button>
             <span class="event-count ms-2 badge bg-primary">${reg?.events.length || 0} selected</span>
+            ${eventBadgesHTML}
         </td>
         <td><button class="btn btn-sm btn-outline-danger py-0 px-2 remove-reg-row-btn">&times;</button></td>
     `;
@@ -18559,44 +18601,46 @@ function addParticipantRow(reg = null) {
 async function handleStudentLookup(inputElement) {
     const admnNo = inputElement.value.trim();
     const row = inputElement.closest('tr');
-    if (!admnNo) return;
+    if (!admnNo) return; // Do nothing if empty
 
-    const student = students.find(s =>String(s.admissionNumber||"").toLowerCase() === admnNo.toLowerCase());
-    //const festId = document.getElementById('bulk-reg-fest-filter').value;
-    const festId = state.managingFest.id; // Automatically set
-            
+    const student = students.find(s => String(s.admissionNumber||"").toLowerCase() === admnNo.toLowerCase());
+    const festId = state.managingFest.id;// document.getElementById('bulk-reg-fest-filter').value;
+    
     // Reset row
     row.dataset.studentid = '';
     row.dataset.events = '';
-    row.dataset.houseid = '';
-    const detailsCell = row.querySelector('.student-details-cell');
-    detailsCell.innerHTML = '<span class="text-warning">...</span>';
+    row.querySelector('.student-name-cell').innerHTML = '<span class="text-warning">...</span>';
+    row.querySelector('.student-class-cell').textContent = '';
     row.querySelector('.manage-events-btn').disabled = true;
-    row.querySelector('.event-count').textContent = '0';
+    row.querySelector('.event-count').textContent = '0 selected';
 
     if (student) {
-        const house = student.house ? festHouses.find(h => h.id === student.house) : null;
         row.dataset.studentid = student.id;
-        row.dataset.houseid = student.house || '';
-        
-        detailsCell.innerHTML = `
-            <strong>${student.name}</strong>
-            <div class="small text-muted">${getStudentClassName(student.classId, student.division)}</div>
-            ${house ? `<div class="small" style="color:${house.color};">● ${house.name}</div>` : '<div class="small text-danger">House not assigned</div>'}`;
-        
+        row.querySelector('.student-name-cell').textContent = student.name;
+        row.querySelector('.student-class-cell').textContent = getStudentClassName(student.classId, student.division);
         row.querySelector('.manage-events-btn').disabled = false;
+        
+        const houseSelect = row.querySelector('.house-select');
+        if (student.house) {
+            houseSelect.value = student.house;
+            houseSelect.disabled = true;
+        } else {
+            houseSelect.disabled = false;
+        }
 
         // Check for existing registration for this student in this fest
         const existingReg = festRegistrations.find(r => r.festId === festId && r.studentId === student.id);
         if(existingReg) {
             row.dataset.events = existingReg.events.join(',');
-            row.querySelector('.event-count').textContent = existingReg.events.length;
-            if(existingReg.houseId) row.dataset.houseid = existingReg.houseId; // Update house if it was manually set during a previous registration
+            row.querySelector('.event-count').textContent = `${existingReg.events.length} selected`;
+            if(existingReg.houseId) houseSelect.value = existingReg.houseId;
         }
     } else {
-        detailsCell.innerHTML = '<span class="text-danger">Not Found</span>';
+        row.querySelector('.student-name-cell').innerHTML = '<span class="text-danger">Not Found</span>';
     }
 }
+
+
 /**
  * Opens a modal to select events for a student in a specific table row.
  * @param {HTMLElement} row The table row (<tr>) element.
@@ -18606,7 +18650,7 @@ function openEventSelectionModal(row) {
     if (!studentId) return showAlert('Please find a valid student first by entering their Admission No.', 'warning');
     
     const student = students.find(s => s.id === studentId);
-    const festId = document.getElementById('bulk-reg-fest-filter').value;
+    const festId = state.managingFest.id;//document.getElementById('bulk-reg-fest-filter').value;
     const studentCategory = getStudentCategory(student);
     const maxEvents = festSettings.maxEventsPerStudent || 3;
     const currentlySelected = row.dataset.events ? row.dataset.events.split(',') : [];
@@ -18650,8 +18694,15 @@ function openEventSelectionModal(row) {
     // Set up the save button to update the table row, NOT save to DB yet.
     saveBtn.onclick = () => {
         const selectedEventIds = Array.from(modalBody.querySelectorAll('.event-modal-checkbox:checked')).map(cb => cb.value);
-        row.dataset.events = selectedEventIds.join(',');
+       
+        const eventBadgesHTML = selectedEventIds.map(id => {
+        const event = festEvents.find(e => e.id === id);
+        return event ? `<span class="badge bg-secondary me-1 mb-1">${event.name}</span>` : '';
+    }).join('') || '<span class="text-muted small">No events selected</span>';
+
+         row.dataset.events = selectedEventIds.join(',');
         row.querySelector('.event-count').textContent = `${selectedEventIds.length} selected`;
+        row.querySelector('.event-items').textContent = `${eventBadgesHTML} `;
         eventModal.hide();
     };
 
@@ -19168,16 +19219,15 @@ function renderParticipantRegistrationSection() {
     const classOptions = classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
 
     container.innerHTML = `
-        <div class="ui-card mb-4">
+        <div class="ui-card mb-4 d-none">
             <h5 class="section-header"><i class="fas fa-filter me-2"></i>Filter Participants</h5>
             <div class="row g-3 align-items-end">
                 <div class="col-md-4"><label class="form-label">Filter by Class</label><select id="participant-class-filter" class="form-select"><option value="">All Classes</option>${classOptions}</select></div>
                 <div class="col-md-5"><label class="form-label">Search by Name / Admn No.</label><input type="text" id="participant-search-input" class="form-control" placeholder="Start typing..."></div>
-                <div class="col-md-3 d-grid"><button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#registrationModal"><i class="fas fa-user-plus me-2"></i>Register New Participant</button></div>
-            </div>
+                </div>
         </div>
-        <div id="participants-table-container" class="ui-card"></div>
-
+        <div id="participants-table-container" class="ui-card d-none"></div>
+        <div class="col-md-3 d-grid d-none"><button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#registrationModal"><i class="fas fa-user-plus me-2"></i>Register New Participant</button></div>
         <div class="modal fade" id="registrationModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content">
             <div class="modal-header"><h5 class="modal-title">New Registration for ${state.managingFest.name}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
             <div class="modal-body">
@@ -19206,8 +19256,14 @@ function renderParticipantRegistrationSection() {
     `;
 
     attachParticipantsTabListeners();
-    renderParticipantsTable();
+    //renderParticipantsTable();
 }
+/**
+ * Renders the event selection modal with corrected filtering and smart disabling logic.
+ * @param {string} festId The ID of the fest.
+ * @param {object} student The student object.
+ * @param {object|null} existingReg The existing registration data if editing.
+ */
 function renderEventsInModal(festId, student, existingReg = null) {
     const containerId = existingReg ? 'edit-form-content' : 'reg-modal-form-body';
     const container = document.getElementById(containerId);
@@ -19215,18 +19271,34 @@ function renderEventsInModal(festId, student, existingReg = null) {
 
     const studentCategory = getStudentCategory(student);
     const registeredEventIds = existingReg?.events || [];
-    const maxEvents = festSettings.maxEventsPerStudent;
+    const fest = fests.find(f => f.id === festId);
+    if (!fest?.settings) {
+        container.innerHTML = `<p class="text-danger">Fest settings are not available. Cannot load events.</p>`;
+        return;
+    }
 
-    // --- NEW LOGIC FOR HOUSE DROPDOWN ---
-    // Check if the student has a house pre-assigned from the main student data.
+    const maxEventsPerStudent = fest.settings.maxEventsPerStudent || 3;
+    const houseLimits = fest.settings.houseEventLimits || { solo: 1, group: 1 };
+    
     const isHousePreAssigned = !!student.house;
-    // Determine the house to be selected: existing registration > pre-assigned house > first house in the list.
     const selectedHouseId = existingReg?.houseId || student.house || festHouses[0]?.id || '';
 
-    // Filter events that are either 'General' or match the student's specific category.
-    const availableEvents = festEvents.filter(e => e.festId === festId && (e.category === 'General' || e.category === studentCategory));
+    // FIXED: Corrected the event filtering logic to use the singular 'category' field.
+    const availableEvents = festEvents.filter(e => 
+        e.festId === festId &&
+        (e.category === 'General' || e.category === studentCategory)
+    );
     
     container.innerHTML = `
+        <style>
+            .form-check-label.selected {
+                background-color: #d1e7dd; /* Light green background */
+                color: #0f5132;
+                font-weight: bold;
+                padding: .25rem .5rem;
+                border-radius: .25rem;
+            }
+        </style>
         <p class="mb-2"><strong>Student's Category:</strong> <span class="badge bg-info fs-6">${studentCategory}</span></p>
         <div class="mb-3">
             <label class="form-label">Assign House</label>
@@ -19236,54 +19308,105 @@ function renderEventsInModal(festId, student, existingReg = null) {
             ${isHousePreAssigned ? '<small class="form-text text-muted">House is pre-assigned and cannot be changed here.</small>' : ''}
         </div>
         <hr>
-        <h6>Select Events (Registered: <span id="event-count">${registeredEventIds.length}</span> / ${maxEvents})</h6>
+        <h6>Select Events (Registered: <span id="event-count">${registeredEventIds.length}</span> / ${maxEventsPerStudent})</h6>
         <div class="row g-3" style="max-height: 300px; overflow-y: auto;">
             ${availableEvents.length > 0 ? availableEvents.map(event => {
-                // ... (rest of the event rendering logic remains the same)
                 const isChecked = registeredEventIds.includes(event.id);
-                // This complex check can be simplified or kept as is, it's for house limits
-                const isDisabled = (registeredEventIds.length >= maxEvents && !isChecked);
+
+                // Comprehensive validation for house and student limits
+                const studentLimitReached = registeredEventIds.length >= maxEventsPerStudent && !isChecked;
+                const registrationsForEvent = festRegistrations.filter(r => r.festId === festId && r.events.includes(event.id));
+                const houseRegistrations = registrationsForEvent.filter(r => r.houseId === selectedHouseId);
+                const houseLimit = event.isGroupEvent ? houseLimits.group : houseLimits.solo;
+                const houseLimitReached = houseRegistrations.length >= houseLimit && !houseRegistrations.some(r => r.studentId === student.id);
+                
+                const isDisabled = studentLimitReached || houseLimitReached;
+                
+                let limitInfo = '';
+                if (houseLimitReached) {
+                    limitInfo = `<span class="badge bg-danger ms-2">House Limit Full</span>`;
+                }
 
                 return `<div class="col-md-6">
                     <div class="form-check">
                         <input class="form-check-input event-checkbox" type="checkbox" value="${event.id}" id="evt-check-${event.id}" ${isChecked ? 'checked' : ''} ${isDisabled ? 'disabled' : ''}>
-                        <label class="form-check-label ${isDisabled ? 'text-muted' : ''}" for="evt-check-${event.id}">
-                            ${event.name}(${event.category})
+                        <label class="form-check-label ${isChecked ? 'selected' : ''} ${isDisabled ? 'text-muted' : ''}" for="evt-check-${event.id}">
+                            ${event.name} (${event.category}) ${limitInfo}
                         </label>
                     </div>
                 </div>`;
             }).join('') : '<p class="text-muted">No eligible events found for this student\'s category.</p>'}
         </div>`;
 
-    // Re-attach listener for event checkboxes to update the counter
+    // This helper function handles the disabling logic you requested
+    const updateCheckboxStates = () => {
+        const currentlyCheckedCount = container.querySelectorAll('.event-checkbox:checked').length;
+        const studentLimitReached = currentlyCheckedCount >= maxEventsPerStudent;
+        document.getElementById('event-count').textContent = currentlyCheckedCount;
+        
+        container.querySelectorAll('.event-checkbox').forEach(checkbox => {
+            const label = container.querySelector(`label[for="${checkbox.id}"]`);
+            // Only affect checkboxes that are NOT checked
+            if (!checkbox.checked) {
+                // An event that is disabled due to a house limit should stay disabled.
+                // Otherwise, its disabled state is determined by the student's personal event limit.
+                if (!label.innerHTML.includes('House Limit Full')) {
+                     checkbox.disabled = studentLimitReached;
+                     label.classList.toggle('text-muted', studentLimitReached);
+                }
+            }
+        });
+    };
+
+    // Attach listeners to update styles and disabled states on every click
     container.querySelectorAll('.event-checkbox').forEach(cb => {
         cb.addEventListener('change', () => {
-            const count = container.querySelectorAll('.event-checkbox:checked').length;
-            document.getElementById('event-count').textContent = count;
+            const label = container.querySelector(`label[for="${cb.id}"]`);
+            label.classList.toggle('selected', cb.checked);
+            updateCheckboxStates();
         });
     });
+    
+    // Initial call to set the correct state when the modal opens
+    updateCheckboxStates();
 }
 
+/**
+ * Determines a student's category based on the currently managed fest's settings.
+ * This version correctly reads the 'criteria' property and is safer.
+ * @param {object} student The student object to categorize.
+ * @returns {string} The name of the category the student belongs to.
+ */
 function getStudentCategory(student) {
-    if (!student || !festSettings.categories) return 'General';
+    // ADDED: A safer guard clause to prevent crashes.
+    // It checks the entire path and also if the categories array is empty.
+    if (!student || !state.managingFest?.settings?.categories || state.managingFest.settings.categories.length === 0) {
+        return 'General';
+    }
+
     const dob = new Date(student.dob);
     
-    // Sort categories to prioritize class-based, then age-based (youngest first)
-    const sortedCategories = [...festSettings.categories].sort((a, b) => {
+    // Create a copy to sort without changing the original data.
+    const sortedCategories = [...state.managingFest.settings.categories].sort((a, b) => {
         if (a.type === 'class' && b.type !== 'class') return -1;
         if (a.type !== 'class' && b.type === 'class') return 1;
-        if (a.type === 'age' && b.type === 'age') return new Date(b.bornAfterDate) - new Date(a.bornAfterDate);
+        // CHANGED: Use the correct 'criteria' property for sorting.
+        if (a.type === 'age' && b.type === 'age') return new Date(b.criteria) - new Date(a.criteria);
         return 0;
     });
 
     for (const category of sortedCategories) {
-        if (category.type === 'class' && category.classes.includes(student.classId)) {
+        // CHANGED: Check 'category.criteria' instead of 'category.classes'.
+        if (category.type === 'class' && category.criteria.includes(student.classId)) {
             return category.name;
         }
-        if (category.type === 'age' && dob >= new Date(category.bornAfterDate)) {
+        // CHANGED: Check 'category.criteria' instead of 'category.bornAfterDate'.
+        if (category.type === 'age' && dob >= new Date(category.criteria)) {
             return category.name;
         }
     }
+    
+    // If no specific category matches, return 'General'.
     return 'General';
 }
 
@@ -19302,6 +19425,10 @@ window.openEditRegistrationModal = (registrationId) => {
     editModal.show();
 }
 
+/**
+ * Saves the changes from the edit registration modal to Firestore.
+ * Ensures the modal is hidden on both success and failure.
+ */
 async function saveEditedRegistration() {
     if (!state.registrationToEdit) return;
 
@@ -19318,7 +19445,7 @@ async function saveEditedRegistration() {
         console.error("Error updating registration:", error);
         showAlert('Failed to update registration.', 'danger');
     } finally {
-        // --- THIS BLOCK NOW ENSURES THE MODAL ALWAYS CLOSES ---
+        // --- THIS BLOCK GUARANTEES THE MODAL ALWAYS CLOSES ---
         if (modalInstance) modalInstance.hide();
         state.registrationToEdit = null;
     }
@@ -19341,8 +19468,8 @@ async function deleteRegistration() {
 }
 function attachParticipantsTabListeners() {
     // Filters (The fest filter listener is removed)
-    document.getElementById('participant-class-filter')?.addEventListener('change', renderParticipantsTable);
-    document.getElementById('participant-search-input')?.addEventListener('input', renderParticipantsTable);
+    // document.getElementById('participant-class-filter')?.addEventListener('change', renderParticipantsTable);
+    // document.getElementById('participant-search-input')?.addEventListener('input', renderParticipantsTable);
 
     // Student search in modal
     document.getElementById('reg-modal-student-search')?.addEventListener('keypress', (e) => {
@@ -19822,76 +19949,144 @@ window.saveEventScores = async (festId, eventId) => {
 // -------------------------------------------------------------------------
 // --- 7. REPORTS TAB ---
 // -------------------------------------------------------------------------
+// =========================================================================
+// --- 7. REPORTS TAB (REFINED & COMPLETE) ---
+// =========================================================================
+
+/**
+ * Renders a clean, card-based interface for generating all fest-related reports.
+ */
 function renderFestReportsTab() {
     const container = document.getElementById('fest-reports');
-    if (!container || !state.managingFest) return;
-    
+    if (!container) return;
+
+    // Show a message if no fest is being managed
+    if (!state.managingFest) {
+        container.innerHTML = `<div class="text-center p-5"><i class="fas fa-arrow-left fa-3x text-primary mb-3"></i><h5>No Fest Selected</h5><p class="text-muted">Please select a fest from the "Setup" tab to generate reports.</p></div>`;
+        return;
+    }
+    const id =printCategoryRegistrationSheet
+
     container.innerHTML = `
-        <div class="ui-card">
-            <h5 class="section-header"><i class="fas fa-print me-2"></i>Generate Reports for ${state.managingFest.name}</h5>
-            <p class="text-muted">Generate and print various reports for the currently selected fest.</p>
-            <div class="list-group">
-                <div class="list-group-item d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="mb-1">Participant Chest Cards</h6>
-                        <p class="mb-1 small text-muted">Generates a printable PDF of chest cards for all registered participants with assigned numbers.</p>
+        <h5 class="section-header"><i class="fas fa-print me-2"></i>Generate Reports for ${state.managingFest.name}</h5>
+        <p class="text-muted">Generate and print various reports for the currently selected fest.</p>
+        
+        <div class="row g-4 mt-2">
+            <div class="col-md-6">
+                <div class="ui-card h-100">
+                    <h6><i class="fas fa-clipboard-list me-2 text-primary"></i>Category Entry Sheet</h6>
+                    <p class="small text-muted">A master sheet for officials, showing all participants in a category and the events they are in. Ideal for roll calls.</p>
+                    <div class="input-group">
+                        <select class="form-select" id="report-category-select">
+                           <option value="">-- Select a Category --</option>
+                           ${state.managingFest.settings?.categories?.map(c => `<option value="${c.name}">${c.name}</option>`).join('') || ''}
+                        </select>
+                        <button class="btn btn-outline-primary" onclick="window.printCategoryEntrySheet()">Generate</button>
                     </div>
-                    <button class="btn btn-primary" onclick="window.printChestNumbers()">
-                        <i class="fas fa-file-pdf me-2"></i>Generate PDF
-                    </button>
-                </div>
-                <div class="list-group-item d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="mb-1">Full Score Sheet</h6>
-                        <p class="mb-1 small text-muted">A detailed report showing points awarded to each house in every event.</p>
-                    </div>
-                    <button class="btn btn-primary" onclick="window.printFullScoreSheet()" disabled>
-                        <i class="fas fa-file-excel me-2"></i>Generate CSV (Coming Soon)
-                    </button>
-                </div>
-                 <div class="list-group-item d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="mb-1">Final House Rankings</h6>
-                        <p class="mb-1 small text-muted">A summary report of the final house standings with total points.</p>
-                    </div>
-                    <button class="btn btn-primary" onclick="window.printHouseRankings()">
-                        <i class="fas fa-trophy me-2"></i>Print Rankings
-                    </button>
                 </div>
             </div>
-        </div>`;
+
+            <div class="col-md-6">
+                <div class="ui-card h-100">
+                    <h6><i class="fas fa-marker me-2 text-primary"></i>Event Result Sheet</h6>
+                    <p class="small text-muted">A blank scoresheet for judges, listing all participants for a single event with space for scores and remarks.</p>
+                    <div class="input-group">
+                         <select class="form-select" id="report-event-select">
+                           <option value="">-- Select an Event --</option>
+                           ${festEvents.filter(e => e.festId === state.managingFest.id).sort((a,b) => a.name.localeCompare(b.name)).map(e => `<option value="${e.id}">${e.name} (${e.category})</option>`).join('')}
+                        </select>
+                        <button class="btn btn-outline-primary" onclick="window.printEventResultSheet()">Generate</button>
+                    </div>
+                </div>
+            </div>
+            <!-- Card 2: Category Registration Sheet (Blank) - NEW -->
+            <div class="row g-4 mt-2">
+            <div class="col-md-6">
+                <div class="ui-card h-100">
+                    <h6><i class="fas fa-edit me-2 text-primary"></i>Category Registration Sheet (Blank)</h6>
+                    <p class="small text-muted">A blank form with 25 empty rows for manually registering new participants on-site.</p>
+                    
+                    <div class="mb-2">
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="reg-sheet-type" id="reg-sheet-onstage" value="onStage" checked>
+                            <label class="form-check-label" for="reg-sheet-onstage">On-Stage</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="reg-sheet-type" id="reg-sheet-offstage" value="offStage">
+                            <label class="form-check-label" for="reg-sheet-offstage">Off-Stage</label>
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <select class="form-select" id="report-category-select-blank">
+                           <option value="">-- Select a Category --</option>
+                           ${state.managingFest.settings?.categories?.map(c => `<option value="${c.name}">${c.name}</option>`).join('') || ''}
+                        </select>
+                        <button class="btn btn-outline-primary" 
+                                onclick="printCategoryRegistrationSheet()">
+                            Generate
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+
+
+            <div class="col-md-6">
+                <div class="ui-card h-100 d-flex flex-column">
+                    <h6><i class="fas fa-id-badge me-2 text-primary"></i>Participant Chest Cards</h6>
+                    <p class="small text-muted">A printable layout of chest cards (10 per A4 page) for all participants with an assigned chest number.</p>
+                    <div class="mt-auto text-end">
+                        <button class="btn btn-primary" onclick="window.printChestNumbers()">
+                            <i class="fas fa-file-pdf me-2"></i>Generate PDF
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="ui-card h-100 d-flex flex-column">
+                    <h6><i class="fas fa-trophy me-2 text-primary"></i>Final House Rankings</h6>
+                    <p class="small text-muted">A summary report of the final house standings with total points, perfect for display.</p>
+                    <div class="mt-auto text-end">
+                         <button class="btn btn-primary" onclick="window.printHouseRankings()">
+                            <i class="fas fa-print me-2"></i>Print Rankings
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
 }
 
-
+/**
+ * Generates and prints the chest cards layout.
+ */
 window.printChestNumbers = function() {
-    if (!state.managingFest) return;
+    if (!state.managingFest) return showAlert('No fest selected.', 'warning');
     const festId = state.managingFest.id;
 
-    const registeredStudents = festRegistrations.filter(r => r.festId === festId && r.chestNo);
-    if (registeredStudents.length === 0) {
-        return showAlert('No students with chest numbers found for this fest.', 'info');
-    }
+    const participants = festRegistrations.filter(r => r.festId === festId && r.chestNo).sort((a,b) => a.chestNo - b.chestNo);
+    if (participants.length === 0) return showAlert('No participants with chest numbers found for this fest.', 'info');
 
-    let contentHtml = '';
-    registeredStudents.forEach(reg => {
+    let contentHtml = participants.map(reg => {
         const student = students.find(s => s.id === reg.studentId);
-        if (!student) return;
+        if (!student) return '';
         
-        const events = reg.events.map(eid => festEvents.find(e => e.id === eid)?.name).filter(Boolean).join(', ');
+        const eventNames = reg.events.map(eid => festEvents.find(e => e.id === eid)?.name).filter(Boolean).join(', ');
         
-        contentHtml += `
+        return `
             <div class="chest-no-slip">
                 <div class="chest-header">${schoolDetails.name || 'School Name'}</div>
                 <div class="fest-name">${state.managingFest.name}</div>
                 <div class="chest-number">${reg.chestNo}</div>
                 <div class="chest-student-name">${student.name}</div>
                 <small class="text-muted">${getStudentClassName(student.classId, student.division)}</small>
-                <div class="chest-events">${events}</div>
+                <div class="chest-events">${eventNames}</div>
             </div>`;
-    });
+    }).join('');
 
     const extraCss = `
-        body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         .chest-no-slip { 
             width: 85mm; height: 55mm; float: left; margin: 5mm; 
             padding: 5mm; border: 1px solid #ccc; box-sizing: border-box; 
@@ -19907,7 +20102,387 @@ window.printChestNumbers = function() {
     printReport({ contentHtml, title: `Chest_Numbers_${festId}`, extraCss });
 }
 
+/**
+ * Generates and prints the final house rankings.
+ */
+window.printHouseRankings = function() {
+    // This requires the calculateFinalResults and renderChampionshipReport functions
+    // The report can be rendered to a hidden div and then printed.
+    showAlert('Printing House Rankings...', 'info');
+    // Example: renderChampionshipReport(state.managingFest.id, true); // second param might mean "for printing"
+}
 
+window.printCategoryEntrySheet = function() {
+    // Ensure a fest is being managed
+    if (!state.managingFest) {
+        return showAlert('Please select a fest from the "Setup" tab first.', 'warning');
+    }
+    const festId = state.managingFest.id;
+
+    // Get the selected category from the dropdown in the Reports tab
+    const categorySelect = document.getElementById('report-category-select');
+    if (!categorySelect || !categorySelect.value) {
+        return showAlert('Please select a category to generate the report.', 'warning');
+    }
+    const categoryName = categorySelect.value;
+    
+    // Generate the report's HTML content
+    const contentHtml = generateCategoryEntrySheetHTML(festId, categoryName);
+    if (!contentHtml) return; // Stop if no participants were found
+
+    // Define the specific CSS for this report, including the vertical headers
+    const extraCss = `
+        .entry-sheet-table { font-size: 9pt; border-collapse: collapse; width: 100%; }
+        .entry-sheet-table th, .entry-sheet-table td { border: 1px solid #dee2e6; }
+        .vertical-header { height: 180px; white-space: nowrap; text-align: left; vertical-align: bottom; position: relative; padding-left: 5px; }
+        .vertical-header div { 
+            transform: rotate(-90deg); 
+            position: absolute; 
+            left: 10px; 
+            bottom: 8px; 
+            transform-origin: 0 100%;
+            width: 170px; /* Limit width to prevent text overflow */
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .tick-box { width: 35px; text-align: center; }
+        .not-participating { background-color: #f0f0f0; }
+        .house-header-row td { background-color: #e9ecef; font-weight: bold; text-align: center; }
+        .report-footer { margin-top: 40px; text-align: right; font-size: 10pt; }
+    `;
+
+    // Call the generic print utility
+    printReport({ 
+        contentHtml, 
+        title: `Entry_Sheet_${state.managingFest.name}_${categoryName}`, 
+        extraCss, 
+        landscape: true // This report is best viewed in landscape mode
+    });
+}
+
+/**
+ * Generates the HTML for the entry sheet, now grouped by house.
+ * @param {string} festId The ID of the fest.
+ * @param {string} categoryName The name of the category.
+ * @returns {string|null} The HTML string for the report, or null if no data.
+ */
+function generateCategoryEntrySheetHTML(festId, categoryName) {
+    const fest = fests.find(f => f.id === festId);
+
+    // 1. Find all events and participants relevant to this category
+    const eventsInCategory = festEvents.filter(e => e.festId === festId && e.category === categoryName).sort((a,b) => a.name.localeCompare(b.name));
+    const allParticipants = festRegistrations.filter(r => r.festId === festId && r.events.some(eventId => eventsInCategory.some(ev => ev.id === eventId)));
+
+    if (allParticipants.length === 0) {
+        showAlert(`No participants found for the '${categoryName}' category.`, 'info');
+        return null;
+    }
+    
+    // 2. Group participants by their assigned house
+    const participantsByHouse = allParticipants.reduce((acc, reg) => {
+        const houseId = reg.houseId || 'UNASSIGNED';
+        if (!acc[houseId]) {
+            acc[houseId] = [];
+        }
+        acc[houseId].push(reg);
+        return acc;
+    }, {});
+
+    const sortedHouseIds = Object.keys(participantsByHouse).sort((a, b) => {
+        if (a === 'UNASSIGNED') return 1; // Put unassigned at the end
+        if (b === 'UNASSIGNED') return -1;
+        const houseA = festHouses.find(h => h.id === a)?.name || '';
+        const houseB = festHouses.find(h => h.id === b)?.name || '';
+        return houseA.localeCompare(houseB);
+    });
+
+    // 3. Build the table HTML with house groupings
+    let tableBodyHtml = '';
+    let serialNumber = 1;
+
+    sortedHouseIds.forEach(houseId => {
+        const house = festHouses.find(h => h.id === houseId);
+        const houseName = house ? house.name : 'Unassigned';
+        const houseColor = house ? house.color : '#f8f9fa';
+
+        // Add a header row for the house
+        tableBodyHtml += `<tr class="house-header-row"><td colspan="${4 + eventsInCategory.length}" style="background-color: ${houseColor}30;">${houseName.toUpperCase()}</td></tr>`;
+
+        // Sort participants within the house by chest number or name
+        const participantsInHouse = participantsByHouse[houseId].sort((a, b) => 
+            (a.chestNo || a.studentName).toString().localeCompare((b.chestNo || b.studentName).toString(), undefined, { numeric: true })
+        );
+
+        participantsInHouse.forEach(reg => {
+            const student = students.find(s => s.id === reg.studentId);
+            tableBodyHtml += `
+                <tr>
+                    <td>${serialNumber++}</td>
+                    <td>${reg.chestNo || 'N/A'}</td>
+                    <td>${reg.studentName}</td>
+                    <td>${getStudentClassName(student?.classId, student?.division)}</td>
+                    ${eventsInCategory.map(event => {
+                        const isParticipating = reg.events.includes(event.id);
+                        return isParticipating ? '<td class="tick-box"></td>' : '<td class="not-participating"></td>';
+                    }).join('')}
+                </tr>`;
+        });
+    });
+
+    // 4. Assemble the final report HTML
+    return `
+        <div class="printable-report">
+            <h3 class="text-center">${fest?.name || ''}</h3>
+            <h4 class="text-center text-muted">Entry Sheet: ${categoryName}</h4>
+            <table class="table table-bordered table-sm mt-4 entry-sheet-table">
+                <thead>
+                    <tr>
+                        <th style="width: 5%;">Sl.No.</th>
+                        <th style="width: 8%;">Chest No.</th>
+                        <th>Name</th>
+                        <th style="width: 10%;">Class</th>
+                        ${eventsInCategory.map(e => `<th class="vertical-header"><div>${e.name} (${e.id})</div></th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody>
+                    ${tableBodyHtml}
+                </tbody>
+            </table>
+            <div class="report-footer">
+                <p>Official's Signature: _________________________</p>
+            </div>
+        </div>
+    `;
+}
+/**
+ * Main function called by the "Generate" button in the UI.
+ * It gathers the required IDs and calls the print utility.
+ */
+window.printEventResultSheet = function() {
+    // Ensure a fest is being managed
+    if (!state.managingFest) {
+        return showAlert('Please select a fest from the "Setup" tab first.', 'warning');
+    }
+    const festId = state.managingFest.id;
+
+    // Get the selected event from the dropdown
+    const eventSelect = document.getElementById('report-event-select');
+    if (!eventSelect || !eventSelect.value) {
+        return showAlert('Please select an event to generate the sheet.', 'warning');
+    }
+    const eventId = eventSelect.value;
+    
+    // Generate the report's HTML content
+    const contentHtml = generateEventResultSheetHTML(festId, eventId);
+    if (!contentHtml) return; // Stop if there was an issue (e.g., no participants)
+
+    // Define the specific CSS for this report
+    const extraCss = `
+        .result-sheet-table .entry-cell { height: 40px; }
+        .result-sheet-table .group-members { font-size: 0.8em; list-style-type: none; padding-left: 0; }
+        .report-footer { margin-top: 50px; display: flex; justify-content: space-around; font-size: 10pt; }
+    `;
+
+    // Call the generic print utility
+    printReport({ 
+        contentHtml, 
+        title: `Result_Sheet_${festEvents.find(e=>e.id === eventId)?.name || eventId}`, 
+        extraCss 
+    });
+}
+
+/**
+ * Generates and prints a BLANK registration sheet for a specific category,
+ * with 25 empty rows for manual entry.
+ * @param {string} festId The ID of the fest.
+ * @param {string} categoryName The name of the category.
+ */
+window.printCategoryRegistrationSheet = () => {
+    const eventType = document.getElementById('reg-sheet-offstage').checked ? 'offStage' : 'onStage';
+    const festId = state.managingFest.id;
+    const categoryName = document.getElementById('report-category-select-blank').value;
+    const fest = fests.find(f => f.id === festId);
+    if (!fest) return;
+    if (!categoryName) return showAlert('Please select a category first.', 'warning');
+
+    // 1. Filter events by category AND the selected event type.
+    //    If eventType is 'onStage', it also includes events where the type is not defined.
+    const eventsInCategory = festEvents.filter(e => 
+        e.festId === festId && 
+        e.category === categoryName &&
+        (e.type === eventType || (eventType === 'onStage' && e.type === undefined))
+    ).sort((a,b) => a.name.localeCompare(b.name));
+
+    if (eventsInCategory.length === 0) {
+        showAlert(`No '${eventType}' events found for the '${categoryName}' category.`, 'info');
+        return;
+    }
+
+    // 2. Create 25 empty rows for manual entry
+    let emptyRowsHtml = '';
+    for (let i = 1; i <= 25; i++) {
+        emptyRowsHtml += `
+            <tr>
+                <td>${i}</td>
+                <td class="entry-cell"></td>
+                <td class="entry-cell"></td>
+                <td class="entry-cell"></td>
+                ${eventsInCategory.map(() => '<td class="tick-box"></td>').join('')}
+            </tr>
+        `;
+    }
+
+    // 3. Assemble the final report HTML
+    const contentHtml = `
+        <div class="printable-report">
+            <h3 class="text-center">${fest.name}</h3>
+            <h4 class="text-center text-muted">Registration Sheet: ${categoryName} (${eventType === 'offStage' ? 'Off-Stage':'On-Stage'})</h4>
+            <table class="table table-bordered table-sm mt-4 entry-sheet-table">
+                <thead>
+                    <tr>
+                        <th style="width: 5%;">Sl.No.</th>
+                        <th style="width: 8%;">Chest No.</th>
+                        <th>Name</th>
+                        <th style="width: 10%;">Class</th>
+                        ${eventsInCategory.map(e => `<th class="vertical-header"><div>${e.name}</div></th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody>
+                    ${emptyRowsHtml}
+                </tbody>
+            </table>
+            <div class="report-footer">
+                <p>Official's Signature: _________________________</p>
+            </div>
+        </div>
+    `;
+    
+    // 4. Define the CSS and call the print utility
+    const extraCss = `
+        .entry-sheet-table { font-size: 9pt; border-collapse: collapse; width: 100%; }
+        .entry-sheet-table th, .entry-sheet-table td { border: 1px solid #dee2e6; }
+        .vertical-header { height: 180px; white-space: nowrap; text-align: left; vertical-align: bottom; position: relative; padding-left: 5px; }
+        .vertical-header div { transform: rotate(-90deg); position: absolute; left: 10px; bottom: 8px; transform-origin: 0 100%; width: 170px; overflow: hidden; text-overflow: ellipsis; }
+        .tick-box { width: 35px; text-align: center; }
+        .entry-cell { height: 25px; } /* Space for handwriting */
+        .report-footer { margin-top: 40px; text-align: right; font-size: 10pt; }
+    `;
+
+    printReport({ 
+        contentHtml, 
+        title: `Registration_Sheet_${categoryName}_${eventType}`, 
+        extraCss, 
+        landscape: true 
+    });
+}
+
+
+
+
+
+
+
+/**
+ * Generates the HTML for the result sheet, adapting for solo or group events.
+ * @param {string} festId The ID of the fest.
+ * @param {string} eventId The ID of the event.
+ * @returns {string|null} The HTML string for the report, or null if no data.
+ */
+function generateEventResultSheetHTML(festId, eventId) {
+    const fest = fests.find(f => f.id === festId);
+    const event = festEvents.find(e => e.id === eventId);
+    if (!event) return null;
+
+    const participants = festRegistrations.filter(r => r.festId === festId && r.events.includes(eventId));
+
+    if (participants.length === 0) {
+        showAlert(`No participants are registered for the event: ${event.name}.`, 'info');
+        return null;
+    }
+
+    let tableBodyHtml = '';
+
+    // --- SMART LAYOUT LOGIC ---
+    if (event.isGroupEvent) {
+        // --- RENDER FOR GROUP EVENT ---
+        const participantsByGroup = participants.reduce((acc, reg) => {
+            const group = festGroups.find(g => g.festId === festId && g.members.includes(reg.studentId));
+            const groupId = group ? group.id : `INDIVIDUAL_${reg.studentId}`; // Fallback for individuals in a group event
+            const groupName = group ? group.name : `${reg.studentName} (Individual)`;
+
+            if (!acc[groupId]) {
+                acc[groupId] = { name: groupName, houseId: reg.houseId, members: [] };
+            }
+            acc[groupId].members.push(reg);
+            return acc;
+        }, {});
+
+        Object.values(participantsByGroup).forEach(group => {
+            const house = festHouses.find(h => h.id === group.houseId);
+            const memberList = group.members.map(mem => `<li>${mem.studentName} (${mem.chestNo || 'N/A'})</li>`).join('');
+            tableBodyHtml += `
+                <tr>
+                    <td>
+                        <strong>${group.name}</strong>
+                        <ul class="group-members text-muted">${memberList}</ul>
+                    </td>
+                    <td>${house?.name || ''}</td>
+                    <td class="entry-cell"></td>
+                    <td class="entry-cell"></td>
+                </tr>
+            `;
+        });
+
+    } else {
+        // --- RENDER FOR SOLO EVENT ---
+        participants.sort((a, b) => (a.chestNo || a.studentName).toString().localeCompare((b.chestNo || b.studentName).toString(), undefined, { numeric: true }));
+        
+        participants.forEach(reg => {
+            const house = festHouses.find(h => h.id === reg.houseId);
+            tableBodyHtml += `
+                <tr>
+                    <td>${reg.chestNo || 'N/A'}</td>
+                    <td>${reg.studentName}</td>
+                    <td>${house?.name || ''}</td>
+                    <td class="entry-cell"></td>
+                    <td class="entry-cell"></td>
+                </tr>`;
+        });
+    }
+
+    // Add a few extra blank rows for write-ins
+    const blankRows = Array(3).fill(`<tr><td class="entry-cell" colspan="${event.isGroupEvent ? 2 : 3}"></td><td class="entry-cell"></td><td class="entry-cell"></td></tr>`).join('');
+
+    return `
+        <div class="printable-report">
+            <h3 class="text-center">${fest?.name || ''}</h3>
+            <h4 class="text-center text-muted">Result Sheet: ${event.name} (${event.category})</h4>
+            
+            <table class="table table-bordered mt-4 result-sheet-table">
+                <thead class="table-light">
+                    <tr>
+                        ${event.isGroupEvent 
+                            ? `<th style="width:50%">Group / Participants</th>`
+                            : `<th style="width:10%">Chest No.</th><th style="width:40%">Name</th>`
+                        }
+                        <th style="width:15%">House</th>
+                        <th style="width:10%">Score</th>
+                        <th style="width:25%">Remarks</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${tableBodyHtml}
+                    ${blankRows}
+                </tbody>
+            </table>
+
+            <div class="report-footer">
+                <p>Judge 1 Signature: _________________________</p>
+                <p>Judge 2 Signature: _________________________</p>
+            </div>
+        </div>
+    `;
+}
 // -------------------------------------------------------------------------
 // --- 8. GLOBAL HELPER & UTILITY FUNCTIONS ---
 // -------------------------------------------------------------------------
@@ -19949,12 +20524,12 @@ function calculateFinalResults(festId) {
     return { housePoints, eventBreakdown };
 }
 function getStudentAgeCategory(studentDob) {
-    if (!studentDob || !festSettings.ageCategories || festSettings.ageCategories.length === 0) {
+    if (!studentDob || !managingFest.ageCategories || managingFest.ageCategories.length === 0) {
         return 'General';
     }
     const dob = new Date(studentDob);
     // The categories should already be sorted from youngest to oldest (latest bornAfterDate to earliest)
-    const sortedCategories = festSettings.ageCategories;
+    const sortedCategories = managingFest.ageCategories;
 
     for (const category of sortedCategories) {
         if (dob >= new Date(category.bornAfterDate)) {
