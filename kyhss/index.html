@@ -677,24 +677,6 @@ async function getData(storeName, idOrQueryObj = null) {
             let localDoc = await store.get(docId);
 
             if (localDoc) return localDoc;
-
-            if (navigator.onLine) {
-                try {
-                    // const docSnap = await getDoc(getDocRef(storeName, docId));
-                    // if (docSnap.exists()) {
-                    //     const firestoreDoc = { id: docSnap.id, ...docSnap.data() };
-                    //     await store.put(firestoreDoc);
-                    //     return firestoreDoc;
-                   // }
-                    attachDataListeners([storeName]);
-
-                } catch (err) {
-                    console.warn(`Firestore fetch failed for ${docId}`, err);
-                }
-            }
-
-            // Not found — better to return null instead of all docs
-            return null;
         }
 
         // --- PATH 2: Query data from cache ---
@@ -1251,8 +1233,8 @@ async function attachDataListeners(collectionsToWatch, main = false) {
         }
 
         let queriesToExecuteForCollection = [];
-        const collectionsWithSingleDivisionField = ['students', 'examSchedules', 'syllabusCompletion', 'studentFeeSetups'];
-        const collectionsWithDivisionArrayField = ['chapters', 'syllabuses'];
+        const collectionsWithSingleDivisionField = ['students','syllabusCompletion', 'studentFeeSetups'];
+        const collectionsWithDivisionArrayField = ['chapters','syllabuses'];
 
         if (currentUserRole === 'teacher' && (collectionsWithSingleDivisionField.includes(name) || collectionsWithDivisionArrayField.includes(name))) {
             if (teacherAssignedClasses.length > 0) {
@@ -6157,7 +6139,7 @@ function displayConsolidatedTimetable(examId, division) {
 // --- RESULTS TAB OVERHAUL ---
 
 async function renderResultsTab() {
-  // await syncMarksDataForUser();
+  //await syncMarksDataForUser();
     const container = document.getElementById('results');
     container.innerHTML = `
         <div class="d-flex justify-content-end align-items-center p-3 bg-light border rounded mb-3">
@@ -9128,6 +9110,123 @@ window.renderSyllabusTracker = () => {
 // Helper Functions
 // No changes needed here.
 // =================================================================================
+// NEW: Centralized modal setup for marking completion details
+function setupCompletionModal() {
+    if (document.getElementById('completionModal')) return;
+    const modal = document.createElement('div');
+    modal.innerHTML = `
+    <div class="modal fade" id="completionModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title">Edit Completion Details</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <form id="completion-form">
+                        <input type="hidden" id="modal-info-class-id"><input type="hidden" id="modal-info-division"><input type="hidden" id="modal-info-subject-id"><input type="hidden" id="modal-info-chapter-no"><input type="hidden" id="modal-info-topic">
+                        <div class="mb-3"><label class="form-label">Completion Date</label><input type="date" id="completion-date" class="form-control" required></div>
+                        <div class="mb-3"><label class="form-label">Periods Taken</label><input type="number" id="completion-periods" class="form-control" min="1" required></div>
+                        <div class="mb-3"><label class="form-label">Remarks</label><textarea id="completion-remarks" class="form-control"></textarea></div>
+                    </form>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button><button type="button" class="btn btn-primary" id="save-completion-btn">Save Details</button></div>
+            </div>
+        </div>
+    </div>`;
+    document.body.appendChild(modal);
+    completionModalInstance = new bootstrap.Modal(document.getElementById('completionModal'));
+
+    document.getElementById('save-completion-btn').addEventListener('click', async () => {
+        const classId = document.getElementById('modal-info-class-id').value;
+        const division = document.getElementById('modal-info-division').value;
+        const subjectId = document.getElementById('modal-info-subject-id').value;
+        const chapterNo = document.getElementById('modal-info-chapter-no').value;
+        const topic = document.getElementById('modal-info-topic').value;
+        const date = document.getElementById('completion-date').value;
+        const periods = document.getElementById('completion-periods').value;
+        const remarks = document.getElementById('completion-remarks').value;
+
+        if (date && periods) {
+            const completionId = `${classId}_${division}_${subjectId}_${chapterNo}_${topic.replace(/\s+/g, '-')}`;
+            await setDoc(getDocRef('syllabusCompletion', completionId), {
+                id: completionId, classId, division, subjectId, chapterNo, topic, date, periods: parseInt(periods), remarks,
+                teacherId: selectedUser.id, teacherName: selectedUser.name
+            });
+            showAlert('Completion details saved!', 'success');
+            completionModalInstance.hide();
+            document.getElementById('comp-subject').dispatchEvent(new Event('change')); // Refresh view
+        } else {
+            showAlert('Please fill all fields.', 'danger');
+        }
+    });
+}
+
+// NEW: Modal for adding remarks for pending weekly topics
+function setupRemarksModal() {
+     if (document.getElementById('remarksModal')) return;
+     const modal = document.createElement('div');
+     modal.innerHTML = `
+     <div class="modal fade" id="remarksModal" tabindex="-1">
+         <div class="modal-dialog">
+             <div class="modal-content">
+                 <div class="modal-header"><h5 class="modal-title">Weekly Remarks</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                 <div class="modal-body">
+                     <p class="text-muted small">Add a reason why some topics for this week are still pending. This will be visible in reports.</p>
+                     <form id="remarks-form">
+                         <input type="hidden" id="remarks-week-id">
+                         <div class="mb-3"><label class="form-label">Remarks</label><textarea id="weekly-remarks-text" class="form-control" rows="4" required></textarea></div>
+                     </form>
+                 </div>
+                 <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button><button type="button" class="btn btn-primary" id="save-remarks-btn">Save Remarks</button></div>
+             </div>
+         </div>
+     </div>`;
+     document.body.appendChild(modal);
+     remarksModalInstance = new bootstrap.Modal(document.getElementById('remarksModal'));
+
+     document.getElementById('save-remarks-btn').addEventListener('click', async () => {
+         const weekId = document.getElementById('remarks-week-id').value;
+         const remarks = document.getElementById('weekly-remarks-text').value;
+         if (remarks && weekId) {
+             await setDoc(getDocRef('weeklyRemarks', weekId), { id: weekId, remarks, teacherId: selectedUser.id, teacherName: selectedUser.name });
+             showAlert('Weekly remarks saved!', 'success');
+             await loadSyllabusData(); // Reload remarks data
+             remarksModalInstance.hide();
+             document.getElementById('comp-subject').dispatchEvent(new Event('change')); // Refresh view
+         } else {
+             showAlert('Please provide the remarks.', 'danger');
+         }
+     });
+}
+
+// REFACTORED: `handleTopicCompletion` now manages checkbox state and opens a modal only for editing existing completions.
+window.handleTopicCompletion = async (checkbox, classId, division, subjectId, chapterNo, topic) => {
+    const completionId = `${classId}_${division}_${subjectId}_${chapterNo}_${topic.replace(/\s+/g, '-')}`;
+    const editBtn = checkbox.closest('.list-group-item').querySelector('.edit-completion-btn');
+
+    if (checkbox.checked) {
+        // Mark as complete
+        await setDoc(getDocRef('syllabusCompletion', completionId), {
+            id: completionId, classId, division, subjectId, chapterNo, topic,
+            date: new Date().toISOString().slice(0, 10), // Default to today
+            periods: 1, // Default to 1 period
+            remarks: "",
+            teacherId: selectedUser.id, teacherName: selectedUser.name
+        });
+        editBtn.style.display = 'inline-block'; // Show edit button
+        showAlert('Topic marked as complete.', 'info');
+    } else {
+        // Revert completion
+        if (confirm("Are you sure you want to mark this topic as pending?")) {
+            await deleteDoc(getDocRef('syllabusCompletion', completionId));
+            editBtn.style.display = 'none'; // Hide edit button
+            showAlert('Topic reverted to pending.', 'success');
+        } else {
+            checkbox.checked = true; // Revert checkbox if user cancels
+        }
+    }
+    await loadSyllabusData(); // Reload completion data
+};
+
+
 window.openCompletionModal = (classId, subjectId, chapterNo, topic) => {
     document.getElementById('completion-form').reset();
     document.getElementById('completion-syllabus-id').value = `${classId}_${subjectId}_${chapterNo}`;
@@ -17810,22 +17909,85 @@ function renderFestSetupTab() {
     attachSetupTabListeners();
 }
 
+/**
+ * Renders the fest-specific settings form with type-based limits for student and house participation.
+ */
 function renderFestSpecificSettings(settings) {
     const wrapper = document.getElementById('fest-settings-wrapper');
     if (!wrapper) return;
-    const categoryRows = settings.categories?.map(cat => `
+
+    // Default values for all settings to prevent errors if they are not yet saved.
+    const defaults = {
+        maxOnStageSoloEvents: 2, maxOnStageGroupEvents: 2,
+        maxOffStageSoloEvents: 1, maxOffStageGroupEvents: 1,
+        houseEventLimits: {
+            onStage: { solo: 2, group: 1 },
+            offStage: { solo: 2, group: 1 }
+        },
+        categories: []
+    };
+    const s = { ...defaults, ...settings, houseEventLimits: { ...defaults.houseEventLimits, ...settings.houseEventLimits } };
+    s.houseEventLimits.onStage = { ...defaults.houseEventLimits.onStage, ...settings.houseEventLimits?.onStage };
+    s.houseEventLimits.offStage = { ...defaults.houseEventLimits.offStage, ...settings.houseEventLimits?.offStage };
+
+
+    const categoryRows = s.categories?.map(cat => `
         <tr data-name="${cat.name}" data-type="${cat.type}" data-criteria="${cat.type === 'age' ? cat.criteria : cat.criteria.join(',') }">
             <td>${cat.name}</td><td><span class="badge bg-info">${cat.type === 'age' ? 'Age-wise' : 'Class-wise'}</span></td>
             <td>${cat.type === 'age' ? `Born after ${cat.criteria}`: cat.criteria.map(cid => classes.find(c => c.id === cid)?.name || 'Unknown').join(', ')}</td>
             <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger py-0 px-2 remove-cat-row-btn">&times;</button></td>
         </tr>`).join('') || '';
+
+    // EDIT: The HTML is completely restructured for type-based limits.
     wrapper.innerHTML = `
         <h5 class="section-header"><i class="fas fa-cogs me-2"></i>Settings for: <span class="text-primary">${state.managingFest.name}</span></h5>
-        <div class="row">
-            <div class="col-md-4 mb-3"><label class="form-label">Max Events per Student</label><input type="number" id="max-events" class="form-control" value="${settings.maxEventsPerStudent || 3}"></div>
-            <div class="col-md-4 mb-3"><label class="form-label">Max Solo per House/Event</label><input type="number" id="limit-solo" class="form-control" value="${settings.houseEventLimits?.solo || 2}"></div>
-            <div class="col-md-4 mb-3"><label class="form-label">Max Group per House/Event</label><input type="number" id="limit-group" class="form-control" value="${settings.houseEventLimits?.group || 1}"></div>
-        </div><hr>
+        
+        <!-- Student Registration Limits -->
+        <div class="card card-body mb-3">
+            <label class="form-label fw-bold">Student Registration Limits</label>
+            <p class="small text-muted">Max number of events a single student can participate in.</p>
+            <div class="row">
+                <div class="col-md-6 border-end">
+                    <label class="form-label small fw-bold text-primary">On-Stage</label>
+                    <div class="row g-2">
+                        <div class="col"><label class="form-label small">Solo Events</label><input type="number" id="max-onstage-solo" class="form-control form-control-sm" value="${s.maxOnStageSoloEvents}"></div>
+                        <div class="col"><label class="form-label small">Group Events</label><input type="number" id="max-onstage-group" class="form-control form-control-sm" value="${s.maxOnStageGroupEvents}"></div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold text-primary">Off-Stage</label>
+                    <div class="row g-2">
+                        <div class="col"><label class="form-label small">Solo Events</label><input type="number" id="max-offstage-solo" class="form-control form-control-sm" value="${s.maxOffStageSoloEvents}"></div>
+                        <div class="col"><label class="form-label small">Group Events</label><input type="number" id="max-offstage-group" class="form-control form-control-sm" value="${s.maxOffStageGroupEvents}"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- House Participation Limits -->
+        <div class="card card-body mb-3">
+            <label class="form-label fw-bold">House Participation Limits</label>
+            <p class="small text-muted">Max number of participants a House can field for any single event.</p>
+            <div class="row">
+                <div class="col-md-6 border-end">
+                    <label class="form-label small fw-bold text-primary">On-Stage</label>
+                    <div class="row g-2">
+                        <div class="col"><label class="form-label small">Solo Participants</label><input type="number" id="limit-onstage-solo-house" class="form-control form-control-sm" value="${s.houseEventLimits.onStage.solo}"></div>
+                        <div class="col"><label class="form-label small">Group Participants</label><input type="number" id="limit-onstage-group-house" class="form-control form-control-sm" value="${s.houseEventLimits.onStage.group}"></div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold text-primary">Off-Stage</label>
+                    <div class="row g-2">
+                        <div class="col"><label class="form-label small">Solo Participants</label><input type="number" id="limit-offstage-solo-house" class="form-control form-control-sm" value="${s.houseEventLimits.offStage.solo}"></div>
+                        <div class="col"><label class="form-label small">Group Participants</label><input type="number" id="limit-offstage-group-house" class="form-control form-control-sm" value="${s.houseEventLimits.offStage.group}"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <hr>
+
+        <!-- Category Management (Unchanged) -->
         <label class="form-label fw-bold">Categories for this Fest</label>
         <div class="table-responsive"><table id="category-table" class="table table-sm"><thead><tr><th>Name</th><th>Type</th><th>Criteria</th><th></th></tr></thead><tbody>${categoryRows}</tbody></table></div>
         <button type="button" id="add-category-btn" class="btn btn-sm btn-outline-secondary mt-2"><i class="fas fa-plus me-1"></i>Add Category</button>
@@ -17838,6 +18000,55 @@ function renderFestSpecificSettings(settings) {
             </div>
         </div>
         <div class="text-end mt-4"><button id="save-fest-settings" class="btn btn-success" onclick="saveAllFestSettings()">Save Settings for ${state.managingFest.name}</button></div>`;
+}
+
+/**
+ * Saves all fest-specific settings from the form to Firestore.
+ */
+async function saveAllFestSettings() {
+    if (!state.managingFest) return;
+
+    // EDIT: The newSettings object is now built from all the new, granular input fields.
+    const newSettings = {
+        // Student Registration Limits
+        maxOnStageSoloEvents: parseInt(document.getElementById('max-onstage-solo').value) || 0,
+        maxOnStageGroupEvents: parseInt(document.getElementById('max-onstage-group').value) || 0,
+        maxOffStageSoloEvents: parseInt(document.getElementById('max-offstage-solo').value) || 0,
+        maxOffStageGroupEvents: parseInt(document.getElementById('max-offstage-group').value) || 0,
+
+        // House Participation Limits
+        houseEventLimits: {
+            onStage: {
+                solo: parseInt(document.getElementById('limit-onstage-solo-house').value) || 0,
+                group: parseInt(document.getElementById('limit-onstage-group-house').value) || 0,
+            },
+            offStage: {
+                solo: parseInt(document.getElementById('limit-offstage-solo-house').value) || 0,
+                group: parseInt(document.getElementById('limit-offstage-group-house').value) || 0,
+            }
+        },
+
+        // Category mapping logic remains the same
+        categories: Array.from(document.querySelectorAll('#category-table tbody tr')).map(row => ({
+            name: row.dataset.name,
+            type: row.dataset.type,
+            criteria: row.dataset.type === 'age' ? row.dataset.criteria : row.dataset.criteria.split(','),
+        })),
+    };
+
+    try {
+        const festRef = getDocRef('fests', state.managingFest.id);
+        // The new, detailed settings object is saved under the 'settings' field in the fest document.
+        await updateDoc(festRef, { settings: newSettings });
+
+        showAlert(`Settings for '${state.managingFest.name}' saved successfully.`, 'success');
+        
+        // Update the local state to match what was saved.
+        state.managingFest.settings = newSettings;
+    } catch (error) {
+        console.error("Error saving fest settings:", error);
+        showAlert('Failed to save settings.', 'danger');
+    }
 }
 
 function renderHousesList() {
@@ -18066,30 +18277,6 @@ function attachSetupTabListeners() {
     });
 }
 
-async function saveAllFestSettings() {
-    if (!state.managingFest) return;
-    const newSettings = {
-        maxEventsPerStudent: parseInt(document.getElementById('max-events').value) || 3,
-        houseEventLimits: {
-            solo: parseInt(document.getElementById('limit-solo').value) || 2,
-            group: parseInt(document.getElementById('limit-group').value) || 1,
-        },
-        categories: Array.from(document.querySelectorAll('#category-table tbody tr')).map(row => ({
-            name: row.dataset.name,
-            type: row.dataset.type,
-            criteria: row.dataset.type === 'age' ? row.dataset.criteria : row.dataset.criteria.split(','),
-        })),
-    };
-    try {
-        const festRef = getDocRef('fests', state.managingFest.id);
-        await updateDoc(festRef, { settings: newSettings });
-        showAlert(`Settings for '${state.managingFest.name}' saved successfully.`, 'success');
-        state.managingFest.settings = newSettings;
-    } catch (error) {
-        console.error("Error saving fest settings:", error);
-        showAlert('Failed to save settings.', 'danger');
-    }
-}
 
 // -------------------------------------------------------------------------
 // --- 4. EVENTS TAB ---
@@ -18246,17 +18433,61 @@ function attachEventsTabListeners() {
 }
 
 /**
- * Renders the list of events, now grouped and displayed under their respective categories.
+ * Renders the list of events with filters, grouped by category.
  */
 function renderEventsList() {
     const container = document.getElementById('events-list');
     if (!container || !state.managingFest) return;
 
-    const eventsForFest = festEvents.filter(e => e.festId === state.managingFest.id);
+    // --- EDIT: Get current filter values from the UI ---
+    const selectedCategory = document.getElementById('event-category-filter')?.value || 'all';
+    const selectedType = document.getElementById('event-type-filter')?.value || 'all';
 
-    // 1. Group events by their assigned category.
+    // --- EDIT: Initial filtering based on fest, then by selected type and category ---
+    let eventsForFest = festEvents.filter(e => e.festId === state.managingFest.id);
+
+    if (selectedType !== 'all') {
+        eventsForFest = eventsForFest.filter(e => {
+            // Treat events with undefined type as 'onStage'
+            const eventType = e.type || 'onStage';
+            return eventType === selectedType;
+        });
+    }
+    if (selectedCategory !== 'all') {
+        eventsForFest = eventsForFest.filter(e => e.category === selectedCategory);
+    }
+    
+    // --- EDIT: Get unique categories from the ORIGINAL unfiltered list to populate the dropdown ---
+    const allCategoriesForFest = [...new Set(festEvents.filter(e => e.festId === state.managingFest.id).map(e => e.category))].sort();
+    const categoryOptions = allCategoriesForFest.map(c => `<option value="${c}" ${selectedCategory === c ? 'selected' : ''}>${c}</option>`).join('');
+
+    // --- EDIT: New HTML structure including filters and a scrollable container ---
+    container.innerHTML = `
+        <div class="row g-2 mb-3 border-bottom pb-3">
+            <div class="col-md-4">
+                <label for="event-category-filter" class="form-label">Filter by Category</label>
+                <select id="event-category-filter" class="form-select">
+                    <option value="all">All Categories</option>
+                    ${categoryOptions}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label for="event-type-filter" class="form-label">Filter by Type</label>
+                <select id="event-type-filter" class="form-select">
+                    <option value="all" ${selectedType === 'all' ? 'selected' : ''}>All Types</option>
+                    <option value="onStage" ${selectedType === 'onStage' ? 'selected' : ''}>On-Stage</option>
+                    <option value="offStage" ${selectedType === 'offStage' ? 'selected' : ''}>Off-Stage</option>
+                </select>
+            </div>
+        </div>
+        <div id="events-list-container" style="max-height: 65vh; overflow-y: auto;">
+            </div>
+    `;
+
+    const listContainer = document.getElementById('events-list-container');
+
+    // 1. Group the *filtered* events by their assigned category.
     const eventsByCategory = eventsForFest.reduce((acc, event) => {
-        // The event object has a single 'category' string field.
         const category = event.category;
         if (!acc[category]) {
             acc[category] = [];
@@ -18268,59 +18499,64 @@ function renderEventsList() {
     const sortedCategories = Object.keys(eventsByCategory).sort();
 
     if (sortedCategories.length === 0) {
-        container.innerHTML = '<p class="text-muted text-center p-5">No events created for this fest yet.</p>';
-        return;
+        listContainer.innerHTML = '<p class="text-muted text-center p-5">No events match the selected filters.</p>';
+    } else {
+        // 2. Build the HTML by looping through each category.
+        let html = '';
+        sortedCategories.forEach(category => {
+            const eventsInThisCategory = eventsByCategory[category].sort((a, b) => a.name.localeCompare(b.name));
+
+            html += `
+                <h6 class="text-primary mt-4">${category}</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Event Name</th>
+                                <th>Type</th>
+                                <th>Mode</th>
+                                <th>Status</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${eventsInThisCategory.map(event => {
+                                const resultsExist = festResults.some(r => r.eventId === event.id);
+                                const statusBadge = resultsExist 
+                                    ? `<span class="badge bg-success">Results Entered</span>` 
+                                    : `<span class="badge bg-warning text-dark">Results Pending</span>`;
+                                
+                                // EDIT: Display 'On-Stage' or 'Off-Stage'. Default to 'On-Stage' if type is not set.
+                                const eventTypeDisplay = (event.type === 'offStage' ? 'Off-Stage' : 'On-Stage');
+
+                                return `
+                                <tr>
+                                    <td><strong>${event.name}</strong></td>
+                                    <td>${eventTypeDisplay}</td>
+                                    <td><span class="badge bg-info">${event.isGroupEvent ? 'Group' : 'Solo'}</span></td>
+                                    <td>${statusBadge}</td>
+                                    <td class="text-end">
+                                        <button class="btn btn-sm btn-outline-primary py-0 px-1 me-1" onclick="window.editEventGroup('${event.id}')" title="Edit Event">
+                                            <i class="fas fa-edit fa-xs"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="window.deleteEventGroup('festEvents', '${event.id}')" title="Delete Event">
+                                            <i class="fas fa-trash fa-xs"></i>
+                                        </button>
+                                    </td>
+                                </tr>`;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        });
+        listContainer.innerHTML = html;
     }
 
-    // 2. Build the HTML by looping through each category.
-    let html = '';
-    sortedCategories.forEach(category => {
-        const eventsInThisCategory = eventsByCategory[category].sort((a, b) => a.name.localeCompare(b.name));
-
-        html += `
-            <h6 class="text-primary mt-4">Category: ${category}</h6>
-            <div class="table-responsive">
-                <table class="table table-sm table-hover">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Event Name</th>
-                            <th>Type</th>
-                            <th>Status</th>
-                            <th class="text-end">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${eventsInThisCategory.map(event => {
-                            // Check if results exist for this specific event ID.
-                            const resultsExist = festResults.some(r => r.eventId === event.id);
-                            const statusBadge = resultsExist 
-                                ? `<span class="badge bg-success">Results Entered</span>` 
-                                : `<span class="badge bg-warning text-dark">Results Pending</span>`;
-
-                            return `
-                            <tr>
-                                <td><strong>${event.name}</strong></td>
-                                <td><span class="badge bg-info">${event.isGroupEvent ? 'Group' : 'Solo'}</span></td>
-                                <td>${statusBadge}</td>
-                                <td class="text-end">
-                                    <button class="btn btn-sm btn-outline-primary py-0 px-1 me-1" onclick="window.editEventGroup('${event.id}')" title="Edit Group">
-                                        <i class="fas fa-edit fa-xs"></i>
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="window.deleteEventGroup('festEvents', '${event.id}')" title="Delete Group">
-                                        <i class="fas fa-trash fa-xs"></i>
-                                    </button>
-                                </td>
-                            </tr>`;
-                        }).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
-    });
-
-    container.innerHTML = html;
+    // --- EDIT: Add event listeners to the filters to re-render the list on change ---
+    document.getElementById('event-category-filter').addEventListener('change', renderEventsList);
+    document.getElementById('event-type-filter').addEventListener('change', renderEventsList);
 }
-
 
 // --- 4. UPDATED HELPER & DELETE FUNCTIONS ---
 
@@ -18636,7 +18872,7 @@ async function handleStudentLookup(inputElement) {
 
 
 /**
- * Opens a modal to select events for a student in a specific table row.
+ * Opens a modal to select events, with type/mode-based limits and a detailed counter.
  * @param {HTMLElement} row The table row (<tr>) element.
  */
 function openEventSelectionModal(row) {
@@ -18644,59 +18880,161 @@ function openEventSelectionModal(row) {
     if (!studentId) return showAlert('Please find a valid student first by entering their Admission No.', 'warning');
     
     const student = students.find(s => s.id === studentId);
-    const festId = state.managingFest.id;//document.getElementById('bulk-reg-fest-filter').value;
+    const festId = state.managingFest.id;
     const studentCategory = getStudentCategory(student);
-    const maxEvents = festSettings.maxEventsPerStudent || 3;
     const currentlySelected = row.dataset.events ? row.dataset.events.split(',') : [];
 
-    const availableEvents = festEvents.filter(e => e.festId === festId && (e.category === 'General' || e.category === studentCategory));
+    // EDIT: Get granular limits for Solo/Group events based on their type.
+    const maxOnStageSolo = festSettings.maxOnStageSoloEvents || 2;
+    const maxOnStageGroup = festSettings.maxOnStageGroupEvents || 2;
+    const maxOffStageSolo = festSettings.maxOffStageSoloEvents || 1;
+    const maxOffStageGroup = festSettings.maxOffStageGroupEvents || 1;
+
+    const onStageEvents = festEvents.filter(e => e.festId === festId && (e.category === 'General' || e.category === studentCategory) && e.type !== 'offStage');
+    const offStageEvents = festEvents.filter(e => e.festId === festId && (e.category === 'General' || e.category === studentCategory) && e.type === 'offStage');
 
     const modalTitle = document.getElementById('event-modal-title');
     const modalBody = document.getElementById('event-modal-body');
     const saveBtn = document.getElementById('event-modal-save-btn');
     
     modalTitle.textContent = `Select Events for ${student.name}`;
+
+    // EDIT: Updated modal HTML to show student's house, granular limits, and a new selection counter.
     modalBody.innerHTML = `
-        <p><strong>Category:</strong> <span class="badge bg-info">${studentCategory}</span> | <strong>Max Events:</strong> ${maxEvents}</p>
-        <div class="row g-3" style="max-height: 400px; overflow-y: auto;">
-            ${availableEvents.map(event => `
-                <div class="col-md-6">
-                    <div class="form-check">
-                        <input class="form-check-input event-modal-checkbox" type="checkbox" value="${event.id}" ${currentlySelected.includes(event.id) ? 'checked' : ''}>
-                        <label class="form-check-label">${event.name}(${event.category})</label>
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <p class="mb-0">
+                    <strong>Category:</strong> <span class="badge bg-info">${studentCategory}</span> | 
+                    <strong>House:</strong> <span class="badge bg-primary">${student.house || 'N/A'}</span>
+                </p>
+            </div>
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="event-type-toggle">
+                <label class="form-check-label" for="event-type-toggle" id="event-type-label">On-Stage Events</label>
+            </div>
+        </div>
+        <p class="mb-2"><small>Limits: On-Stage (Solo: ${maxOnStageSolo}, Group: ${maxOnStageGroup}) | Off-Stage (Solo: ${maxOffStageSolo}, Group: ${maxOffStageGroup})</small></p>
+        
+        <div id="selection-summary" class="mb-2">
+            <strong>Selected: </strong>
+            <span id="selection-count-display" class="badge rounded-pill bg-dark" data-bs-toggle="tooltip" data-bs-placement="top" title="No events selected">
+                0 On-Stage, 0 Off-Stage
+            </span>
+        </div>
+        <hr class="my-2">
+        
+        <div style="max-height: 400px; overflow-y: auto;">
+            <div id="onstage-events-container" class="row g-3">
+                ${onStageEvents.map(event => `
+                    <div class="col-md-6">
+                        <div class="form-check">
+                            <input class="form-check-input event-modal-checkbox" data-event-type="onStage" data-event-mode="${event.isGroupEvent ? 'group' : 'solo'}" type="checkbox" value="${event.id}" ${currentlySelected.includes(event.id) ? 'checked' : ''}>
+                            <label class="form-check-label">${event.name} (${event.isGroupEvent ? 'Group' : 'Solo'})</label>
+                        </div>
                     </div>
-                </div>
-            `).join('')}
+                `).join('') || '<p class="text-muted p-3">No On-Stage events available.</p>'}
+            </div>
+            <div id="offstage-events-container" class="row g-3" style="display: none;">
+                ${offStageEvents.map(event => `
+                    <div class="col-md-6">
+                        <div class="form-check">
+                            <input class="form-check-input event-modal-checkbox" data-event-type="offStage" data-event-mode="${event.isGroupEvent ? 'group' : 'solo'}" type="checkbox" value="${event.id}" ${currentlySelected.includes(event.id) ? 'checked' : ''}>
+                            <label class="form-check-label">${event.name} (${event.isGroupEvent ? 'Group' : 'Solo'})</label>
+                        </div>
+                    </div>
+                `).join('') || '<p class="text-muted p-3">No Off-Stage events available.</p>'}
+            </div>
         </div>
     `;
 
-    // Logic to disable checkboxes if max limit is reached
-    const checkboxes = modalBody.querySelectorAll('.event-modal-checkbox');
-    const checkLimit = () => {
-        const checkedCount = modalBody.querySelectorAll('.event-modal-checkbox:checked').length;
-        if (checkedCount >= maxEvents) {
-            checkboxes.forEach(cb => { if (!cb.checked) cb.disabled = true; });
+    const toggle = document.getElementById('event-type-toggle');
+    const toggleLabel = document.getElementById('event-type-label');
+    const onStageContainer = document.getElementById('onstage-events-container');
+    const offStageContainer = document.getElementById('offstage-events-container');
+
+    toggle.addEventListener('change', () => {
+        if (toggle.checked) {
+            toggleLabel.textContent = 'Off-Stage Events';
+            onStageContainer.style.display = 'none';
+            offStageContainer.style.display = 'flex';
         } else {
-            checkboxes.forEach(cb => cb.disabled = false);
+            toggleLabel.textContent = 'On-Stage Events';
+            onStageContainer.style.display = 'flex';
+            offStageContainer.style.display = 'none';
         }
+    });
+
+    const checkboxes = modalBody.querySelectorAll('.event-modal-checkbox');
+    const countDisplay = document.getElementById('selection-count-display');
+    const countTooltip = new bootstrap.Tooltip(countDisplay);
+
+    // EDIT: New function to update the counter and its tooltip.
+    const updateSelectionCount = () => {
+        const checkedBoxes = modalBody.querySelectorAll('.event-modal-checkbox:checked');
+        let onStageCount = 0;
+        let offStageCount = 0;
+        const selectedEventNames = [];
+
+        checkedBoxes.forEach(cb => {
+            if (cb.dataset.eventType === 'onStage') onStageCount++;
+            if (cb.dataset.eventType === 'offStage') offStageCount++;
+            const event = festEvents.find(e => e.id === cb.value);
+            if (event) selectedEventNames.push(event.name);
+        });
+
+        countDisplay.textContent = `${onStageCount} On-Stage, ${offStageCount} Off-Stage`;
+        
+        // Update tooltip content
+        const tooltipTitle = selectedEventNames.length > 0 ? selectedEventNames.join(', ') : 'No events selected';
+        countDisplay.setAttribute('data-bs-original-title', tooltipTitle);
+        countTooltip.setContent({ '.tooltip-inner': tooltipTitle });
+    };
+
+    // EDIT: Overhauled logic to handle four separate limits.
+    const checkLimit = () => {
+        const counts = {
+            onStage: { solo: 0, group: 0 },
+            offStage: { solo: 0, group: 0 }
+        };
+
+        checkboxes.forEach(cb => {
+            if (cb.checked) {
+                counts[cb.dataset.eventType][cb.dataset.eventMode]++;
+            }
+        });
+        
+        const limits = {
+            onStage: { solo: maxOnStageSolo, group: maxOnStageGroup },
+            offStage: { solo: maxOffStageSolo, group: maxOffStageGroup }
+        };
+
+        checkboxes.forEach(cb => {
+            if (!cb.checked) {
+                const type = cb.dataset.eventType;
+                const mode = cb.dataset.eventMode;
+                cb.disabled = counts[type][mode] >= limits[type][mode];
+            }
+        });
+        
+        // Update the visual counter after checking limits.
+        updateSelectionCount();
     };
     checkboxes.forEach(cb => cb.addEventListener('change', checkLimit));
-    checkLimit(); // Run on open
+    checkLimit(); // Run on open to set initial state
 
     const eventModal = new bootstrap.Modal(document.getElementById('eventSelectionModal'));
 
-    // Set up the save button to update the table row, NOT save to DB yet.
     saveBtn.onclick = () => {
         const selectedEventIds = Array.from(modalBody.querySelectorAll('.event-modal-checkbox:checked')).map(cb => cb.value);
-       
         const eventBadgesHTML = selectedEventIds.map(id => {
-        const event = festEvents.find(e => e.id === id);
-        return event ? `<span class="badge bg-secondary me-1 mb-1">${event.name}</span>` : '';
-    }).join('') || '<span class="text-muted small">No events selected</span>';
-
-         row.dataset.events = selectedEventIds.join(',');
+            const event = festEvents.find(e => e.id === id);
+            const typeIndicator = event.type === 'offStage' ? ' (Off)' : '';
+            return event ? `<span class="badge bg-secondary me-1 mb-1">${event.name}${typeIndicator}</span>` : '';
+        }).join('') || '<span class="text-muted small">No events selected</span>';
+        
+        row.dataset.events = selectedEventIds.join(',');
         row.querySelector('.event-count').textContent = `${selectedEventIds.length} selected`;
-        row.querySelector('.event-items').textContent = `${eventBadgesHTML} `;
+        row.querySelector('.event-items').innerHTML = eventBadgesHTML;
         eventModal.hide();
     };
 
@@ -20300,12 +20638,11 @@ window.printCategoryRegistrationSheet = () => {
     if (!categoryName) return showAlert('Please select a category first.', 'warning');
 
     // 1. Filter events by category AND the selected event type.
-    //    If eventType is 'onStage', it also includes events where the type is not defined.
-    const eventsInCategory = festEvents.filter(e => 
-        e.festId === festId && 
+    const eventsInCategory = festEvents.filter(e =>
+        e.festId === festId &&
         e.category === categoryName &&
         (e.type === eventType || (eventType === 'onStage' && e.type === undefined))
-    ).sort((a,b) => a.name.localeCompare(b.name));
+    ).sort((a, b) => a.name.localeCompare(b.name));
 
     if (eventsInCategory.length === 0) {
         showAlert(`No '${eventType}' events found for the '${categoryName}' category.`, 'info');
@@ -20314,7 +20651,7 @@ window.printCategoryRegistrationSheet = () => {
 
     // 2. Create 25 empty rows for manual entry
     let emptyRowsHtml = '';
-    for (let i = 1; i <= 25; i++) {
+    for (let i = 1; i <= 35; i++) {
         emptyRowsHtml += `
             <tr>
                 <td>${i}</td>
@@ -20330,14 +20667,14 @@ window.printCategoryRegistrationSheet = () => {
     const contentHtml = `
         <div class="printable-report">
             <h3 class="text-center">${fest.name}</h3>
-            <h4 class="text-center text-muted">Registration Sheet: ${categoryName} (${eventType === 'offStage' ? 'Off-Stage':'On-Stage'})</h4>
+            <h4 class="text-center text-muted">Registration Sheet: ${categoryName} (${eventType === 'offStage' ? 'Off-Stage' : 'On-Stage'})</h4>
             <table class="table table-bordered table-sm mt-4 entry-sheet-table">
                 <thead>
                     <tr>
-                        <th style="width: 5%;">Sl.No.</th>
-                        <th style="width: 8%;">Chest No.</th>
-                        <th>Name</th>
-                        <th style="width: 10%;">Class</th>
+                        <th style="width: 4%;">Sl</th>
+                        <th style="width: 4%;">Ad.No.</th>
+                        <th style="width: 18%;">Name</th>
+                        <th style="width: 5%;">Class</th>
                         ${eventsInCategory.map(e => `<th class="vertical-header"><div>${e.name}</div></th>`).join('')}
                     </tr>
                 </thead>
@@ -20350,23 +20687,39 @@ window.printCategoryRegistrationSheet = () => {
             </div>
         </div>
     `;
-    
+
     // 4. Define the CSS and call the print utility
+    // EDIT: The CSS for .vertical-header and its div has been updated for centering.
     const extraCss = `
         .entry-sheet-table { font-size: 9pt; border-collapse: collapse; width: 100%; }
         .entry-sheet-table th, .entry-sheet-table td { border: 1px solid #dee2e6; }
-        .vertical-header { height: 180px; white-space: nowrap; text-align: left; vertical-align: bottom; position: relative; padding-left: 5px; }
-        .vertical-header div { transform: rotate(-90deg); position: absolute; left: 10px; bottom: 8px; transform-origin: 0 100%; width: 170px; overflow: hidden; text-overflow: ellipsis; }
+        .vertical-header { 
+            height: 180px; 
+            white-space: nowrap; 
+            text-align: center; 
+            vertical-align: middle; 
+            position: relative; 
+        }
+        .vertical-header div { 
+            /* This transform first centers the element, then rotates it */
+            transform: translate(-50%, -50%) rotate(-90deg); 
+            position: absolute; 
+            top: 50%; 
+            left: 50%;
+            width: 170px; /* Should be slightly less than the header height */
+            overflow: hidden; 
+            text-overflow: ellipsis; 
+        }
         .tick-box { width: 35px; text-align: center; }
         .entry-cell { height: 25px; } /* Space for handwriting */
         .report-footer { margin-top: 40px; text-align: right; font-size: 10pt; }
     `;
 
-    printReport({ 
-        contentHtml, 
-        title: `Registration_Sheet_${categoryName}_${eventType}`, 
-        extraCss, 
-        landscape: true 
+    printReport({
+        contentHtml,
+        title: `Registration_Sheet_${categoryName}_${eventType}`,
+        extraCss,
+        pageSize: 'A4 landscape'
     });
 }
 
@@ -27408,3 +27761,5 @@ function printContentOfDiv(divId, title = 'Report', options = {}) {
 
 </body>
 </html>
+
+    
