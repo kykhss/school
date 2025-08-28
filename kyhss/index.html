@@ -549,13 +549,30 @@
     </div>
   </div>
 </div>
+
+<div class="modal fade" id="eventSelectionModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="event-modal-title">Select Events</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="event-modal-body">
+                    </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" id="event-modal-save-btn" class="btn btn-primary">Confirm Events</button>
+                </div>
+            </div>
+        </div>
    <!-- Cropper CSS -->
 <link href="https://unpkg.com/cropperjs/dist/cropper.min.css" rel="stylesheet"/>
 
 <!-- Cropper JS -->
 <script src="https://unpkg.com/cropperjs/dist/cropper.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/davidshimjs-qrcodejs/qrcode.min.js"></script>
-    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <script type="module">
       // Correct import for side effects
         
@@ -1885,6 +1902,11 @@ function showMainApp() {
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
+                        // ---> ADD THIS LOGIC HERE <---
+        const inDataEntryMode = await checkForDataEntryMode();
+        if (inDataEntryMode) {
+            return; // Stop normal app execution if in data entry mode
+        }
                 // attachMainDataListeners();
              attachFeeDataListeners(activeFinancialYear);
                 // document.getElementById('loading-spinner').style.display = 'none';
@@ -2354,7 +2376,10 @@ mainContent.innerHTML = content;
 
         async function renderTeacherDashboardData() {
             //console.log('mythreestudents',await getData('students')); 
-    const charge = selectedUser.classCharge;
+    // Using optional chaining (?.) to prevent a crash if the class is not found.
+const charge = selectedUser.classCharge?.classId 
+    ? `${classes.find(c => c.id === selectedUser.classCharge.classId)?.name || 'N/A'} - ${selectedUser.classCharge.division}` 
+    : 'None';
     if (!charge) return;
 
     // --- RENDER THE NEW UI SHELL ---
@@ -5570,6 +5595,7 @@ function renderSummaryTableHTML(displayData, examId) {
  * Renders the UI for the new "Entry Report" tab.
  */
 function renderEntryReportTab() {
+    syncDataForUser();
     const container = document.getElementById('entry-report');
     if (!container) return;
 
@@ -5832,6 +5858,15 @@ async function loadScheduleSheet(examId, classId, divisions) {
 
 // Reverted and enhanced version of saveExamSchedule
 async function saveExamSchedule(examId, classId, divisions) {
+    const saveButton = document.getElementById('save-schedule-btn');
+    if (!saveButton) return;
+
+    // Store original button state and disable it
+    const originalButtonHtml = saveButton.innerHTML;
+    saveButton.disabled = true;
+    saveButton.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Saving...`;
+
+    try{
     const batch = writeBatch(db);
     const scheduleRows = document.querySelectorAll('#schedule-table tbody tr');
     let hasDataToSave = false;
@@ -5862,10 +5897,18 @@ async function saveExamSchedule(examId, classId, divisions) {
     });
 
     if (hasDataToSave) {
-        await batch.commit();
-        showAlert(`Schedule saved successfully for divisions: ${divisions.join(', ')}!`, 'success');
-    } else {
-        showAlert('No schedule data entered to save.', 'warning');
+            await batch.commit();
+            showAlert(`Schedule saved successfully for divisions: ${divisions.join(', ')}!`, 'success');
+        } else {
+            showAlert('No schedule data entered to save.', 'warning');
+        }
+    } catch (error) {
+        console.error("Error saving exam schedule:", error);
+        showAlert("Failed to save schedule. Please check your connection and try again.", "danger");
+    } finally {
+        // This block ALWAYS runs, ensuring the UI is restored.
+        saveButton.disabled = false;
+        saveButton.innerHTML = originalButtonHtml;
     }
 }
 
@@ -9110,122 +9153,6 @@ window.renderSyllabusTracker = () => {
 // Helper Functions
 // No changes needed here.
 // =================================================================================
-// NEW: Centralized modal setup for marking completion details
-function setupCompletionModal() {
-    if (document.getElementById('completionModal')) return;
-    const modal = document.createElement('div');
-    modal.innerHTML = `
-    <div class="modal fade" id="completionModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header"><h5 class="modal-title">Edit Completion Details</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-                <div class="modal-body">
-                    <form id="completion-form">
-                        <input type="hidden" id="modal-info-class-id"><input type="hidden" id="modal-info-division"><input type="hidden" id="modal-info-subject-id"><input type="hidden" id="modal-info-chapter-no"><input type="hidden" id="modal-info-topic">
-                        <div class="mb-3"><label class="form-label">Completion Date</label><input type="date" id="completion-date" class="form-control" required></div>
-                        <div class="mb-3"><label class="form-label">Periods Taken</label><input type="number" id="completion-periods" class="form-control" min="1" required></div>
-                        <div class="mb-3"><label class="form-label">Remarks</label><textarea id="completion-remarks" class="form-control"></textarea></div>
-                    </form>
-                </div>
-                <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button><button type="button" class="btn btn-primary" id="save-completion-btn">Save Details</button></div>
-            </div>
-        </div>
-    </div>`;
-    document.body.appendChild(modal);
-    completionModalInstance = new bootstrap.Modal(document.getElementById('completionModal'));
-
-    document.getElementById('save-completion-btn').addEventListener('click', async () => {
-        const classId = document.getElementById('modal-info-class-id').value;
-        const division = document.getElementById('modal-info-division').value;
-        const subjectId = document.getElementById('modal-info-subject-id').value;
-        const chapterNo = document.getElementById('modal-info-chapter-no').value;
-        const topic = document.getElementById('modal-info-topic').value;
-        const date = document.getElementById('completion-date').value;
-        const periods = document.getElementById('completion-periods').value;
-        const remarks = document.getElementById('completion-remarks').value;
-
-        if (date && periods) {
-            const completionId = `${classId}_${division}_${subjectId}_${chapterNo}_${topic.replace(/\s+/g, '-')}`;
-            await setDoc(getDocRef('syllabusCompletion', completionId), {
-                id: completionId, classId, division, subjectId, chapterNo, topic, date, periods: parseInt(periods), remarks,
-                teacherId: selectedUser.id, teacherName: selectedUser.name
-            });
-            showAlert('Completion details saved!', 'success');
-            completionModalInstance.hide();
-            document.getElementById('comp-subject').dispatchEvent(new Event('change')); // Refresh view
-        } else {
-            showAlert('Please fill all fields.', 'danger');
-        }
-    });
-}
-
-// NEW: Modal for adding remarks for pending weekly topics
-function setupRemarksModal() {
-     if (document.getElementById('remarksModal')) return;
-     const modal = document.createElement('div');
-     modal.innerHTML = `
-     <div class="modal fade" id="remarksModal" tabindex="-1">
-         <div class="modal-dialog">
-             <div class="modal-content">
-                 <div class="modal-header"><h5 class="modal-title">Weekly Remarks</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-                 <div class="modal-body">
-                     <p class="text-muted small">Add a reason why some topics for this week are still pending. This will be visible in reports.</p>
-                     <form id="remarks-form">
-                         <input type="hidden" id="remarks-week-id">
-                         <div class="mb-3"><label class="form-label">Remarks</label><textarea id="weekly-remarks-text" class="form-control" rows="4" required></textarea></div>
-                     </form>
-                 </div>
-                 <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button><button type="button" class="btn btn-primary" id="save-remarks-btn">Save Remarks</button></div>
-             </div>
-         </div>
-     </div>`;
-     document.body.appendChild(modal);
-     remarksModalInstance = new bootstrap.Modal(document.getElementById('remarksModal'));
-
-     document.getElementById('save-remarks-btn').addEventListener('click', async () => {
-         const weekId = document.getElementById('remarks-week-id').value;
-         const remarks = document.getElementById('weekly-remarks-text').value;
-         if (remarks && weekId) {
-             await setDoc(getDocRef('weeklyRemarks', weekId), { id: weekId, remarks, teacherId: selectedUser.id, teacherName: selectedUser.name });
-             showAlert('Weekly remarks saved!', 'success');
-             await loadSyllabusData(); // Reload remarks data
-             remarksModalInstance.hide();
-             document.getElementById('comp-subject').dispatchEvent(new Event('change')); // Refresh view
-         } else {
-             showAlert('Please provide the remarks.', 'danger');
-         }
-     });
-}
-
-// REFACTORED: `handleTopicCompletion` now manages checkbox state and opens a modal only for editing existing completions.
-window.handleTopicCompletion = async (checkbox, classId, division, subjectId, chapterNo, topic) => {
-    const completionId = `${classId}_${division}_${subjectId}_${chapterNo}_${topic.replace(/\s+/g, '-')}`;
-    const editBtn = checkbox.closest('.list-group-item').querySelector('.edit-completion-btn');
-
-    if (checkbox.checked) {
-        // Mark as complete
-        await setDoc(getDocRef('syllabusCompletion', completionId), {
-            id: completionId, classId, division, subjectId, chapterNo, topic,
-            date: new Date().toISOString().slice(0, 10), // Default to today
-            periods: 1, // Default to 1 period
-            remarks: "",
-            teacherId: selectedUser.id, teacherName: selectedUser.name
-        });
-        editBtn.style.display = 'inline-block'; // Show edit button
-        showAlert('Topic marked as complete.', 'info');
-    } else {
-        // Revert completion
-        if (confirm("Are you sure you want to mark this topic as pending?")) {
-            await deleteDoc(getDocRef('syllabusCompletion', completionId));
-            editBtn.style.display = 'none'; // Hide edit button
-            showAlert('Topic reverted to pending.', 'success');
-        } else {
-            checkbox.checked = true; // Revert checkbox if user cancels
-        }
-    }
-    await loadSyllabusData(); // Reload completion data
-};
-
 
 window.openCompletionModal = (classId, subjectId, chapterNo, topic) => {
     document.getElementById('completion-form').reset();
@@ -17739,9 +17666,824 @@ window.renderFestManagement = () => {
     if (!state.managingFest) {
         renderFestSelectionScreen();
     } else {
-        renderSelectedFestDashboard();
+        // UPDATED: Added a new tab for Data Entry Links
+        mainContent.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h2 fw-bold mb-0">Managing: <span class="text-primary">${state.managingFest.name}</span></h1>
+                <button class="btn btn-sm btn-outline-secondary" onclick="window.unselectFest()">
+                    <i class="fas fa-arrow-left me-2"></i>Change Fest
+                </button>
+            </div>
+
+            <ul class="nav nav-tabs" id="festMgtTab" role="tablist">
+                <li class="nav-item" role="presentation"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#fest-dashboard" type="button"><i class="fas fa-tachometer-alt me-2"></i>Dashboard</button></li>
+                <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#fest-setup" type="button"><i class="fas fa-cogs me-2"></i>Setup</button></li>
+                <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#fest-events" type="button"><i class="fas fa-calendar-check me-2"></i>Events</button></li>
+                <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#fest-participants" type="button"><i class="fas fa-users-cog me-2"></i>Participants</button></li>
+                <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#fest-scoring" type="button"><i class="fas fa-clipboard-list me-2"></i>Scoring</button></li>
+                <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#fest-reports" type="button"><i class="fas fa-print me-2"></i>Reports</button></li>
+                <!-- NEW TAB ADDED HERE -->
+                <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#fest-data-entry" type="button"><i class="fas fa-link me-2"></i>Data Entry Links</button></li>
+            </ul>
+            <div class="tab-content card" id="festMgtTabContent">
+                <div class="tab-pane fade show active p-4" id="fest-dashboard" role="tabpanel"></div>
+                <div class="tab-pane fade p-4" id="fest-setup" role="tabpanel"></div>
+                <div class="tab-pane fade p-4" id="fest-events" role="tabpanel"></div>
+                <div class="tab-pane fade p-4" id="fest-participants" role="tabpanel"></div>
+                <div class="tab-pane fade p-4" id="fest-scoring" role="tabpanel"></div>
+                <div class="tab-pane fade p-4" id="fest-reports" role="tabpanel"></div>
+                <!-- NEW TAB CONTENT DIV ADDED HERE -->
+                <div class="tab-pane fade p-4" id="fest-data-entry" role="tabpanel"></div>
+            </div>
+        `;
+
+        // Render content for each tab
+        renderFestDashboardTab();
+        renderFestSetupTab();
+        renderFestEventsTab();
+        renderFestParticipantsTab();
+        renderFestScoringTab();
+        renderFestReportsTab();
+        renderFestDataEntryLinksTab(); // Render the new tab
     }
 };
+
+// =========================================================================
+// --- 🏆 NEW: DATA ENTRY LINKS MODULE ---
+// Add all the following new functions to your script.
+// =========================================================================
+
+/**
+ * Renders the "Data Entry Links" tab for the Fest Manager.
+ */
+function renderFestDataEntryLinksTab() {
+    const container = document.getElementById('fest-data-entry');
+    if (!container || !state.managingFest) return;
+
+    const housePasswords = state.managingFest.housePasswords || {};
+
+    container.innerHTML = `
+        <h5 class="section-header"><i class="fas fa-key me-2"></i>Manage Data Entry Access</h5>
+        <p class="text-muted">Set a password for each house to grant them access to a simplified participant entry page for this fest. Share the generated link with the house captain.</p>
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>House</th>
+                        <th>Set Password</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${festHouses.map(house => `
+                        <tr data-house-id="${house.id}">
+                            <td class="align-middle">
+                                <span class="color-dot-display" style="background-color:${house.color};"></span>
+                                <strong>${house.name}</strong>
+                            </td>
+                            <td>
+                                <div class="input-group">
+                                    <input type="text" class="form-control house-password-input" placeholder="Enter password..." value="${housePasswords[house.id] || ''}">
+                                    <button class="btn btn-outline-primary" onclick="window.saveHousePassword('${state.managingFest.id}', '${house.id}')">Save</button>
+                                </div>
+                            </td>
+                            <td>
+                                <button class="btn btn-secondary" onclick="window.copyShareableLink('${state.managingFest.id}', '${house.id}')" ${!housePasswords[house.id] ? 'disabled' : ''}>
+                                    <i class="fas fa-copy me-2"></i>Copy Link
+                                </button>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+/**
+ * Saves the password for a specific house for the current fest.
+ * @param {string} festId - The ID of the fest.
+ * @param {string} houseId - The ID of the house.
+ */
+window.saveHousePassword = async (festId, houseId) => {
+    const row = document.querySelector(`tr[data-house-id="${houseId}"]`);
+    const passwordInput = row.querySelector('.house-password-input');
+    const password = passwordInput.value.trim();
+
+    if (!password) {
+        return showAlert('Password cannot be empty.', 'danger');
+    }
+
+    const festRef = getDocRef('fests', festId);
+    const updatedPasswords = {
+        ...state.managingFest.housePasswords,
+        [houseId]: password
+    };
+
+    try {
+        await updateDoc(festRef, { housePasswords: updatedPasswords });
+        // Update local state to match
+        state.managingFest.housePasswords = updatedPasswords;
+        showAlert('Password saved successfully!', 'success');
+        renderFestDataEntryLinksTab(); // Re-render to enable the copy button
+    } catch (error) {
+        console.error("Error saving house password:", error);
+        showAlert('Failed to save password.', 'danger');
+    }
+};
+
+/**
+ * Generates and copies the unique shareable link to the clipboard.
+ * @param {string} festId - The ID of the fest.
+ * @param {string} houseId - The ID of the house.
+ */
+window.copyShareableLink = (festId, houseId) => {
+    const baseUrl = window.location.href.split('#')[0];
+    const shareableLink = `${baseUrl}#fest-entry?fest=${festId}&house=${houseId}`;
+    
+    navigator.clipboard.writeText(shareableLink).then(() => {
+        showAlert('Shareable link copied to clipboard!', 'success');
+    }).catch(err => {
+        console.error('Failed to copy link: ', err);
+        showAlert('Could not copy link. Please copy it manually.', 'danger');
+        prompt("Copy this link manually:", shareableLink);
+    });
+};
+
+/**
+ * Checks the URL hash on page load to see if we are in data entry mode.
+ * THIS FUNCTION SHOULD BE CALLED AT THE VERY BEGINNING OF YOUR SCRIPT,
+ * RIGHT AFTER FIREBASE IS INITIALIZED, BUT BEFORE THE MAIN LOGIN SCREEN IS SHOWN.
+ */
+window.checkForDataEntryMode = async () => {
+    if (window.location.hash.startsWith('#fest-entry')) {
+        const params = new URLSearchParams(window.location.hash.split('?')[1]);
+        const festId = params.get('fest');
+        const houseId = params.get('house');
+
+        if (festId && houseId) {
+            // ---> EDITED LOGIC: FETCH DIRECTLY FROM FIREBASE <---
+            try {
+                // Fetch the necessary data directly from Firestore
+                const festDoc = await getDoc(getDocRef('fests', festId));
+                const houseDoc = await getDoc(getDocRef('festHouses', houseId));
+
+
+                if (!festDoc.exists() || !houseDoc.exists()) {
+                    document.body.innerHTML = `<div class="alert alert-danger m-5">Error: Invalid Fest or House ID provided in the link.</div>`;
+                    return true; // Stop normal app execution
+                }
+
+                const festData = { id: festDoc.id, ...festDoc.data() };
+                const houseData = { id: houseDoc.id, ...houseDoc.data() };
+
+                // Hide the main app and show the special data entry login page
+                document.getElementById('app-container').style.display = 'none';
+                renderFestEntryLoginPage(festData, houseData); // Pass the fetched data
+                return true; // Indicate that we are in data entry mode
+
+            } catch (error) {
+                console.error("Error fetching data for entry mode:", error);
+                document.body.innerHTML = `<div class="alert alert-danger m-5">Could not load data entry page. Please check your connection.</div>`;
+                return true; // Stop normal app execution
+            }
+        }
+    }
+    return false; // Not in data entry mode, proceed with normal app startup
+};
+
+
+/**
+ * Renders the special login page for house data entry.
+ * @param {object} festData - The full fest object from Firestore.
+ * @param {object} houseData - The full house object from Firestore.
+ */
+function renderFestEntryLoginPage(festData, houseData) {
+            const entryLoginDiv = document.createElement('div');
+            entryLoginDiv.id = 'fest-entry-login-screen';
+            entryLoginDiv.className = 'vh-100 d-flex align-items-center justify-content-center bg-light';
+            
+            const festName = festData.name || 'the Fest';
+            const houseName = houseData.name || 'your House';
+
+            entryLoginDiv.innerHTML = `
+                <div class="card shadow-lg" style="width: 100%; max-width: 420px;">
+                    <div class="card-body p-5">
+                        <div class="text-center mb-4">
+                            <i class="fas fa-trophy fa-3x text-warning"></i>
+                            <h1 class="mt-3 h3 fw-bold">Participant Entry</h1>
+                            <p class="text-muted">For ${houseName} in ${festName}</p>
+                        </div>
+                        <form id="fest-entry-login-form">
+                            <div class="mb-3">
+                                <label class="form-label">House Password</label>
+                                <!-- ✅ FIX: Added autocomplete attribute -->
+                                <input type="password" id="fest-entry-password" class="form-control" required autocomplete="current-password">
+                            </div>
+                            <div class="d-grid mt-4">
+                                <button type="submit" class="btn btn-primary btn-lg">Login</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(entryLoginDiv);
+
+            document.getElementById('fest-entry-login-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                handleFestEntryLogin(festData.id, houseData.id);
+            });
+        }
+
+        /**
+         * Handles the login attempt for the data entry page.
+         * ✅ FIX: This function now fetches all necessary data AFTER a successful login.
+         * @param {string} festId - The ID of the fest.
+         * @param {string} houseId - The ID of the house.
+         */
+async function handleFestEntryLogin(festId, houseId) {
+    const enteredPassword = document.getElementById('fest-entry-password').value;
+    
+    try {
+        const festDoc = await getDoc(getDocRef('fests', festId));
+        if (!festDoc.exists()) {
+            showAlert('Fest data could not be found.', 'danger');
+            return;
+        }
+        const fest = { id: festDoc.id, ...festDoc.data() };
+
+        if (fest && fest.housePasswords && fest.housePasswords[houseId] === enteredPassword) {
+            showAlert('Login successful! Loading live data...', 'success');
+            
+            const initialLoadPromises = [];
+
+            // ✅ MODIFICATION: Listen to the main 'fests' collection separately
+            const festsPromise = new Promise(resolve => {
+                onSnapshot(getCollectionRef('fests'), (snapshot) => {
+                    fests = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                    
+                    // Find the currently managed fest from the updated data
+                    const currentFest = fests.find(f => f.id === festId);
+                    const houseData = festHouses.find(h => h.id === houseId);
+
+                    // If the dashboard is already visible, re-render it with the new fest data
+                    if (document.getElementById('house-registration-view')) {
+                        renderHouseDataEntryDashboard(currentFest, houseData);
+                    }
+                    resolve(); 
+                });
+            });
+            initialLoadPromises.push(festsPromise);
+
+            // Set up listeners for other general collections (these don't need to trigger a re-render)
+            const otherCollections = ['classes', 'festHouses', 'festEvents', 'festRegistrations'];
+            otherCollections.forEach(name => {
+                const promise = new Promise(resolve => {
+                    onSnapshot(getCollectionRef(name), (snapshot) => {
+                        const fetchedData = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                        switch (name) {
+                            case 'classes': classes = fetchedData; break;
+                            case 'festHouses': festHouses = fetchedData; break;
+                            case 'festEvents': festEvents = fetchedData; break;
+                            case 'festRegistrations': festRegistrations = fetchedData; break;
+                        }
+                        resolve(); 
+                    });
+                });
+                initialLoadPromises.push(promise);
+            });
+
+            // Set up a specific, filtered listener for students of the logged-in house
+            const studentsPromise = new Promise(resolve => {
+                const studentsQuery = query(getCollectionRef('students'), where("houseId", "==", houseId));
+                onSnapshot(studentsQuery, (snapshot) => {
+                    students = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                    resolve();
+                });
+            });
+            initialLoadPromises.push(studentsPromise);
+            
+            await Promise.all(initialLoadPromises);
+
+            const loginScreen = document.getElementById('fest-entry-login-screen');
+            if (loginScreen) {
+                loginScreen.remove();
+            }
+            document.getElementById('app-container').style.display = 'block';
+            
+            // Initial render after all data is loaded
+            const houseData = festHouses.find(h => h.id === houseId);
+            renderHouseDataEntryDashboard(fest, houseData);
+        } else {
+            showAlert('Incorrect password. Please try again.', 'danger');
+        }
+    } catch (error) {
+        console.error("Error during fest entry login:", error);
+        showAlert('An error occurred during login. Please check your connection.', 'danger');
+    }
+}       
+/**
+         * Renders the simplified dashboard for the house captain.
+         * ✅ FIX: This function now receives the full house object to prevent the error.
+         * @param {object} fest - The full fest object.
+         * @param {object} house - The full house object.
+         */
+        function renderHouseDataEntryDashboard(fest, house) {
+            const appContainer = document.getElementById('app-container');
+            
+            // ✅ FIX: The 'house' object is now passed directly, so no .find() is needed.
+            // This prevents the "Cannot read properties of undefined (reading 'color')" error.
+            if (!house) {
+                appContainer.innerHTML = `<div class="alert alert-danger m-5">Error: House data could not be loaded.</div>`;
+                return;
+            }
+
+            appContainer.innerHTML = `
+                <main class="container-fluid p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h1 class="h2 mb-0">
+                            <span class="color-dot-display" style="background-color:${house.color};"></span>
+                            ${house.name} - Participant Dashboard
+                        </h1>
+                        <span class="badge bg-primary fs-6">${fest.name}</span>
+                    </div>
+                    <div id="house-registration-view"></div>
+                </main>
+            `;
+            
+            renderHouseParticipantRegistration(fest, house.id);
+        }
+
+
+/**
+ * Renders the participant registration dashboard for a specific house,
+ * with search, tabs, and checks for registration status.
+ * @param {object} fest - The full fest object.
+ * @param {string} houseId - The ID of the house.
+ */
+function renderHouseParticipantRegistration(fest, houseId) {
+    state.managingFest = fest; // Ensure the global state is set for modals
+    const container = document.getElementById('house-registration-view');
+    const studentsInHouse = students.filter(s => s.houseId === houseId);
+    const eventsForFest = festEvents.filter(e => e.festId === fest.id);
+
+    const isRegistrationOpen = fest.registrationOpen === true;
+
+    container.innerHTML = `
+        <div class="ui-card">
+            <ul class="nav nav-pills mb-3" id="house-entry-tabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="register-tab" data-bs-toggle="tab" data-bs-target="#register-pane" type="button" role="tab">
+                        <i class="fas fa-user-plus me-2"></i>Register Participants
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="view-registrations-tab" data-bs-toggle="tab" data-bs-target="#view-pane" type="button" role="tab">
+                        <i class="fas fa-list-alt me-2"></i>View Registrations
+                    </button>
+                </li>
+            </ul>
+            <div class="tab-content" id="house-entry-tabs-content">
+                <div class="tab-pane fade show active" id="register-pane" role="tabpanel">
+                    ${!isRegistrationOpen ? `
+                        <div class="alert alert-warning">
+                            <i class="fas fa-lock me-2"></i>
+                            Registration for this fest is currently closed. You can view existing registrations but cannot make changes.
+                        </div>
+                    ` : ''}
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <input type="text" id="house-student-search" class="form-control" placeholder="Search students by name or admission no...">
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm" id="house-reg-table">
+                            <thead>
+                                <tr>
+                                    <th>Student Name (Admission No.)</th>
+                                    <th>Class</th>
+                                    <th>Events</th>
+                                    <th class="text-end">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <div class="text-end mt-3">
+                        <button class="btn btn-success" id="save-house-regs-btn" ${!isRegistrationOpen ? 'disabled' : ''}>Save All Registrations</button>
+                    </div>
+                </div>
+                <div class="tab-pane fade" id="view-pane" role="tabpanel">
+                    <div class="row mb-3 align-items-end">
+                        <div class="col-md-6">
+                            <label for="house-event-filter" class="form-label">Filter by Event</label>
+                            <select id="house-event-filter" class="form-select">
+                                <option value="all">All Events</option>
+                                ${eventsForFest.map(e => `<option value="${e.id}">${e.name} (${e.category})</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <button class="btn btn-danger" id="download-house-report-pdf-btn">
+                                <i class="fas fa-file-pdf me-2"></i>Download PDF
+                            </button>
+                        </div>
+                    </div>
+                    <div id="house-registered-list"></div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // --- HELPER FUNCTION TO RENDER THE REGISTRATION TABLE ROWS ---
+    const renderTableRows = (searchTerm = '') => {
+        const tableBody = container.querySelector('#house-reg-table tbody');
+        const registrationsInHouse = festRegistrations.filter(r => r.festId === fest.id && r.houseId === houseId);
+        const filteredStudents = studentsInHouse.filter(s => 
+            s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+            String(s.admissionNumber || "").toLowerCase().includes(searchTerm.toLowerCase())
+        );
+
+        tableBody.innerHTML = filteredStudents.map(student => {
+            const registration = registrationsInHouse.find(r => r.studentId === student.id);
+            const eventCount = registration?.events.length || 0;
+            return `
+                <tr data-studentid="${student.id}" data-events="${registration?.events.join(',') || ''}">
+                    <td>${student.name} (${student.admissionNumber})</td>
+                    <td>${getStudentClassName(student.classId, student.division)}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-secondary manage-events-btn" ${!isRegistrationOpen ? 'disabled' : ''}>
+                            Manage Events (<span class="event-count">${eventCount}</span>)
+                        </button>
+                    </td>
+                    <td class="text-end">
+                        <button class="btn btn-sm btn-outline-success save-single-reg-btn" title="Save this student's registration" ${!isRegistrationOpen ? 'disabled' : ''}>
+                            <i class="fas fa-save"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    };
+    
+    // ✅ FIX: This function now accepts houseId as a parameter.
+    const renderViewPaneContent = (filterEventId = 'all') => {
+        const listContainer = document.getElementById('house-registered-list');
+        
+        // ✅ FIX: The houseId is passed in, not read from the DOM.
+        const registrationsInHouse = festRegistrations.filter(r => r.festId === fest.id && r.houseId === houseId);
+        
+        const eventsToDisplay = (filterEventId === 'all') 
+            ? eventsForFest.filter(e => e.festId === fest.id).sort((a, b) => a.name.localeCompare(b.name))
+            : festEvents.filter(e => e.id === filterEventId);
+
+        if (registrationsInHouse.length === 0 && filterEventId === 'all') {
+            listContainer.innerHTML = '<p class="text-muted">No participants have been registered from your house yet.</p>';
+            return;
+        }
+
+        let content = '';
+        let foundParticipants = false;
+
+        eventsToDisplay.forEach(event => {
+            const participants = registrationsInHouse.filter(r => r.events.includes(event.id));
+            
+            if (participants.length > 0) {
+                foundParticipants = true;
+                content += `
+                    <div class="d-flex justify-content-between align-items-center mt-4">
+                        <h6 class="section-header text-primary mb-0">${event.name} (${event.category})</h6>
+                        <span class="badge bg-secondary rounded-pill">${participants.length} Participant(s)</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-bordered table-sm mt-2" id="house-report-table-${event.id}">
+                            <thead>
+                                <tr>
+                                    <th>Chest No.</th>
+                                    <th>Admission No.</th>
+                                    <th>Name</th>
+                                    <th>Class</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${participants.map(p => {
+                                    const student = students.find(s => s.id === p.studentId);
+                                    return `
+                                        <tr>
+                                            <td>${p.chestNo || 'N/A'}</td>
+                                            <td>${student?.admissionNumber || 'N/A'}</td>
+                                            <td>${p.studentName}</td>
+                                            <td>${getStudentClassName(student?.classId, student?.division)}</td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+        });
+        
+        if (foundParticipants) {
+            listContainer.innerHTML = content;
+        } else {
+            listContainer.innerHTML = '<p class="text-muted">No participants registered for the selected event(s).</p>';
+        }
+    };
+
+    // --- ATTACH EVENT LISTENERS ---
+    const regTableBody = container.querySelector('#house-reg-table tbody');
+    regTableBody.addEventListener('click', (e) => {
+        const manageBtn = e.target.closest('.manage-events-btn');
+        const saveBtn = e.target.closest('.save-single-reg-btn');
+        if (manageBtn) openEventSelectionModal(manageBtn.closest('tr'));
+        if (saveBtn) saveSingleHouseRegistration(fest.id, houseId, saveBtn.closest('tr'));
+    });
+
+    document.getElementById('save-house-regs-btn').addEventListener('click', () => {
+        saveHouseRegistrationsFromEntryPage(fest.id, houseId);
+    });
+    
+    document.getElementById('house-student-search').addEventListener('input', (e) => {
+        renderTableRows(e.target.value);
+    });
+
+    document.getElementById('house-event-filter').addEventListener('change', (e) => {
+        // ✅ FIX: Call the internal helper function.
+        renderViewPaneContent(e.target.value);
+    });
+
+    document.getElementById('download-house-report-pdf-btn').addEventListener('click', () => {
+        downloadHouseReportPDF(fest, houseId);
+    });
+
+    // Initial renders
+    renderTableRows();
+    renderViewPaneContent(); // Initial call for the view pane
+}
+
+/**
+ * Renders the list of registered participants for the house, filtered by event,
+ * and now includes participant counts and conditional edit buttons.
+ * @param {string} [filterEventId='all'] - The ID of the event to filter by, or 'all'.
+ */
+function renderHouseRegisteredList(filterEventId = 'all') {
+    const listContainer = document.getElementById('house-registered-list');
+    const fest = state.managingFest; // Get the current fest from the global state
+    const houseId = festHouses.find(h => h.name === document.querySelector('#house-registration-view h1 .badge').textContent.split(' - ')[0])?.id; // A bit complex, assumes house name is in the title
+    
+    if (!fest || !houseId) {
+        listContainer.innerHTML = '<p class="text-danger">Could not identify the current house or fest.</p>';
+        return;
+    }
+
+    const registrationsInHouse = festRegistrations.filter(r => r.festId === fest.id && r.houseId === houseId);
+    
+    // ✅ CHECK: Determine if registration is open for this fest.
+    const isRegistrationOpen = fest.registrationOpen === true;
+
+    let content = '';
+    const eventsToDisplay = (filterEventId === 'all') 
+        ? festEvents.filter(e => e.festId === fest.id)
+        : festEvents.filter(e => e.id === filterEventId);
+
+    if (registrationsInHouse.length === 0 && filterEventId === 'all') {
+        listContainer.innerHTML = '<p class="text-muted">No participants have been registered from your house yet.</p>';
+        return;
+    }
+
+    eventsToDisplay.forEach(event => {
+        const participants = registrationsInHouse.filter(r => r.events.includes(event.id));
+        
+        // Only show the event header if there are participants or if we are viewing all events
+        if (participants.length > 0 || filterEventId !== 'all') {
+            content += `
+                <div class="d-flex justify-content-between align-items-center mt-3">
+                    <h6 class="text-primary mb-0">${event.name} (${event.category})</h6>
+                    <span class="badge bg-secondary rounded-pill">${participants.length} Participant(s)</span>
+                </div>
+                <ul class="list-group mt-2">
+                    ${participants.length > 0 ? participants.map(p => {
+                        const student = students.find(s => s.id === p.studentId);
+                        return `
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span>
+                                    <strong>${p.chestNo || 'N/A'}:</strong> ${p.studentName}
+                                    <small class="text-muted ms-2">(${getStudentClassName(student?.classId, student?.division)})</small>
+                                </span>
+                                <!-- ✅ EDIT BUTTON: Conditionally shown based on registration status -->
+                                ${isRegistrationOpen ? `
+                                <button class="btn btn-sm btn-outline-primary py-0 px-2" onclick="window.editParticipantFromReport('${p.studentId}')">
+                                    <i class="fas fa-edit"></i> Edit
+                                </button>
+                                ` : ''}
+                            </li>
+                        `;
+                    }).join('') : '<li class="list-group-item text-muted">No participants from your house in this event.</li>'}
+                </ul>
+            `;
+        }
+    });
+    
+    listContainer.innerHTML = content || '<p class="text-muted">No participants registered for the selected event.</p>';
+}
+
+/**
+ * NEW HELPER FUNCTION: Finds a student in the registration tab and opens the event modal for them.
+ * This allows editing directly from the "View Registrations" report.
+ * @param {string} studentId - The ID of the student to edit.
+ */
+window.editParticipantFromReport = (studentId) => {
+    // 1. Switch back to the "Register Participants" tab
+    const registerTabButton = document.getElementById('register-tab');
+    if (registerTabButton) {
+        new bootstrap.Tab(registerTabButton).show();
+    }
+
+    // 2. Find the student's row in the registration table
+    const registrationTable = document.getElementById('house-reg-table');
+    const studentRow = registrationTable.querySelector(`tr[data-studentid="${studentId}"]`);
+
+    if (studentRow) {
+        // 3. Scroll to the student's row and open the modal
+        studentRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        // Highlight the row briefly to give user context
+        studentRow.style.backgroundColor = '#d1e7dd';
+        setTimeout(() => {
+            studentRow.style.backgroundColor = '';
+        }, 2000);
+
+        // 4. Trigger the "Manage Events" button click to open the modal
+        const manageButton = studentRow.querySelector('.manage-events-btn');
+        if (manageButton) {
+            manageButton.click();
+        }
+    } else {
+        showAlert('Could not find the student in the registration list. Try clearing the search filter.', 'warning');
+    }
+};
+/**
+ * Saves a single student's registration from the house entry page.
+ * @param {string} festId - The ID of the fest.
+ * @param {string} houseId - The ID of the house.
+ * @param {HTMLElement} tableRow - The <tr> element of the student to save.
+ */
+async function saveSingleHouseRegistration(festId, houseId, tableRow) {
+    const studentId = tableRow.dataset.studentid;
+    const eventIds = tableRow.dataset.events ? tableRow.dataset.events.split(',') : [];
+    const student = students.find(s => s.id === studentId);
+    const saveButton = tableRow.querySelector('.save-single-reg-btn');
+
+    if (!student) {
+        showAlert('Could not find student to save.', 'danger');
+        return;
+    }
+
+    saveButton.innerHTML = `<span class="spinner-border spinner-border-sm"></span>`;
+    saveButton.disabled = true;
+
+    const regId = `${festId}_${studentId}`;
+    const regData = {
+        id: regId, festId, studentId,
+        studentName: student.name, houseId, events: eventIds,
+        chestNo: festRegistrations.find(r => r.id === regId)?.chestNo || null
+    };
+
+    try {
+        await setDoc(getDocRef('festRegistrations', regId), regData);
+        saveButton.innerHTML = `<i class="fas fa-check"></i>`; // Show success icon
+        setTimeout(() => {
+            saveButton.innerHTML = `<i class="fas fa-save"></i>`; // Revert after a delay
+            saveButton.disabled = false;
+        }, 2000);
+    } catch (error) {
+        showAlert('Error saving registration.', 'danger');
+        saveButton.innerHTML = `<i class="fas fa-save"></i>`; // Revert on error
+        saveButton.disabled = false;
+    }
+}
+
+/**
+ * Generates and downloads a PDF report for the house's filtered participants.
+ * @param {object} fest - The full fest object.
+ * @param {string} houseId - The ID of the house.
+ */
+/**
+ * Generates and downloads a PDF report for the house's filtered participants,
+ * now correctly creating a multi-table document.
+ * @param {object} fest - The full fest object.
+ * @param {string} houseId - The ID of the house.
+ */
+function downloadHouseReportPDF(fest, houseId) {
+    // 1. Get the same filtered data as the view
+    const filterEventId = document.getElementById('house-event-filter').value;
+    const registrationsInHouse = festRegistrations.filter(r => r.festId === fest.id && r.houseId === houseId);
+    
+    let participantsToDisplay = registrationsInHouse;
+    if (filterEventId !== 'all') {
+        participantsToDisplay = registrationsInHouse.filter(r => r.events.includes(filterEventId));
+    }
+
+    if (participantsToDisplay.length === 0) {
+        showAlert('No report data to download.', 'warning');
+        return;
+    }
+
+    const house = festHouses.find(h => h.id === houseId);
+    const reportTitle = `${house.name} - Participant List`;
+    const subTitle = `Fest: ${fest.name}`;
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    // --- Add Main Header ---
+    doc.setFontSize(18);
+    doc.text(reportTitle, 14, 22);
+    doc.setFontSize(12);
+    doc.text(subTitle, 14, 29);
+    let startY = 35; // Initial Y position for the first table
+
+    // --- 2. Loop through events and create a table for each one ---
+    const eventsToDisplay = (filterEventId === 'all') 
+        ? festEvents.filter(e => e.festId === fest.id).sort((a, b) => a.name.localeCompare(b.name))
+        : festEvents.filter(e => e.id === filterEventId);
+
+    eventsToDisplay.forEach(event => {
+        const participantsInEvent = participantsToDisplay.filter(r => r.events.includes(event.id));
+        
+        if (participantsInEvent.length > 0) {
+            // Add a header for the event
+            doc.setFontSize(14);
+            doc.setTextColor(60); // Dark gray
+            doc.text(`${event.name} (${event.category})`, 14, startY);
+            startY += 7;
+
+            // Prepare table data for this event
+            const head = [['Chest No.', 'Admission No.', 'Name', 'Class']];
+            const body = participantsInEvent.map(p => {
+                const student = students.find(s => s.id === p.studentId);
+                return [
+                    p.chestNo || 'N/A',
+                    student?.admissionNumber || 'N/A',
+                    p.studentName,
+                    getStudentClassName(student?.classId, student?.division)
+                ];
+            });
+
+            // Create the table
+            doc.autoTable({
+                head: head,
+                body: body,
+                startY: startY,
+                theme: 'grid',
+                headStyles: { fillColor: [41, 128, 185] } // Blue header
+            });
+
+            // Update the startY for the next table, adding a margin
+            startY = doc.autoTable.previous.finalY + 15;
+        }
+    });
+
+    doc.save(`${house.name}_Participants.pdf`);
+}
+/**
+ * A specific save function for the house data entry page.
+ * @param {string} festId - The ID of the fest.
+ * @param {string} houseId - The ID of the house.
+ */
+async function saveHouseRegistrationsFromEntryPage(festId, houseId) {
+    const rows = document.querySelectorAll('#house-reg-table tbody tr');
+    const batch = writeBatch(db);
+    let validCount = 0;
+
+    rows.forEach(row => {
+        const studentId = row.dataset.studentid;
+        const eventIds = row.dataset.events ? row.dataset.events.split(',') : [];
+        const student = students.find(s => s.id === studentId);
+
+        if (student) {
+            const regId = `${festId}_${studentId}`;
+            const regData = {
+                id: regId, festId, studentId,
+                studentName: student.name, houseId, events: eventIds,
+                chestNo: festRegistrations.find(r => r.id === regId)?.chestNo || null
+            };
+            batch.set(getDocRef('festRegistrations', regId), regData);
+            validCount++;
+        }
+    });
+
+    if (validCount > 0) {
+        try {
+            await batch.commit();
+            showAlert('Your registrations have been saved successfully!', 'success');
+        } catch (error) {
+            showAlert('An error occurred while saving.', 'danger');
+        }
+    } else {
+        showAlert('No participants to save.', 'info');
+    }
+}
 
 /**
  * Renders the initial screen to choose a fest.
@@ -17778,6 +18520,7 @@ function renderFestSelectionScreen() {
         </div>
     `;
 }
+
 
 /**
  * Renders the main tabbed interface for the selected fest.
@@ -17910,7 +18653,7 @@ function renderFestSetupTab() {
 }
 
 /**
- * Renders the fest-specific settings form with type-based limits for student and house participation.
+ * Renders the fest-specific settings form with type-based limits and the new registration status toggle.
  */
 function renderFestSpecificSettings(settings) {
     const wrapper = document.getElementById('fest-settings-wrapper');
@@ -17924,12 +18667,15 @@ function renderFestSpecificSettings(settings) {
             onStage: { solo: 2, group: 1 },
             offStage: { solo: 2, group: 1 }
         },
-        categories: []
+        categories: [],
+        registrationOpen: true // Default to open
     };
-    const s = { ...defaults, ...settings, houseEventLimits: { ...defaults.houseEventLimits, ...settings.houseEventLimits } };
+    
+    // Deep merge settings to avoid errors
+    const s = { ...defaults, ...settings };
+    s.houseEventLimits = { ...defaults.houseEventLimits, ...settings.houseEventLimits };
     s.houseEventLimits.onStage = { ...defaults.houseEventLimits.onStage, ...settings.houseEventLimits?.onStage };
     s.houseEventLimits.offStage = { ...defaults.houseEventLimits.offStage, ...settings.houseEventLimits?.offStage };
-
 
     const categoryRows = s.categories?.map(cat => `
         <tr data-name="${cat.name}" data-type="${cat.type}" data-criteria="${cat.type === 'age' ? cat.criteria : cat.criteria.join(',') }">
@@ -17938,9 +18684,21 @@ function renderFestSpecificSettings(settings) {
             <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger py-0 px-2 remove-cat-row-btn">&times;</button></td>
         </tr>`).join('') || '';
 
-    // EDIT: The HTML is completely restructured for type-based limits.
+    // ✅ MODIFIED: Added the Registration Status section
     wrapper.innerHTML = `
         <h5 class="section-header"><i class="fas fa-cogs me-2"></i>Settings for: <span class="text-primary">${state.managingFest.name}</span></h5>
+        
+        <!-- ✅ NEW: Registration Status Toggle -->
+        <div class="card card-body mb-3 bg-light border-primary">
+            <label class="form-label fw-bold">Registration Status</label>
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="fest-registration-status" ${state.managingFest.registrationOpen ? 'checked' : ''}>
+                <label class="form-check-label" for="fest-registration-status">
+                    ${state.managingFest.registrationOpen ? 'Registration is OPEN' : 'Registration is CLOSED'}
+                </label>
+            </div>
+            <p class="small text-muted mt-1">When closed, house captains cannot add or edit participants.</p>
+        </div>
         
         <!-- Student Registration Limits -->
         <div class="card card-body mb-3">
@@ -17987,7 +18745,7 @@ function renderFestSpecificSettings(settings) {
         </div>
         <hr>
 
-        <!-- Category Management (Unchanged) -->
+        <!-- Category Management -->
         <label class="form-label fw-bold">Categories for this Fest</label>
         <div class="table-responsive"><table id="category-table" class="table table-sm"><thead><tr><th>Name</th><th>Type</th><th>Criteria</th><th></th></tr></thead><tbody>${categoryRows}</tbody></table></div>
         <button type="button" id="add-category-btn" class="btn btn-sm btn-outline-secondary mt-2"><i class="fas fa-plus me-1"></i>Add Category</button>
@@ -18008,15 +18766,14 @@ function renderFestSpecificSettings(settings) {
 async function saveAllFestSettings() {
     if (!state.managingFest) return;
 
-    // EDIT: The newSettings object is now built from all the new, granular input fields.
+    // ✅ MODIFIED: Read the new registration status and save it along with other settings.
+    const registrationOpen = document.getElementById('fest-registration-status').checked;
+
     const newSettings = {
-        // Student Registration Limits
         maxOnStageSoloEvents: parseInt(document.getElementById('max-onstage-solo').value) || 0,
         maxOnStageGroupEvents: parseInt(document.getElementById('max-onstage-group').value) || 0,
         maxOffStageSoloEvents: parseInt(document.getElementById('max-offstage-solo').value) || 0,
         maxOffStageGroupEvents: parseInt(document.getElementById('max-offstage-group').value) || 0,
-
-        // House Participation Limits
         houseEventLimits: {
             onStage: {
                 solo: parseInt(document.getElementById('limit-onstage-solo-house').value) || 0,
@@ -18027,8 +18784,6 @@ async function saveAllFestSettings() {
                 group: parseInt(document.getElementById('limit-offstage-group-house').value) || 0,
             }
         },
-
-        // Category mapping logic remains the same
         categories: Array.from(document.querySelectorAll('#category-table tbody tr')).map(row => ({
             name: row.dataset.name,
             type: row.dataset.type,
@@ -18038,13 +18793,27 @@ async function saveAllFestSettings() {
 
     try {
         const festRef = getDocRef('fests', state.managingFest.id);
-        // The new, detailed settings object is saved under the 'settings' field in the fest document.
-        await updateDoc(festRef, { settings: newSettings });
+        // ✅ MODIFIED: Update both the 'settings' object and the 'registrationOpen' field.
+        await updateDoc(festRef, { 
+            settings: newSettings,
+            registrationOpen: registrationOpen 
+        });
 
         showAlert(`Settings for '${state.managingFest.name}' saved successfully.`, 'success');
         
         // Update the local state to match what was saved.
         state.managingFest.settings = newSettings;
+        state.managingFest.registrationOpen = registrationOpen;
+
+        // Re-render the tab to reflect the new status label
+        renderFestSetupTab();
+        // Check if the Participants tab is currently the active one in the UI.
+        const participantsTabPane = document.getElementById('fest-participants');
+        if (participantsTabPane && participantsTabPane.classList.contains('active')) {
+            // If it is, re-render it immediately to disable/enable its controls.
+            renderFestParticipantsTab();
+        }
+
     } catch (error) {
         console.error("Error saving fest settings:", error);
         showAlert('Failed to save settings.', 'danger');
@@ -18203,7 +18972,7 @@ function attachSetupTabListeners() {
 
         // Main Save Button for ALL settings for the selected fest
         if (e.target.id === 'save-fest-settings') {
-            saveAllFestSettings();
+            saveAllFestSettings(); 
         }
     });
 
@@ -18245,16 +19014,18 @@ function attachSetupTabListeners() {
 
     // Save all global and age settings
     document.getElementById('save-fest-settings')?.addEventListener('click', async () => {
-        const newSettings = {
-            maxEventsPerStudent: parseInt(document.getElementById('max-events').value) || 3,
-            houseEventLimits: {
-                solo: parseInt(document.getElementById('limit-solo').value) || 2,
-                group: parseInt(document.getElementById('limit-group').value) || 1,
-            },
-            ageCategories: [],
-            categories: []
+        // const newSettings = {
+        //     maxEventsPerStudent: parseInt(document.getElementById('max-events').value) || 3,
+        //     houseEventLimits: {
+        //         solo: parseInt(document.getElementById('limit-solo').value) || 2,
+        //         group: parseInt(document.getElementById('limit-group').value) || 1,
+        //     },
+        //     ageCategories: [],
+        //     categories: []
+        
 
-        };
+        //};
+        saveAllFestSettings();
         
         document.querySelectorAll('#age-category-table tbody tr').forEach(row => {
             const name = row.querySelector('.age-cat-name')?.value.trim();
@@ -18635,11 +19406,21 @@ window.deleteEventGroup = async (collectionName, baseEventId) => {
 function renderFestParticipantsTab() {
     const container = document.getElementById('fest-participants');
     if (!container || !state.managingFest) return;
-const festOptions = fests.map(f => `<option value="${f.id}">${f.name}</option>`).join('');
 
+    // ✅ CHECK: Get the current registration status from the global state.
+    const isRegistrationOpen = state.managingFest.registrationOpen === true;
 
     container.innerHTML = `
         <p class="text-muted">Manage all participant-related tasks for <strong>${state.managingFest.name}</strong> from one place.</p>
+        
+        <!-- ✅ MESSAGE: Show a prominent message if registration is closed -->
+        ${!isRegistrationOpen ? `
+            <div class="alert alert-warning">
+                <i class="fas fa-lock me-2"></i>
+                <strong>Registration is Closed.</strong> You can view participant data, but you cannot add, edit, or remove participants.
+            </div>
+        ` : ''}
+
         <ul class="nav nav-pills mb-3" id="pills-tab" role="tablist">
           <li class="nav-item" role="presentation">
             <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#pills-registration" type="button"><i class="fas fa-user-plus me-2"></i>Registration</button>
@@ -18659,33 +19440,22 @@ const festOptions = fests.map(f => `<option value="${f.id}">${f.name}</option>`)
           <div class="tab-pane fade" id="pills-house" role="tabpanel"></div>
           <div class="tab-pane fade" id="pills-chest" role="tabpanel"></div>
           <div class="tab-pane fade" id="pills-groups" role="tabpanel"></div>
-       
-
-        <ul class="nav nav-pills mb-3">
-            <li class="nav-item">
-                <a class="nav-link active" data-bs-toggle="pill" href="#bulk-registration-view">Bulk Registration</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" data-bs-toggle="pill" href="#participant-list-view">View Participants</a>
-            </li>
-        </ul>
-
-        <div class="tab-content">
-            <div class="tab-pane fade show active" id="bulk-registration-view">
-                </div>
-            <div class="tab-pane fade" id="participant-list-view">
-                </div>
         </div>
     `;
-    attachMainParticipantListeners();
-
-
-    // Render the content for each sub-tab
-    renderParticipantRegistrationSection();
-    renderParticipantHouseSection();
-    renderParticipantChestSection();
-    renderParticipantGroupsSection();
+    
+    // Pass the registration status down to the sub-tab renderers
+    renderParticipantRegistrationSection(isRegistrationOpen);
+    renderParticipantHouseSection(); // This section is for viewing/assigning students to houses, typically done before registration.
+    renderParticipantChestSection(); // Chest numbers can be generated anytime.
+    renderParticipantGroupsSection(isRegistrationOpen);
 }
+
+
+
+
+
+
+
 function attachMainParticipantListeners() {
    // const festFilter = document.getElementById('participant-fest-filter');
     const festFilter = state.managingFest.id;// Automatically set
@@ -18727,21 +19497,7 @@ function renderBulkRegistrationView(festId) {
             </table>
         </div>
         <button class="btn btn-outline-primary mt-2" id="add-reg-row-btn"><i class="fas fa-plus me-1"></i>Add Participant Row</button>
-        <div class="modal fade" id="eventSelectionModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="event-modal-title">Select Events</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body" id="event-modal-body">
-                    </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" id="event-modal-save-btn" class="btn btn-primary">Confirm Events</button>
-                </div>
-            </div>
-        </div>
+        
     </div>
 
     `;
@@ -18905,7 +19661,7 @@ function openEventSelectionModal(row) {
             <div>
                 <p class="mb-0">
                     <strong>Category:</strong> <span class="badge bg-info">${studentCategory}</span> | 
-                    <strong>House:</strong> <span class="badge bg-primary">${student.house || 'N/A'}</span>
+                    <strong>House:</strong> <span class="badge bg-primary">${student.houseId || 'N/A'}</span>
                 </p>
             </div>
             <div class="form-check form-switch">
@@ -19034,7 +19790,7 @@ function openEventSelectionModal(row) {
         
         row.dataset.events = selectedEventIds.join(',');
         row.querySelector('.event-count').textContent = `${selectedEventIds.length} selected`;
-        row.querySelector('.event-items').innerHTML = eventBadgesHTML;
+        // row.querySelector('.event-items').innerHTML = eventBadgesHTML;
         eventModal.hide();
     };
 
@@ -20066,10 +20822,67 @@ window.saveHouseAllocations = async function() {
 /**
  * Renders the table of students for house allocation based on filters.
  */
+/**
+ * Renders the table of students for house allocation, now with a summary dashboard.
+ */
 function renderHouseAllocationTable() {
     const container = document.getElementById('house-allocation-table-container');
     if (!container) return;
 
+    // --- 1. Calculate Overall House Counts & Category Breakdown ---
+    const houseSummary = {};
+
+    // Initialize the summary object for all known houses and an 'Unassigned' category
+    festHouses.forEach(house => {
+        houseSummary[house.id] = { total: 0, categories: {}, name: house.name, color: house.color };
+    });
+    houseSummary['UNASSIGNED'] = { total: 0, categories: {}, name: 'Unassigned', color: '#6c757d' };
+
+    // A simple helper to categorize students based on their class name for the summary
+    const getStudentSchoolCategory = (student) => {
+        if (!student.classId) return 'Unknown';
+        const className = classes.find(c => c.id === student.classId)?.name || '';
+        if (className.includes('HS') || className.includes('11') || className.includes('12')) return 'High School';
+        if (className.includes('UP') || className.includes('6') || className.includes('7') || className.includes('8')) return 'Middle School';
+        return 'Primary';
+    };
+
+    // Populate the summary by iterating through ALL students
+    students.forEach(s => {
+        const houseId = s.houseId || 'UNASSIGNED';
+        const category = getStudentSchoolCategory(s);
+        
+        if (houseSummary[houseId]) {
+            houseSummary[houseId].total++;
+            houseSummary[houseId].categories[category] = (houseSummary[houseId].categories[category] || 0) + 1;
+        }
+    });
+
+    // --- 2. Generate HTML for the Summary Dashboard ---
+    const summaryHtml = `
+        <h5 class="section-header mb-3"><i class="fas fa-chart-pie me-2"></i>Overall House Distribution</h5>
+        <div class="row g-3 mb-4">
+            ${Object.values(houseSummary).map(summary => `
+                <div class="col-md-6 col-lg-3">
+                    <div class="ui-card-stat h-100">
+                        <div class="stat-icon" style="background-color: ${summary.color};"><i class="fas fa-home"></i></div>
+                        <div class="stat-info">
+                            <div class="stat-number">${summary.total}</div>
+                            <div class="stat-label">${summary.name}</div>
+                            <div class="stat-breakdown">
+                                ${Object.entries(summary.categories).map(([cat, count]) => `
+                                    <span class="badge bg-light text-dark">${cat}: ${count}</span>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+        <hr class="my-4">
+    `;
+
+    // --- 3. Filter Students for the Detailed Table (Your existing logic) ---
     const classId = document.getElementById('house-alloc-class-filter').value;
     const division = document.getElementById('house-alloc-division-filter').value;
     const searchTerm = document.getElementById('house-alloc-search-input').value.toLowerCase();
@@ -20083,9 +20896,11 @@ function renderHouseAllocationTable() {
 
     const houseOptions = festHouses.map(h => `<option value="${h.id}">${h.name}</option>`).join('');
 
+    // --- 4. Render the Complete UI ---
     container.innerHTML = `
+        ${summaryHtml}
         <div class="d-flex justify-content-between align-items-center">
-            <h5 class="section-header mb-0"><i class="fas fa-users me-2"></i>Students (${filteredStudents.length})</h5>
+            <h5 class="section-header mb-0"><i class="fas fa-users me-2"></i>Filtered Students (${filteredStudents.length})</h5>
             <div>
                 <button class="btn btn-sm btn-success me-2" onclick="window.downloadHouseAllocationCSV()"><i class="fas fa-file-csv me-1"></i>Export CSV</button>
                 <button class="btn btn-sm btn-danger" onclick="window.downloadHouseAllocationPDF()"><i class="fas fa-file-pdf me-1"></i>Export PDF</button>
@@ -20110,7 +20925,116 @@ function renderHouseAllocationTable() {
         </div>
     `;
 }
+/**
+ * Downloads the currently filtered house allocation data as a CSV file.
+ */
+window.downloadHouseAllocationCSV = function() {
+    // 1. Get the same filtered list of students as the table
+    const classId = document.getElementById('house-alloc-class-filter').value;
+    const division = document.getElementById('house-alloc-division-filter').value;
+    const searchTerm = document.getElementById('house-alloc-search-input').value.toLowerCase();
 
+    let filteredStudents = students.filter(s => {
+        const classMatch = !classId || s.classId === classId;
+        const divisionMatch = !division || s.division === division;
+        const searchMatch = !searchTerm || s.name.toLowerCase().includes(searchTerm) || String(s.admissionNumber || "").toLowerCase().includes(searchTerm);
+        return classMatch && divisionMatch && searchMatch;
+    });
+
+    if (filteredStudents.length === 0) {
+        return showAlert('No data to export.', 'info');
+    }
+
+    // 2. Define CSV headers and create CSV rows
+    const headers = ['Admission Number', 'Student Name', 'Class', 'Current House'];
+    const csvRows = [headers.join(',')]; // Start with the header row
+
+    filteredStudents.forEach(s => {
+        const studentClass = getStudentClassName(s.classId, s.division);
+        const houseName = festHouses.find(h => h.id === s.houseId)?.name || 'Not Assigned';
+        
+        // Escape commas in names by wrapping the value in double quotes
+        const studentName = `"${s.name}"`; 
+
+        const row = [s.admissionNumber, studentName, studentClass, houseName];
+        csvRows.push(row.join(','));
+    });
+
+    // 3. Create a Blob and trigger the download
+    const csvContent = csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        const today = new Date().toISOString().slice(0, 10);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `house_allocation_${today}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+}
+
+/**
+ * Downloads the currently filtered house allocation data as a PDF file.
+ * Requires the jsPDF and jsPDF-AutoTable libraries to be included in your HTML.
+ */
+window.downloadHouseAllocationPDF = function() {
+    // 1. Check if the jsPDF library is available
+    const { jsPDF } = window.jspdf;
+    if (typeof jsPDF === 'undefined' || typeof jsPDF.API.autoTable === 'undefined') {
+        console.error("jsPDF or jsPDF-AutoTable is not loaded. Please include the required scripts in your HTML.");
+        return showAlert('Could not generate PDF. Library not found.', 'danger');
+    }
+
+    // 2. Get the same filtered list of students
+    const classId = document.getElementById('house-alloc-class-filter').value;
+    const division = document.getElementById('house-alloc-division-filter').value;
+    const searchTerm = document.getElementById('house-alloc-search-input').value.toLowerCase();
+
+    let filteredStudents = students.filter(s => {
+        const classMatch = !classId || s.classId === classId;
+        const divisionMatch = !division || s.division === division;
+        const searchMatch = !searchTerm || s.name.toLowerCase().includes(searchTerm) || String(s.admissionNumber || "").toLowerCase().includes(searchTerm);
+        return classMatch && divisionMatch && searchMatch;
+    });
+
+    if (filteredStudents.length === 0) {
+        return showAlert('No data to export.', 'info');
+    }
+
+    // 3. Prepare data for the PDF table
+    const head = [['Admission No.', 'Student Name', 'Class', 'House']];
+    const body = filteredStudents.map(s => [
+        s.admissionNumber,
+        s.name,
+        getStudentClassName(s.classId, s.division),
+        festHouses.find(h => h.id === s.houseId)?.name || 'Not Assigned'
+    ]);
+
+    // 4. Create the PDF document
+    //const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    
+    // Add title
+    doc.setFontSize(18);
+    doc.text('Student House Allocation', 14, 22);
+    
+    // Add table using autoTable plugin
+    doc.autoTable({
+        head: head,
+        body: body,
+        startY: 30, // Start table below the title
+        theme: 'grid', // 'striped', 'grid', or 'plain'
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [22, 160, 133] } // Dark cyan color for header
+    });
+    
+    // 5. Save the PDF
+    const today = new Date().toISOString().slice(0, 10);
+    doc.save(`house_allocation_${today}.pdf`);
+}
 /**
  * Saves all pending house allocations from the table.
  */
@@ -20297,26 +21221,52 @@ function renderFestReportsTab() {
         container.innerHTML = `<div class="text-center p-5"><i class="fas fa-arrow-left fa-3x text-primary mb-3"></i><h5>No Fest Selected</h5><p class="text-muted">Please select a fest from the "Setup" tab to generate reports.</p></div>`;
         return;
     }
-    const id =printCategoryRegistrationSheet
+    const id =printCategoryRegistrationSheet;
+    // Prepare options for the dropdowns, including an "ALL" option for each
+    const categoryOptions = state.managingFest.settings?.categories?.map(c => `<option value="${c.name}">${c.name}</option>`).join('') || '';
+    const houseOptions = festHouses.map(h => `<option value="${h.id}">${h.name}</option>`).join('');
+
+
 
     container.innerHTML = `
         <h5 class="section-header"><i class="fas fa-print me-2"></i>Generate Reports for ${state.managingFest.name}</h5>
         <p class="text-muted">Generate and print various reports for the currently selected fest.</p>
         
         <div class="row g-4 mt-2">
-            <div class="col-md-6">
-                <div class="ui-card h-100">
-                    <h6><i class="fas fa-clipboard-list me-2 text-primary"></i>Category Entry Sheet</h6>
-                    <p class="small text-muted">A master sheet for officials, showing all participants in a category and the events they are in. Ideal for roll calls.</p>
-                    <div class="input-group">
-                        <select class="form-select" id="report-category-select">
-                           <option value="">-- Select a Category --</option>
-                           ${state.managingFest.settings?.categories?.map(c => `<option value="${c.name}">${c.name}</option>`).join('') || ''}
+            <div class="ui-card">
+                <h6><i class="fas fa-clipboard-list me-2 text-primary"></i>Participant Entry Sheet</h6>
+                <p class="small text-muted">A master sheet for officials. Filter by category, house, and event type for roll calls.</p>
+                <div class="row g-2 align-items-end">
+                    <div class="col-lg-3 col-md-6">
+                        <label for="report-category-select" class="form-label-sm">Category</label>
+                        <select class="form-select form-select-sm" id="report-category-select">
+                            <option value="ALL">All Categories</option>
+                            ${categoryOptions}
                         </select>
-                        <button class="btn btn-outline-primary" onclick="window.printCategoryEntrySheet()">Generate</button>
+                    </div>
+                    <div class="col-lg-3 col-md-6">
+                        <label for="report-house-select" class="form-label-sm">House</label>
+                        <select class="form-select form-select-sm" id="report-house-select">
+                            <option value="ALL">All Houses</option>
+                            ${houseOptions}
+                        </select>
+                    </div>
+                    <div class="col-lg-3 col-md-6">
+                        <label for="report-event-type-select" class="form-label-sm">Event Type</label>
+                        <select class="form-select form-select-sm" id="report-event-type-select">
+                            <option value="ALL">All Events</option>
+                            <option value="onStage">On-Stage</option>
+                            <option value="offStage">Off-Stage</option>
+                        </select>
+                    </div>
+                    <div class="col-lg-3 col-md-6 d-grid">
+                        <button class="btn btn-sm btn-primary" onclick="window.printCategoryEntrySheet()">Generate Sheet</button>
                     </div>
                 </div>
             </div>
+        </div>
+
+
 
             <div class="col-md-6">
                 <div class="ui-card h-100">
@@ -20444,52 +21394,212 @@ window.printHouseRankings = function() {
     // Example: renderChampionshipReport(state.managingFest.id, true); // second param might mean "for printing"
 }
 
+/**
+ * Reads filter values and triggers the printing of the category entry sheet.
+ */
+/**
+ * Reads all filter values and triggers the printing of the category entry sheet.
+ */
 window.printCategoryEntrySheet = function() {
-    // Ensure a fest is being managed
-    if (!state.managingFest) {
-        return showAlert('Please select a fest from the "Setup" tab first.', 'warning');
-    }
-    const festId = state.managingFest.id;
-
-    // Get the selected category from the dropdown in the Reports tab
-    const categorySelect = document.getElementById('report-category-select');
-    if (!categorySelect || !categorySelect.value) {
-        return showAlert('Please select a category to generate the report.', 'warning');
-    }
-    const categoryName = categorySelect.value;
+    if (!state.managingFest) return showAlert('Please select a fest.', 'warning');
     
-    // Generate the report's HTML content
-    const contentHtml = generateCategoryEntrySheetHTML(festId, categoryName);
-    if (!contentHtml) return; // Stop if no participants were found
+    // 1. Get filter values from all three dropdowns
+    const categoryValue = document.getElementById('report-category-select').value;
+    const houseValue = document.getElementById('report-house-select').value;
+    const eventTypeValue = document.getElementById('report-event-type-select').value;
+    
+    // 2. Generate the report HTML using all three filters
+    const { contentHtml, reportTitle } = generateCategoryEntrySheetHTML(state.managingFest.id, categoryValue, houseValue, eventTypeValue);
+    if (!contentHtml) return; // Stop if the helper function showed an alert
 
-    // Define the specific CSS for this report, including the vertical headers
+    // 3. Define the CSS for the report (this is unchanged)
     const extraCss = `
+        /* ... CSS from previous response ... */
         .entry-sheet-table { font-size: 9pt; border-collapse: collapse; width: 100%; }
-        .entry-sheet-table th, .entry-sheet-table td { border: 1px solid #dee2e6; }
+        .entry-sheet-table th, .entry-sheet-table td { border: 1px solid #dee2e6; padding: 4px 6px; }
         .vertical-header { height: 180px; white-space: nowrap; text-align: left; vertical-align: bottom; position: relative; padding-left: 5px; }
-        .vertical-header div { 
-            transform: rotate(-90deg); 
-            position: absolute; 
-            left: 10px; 
-            bottom: 8px; 
-            transform-origin: 0 100%;
-            width: 170px; /* Limit width to prevent text overflow */
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
+        .vertical-header div { transform: translateX(-50%) rotate(-90deg); position: absolute; left: 50%; bottom: 8px; transform-origin: bottom left; width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .tick-box { width: 35px; text-align: center; }
         .not-participating { background-color: #f0f0f0; }
         .house-header-row td { background-color: #e9ecef; font-weight: bold; text-align: center; }
         .report-footer { margin-top: 40px; text-align: right; font-size: 10pt; }
     `;
 
-    // Call the generic print utility
+    // 4. Call the generic print utility with a more descriptive title
     printReport({ 
         contentHtml, 
-        title: `Entry_Sheet_${state.managingFest.name}_${categoryName}`, 
+        title: `Entry_Sheet_${state.managingFest.name}_${reportTitle}`, 
         extraCss, 
-        landscape: true // This report is best viewed in landscape mode
+        landscape: true 
     });
+}
+
+/**
+ * Generates the HTML for the entry sheet based on category, house, and event type filters.
+ * @param {string} festId - The ID of the current fest.
+ * @param {string} selectedCategory - The category name, or "ALL".
+ * @param {string} selectedHouseId - The house ID, or "ALL".
+ * @param {string} selectedEventType - The event type (onStage, offStage), or "ALL".
+ * @returns {object} An object with the HTML content and a title for the report.
+ */
+function generateCategoryEntrySheetHTML(festId, selectedCategory, selectedHouseId, selectedEventType) {
+    const fest = fests.find(f => f.id === festId);
+
+    // 1. Filter events based on the selected category AND event type
+    let eventsToDisplay = festEvents.filter(e => e.festId === festId);
+
+    if (selectedCategory !== 'ALL') {
+        eventsToDisplay = eventsToDisplay.filter(e => e.category === selectedCategory);
+    }
+    if (selectedEventType !== 'ALL') {
+        eventsToDisplay = eventsToDisplay.filter(e => e.type === selectedEventType);
+    }
+    eventsToDisplay.sort((a, b) => a.name.localeCompare(b.name));
+
+    // 2. Filter participants based on the selected house AND if they are in any of the selected events
+    let filteredParticipants = festRegistrations.filter(r => r.festId === festId);
+
+    if (selectedHouseId !== 'ALL') {
+        filteredParticipants = filteredParticipants.filter(r => r.houseId === selectedHouseId);
+    }
+    
+    const eventIdsToDisplay = eventsToDisplay.map(e => e.id);
+    filteredParticipants = filteredParticipants.filter(r => r.events.some(eventId => eventIdsToDisplay.includes(eventId)));
+
+    if (filteredParticipants.length === 0) {
+        showAlert('No participants found for the selected filters.', 'info');
+        return { contentHtml: null };
+    }
+    
+    // The rest of the function (grouping by house and building the HTML) remains the same as before...
+       // 3. Group the filtered participants by their house
+    const participantsByHouse = filteredParticipants.reduce((acc, reg) => {
+        const houseId = reg.houseId || 'UNASSIGNED';
+        if (!acc[houseId]) acc[houseId] = [];
+        acc[houseId].push(reg);
+        return acc;
+    }, {});
+    
+    const sortedHouseIds = Object.keys(participantsByHouse).sort((a, b) => {
+        if (a === 'UNASSIGNED') return 1; // Put unassigned at the end
+        if (b === 'UNASSIGNED') return -1;
+        const houseA = festHouses.find(h => h.id === a)?.name || '';
+        const houseB = festHouses.find(h => h.id === b)?.name || '';
+        return houseA.localeCompare(houseB);
+    });
+    let tableBodyHtml = '';
+    //... loop through houses and participants to build tableBodyHtml ...
+
+    // 5. Create a more descriptive dynamic title for the report
+    const categoryTitle = selectedCategory;
+    const houseTitle = selectedHouseId === 'ALL' ? 'All Houses' : festHouses.find(h=>h.id === selectedHouseId)?.name || '';
+    const eventTypeTitle = selectedEventType === 'ALL' ? '' : ` (${selectedEventType})`;
+    const displayTitle = `Entry Sheet: ${categoryTitle}${eventTypeTitle} - ${houseTitle}`;
+    const fileTitle = `${categoryTitle}_${eventTypeTitle}_${houseTitle.replace(' ','_')}`;
+
+
+    // 6. Assemble the final report HTML...
+    const contentHtml = `
+        <div class="printable-report">
+            <h3 class="text-center">${fest?.name || ''}</h3>
+            <h4 class="text-center text-muted">${displayTitle}</h4>
+            </div>
+    `;
+    
+    return { contentHtml, reportTitle: fileTitle };
+}
+/**
+ * Generates the HTML for the entry sheet based on category and house filters.
+ * @param {string} festId - The ID of the current fest.
+ * @param {string} selectedCategory - The category name, or "ALL".
+ * @param {string} selectedHouseId - The house ID, or "ALL".
+ * @returns {object} An object with the HTML content and a title for the report.
+ */
+function generateCategoryEntrySheetHTML2(festId, selectedCategory, selectedHouseId) {
+    const fest = fests.find(f => f.id === festId);
+
+    // 1. Filter events based on the selected category
+    const eventsToDisplay = (selectedCategory === 'ALL')
+        ? festEvents.filter(e => e.festId === festId)
+        : festEvents.filter(e => e.festId === festId && e.category === selectedCategory);
+    eventsToDisplay.sort((a, b) => a.name.localeCompare(b.name));
+
+    // 2. Filter participants based on the selected house AND if they are in any of the selected events
+    let filteredParticipants = festRegistrations.filter(r => r.festId === festId);
+
+    if (selectedHouseId !== 'ALL') {
+        filteredParticipants = filteredParticipants.filter(r => r.houseId === selectedHouseId);
+    }
+    
+    // Only keep participants who are in at least one of the events we are displaying
+    const eventIdsToDisplay = eventsToDisplay.map(e => e.id);
+    filteredParticipants = filteredParticipants.filter(r => r.events.some(eventId => eventIdsToDisplay.includes(eventId)));
+
+    if (filteredParticipants.length === 0) {
+        showAlert('No participants found for the selected filters.', 'info');
+        return { contentHtml: null };
+    }
+    
+    // 3. Group the filtered participants by their house
+    const participantsByHouse = filteredParticipants.reduce((acc, reg) => {
+        const houseId = reg.houseId || 'UNASSIGNED';
+        if (!acc[houseId]) acc[houseId] = [];
+        acc[houseId].push(reg);
+        return acc;
+    }, {});
+    
+    const sortedHouseIds = Object.keys(participantsByHouse).sort(/* ...sorting logic from original code... */);
+    
+    // 4. Build the table body, grouped by house
+    let tableBodyHtml = '';
+    let serialNumber = 1;
+
+    sortedHouseIds.forEach(houseId => {
+        const house = festHouses.find(h => h.id === houseId);
+        const houseName = house ? house.name : 'Unassigned';
+        tableBodyHtml += `<tr class="house-header-row"><td colspan="${4 + eventsToDisplay.length}">${houseName.toUpperCase()}</td></tr>`;
+        
+        const participantsInHouse = participantsByHouse[houseId].sort((a, b) => 
+            (a.chestNo || a.studentName).toString().localeCompare((b.chestNo || b.studentName).toString(), undefined, { numeric: true })
+        );
+        
+        participantsInHouse.forEach(reg => {
+            const student = students.find(s => s.id === reg.studentId);
+            tableBodyHtml += `<tr>
+                <td>${serialNumber++}</td>
+                <td>${reg.chestNo || 'N/A'}</td>
+                <td>${reg.studentName}</td>
+                <td>${getStudentClassName(student?.classId, student?.division)}</td>
+                ${eventsToDisplay.map(event => reg.events.includes(event.id) ? '<td class="tick-box text-center fw-bold">✓</td>' : '<td class="not-participating"></td>').join('')}
+            </tr>`;
+        });
+    });
+
+    // 5. Create a dynamic title for the report
+    const houseNameForTitle = selectedHouseId === 'ALL' ? 'All_Houses' : festHouses.find(h=>h.id === selectedHouseId)?.name.replace(' ','_') || 'House';
+    const reportTitle = `${selectedCategory}_(${houseNameForTitle})`;
+    const displayTitle = `Entry Sheet: ${selectedCategory} (${houseNameForTitle.replace('_',' ')})`;
+
+    // 6. Assemble the final report HTML
+    const contentHtml = `
+        <div class="printable-report">
+            <h3 class="text-center">${fest?.name || ''}</h3>
+            <h4 class="text-center text-muted">${displayTitle}</h4>
+            <table class="table table-bordered table-sm mt-4 entry-sheet-table">
+                <thead><tr>
+                    <th>Sl.</th>
+                    <th style="width: 5%;">Chest</th>
+                    <th style="width: 15%;">Name</th>
+                    <th style="width: 3%;">Class</th>
+                    ${eventsToDisplay.map(e => `<th class="vertical-header"><div>${e.name}</div></th>`).join('')}
+                </tr></thead>
+                <tbody>${tableBodyHtml}</tbody>
+            </table>
+            <div class="report-footer"><p>Official's Signature: _________________________</p></div>
+        </div>
+    `;
+    
+    return { contentHtml, reportTitle };
 }
 
 /**
@@ -20498,7 +21608,7 @@ window.printCategoryEntrySheet = function() {
  * @param {string} categoryName The name of the category.
  * @returns {string|null} The HTML string for the report, or null if no data.
  */
-function generateCategoryEntrySheetHTML(festId, categoryName) {
+function generateCategoryEntrySheetHTMLold(festId, categoryName) {
     const fest = fests.find(f => f.id === festId);
 
     // 1. Find all events and participants relevant to this category
@@ -20555,7 +21665,7 @@ function generateCategoryEntrySheetHTML(festId, categoryName) {
                     <td>${getStudentClassName(student?.classId, student?.division)}</td>
                     ${eventsInCategory.map(event => {
                         const isParticipating = reg.events.includes(event.id);
-                        return isParticipating ? '<td class="tick-box"></td>' : '<td class="not-participating"></td>';
+                        return isParticipating ? '<td class="tick-box text-center fw-bold">✓</td>' : '<td class="not-participating"></td>';
                     }).join('')}
                 </tr>`;
         });
@@ -20667,7 +21777,8 @@ window.printCategoryRegistrationSheet = () => {
     const contentHtml = `
         <div class="printable-report">
             <h3 class="text-center">${fest.name}</h3>
-            <h4 class="text-center text-muted">Registration Sheet: ${categoryName} (${eventType === 'offStage' ? 'Off-Stage' : 'On-Stage'})</h4>
+            <h4 class="text-center text-muted">Registration Sheet: ${categoryName} (${eventType === 'offStage' ? 'Off-Stage' : 'On-Live'})</h4>
+            <p style="margin-bottom:0px;">HOUSE NAME: _________________________</p>
             <table class="table table-bordered table-sm mt-4 entry-sheet-table">
                 <thead>
                     <tr>
@@ -27761,5 +28872,3 @@ function printContentOfDiv(divId, title = 'Report', options = {}) {
 
 </body>
 </html>
-
-    
