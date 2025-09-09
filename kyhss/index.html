@@ -6349,6 +6349,123 @@ async function renderResultsTab() {
     }
 }
 
+/**
+ * Generates a printable report containing both a Chart.js canvas and HTML table content.
+ * It converts the canvas to an image to ensure high-quality printing.
+ *
+ * @param {string} contentDivId - The ID of the div containing the HTML table/data to print.
+ * @param {string} canvasId - The ID of the <canvas> element to include in the report.
+ * @param {string} reportTitle - The main title for the printed report.
+ * @param {string} reportSubtitle - The subtitle (e.g., class and exam details).
+ */
+function printReportWithChart(contentDivId, canvasId, reportTitle, reportSubtitle) {
+    // --- 1. Get Elements ---
+    const contentEl = document.getElementById(contentDivId);
+    const canvasEl = document.getElementById(canvasId);
+
+    if (!contentEl) {
+        showAlert('Report content element could not be found.', 'danger');
+        return;
+    }
+    if (!canvasEl) {
+        showAlert('Report chart element could not be found.', 'danger');
+        return;
+    }
+
+    // --- 2. Convert Canvas to High-Resolution Image Data URL ---
+    // This ensures the chart prints clearly and not as a blurry image.
+    let chartImageDataUrl = '';
+    try {
+        chartImageDataUrl = canvasEl.toDataURL('image/png', 4.0); // 1.0 quality for PNG
+    } catch (e) {
+        console.error("Error converting canvas to image:", e);
+        showAlert("Could not process chart image for printing. It might be blank.", "warning");
+    }
+
+    // --- 3. Get Report Table HTML ---
+    // We clone the part of the UI that contains the table to print.
+    const tableHtmlContent = document.getElementById(contentDivId).innerHTML;
+
+    // --- 4. Assemble Final Print HTML ---
+    // --- 4. Assemble Final Print HTML ---
+const printHtml = `
+    <html>
+        <head>
+            <title>${reportTitle}</title>
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+            <style>
+                body { 
+                    font-family: 'Inter', sans-serif; 
+                    margin: 10px; 
+                }
+                @page { 
+                    size: A4 landscape; 
+                    margin: 0.5cm; 
+                }
+                @media print {
+                    body { 
+                        -webkit-print-color-adjust: exact !important; 
+                        print-color-adjust: exact !important; 
+                    }
+                    /* Avoid breaking elements across pages */
+                    .printable-chart, .table { 
+                        page-break-inside: avoid; 
+                    }
+                    /* NEW: Add space after the header in print view */
+                }
+                .chart-container {
+                   /* margin-top: 0.5rem;  Add space above the chart */
+                    margin-bottom: 0.5rem;
+                }
+                .chart-image {
+                    max-width: 100%;
+                    height: auto;
+                    border: 1px solid #eee;
+                    padding: 5px;
+                }
+                table {
+                    width: 100%;
+                    font-size: 0.8rem;
+                }
+                    /* --- MODIFIED: Reduced padding for more space --- */
+                    th, td {
+                        padding: 2px !important; /* Reduced padding (e.g., 4px). Adjust as needed. */
+                        vertical-align: middle;
+                    }
+
+            </style>
+        </head>
+        <body>
+            <div class="report-header" style="text-align: center;">
+                <h4>${schoolDetails.name || 'School Report'}</h4>
+                <h5>${reportTitle}</h5>
+                <p class="text-muted" style="margin-bottom: 0;">${reportSubtitle}</p>
+            </div>
+
+            <hr style="border-top: 1px solid #ccc;">
+
+            <div class="table-container">
+                ${tableHtmlContent}
+            </div>
+            
+            ${chartImageDataUrl ? `
+            <div class="chart-container">
+                <img src="${chartImageDataUrl}" class="chart-image">
+            </div>` : ''}
+        </body>
+    </html>
+`;
+
+    // --- 5. Open Print Dialog ---
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(printHtml);
+    printWindow.document.close();
+    setTimeout(() => {
+        printWindow.focus();
+        printWindow.print();
+       // printWindow.close();
+    }, 500); // Wait for images and styles to load before printing
+}
 
         /**
  * Main controller function for the Exam-wise Report.
