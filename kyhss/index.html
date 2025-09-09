@@ -9171,7 +9171,7 @@ window.revertCompletion = async (completionId) => {
     }
 };
 
-function generateScopedDropdownOptions(type, selectedClassId = '',consider = '') {
+function generateScopedDropdownOptions(type, selectedClassId = '',consider='') {
     // This function remains unchanged.
     let optionsHtml = '';
     let filteredItems = [];
@@ -9191,14 +9191,11 @@ function generateScopedDropdownOptions(type, selectedClassId = '',consider = '')
         if (cls) {
             if (currentUserRole === 'teacher' && selectedUser?.id) {
                 const uniqueDivisions = [...new Set(teacherAssignedClasses.filter(a => a.classId === selectedClassId).map(a => a.division))];
-                if (currentUserRole === 'teacher' && selectedUser?.id) {
-                const uniqueDivisions = [...new Set(teacherAssignedClasses.filter(a => a.classId === selectedClassId).map(a => a.division))];
                 if (consider==="ok") {
                     filteredItems = cls.divisions;
                 } else {
                 filteredItems = cls.divisions.filter(d => uniqueDivisions.includes(d));
                 }
-
             } else {
                 filteredItems = cls.divisions;
             }
@@ -9514,7 +9511,7 @@ function renderCreateSyllabusTab() {
 
     const updateSubjectsAndDivisions = () => {
         const classId = classSelect.value;
-        subjectSelect.innerHTML = `<option value="">-- Select Subject --</option>${generateScopedDropdownOptions('subject', classId)}`;
+        subjectSelect.innerHTML = `<option value="">-- Select Subject --</option>${generateScopedDropdownOptions('subject', classId, 'ok')}`;
         divisionsSelect.innerHTML = `${generateScopedDropdownOptions('division', classId, 'ok')}`;
         divisionsSelect.disabled = !classId;
         if (subjectSelect.options.length === 1 && subjectSelect.options[0].value === "") {
