@@ -7009,7 +7009,9 @@ async function renderResultsTab() {
                 event.preventDefault(); // Prevent default anchor link behavior
                 const studentId = studentLink.dataset.id; // Get student ID from data-id attribute
                 if (studentId) {
-                    generateReportCardHTML(studentId, examSelect.value , 'rc-results-container');
+                   //  generateReportCardHTML(studentId, examSelect.value , 'rc-results-container');
+                    document.getElementById('rc-results-container').innerHTML = generateReportCardHTML_Comparison(studentIdToRender, examIds, 'rc-results-container')
+           
                     // populateAndShowFullStudentModal(studentId); // Call your existing modal function
                 }
             }
@@ -7176,8 +7178,7 @@ async function generateExamWiseResultsTable(examId, classId, division) {
 }
 
 /**
- * Processes raw data to calculate marks, totals, and grades for each student.
- * This version now includes the studentId in the results for reliable lookups.
+ * Processes raw data to calculate marks, totals, and individual grades for each student.
  * @param {Array} studentsInClass
  * @param {Array} schedules
  * @param {object} marksObject
@@ -7204,33 +7205,41 @@ function processExamResultsData(studentsInClass, schedulesForClass, marksObject,
 
             const te = mark?.te ?? 'N/A';
             const ce = mark?.ce ?? 'N/A';
-            let total = 'N/A', pct = 'N/A', grade = 'N/A';
+            let total = 'N/A', pct = 'N/A', grade = 'N/A', teGrade = 'N/A', ceGrade = 'N/A';
 
             if (te !== 'AB' && te !== 'N/A' && ce !== 'AB' && ce !== 'N/A') {
                 total = (Number(te) || 0) + (Number(ce) || 0);
                 pct = maxTotal > 0 ? ((total / maxTotal) * 100).toFixed(1) : 0;
-                grade = gradingSystem === 'type1' ? calculateGrade(total, maxTotal) : calculateGradeType2(total, maxTotal);
+                
+                // Calculate all three grades
+                const gradeFunc = gradingSystem === 'type1' ? calculateGrade : calculateGradeType2;
+                grade = gradeFunc(total, maxTotal);
+                teGrade = gradeFunc(te, maxTE);
+                ceGrade = gradeFunc(ce, maxCE);
+
                 if (grade === 'E' || grade === 'F') finalStatus = 'FAIL';
                 grandTotalMarks += total;
                 grandMaxMarks += maxTotal;
             } else {
                 finalStatus = 'FAIL';
-                if(maxTotal > 0) grandMaxMarks += maxTotal;
+                if (maxTotal > 0) grandMaxMarks += maxTotal;
             }
 
-            subjectResults.push({ subjectId: subject.id, te, ce, maxTE, maxCE, total, pct, grade });
+            subjectResults.push({ subjectId: subject.id, te, ce, total, pct, grade, teGrade, ceGrade });
         });
 
         const grandPct = grandMaxMarks > 0 ? ((grandTotalMarks / grandMaxMarks) * 100) : 0;
+        const gradeFunc = gradingSystem === 'type1' ? calculateGrade : calculateGradeType2;
+
         return {
-            studentId: student.id, // <-- ADDED STUDENT ID HERE
+            studentId: student.id,
             studentName: student.name,
             subjectResults,
             grandTotalMarks,
             grandMaxMarks,
             grandPct,
             finalStatus,
-            overallGrade: gradingSystem === 'type1' ? calculateGrade(grandTotalMarks, grandMaxMarks) : calculateGradeType2(grandTotalMarks, grandMaxMarks)
+            overallGrade: gradeFunc(grandTotalMarks, grandMaxMarks)
         };
     });
 }
@@ -7241,28 +7250,35 @@ function processExamResultsData(studentsInClass, schedulesForClass, marksObject,
  * @param {Array} subjectHeaders - The subject objects for table headers.
  * @returns {string} The complete HTML string for the results table.
  */
-function renderExamResultsTable(resultsData, subjectHeaders,schedulesForClass) {
+/**
+ * Renders the HTML table from the processed results data with a simplified, compact layout.
+ * @param {Array} resultsData - The processed data with calculated results.
+ * @param {Array} subjectHeaders - The subject objects for table headers.
+ * @param {Array} schedulesForClass - The schedule objects for the class.
+ * @returns {string} The complete HTML string for the results table.
+ */
+function renderExamResultsTable(resultsData, subjectHeaders, schedulesForClass) {
     // --- Build Header ---
     let headerHTML = `<thead><tr><th rowspan="2" class="align-middle">Student</th>`;
 
     // Header Row 1: Subject Name + Max Marks
     subjectHeaders.forEach(subject => {
-        // Find the schedule to get the max marks for this subject
         const schedule = schedulesForClass.find(s => s.subjectId === subject.id);
         const maxTE = schedule?.maxTE || 0;
         const maxCE = schedule?.maxCE || 0;
-        headerHTML += `<th colspan="4" class="text-center">
-                         ${subject.name}
-                         <br>
-                         <small class="text-muted fw-normal">(Max TE: ${maxTE}, Max CE: ${maxCE})</small>
+        // --- MODIFIED: Colspan is now 3 ---
+        headerHTML += `<th colspan="3" class="text-center">
+                           ${subject.name}
+                           <br>
+                           <small class="text-muted fw-normal">(Max TE: ${maxTE}, Max CE: ${maxCE})</small>
                        </th>`;
     });
     headerHTML += `<th colspan="3" rowspan="2" class="text-center table-primary align-middle">Grand Total</th></tr>`;
 
-    // Header Row 2: Column Titles (TE, CE, etc.)
+    // --- MODIFIED: Header Row 2 now has fewer columns ---
     headerHTML += `<tr>`;
     subjectHeaders.forEach(() => {
-        headerHTML += `<th>TE/CE</th><th>Tot</th><th>%</th><th>Grd</th>`;
+        headerHTML += `<th>Marks (TE/CE)</th><th>Total / Grade</th><th>%</th>`;
     });
     headerHTML += `</tr></thead>`;
 
@@ -7270,35 +7286,44 @@ function renderExamResultsTable(resultsData, subjectHeaders,schedulesForClass) {
     let bodyHTML = `<tbody>`;
     let rank = 1;
     resultsData.forEach(res => {
-        // Ensure student ID is available in the resultsData (you might need to add it during processing)
-        // Assuming `res.studentId` is available or derived from `res.student` object
-        const studentId = students.find(s => s.name === res.studentName)?.id || ''; // Find ID if not directly present
-
-        const currentRank = res.finalStatus === 'P' ? rank++ : '-';
-        const rowClass = res.finalStatus === 'F' ? 'table-danger' : '';
+        const studentId = res.studentId;
+        const currentRank = res.finalStatus === 'PASS' ? rank++ : '-';
+        const rowClass = res.finalStatus === 'FAIL' ? 'table-danger' : '';
+        
         bodyHTML += `<tr class="${rowClass}">
                         <td class="text-nowrap">
                             <a href="#" class="student-name-link fw-bold" data-id="${studentId}">${res.studentName}</a>
-                        </td>`; // <-- MODIFICATION HERE
+                        </td>`;
 
-        // Data Rows: Show only the obtained marks
+        // --- MODIFIED: Data Rows now have a compact structure ---
         res.subjectResults.forEach(subRes => {
             const gradeColor = (subRes.grade === 'E' || subRes.grade === 'F') ? 'text-danger fw-bold' : '';
-            bodyHTML += `<td class="text-center ${gradeColor}">${subRes.te}/${subRes.ce}</td>
-                         <td class="text-center ${gradeColor}">${subRes.total}</td>
-                         <td class="text-center ${gradeColor}">${subRes.pct}%</td>
-                         <td class="text-center ${gradeColor}">${subRes.grade}</td>`;
+            
+            bodyHTML += `
+                <td class="text-center">
+                    ${subRes.te} / ${subRes.ce}
+                    <br>
+                    <small class="text-muted">(${subRes.teGrade} / ${subRes.ceGrade})</small>
+                </td>
+                <td class="text-center ${gradeColor}">
+                    ${subRes.total}
+                    <br>
+                    <small>(${subRes.grade})</small>
+                </td>
+                <td class="text-center">${subRes.pct}%</td>
+            `;
         });
 
-        bodyHTML += `<td class="table-primary">${res.grandTotalMarks}/${res.grandMaxMarks}</td>
-                     <td class="table-primary">${res.grandPct.toFixed(2)}%</td>
-                     <td class="table-primary fw-bold">${res.finalStatus} (${currentRank})</td></tr>`;
+        bodyHTML += `
+            <td class="table-primary">${res.grandTotalMarks}/${res.grandMaxMarks}</td>
+            <td class="table-primary">${res.grandPct.toFixed(2)}%</td>
+            <td class="table-primary fw-bold">${res.finalStatus} (${currentRank})</td>
+        </tr>`;
     });
     bodyHTML += `</tbody>`;
 
     return `<table class="table table-bordered table-hover table-sm">${headerHTML}${bodyHTML}</table>`;
 }
-
 
 
 /**
@@ -7815,7 +7840,7 @@ window.toggleExamStatus = async function(examId, newStatus) {
         
         
 
-        function renderMarkEntryTab() {
+    function renderMarkEntryTab() {
     const container = document.getElementById('entry');
     let classOptions = '';
 
@@ -7946,76 +7971,93 @@ window.toggleExamStatus = async function(examId, newStatus) {
     }
 }
 
-        async function loadMarkEntrySheet(examId, classId, division, subjectId) {
+     async function loadMarkEntrySheet(examId, classId, division, subjectId) {
     const container = document.getElementById('mark-entry-sheet');
-    if (!examId || !classId || !division || !subjectId) { 
-        container.innerHTML = `<div class="text-center p-5 text-muted">Please select all filters to enter marks.</div>`; 
-        return; 
+    if (!examId || !classId || !division || !subjectId) {
+        container.innerHTML = `<div class="text-center p-5 text-muted">Please select all filters to enter marks.</div>`;
+        return;
     }
     
+    container.innerHTML = `<div class="text-center p-5"><div class="spinner-border text-primary"></div><p class="mt-2">Loading student marks...</p></div>`;
+
     const schedule = examSchedules.find(s => s.examId === examId && s.classId === classId && s.division === division && s.subjectId === subjectId);
-    const maxTE = schedule?.maxTE || 0, maxCE = schedule?.maxCE || 0;
-    const studentsInClass = students
-
-    .filter(s => s.classId === classId && s.division === division && s.status !== 'TC Issued')
-
-    .sort((a, b) => a.name.localeCompare(b.name));
-if (studentsInClass.length === 0) { 
-        container.innerHTML = '<div class="alert alert-warning">No students found in this class/division.</div>'; 
-        return; 
+    if (!schedule) {
+        container.innerHTML = '<div class="alert alert-danger">Could not find a valid exam schedule for this selection.</div>';
+        return;
     }
     
-    // Calculate Entered and Pending Counts
+    const maxTE = schedule.maxTE || 0;
+    const maxCE = schedule.maxCE || 0;
+    const studentsInClass = students
+        .filter(s => s.classId === classId && s.division === division && s.status !== 'TC Issued' && s.status !== 'Graduated')
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+    if (studentsInClass.length === 0) {
+        container.innerHTML = '<div class="alert alert-warning">No active students found in this class/division.</div>';
+        return;
+    }
+    
+    // --- MODIFICATION: Directly fetch marks for this specific class/subject/exam ---
+    const marksForSheet = {};
+    try {
+        const q = query(getCollectionRef('marks'), 
+            where('examId', '==', examId),
+            where('classId', '==', classId),
+            where('division', '==', division),
+            where('subjectId', '==', subjectId)
+        );
+        const querySnapshot = await getDocs(q);
+        querySnapshot.forEach(doc => {
+            const markData = doc.data();
+            marksForSheet[markData.studentId] = markData;
+        });
+    } catch (error) {
+        console.error("Error fetching marks directly:", error);
+        showAlert('Could not fetch the latest marks. Data may be from cache.', 'danger');
+        // Fallback to cached marks if direct fetch fails
+        studentsInClass.forEach(student => {
+            const markId = `${examId}_${student.id}_${subjectId}`;
+            if (marks[markId]) {
+                marksForSheet[student.id] = marks[markId];
+            }
+        });
+    }
+    
+    // --- Calculate Entered and Pending Counts using the freshly fetched data ---
     const enteredStudents = [];
     const notEnteredStudents = [];
-
     studentsInClass.forEach(student => {
-        const markId = `${examId}_${student.id}_${subjectId}`;
-        if (marks[markId]) { // Check if a mark exists for this student in the marks object
+        if (marksForSheet[student.id]) {
             enteredStudents.push(student.name);
         } else {
             notEnteredStudents.push(student.name);
         }
     });
 
-    // HTML for the summary section
     const summaryHTML = `
         <div class="card bg-light p-3 mb-4 border-0">
             <h6 class="fw-bold">Entry Status</h6>
             <div class="d-flex justify-content-around text-center mt-2">
-                <div>
-                    <h5 class="mb-0">${studentsInClass.length}</h5>
-                    <small class="text-muted">Total Students</small>
-                </div>
-                <div>
-                    <h5 class="mb-0 text-success">${enteredStudents.length}</h5>
-                    <small class="text-muted">Marks Entered</small>
-                </div>
-                <div>
-                    <h5 class="mb-0 text-danger">${notEnteredStudents.length}</h5>
-                    <small class="text-muted">Pending</small>
-                </div>
+                <div><h5 class="mb-0">${studentsInClass.length}</h5><small class="text-muted">Total Students</small></div>
+                <div><h5 class="mb-0 text-success">${enteredStudents.length}</h5><small class="text-muted">Marks Entered</small></div>
+                <div><h5 class="mb-0 text-danger">${notEnteredStudents.length}</h5><small class="text-muted">Pending</small></div>
             </div>
             ${notEnteredStudents.length > 0 ? `
             <div class="mt-3">
-                <a class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" href="#pending-list-collapse" role="button">
-                    Show Pending Student List
-                </a>
+                <a class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" href="#pending-list-collapse" role="button">Show Pending Student List</a>
                 <div class="collapse mt-2" id="pending-list-collapse">
                     <ul class="list-group list-group-flush small">
                         ${notEnteredStudents.map(name => `<li class="list-group-item py-1 bg-light">${name}</li>`).join('')}
                     </ul>
                 </div>
             </div>` : ''}
-        </div>
-    `;
+        </div>`;
 
-    // HTML for the marks entry table
     let tableHTML = `<div class="table-responsive"><table id="marks-table" class="table table-bordered">
         <thead class="table-light"><tr><th>Student Name</th><th>Admission No.</th><th>Theory / ${maxTE}</th><th>Internal / ${maxCE}</th></tr></thead><tbody>`;
+    
     studentsInClass.forEach(student => {
-        const markId = `${examId}_${student.id}_${subjectId}`;
-        const mark = marks[markId];
+        const mark = marksForSheet[student.id]; // Use the freshly fetched data
         const teValue = mark?.te === 'AB' ? 'AB' : (mark?.te ?? '');
         const ceValue = mark?.ce === 'AB' ? 'AB' : (mark?.ce ?? '');
         tableHTML += `<tr data-student-id="${student.id}">
@@ -8024,12 +8066,11 @@ if (studentsInClass.length === 0) {
             <td><input type="text" name="ce" class="form-control form-control-sm" value="${ceValue}" data-max="${maxCE}"></td>
         </tr>`;
     });
+    
     tableHTML += `</tbody></table></div><div class="text-end mt-3"><button id="save-marks-btn" class="btn btn-success">Save Marks</button></div>`;
     
-    // --- REARRANGED: Summary is now displayed above the table ---
     container.innerHTML = summaryHTML + tableHTML;
     document.getElementById('mark-entry-summary-container').innerHTML = ''; // Clear the other container
-
 
     // Attach event listeners for the input fields
     container.querySelectorAll('input[name="te"], input[name="ce"]').forEach(input => {
@@ -8044,7 +8085,6 @@ if (studentsInClass.length === 0) {
     });
     document.getElementById('save-marks-btn').addEventListener('click', () => saveMarks(examId, classId, division, subjectId));
 }
-
 
         async function saveMarks(examId, classId, division, subjectId) {
     const saveButton = document.getElementById('save-marks-btn');
@@ -8527,7 +8567,7 @@ function renderReportCardTab() {
                 showAlert('Please select at least one exam.', 'warning');
                 return;
             }
-            generateReportCardHTML_Comparison(studentId, examIds, 'rc-results-container');
+            resultsContainer.innerHTML = generateReportCardHTML_Comparison(studentId, examIds);
             // Show the header and print button for the selected student
             rcStudentNameHeader.textContent = `Report for ${studentName}`;
             rcHeader.style.display = 'flex';
@@ -8567,53 +8607,37 @@ function renderReportCardTab() {
  * This version uses a temporary DOM element to ensure all images are loaded before printing.
  */
 function printAllReportCards(classId, division, examIds) {
-    showAlert('Generating all report cards, this may take a moment...', 'info');
+    showAlert('Preparing report cards for printing...', 'info');
 
-    const studentsInClass = students.filter(s => s.classId === classId && s.division === division && s.status !== 'TC Issued').sort((a, b) => a.name.localeCompare(b.name));
-if (studentsInClass.length === 0) {
+    const studentsInClass = students.filter(s => s.classId === classId && s.division === division);
+    if (studentsInClass.length === 0) {
         return showAlert('No students to print.', 'warning');
     }
 
-    // --- FIX: Step 1 - Create a temporary, hidden container div ---
     const tempPrintContainer = document.createElement('div');
     tempPrintContainer.id = 'temp-report-card-container';
-    tempPrintContainer.style.display = 'none'; // Hide it from the user
+    tempPrintContainer.style.display = 'none';
     document.body.appendChild(tempPrintContainer);
 
     try {
         let allCardsHtml = '';
         studentsInClass.forEach(student => {
-            // Create a unique temporary div for each student's card generation
-            const studentCardDiv = document.createElement('div');
-            // The generateReportCardHTML_Comparison function will populate this div's innerHTML
-            generateReportCardHTML_Comparison(student.id, examIds, studentCardDiv);
-            
-            // Wrap the generated content in a page-break controller div
-            allCardsHtml += `<div class="printable-card-page">${studentCardDiv.innerHTML}</div>`;
+            // --- MODIFIED: Directly get the HTML string from the function ---
+            const cardHtml = generateReportCardHTML_Comparison(student.id, examIds,tempPrintContainer);
+            allCardsHtml += `<div class="printable-card-page">${cardHtml}</div>`;
         });
         
-        // --- FIX: Step 2 - Put all the generated HTML into the hidden container ---
         tempPrintContainer.innerHTML = allCardsHtml;
-
         const reportTitle = `Report Cards for ${classes.find(c=>c.id===classId).name} - ${division}`;
         
-        // --- FIX: Step 3 - Call the print function that reads from a DOM element ID ---
         printContentOfDiv('temp-report-card-container', reportTitle, {
-            extraCss: `
-                .printable-card-page { 
-                    page-break-after: always; /* Each report card starts on a new page */
-                }
-                .printable-card-page:last-child {
-                    page-break-after: avoid; /* Prevent a blank page after the last card */
-                }
-            `
+            extraCss: `.printable-card-page { page-break-after: always; } .printable-card-page:last-child { page-break-after: avoid; }`
         });
-
     } finally {
-        // --- FIX: Step 4 - Always remove the temporary container after printing ---
         document.body.removeChild(tempPrintContainer);
     }
 }
+
 
 function renderRankListTab() {
             const container = document.getElementById('pills-ranklist');
@@ -8794,56 +8818,43 @@ function generateReportCardHTML(studentId, examId, containerId) {
         </div>
     </div>`;
 }
-function generateReportCardHTML_Comparison(studentId, examIds, containerId) {
-    const container = document.getElementById(containerId);
-    if (!container) return;
-
+/**
+ * Generates and returns the HTML for a student's comparison report card.
+ * This function is self-contained and does not modify the DOM directly.
+ * @param {string} studentId - The ID of the student.
+ * @param {string[]} examIds - An array of exam IDs to compare.
+ * @returns {string} The complete HTML string for the report card, or an error message.
+ */
+function generateReportCardHTML_Comparison(studentId, examIds) {
     const student = students.find(s => s.id === studentId);
-    if (!student) return;
+    if (!student) {
+        console.error("Could not generate report card: Student not found for ID", studentId);
+        return '<p class="alert alert-danger">Student data not found.</p>';
+    }
 
     const studentClass = classes.find(c => c.id === student?.classId);
     const gradingSystem = document.getElementById('shared-grading-system')?.value || 'type1';
-    
-    // Construct photo URL: use thumbnail if photoDriveId exists, otherwise a placeholder
     const studentPhotoSrc = student.photoDriveId
         ? `https://drive.google.com/thumbnail?id=${student.photoDriveId}&sz=400`
         : 'https://placehold.co/150x200?text=No+Photo&font=roboto';
 
-
-    // Process data for all exams
     const examsData = examIds.map(eId => {
         const exam = exams.find(e => e.id === eId);
         if (!exam) return null;
 
-        const schedules = examSchedules.filter(s =>
-            s.examId === eId &&
-            s.classId === student.classId &&
-            s.division === student.division
-        );
-
+        const schedules = examSchedules.filter(s => s.examId === eId && s.classId === student.classId && s.division === student.division);
         const processedData = processExamResultsData([student], schedules, marks, eId, gradingSystem);
         const report = processedData[0] || {};
 
-        // Calculate rank for student in this exam
-       // const allStudentsInClass = students.filter(s => s.classId === student.classId && s.division === student.division);
-       const allStudentsInClass = students.filter(s => s.classId === student.classId && s.division === student.division && s.status !== 'TC Issued').sort((a, b) => a.name.localeCompare(b.name));
+        const allStudentsInClass = students.filter(s => s.classId === student.classId && s.division === student.division && s.status !== 'TC Issued' && s.status !== 'Graduated').sort((a, b) => a.name.localeCompare(b.name));
         const allProcessed = processExamResultsData(allStudentsInClass, schedules, marks, eId, gradingSystem);
         allProcessed.sort((a, b) => b.grandTotalMarks - a.grandTotalMarks);
         const rank = allProcessed.findIndex(s => s.studentId === student.id) + 1;
-
-        return {
-            exam,
-            report,
-            rank
-        };
+        return { exam, report, rank };
     }).filter(Boolean);
 
-    // Collect all unique subjectIds
-    const allSubjectIds = [
-        ...new Set(examsData.flatMap(e => e.report.subjectResults?.map(r => r.subjectId) || []))
-    ];
+    const allSubjectIds = [...new Set(examsData.flatMap(e => e.report.subjectResults?.map(r => r.subjectId) || []))];
 
-    // Build table header
     let headerRow1 = `<tr><th rowspan="2">Subject</th>`;
     let headerRow2 = ``;
     examsData.forEach(ed => {
@@ -8853,7 +8864,6 @@ function generateReportCardHTML_Comparison(studentId, examIds, containerId) {
     headerRow1 += `</tr>`;
     headerRow2 = `<tr>${headerRow2}</tr>`;
 
-    // Build body
     let bodyRows = ``;
     allSubjectIds.forEach(subId => {
         const subjectName = subjects.find(s => s.id === subId)?.name || "N/A";
@@ -8862,15 +8872,8 @@ function generateReportCardHTML_Comparison(studentId, examIds, containerId) {
             const res = ed.report.subjectResults?.find(r => r.subjectId === subId);
             if (res) {
                 const totalMax = res.maxTE + res.maxCE;
-                const grade = gradingSystem === 'type1'
-                    ? calculateGrade(res.total, totalMax)
-                    : calculateGradeType2(res.total, totalMax);
-                rowHtml += `
-                    <td class="text-center">${res.te}/${res.maxTE}</td>
-                    <td class="text-center">${res.ce}/${res.maxCE}</td>
-                    <td class="text-center">${res.total}/${totalMax}</td>
-                    <td class="text-center">${grade}</td>
-                `;
+                const grade = gradingSystem === 'type1' ? calculateGrade(res.total, totalMax) : calculateGradeType2(res.total, totalMax);
+                rowHtml += `<td class="text-center">${res.te}/${res.maxTE}</td><td class="text-center">${res.ce}/${res.maxCE}</td><td class="text-center">${res.total}/${totalMax}</td><td class="text-center">${grade}</td>`;
             } else {
                 rowHtml += `<td>-</td><td>-</td><td>-</td><td>-</td>`;
             }
@@ -8879,17 +8882,12 @@ function generateReportCardHTML_Comparison(studentId, examIds, containerId) {
         bodyRows += rowHtml;
     });
 
-    // Summary rows: Percentage / Grade / Pass-Fail / Rank
     let summaryRow = `<tr><th>Overall %</th>`;
-    examsData.forEach(ed => {
-        summaryRow += `<td colspan="4" class="text-center">${ed.report.grandPct?.toFixed(2) || "0"}%</td>`;
-    });
+    examsData.forEach(ed => { summaryRow += `<td colspan="4" class="text-center">${ed.report.grandPct?.toFixed(2) || "0"}%</td>`; });
     summaryRow += `</tr>`;
 
     let gradeRow = `<tr><th>Overall Grade</th>`;
-    examsData.forEach(ed => {
-        gradeRow += `<td colspan="4" class="text-center">${ed.report.overallGrade || "-"}</td>`;
-    });
+    examsData.forEach(ed => { gradeRow += `<td colspan="4" class="text-center">${ed.report.overallGrade || "-"}</td>`; });
     gradeRow += `</tr>`;
 
     let resultRow = `<tr><th>Result</th>`;
@@ -8900,33 +8898,25 @@ function generateReportCardHTML_Comparison(studentId, examIds, containerId) {
     resultRow += `</tr>`;
 
     let rankRow = `<tr><th>Rank</th>`;
-    examsData.forEach(ed => {
-        rankRow += `<td colspan="4" class="text-center">${ed.rank}</td>`;
-    });
+    examsData.forEach(ed => { rankRow += `<td colspan="4" class="text-center">${ed.rank}</td>`; });
     rankRow += `</tr>`;
 
-    // Teacher remarks based on comparison
     let remark = "Performance is consistent.";
     if (examsData.length > 1) {
         const first = examsData[0].report.grandPct || 0;
         const last = examsData[examsData.length - 1].report.grandPct || 0;
-        if (last > first) {
-            remark = "Excellent! Performance has improved.";
-        } else if (last < first) {
-            remark = "Performance has declined. Needs more effort.";
-        }
+        if (last > first) remark = "Excellent! Performance has improved.";
+        else if (last < first) remark = "Performance has declined. Needs more effort.";
     }
 
-    // Render final HTML
-    container.innerHTML = `
-    <div id="report-card-printable" class="p-4 border bg-white mx-auto" style="max-width: 100%;">
+    return `
+    <div id="report-card-printable" class="p-2 border bg-white mx-auto" style="max-width: 100%;">
         <div class="report-header text-center mb-4">
-            ${schoolDetails.logoUrl ? `<img src="${schoolDetails.logoUrl}" style="max-height: 80px; margin-bottom: 1rem;">` : ''}
-            <h3>${schoolDetails.address.toUpperCase() || 'School Name'}</h3>
+            ${schoolDetails.logoUrl ? `<img src="${schoolDetails.logoUrl}" style="max-height: 80px; margin-bottom: 0.5rem;margin-top: -1rem;">` : ''}
+            <h4>${schoolDetails.address.toUpperCase() || 'School Name'}</h4>
             <p>${schoolDetails.name || ''}</p>
             <h4>Progress Report Comparison</h4>
         </div>
-
         <div class="row mb-4 align-items-center">
             <div class="col-8">
                 <table class="table table-sm table-borderless">
@@ -8939,35 +8929,19 @@ function generateReportCardHTML_Comparison(studentId, examIds, containerId) {
                 </table>
             </div>
             <div class="col-4 text-center">
-                <img src="${studentPhotoSrc}"
-                     alt="Student Photo" class="img-thumbnail rounded-3 shadow-sm" style="width: 130px; height: 170px; object-fit: cover; border: 2px solid #ddd;">
+                <img src="${studentPhotoSrc}" alt="Student Photo" class="img-thumbnail rounded-3 shadow-sm" style="width: 130px; height: 170px; object-fit: cover; border: 2px solid #ddd;">
             </div>
         </div>
-
         <table class="table table-bordered table-sm">
-            <thead class="table-light text-center">
-                ${headerRow1}
-                ${headerRow2}
-            </thead>
-            <tbody>
-                ${bodyRows}
-                ${summaryRow}
-                ${gradeRow}
-                ${resultRow}
-                ${rankRow}
-            </tbody>
+            <thead class="table-light text-center">${headerRow1}${headerRow2}</thead>
+            <tbody>${bodyRows}${summaryRow}${gradeRow}${resultRow}${rankRow}</tbody>
         </table>
-
-        <div class="mt-4">
-            <strong>Teacher's Remark:</strong> ${remark}
-        </div>
-
+        <div class="mt-2"><strong>Teacher's Remark:</strong> ${remark}</div>
         <div class="row mt-5 text-center text-muted" style="font-size: 0.9rem;">
             <div class="col-6"><hr class="mx-auto w-50">Class Teacher</div>
             <div class="col-6"><hr class="mx-auto w-50">Headmaster / Principal</div>
         </div>
-    </div>
-`;
+    </div>`;
 }
 
         function calculateGrade(score, maxScore) {
