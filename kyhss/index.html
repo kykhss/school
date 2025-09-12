@@ -8895,16 +8895,30 @@ function generateReportCardHTML_Comparison(studentId, examIds) {
     allSubjectIds.forEach(subId => {
         const subjectName = subjects.find(s => s.id === subId)?.name || "N/A";
         let rowHtml = `<tr><td>${subjectName}</td>`;
-        examsData.forEach(ed => {
-            const res = ed.report.subjectResults?.find(r => r.subjectId === subId);
-            if (res) {
-                const totalMax = res.maxTE + res.maxCE;
-                const grade = gradingSystem === 'type1' ? calculateGrade(res.total, totalMax) : calculateGradeType2(res.total, totalMax);
-                rowHtml += `<td class="text-center">${res.te}/${res.maxTE}</td><td class="text-center">${res.ce}/${res.maxCE}</td><td class="text-center">${res.total}/${totalMax}</td><td class="text-center">${grade}</td>`;
-            } else {
-                rowHtml += `<td>-</td><td>-</td><td>-</td><td>-</td>`;
-            }
-        });
+        // This loop builds the main body of the marks table
+examsData.forEach(ed => {
+    const res = ed.report.subjectResults?.find(r => r.subjectId === subId);
+    if (res) {
+        const totalMax = res.maxTE + res.maxCE;
+
+        // The grade for the total marks of the subject
+        const totalGrade = gradingSystem === 'type1' 
+            ? calculateGrade(res.total, totalMax) 
+            : calculateGradeType2(res.total, totalMax);
+
+        // --- MODIFICATION IS HERE ---
+        // The individual grades for TE and CE are now included in brackets
+        rowHtml += `
+            <td class="text-center">${res.te}/${res.maxTE} (${res.teGrade})</td>
+            <td class="text-center">${res.ce}/${res.maxCE} (${res.ceGrade})</td>
+            <td class="text-center">${res.total}/${totalMax}</td>
+            <td class="text-center">${totalGrade}</td>
+        `;
+    } else {
+        // If no results, add empty cells
+        rowHtml += `<td>-</td><td>-</td><td>-</td><td>-</td>`;
+    }
+});
         rowHtml += `</tr>`;
         bodyRows += rowHtml;
     });
@@ -8970,6 +8984,7 @@ function generateReportCardHTML_Comparison(studentId, examIds) {
         </div>
     </div>`;
 }
+        
 
         function calculateGrade(score, maxScore) {
             if (score === 'AB') return 'AB';
