@@ -8984,7 +8984,6 @@ examsData.forEach(ed => {
         </div>
     </div>`;
 }
-        
 
         function calculateGrade(score, maxScore) {
             if (score === 'AB') return 'AB';
@@ -14072,6 +14071,11 @@ async function handleFormSave(e) {
  * Displays all responses for a specific form with filters for class and division.
  * @param {string} formId - The ID of the form.
  */
+/**
+ * Displays all responses for a specific form with filters for class and division,
+ * a dynamic total row for amount fields, and a filtered print option.
+ * @param {string} formId - The ID of the form.
+ */
 window.viewFormResponses = (formId) => {
     const form = forms.find(f => f.id === formId);
     if (!form) {
@@ -14085,7 +14089,6 @@ window.viewFormResponses = (formId) => {
         return;
     }
     
-    // --- NEW: Get class and division options for filters ---
     const classOptions = classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
 
     mainContent.innerHTML = `
@@ -14094,23 +14097,24 @@ window.viewFormResponses = (formId) => {
         <div class="card shadow-sm mb-4">
             <div class="card-body">
                 <div class="row g-3 align-items-end">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label for="response-class-filter" class="form-label">Filter by Class</label>
                         <select id="response-class-filter" class="form-select">
                             <option value="">All Classes</option>
                             ${classOptions}
                         </select>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label for="response-division-filter" class="form-label">Filter by Division</label>
                         <select id="response-division-filter" class="form-select" disabled>
                             <option value="">All Divisions</option>
                         </select>
                     </div>
-                    <div class="col-md-4 text-end">
+                    <div class="col-md-6 text-end">
                         <div class="btn-group">
                              <button id="export-responses-csv-btn" class="btn btn-success"><i class="fas fa-file-csv me-2"></i>Export CSV</button>
                              <button id="export-responses-pdf-btn" class="btn btn-danger"><i class="fas fa-file-pdf me-2"></i>Export PDF</button>
+                             <button id="print-filtered-responses-btn" class="btn btn-secondary"><i class="fas fa-print me-2"></i>Print Filtered</button>
                         </div>
                     </div>
                 </div>
@@ -14121,6 +14125,7 @@ window.viewFormResponses = (formId) => {
             <table class="table table-striped" id="form-responses-table">
                 <thead></thead>
                 <tbody></tbody>
+                <tfoot></tfoot>
             </table>
         </div>
         <div class="mt-3 text-end">
@@ -14128,12 +14133,12 @@ window.viewFormResponses = (formId) => {
         </div>
     `;
 
-    // --- NEW: Logic to handle filtering and re-rendering the table ---
     const classFilter = document.getElementById('response-class-filter');
     const divisionFilter = document.getElementById('response-division-filter');
     const table = document.getElementById('form-responses-table');
     const thead = table.querySelector('thead');
     const tbody = table.querySelector('tbody');
+    const tfoot = table.querySelector('tfoot');
 
     const renderTable = () => {
         const selectedClassId = classFilter.value;
@@ -14141,7 +14146,6 @@ window.viewFormResponses = (formId) => {
 
         let filteredResponses = formResponses.filter(r => r.formId === formId);
 
-        // Apply filters if they are selected
         if (selectedClassId) {
             const studentIdsInClass = students.filter(s => s.classId === selectedClassId).map(s => s.id);
             filteredResponses = filteredResponses.filter(r => studentIdsInClass.includes(r.userId));
@@ -14156,6 +14160,7 @@ window.viewFormResponses = (formId) => {
 
         if (filteredResponses.length === 0) {
             tbody.innerHTML = `<tr><td colspan="${headers.length}" class="text-center">No responses match your filters.</td></tr>`;
+            tfoot.innerHTML = ''; // Clear footer if no data
             return;
         }
 
@@ -14167,12 +14172,26 @@ window.viewFormResponses = (formId) => {
                 const value = r.values[key];
                 return `<td>${value !== undefined && value !== null ? value : '—'}</td>`;
             }).join('');
-
             return `<tr><td>${r.userId}</td><td>${userName}</td>${valuesHtml}<td><span class="badge bg-info">${r.status || 'N/A'}</span></td></tr>`;
         }).join('');
+
+        // --- NEW: Calculate and Render Totals Row ---
+        const amountFields = form.fields.filter(f => f.type === 'amount');
+        if (amountFields.length > 0) {
+            const totalCells = form.fields.map(field => {
+                if (field.type === 'amount') {
+                    const key = field.label.replace(/\s+/g, '_').toLowerCase();
+                    const total = filteredResponses.reduce((sum, r) => sum + (parseFloat(r.values[key]) || 0), 0);
+                    return `<td class="fw-bold">₹ ${total.toFixed(2)}</td>`;
+                }
+                return '<td></td>';
+            }).join('');
+            tfoot.innerHTML = `<tr class="table-light"><th colspan="2" class="text-end">Total</th>${totalCells}<th></th></tr>`;
+        } else {
+            tfoot.innerHTML = ''; // Ensure footer is empty if no amount fields
+        }
     };
 
-    // Populate division filter when class changes
     classFilter.addEventListener('change', () => {
         const selectedClass = classes.find(c => c.id === classFilter.value);
         divisionFilter.innerHTML = '<option value="">All Divisions</option>';
@@ -14187,14 +14206,66 @@ window.viewFormResponses = (formId) => {
 
     divisionFilter.addEventListener('change', renderTable);
     
-    // Attach export listeners
+    // Attach export and print listeners
     document.getElementById('export-responses-csv-btn').addEventListener('click', () => downloadFormResponsesCSV(form.id, classFilter.value, divisionFilter.value));
     document.getElementById('export-responses-pdf-btn').addEventListener('click', () => downloadStudentSubmissionsPDF(form.id));
+    document.getElementById('print-filtered-responses-btn').addEventListener('click', () => {
+        const tableHtml = document.getElementById('form-responses-table').outerHTML;
+        const className = classFilter.options[classFilter.selectedIndex]?.text || 'All Classes';
+        const divisionName = divisionFilter.options[divisionFilter.selectedIndex]?.text || 'All Divisions';
+        
+        const reportTitle = `${form.title}`;
+        const subTitle = `by: ${className} - ${divisionName}`;
+const customHeaderHtml = `
+        <div style="text-align: center; margin-bottom: 20px;">
+            ${schoolDetails.logoUrl ? `<img src="${schoolDetails.logoUrl}" alt="School Logo" style="max-height: 80px;">` : ''}
+            <h3>${schoolDetails.name || 'School Name'}</h3>
+            <h5>${reportTitle}</h5>
+            <h4 class="text-muted">${subTitle}</h4>
 
+        </div>
+    `;
+        printReport({
+            contentHtml: `<div class="printable-report">${tableHtml}</div>`,
+            title: form.title,
+            reportHeader: { title: reportTitle, subTitle: subTitle },
+            customHeaderHtml: customHeaderHtml
+        });
+    });
 
-    // Initial render of the table
     renderTable();
 };
+
+/**
+ * Generates a standardized HTML header for all printable reports.
+ * @param {object} headerInfo - An object containing the title and subtitle for the report.
+ * @param {string} headerInfo.title - The main title of the report.
+ * @param {string} headerInfo.subTitle - The subtitle, typically showing the filter conditions.
+ * @returns {string} The complete HTML string for the report header.
+ */
+function generateReportHeaderHTML(headerInfo) {
+    const { title, subTitle } = headerInfo;
+
+    // This layout uses a side-by-side logo and school name, as requested previously.
+    return `
+        <div class="report-header mb-4">
+            <div class="row align-items-center">
+                <div class="col-2 text-start">
+                    ${schoolDetails.logoUrl ? `<img src="${schoolDetails.logoUrl}" style="max-height: 80px;">` : ''}
+                </div>
+                <div class="col-10 text-center">
+                    <h3>${schoolDetails.name || 'School Report'}</h3>
+                    <p class="mb-0">${schoolDetails.address || ''}</p>
+                </div>
+            </div>
+            <hr>
+            <div class="text-center">
+                <h4>${title || 'Report'}</h4>
+                ${subTitle ? `<p class="text-muted">${subTitle}</p>` : ''}
+            </div>
+        </div>
+    `;
+}
 // --- TEACHER-SPECIFIC VIEWS ---
 /**
  * Renders the dashboard for teachers to see forms they need to fill
@@ -20718,25 +20789,42 @@ async function handleStudentLookup(inputElement) {
 function openEventSelectionModal(row) {
     const studentId = row.dataset.studentid;
     if (!studentId) return showAlert('Please find a valid student first by entering their Admission No.', 'warning');
-    state.managingFest = fest; // Ensure the global state is set for modals
     
+    // --- FIX: The incorrect line "state.managingFest = fest;" has been removed ---
+
     const student = students.find(s => s.id === studentId);
+    // Ensure the global state is set before proceeding
+    if (!state.managingFest) {
+        return showAlert('Error: No fest is currently being managed. Please go to the Setup tab.', 'danger');
+    }
+
     const festId = state.managingFest.id;
     const studentCategory = getStudentCategory(student);
     const currentlySelected = row.dataset.events ? row.dataset.events.split(',') : [];
 
-    // EDIT: Get granular limits for Solo/Group events based on their type.
     const maxOnStageSolo = state.managingFest.settings.maxOnStageSoloEvents || 2;
-    const maxOnStageGroup =state.managingFest. settings.maxOnStageGroupEvents || 2;
+    const maxOnStageGroup = state.managingFest.settings.maxOnStageGroupEvents || 2;
     const maxOffStageSolo = state.managingFest.settings.maxOffStageSoloEvents || 1;
-    const maxOffStageGroup =state.managingFest. settings.maxOffStageGroupEvents || 1;
+    const maxOffStageGroup = state.managingFest.settings.maxOffStageGroupEvents || 1;
 
-    const onStageEvents = festEvents.filter(e => e.festId === festId && (e.category === 'General' || e.category === studentCategory) && e.type !== 'offStage');
-    const offStageEvents = festEvents.filter(e => e.festId === festId && (e.category === 'General' || e.category === studentCategory) && e.type === 'offStage');
+    const onStageEvents = festEvents.filter(e => 
+    e.festId === festId && 
+    (e.category === 'General' || e.category === studentCategory) && 
+    e.type !== 'offStage' && 
+    (!e.gender || e.gender === 'Common' || e.gender === student.gender)
+);
+
+const offStageEvents = festEvents.filter(e => 
+    e.festId === festId && 
+    (e.category === 'General' || e.category === studentCategory) && 
+    e.type === 'offStage' && 
+    (!e.gender || e.gender === 'Common' || e.gender === student.gender)
+);
 
     const modalTitle = document.getElementById('event-modal-title');
     const modalBody = document.getElementById('event-modal-body');
     const saveBtn = document.getElementById('event-modal-save-btn');
+
     
     modalTitle.textContent = `Select Events for ${student.name}`;
 
