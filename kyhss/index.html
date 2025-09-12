@@ -812,7 +812,8 @@ let bookAllotments =[];
 let examRooms = [];
 let examDuties = [];
 let examAbsentees = [];
-let examRegistrationSettings = {}; // Single document
+let examRegistrationSettings = {}; // Single document,
+let timetables = [];
 
 let roomToEdit = null; // Local state for editing a room (can be global if preferred)
 
@@ -1038,7 +1039,8 @@ const teacherNav = [
   { id: 'exam-mgt', icon: 'fa-file-signature', text: 'Mark Entry' },
   { id: 'syllabus-tracker', icon: 'fa-tasks', text: 'Syllabus Tracker' },
   { id: 'teacher-forms', icon: 'fa-clipboard-check', text: 'Forms' }, // ✅ NEW
-  { id: 'response-forms', icon: 'fa-table', text: 'Form Responses' },
+  //{ id: 'response-forms', icon: 'fa-table', text: 'Form Responses' },
+  { id: 'classwise-forms', icon: 'fa-edit', text: 'Class Data Entry' },
   { id: 'mark-absentee', icon: 'fa-user-times', text: 'Mark Absentee' }, 
   { id: 'fee-details', icon: 'fa-receipt', text: 'FeeDetails'},
   { id: 'exam-timetable', icon: 'fa-calendar-alt', text: 'Exam Timetable' },
@@ -1309,6 +1311,10 @@ const viewDependencies = {
     'holiday-mgt': ['holidays'],
     'syllabus-tracker': ['classes', 'subjects', 'teachers', 'classroomSubjects', 'chapters', 'syllabuses', 'syllabusCompletion'],
     'form-mgt': ['forms', 'formResponses'],
+    'forms': ['forms', 'formResponses'],
+    'classwise-forms': ['forms', 'formResponses'],
+    'teacher-forms': ['forms', 'formResponses'],
+    
     'fee-mgt' : ['pendingPayments','classes','students','feeStructures','studentFeeSetups','receipts'],
     'reports': ['reports', 'students', 'teachers', 'classes', 'subjects', 'classroomSubjects'],
     'school-details': ['schoolDetails'],
@@ -1669,107 +1675,85 @@ function syncDataForUser() {
     });
 }
 
+/**
+ * Attaches a Firestore listener for marks data, syncing changes in real-time
+ * to both the in-memory 'marks' object and the 'marks' table in IndexedDB.
+ * @param {string} examId
+ * @param {string} classId
+ * @param {string} division
+ * @param {string|null} refresh - If not null, forces the listener to re-attach.
+ */
+function attachMarksListener(examId, classId, division, refresh = null) {
+    if (!classId || !division) {
+        return;
+    }
 
-function attachMarksListener(examId, classId, division,refresh=null) {
+    const listenerKey = `${classId}_${division}}`;
 
-    if (!classId || !division) {
+    if (activeMarksListeners[listenerKey] && refresh === null) {
+        generateExamWiseResultsTable(examId, classId, division);
+        return;
+    }
 
-        return;
+    // --- Bug Fix: Correctly constructed queries ---
+    let marksQuery;
+    if (examId && classId && division) {
+        marksQuery = query(getCollectionRef('marks'),
+            where('classId', '==', classId),
+            where('division', '==', division)
+        );
+    } else { // This covers cases with only class/division
+        marksQuery = query(getCollectionRef('marks'),
+            where('classId', '==', classId),
+            where('division', '==', division)
+        );
+    }
 
-    }
+    const unsubscribe = onSnapshot(marksQuery, async (snapshot) => {
+        const changes = snapshot.docChanges();
+        if (changes.length === 0) {
+            // Even if no data changes, re-render in case the UI needs an update
+            generateExamWiseResultsTable(examId, classId, division);
+            return;
+        }
 
+        // --- MODIFICATION: Prepare for batch IndexedDB operations ---
+        const toAddOrUpdate = [];
+        const toDelete = [];
 
+        changes.forEach(change => {
+            const docData = { id: change.doc.id, ...change.doc.data() };
+            if (change.type === "removed") {
+                delete marks[change.doc.id]; // Update in-memory object
+                toDelete.push(change.doc.id); // Add ID to delete array
+            } else { // "added" or "modified"
+                marks[change.doc.id] = docData; // Update in-memory object
+                toAddOrUpdate.push(docData);    // Add full object to update array
+            }
+        });
 
-    // Create a unique key for this specific listener
+        // --- MODIFICATION: Save changes to IndexedDB ---
+        try {
+            if (toAddOrUpdate.length > 0) {
+                await appDb.marks.bulkPut(toAddOrUpdate);
+            }
+            if (toDelete.length > 0) {
+                await appDb.marks.bulkDelete(toDelete);
+            }
+        } catch (error) {
+            console.error('Error syncing marks to IndexedDB:', error);
+            showAlert('Failed to save marks data locally.', 'danger');
+        }
+        
+        // After data arrives or updates, re-render the results table
+        generateExamWiseResultsTable(examId, classId, division);
 
-    const listenerKey = `${classId}_${division}`;
+    }, (error) => {
+        console.error(`[Firestore] Error listening to marks for ${listenerKey}: `, error);
+    });
 
-
-
-    // --- NEW: If a listener for this specific query is already active, do nothing ---
-
-    if (activeMarksListeners[listenerKey]&&refresh===null) {
-
-        // The data is already being synced in real-time. We just need to re-render the table.
-
-        generateExamWiseResultsTable(examId, classId, division);
-
-        return;
-
-    }
-
-    let marksQuery ="";
-
-    if(examId&&!classId&&!division){
-
-        marksQuery = query(getCollectionRef('marks'),
-
-        where('examId', '==', examId)
-
-    );
-
-
-
-    }else if(examId&&classId&&division){
-
-marksQuery = query(getCollectionRef('marks'),
-
-        where('examId', '==', examId),
-
-        where('classId', '==', classId),
-
-        where('division', '==', division)
-
-    );
-
-
-
-}else{
-
-    marksQuery = query(getCollectionRef('marks'),
-
-        where('classId', '==', classId),
-
-        where('division', '==', division)
-
-    );
-
-}
-
-   
-
-
-
-    const unsubscribe = onSnapshot(marksQuery, (snapshot) => {
-
-        // Merge the incoming data into our global marks object
-
-        snapshot.docs.forEach(doc => {
-
-            marks[doc.id] = { id: doc.id, ...doc.data() };
-
-        });
-
-       
-
-        // After data arrives or updates, re-render the results table
-
-        generateExamWiseResultsTable(examId, classId, division);
-
-
-
-    }, (error) => {
-
-        console.error(`[Firestore] Error listening to marks for ${listenerKey}: `, error);
-
-    });
-
-
-
-    // Store the new unsubscribe function in our cache
-
-    activeMarksListeners[listenerKey] = unsubscribe;
-
+    // Store the new unsubscribe function
+    activeMarksListeners[listenerKey] = unsubscribe;
 }
 
 
@@ -4367,6 +4351,7 @@ async function handleReassignSubjects() {
     if (formElement) {
         formElement.addEventListener('input', () => saveFormToLocalStorage(formId));
     }
+
     loadFormFromLocalStorage(formId);
 
     if (currentStudent.dob) {
@@ -4773,6 +4758,7 @@ removePhotoBtn.addEventListener('click', async () => {
         } finally {
             submitButton.disabled = false;
             submitButton.innerHTML = originalButtonHtml;
+            localStorage.removeItem(`formData_${formId}`);
         }
     });
 
@@ -6028,23 +6014,76 @@ window.renderExamManagement = () => {
         new bootstrap.Tab(firstVisibleTab).show();
     }
 };
-
-
-/**
- * Generates the entry report, filtering schedules based on user role
- * and then calling the summary table renderer.
- * @param {string} examId - The ID of the selected exam.
- */
 // Global variable to hold the complete, unfiltered report data
 let reportData = [];
+async function renderEntryReportTab() {
+    await getData('marks');
+    const container = document.getElementById('entry-report');
+    if (!container) return;
 
+    const isClassTeacher = currentUserRole === 'teacher' && selectedUser.classCharge;
+
+    // --- NEW: Conditional Tab UI ---
+    const tabNav = isClassTeacher ? `
+        <ul class="nav nav-tabs">
+            <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#overall-report-pane">Overall Report</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#my-class-pending-pane">My Class Pending</button></li>
+        </ul>` : '';
+
+    const tabContent = `
+        <div class="tab-content">
+            <div class="tab-pane fade show active" id="overall-report-pane">
+                <div id="entry-report-container" class="mt-4">
+                    <p class="text-muted text-center p-5">Please select an exam to view the detailed entry report.</p>
+                </div>
+            </div>
+            ${isClassTeacher ? `
+            <div class="tab-pane fade" id="my-class-pending-pane">
+                <div id="my-class-pending-container" class="mt-4">
+                    <p class="text-muted text-center p-5">Select an exam to see pending entries for your class.</p>
+                </div>
+            </div>` : ''}
+        </div>`;
+
+    container.innerHTML = `
+        <div class="row g-3 align-items-end border-bottom pb-3 mb-3">
+            <div class="col-md-6">
+                <label class="form-label fw-bold">Select Exam to Generate Report</label>
+                <select id="entry-report-exam" class="form-select">
+                    <option value="">-- Choose an Exam --</option>
+                    ${exams.map(ex => `<option value="${ex.id}">${ex.name}</option>`).join('')}
+                </select>
+            </div>
+        </div>
+        ${tabNav}
+        ${tabContent}
+    `;
+
+    document.getElementById('entry-report-exam').addEventListener('change', (e) => {
+        const examId = e.target.value;
+        if (examId) {
+            generateEntryReport(examId); // Always generate the main report
+            if (isClassTeacher) {
+                renderMyClassPendingList(examId); // Also generate the teacher's pending list
+            }
+        } else {
+            document.getElementById('entry-report-container').innerHTML = `<p class="text-muted text-center p-5">Please select an exam.</p>`;
+            if (isClassTeacher) {
+                document.getElementById('my-class-pending-container').innerHTML = `<p class="text-muted text-center p-5">Please select an exam.</p>`;
+            }
+        }
+    });
+}
+
+/**
+ * Generates the data for the main entry report and renders the controls and table.
+ */
 async function generateEntryReport(examId) {
-    //let dat = await getData('marks',null,null);
     const container = document.getElementById('entry-report-container');
-    container.innerHTML = `<div class="text-center p-5"><div class="spinner-border text-primary"></div><p class="mt-2">Generating Report...</p></div>`;
+    container.innerHTML = `<div class="text-center p-5"><div class="spinner-border text-primary"></div></div>`;
 
     let relevantSchedules = [];
-    const isAdminOrController = currentUserRole === 'admin' || (currentUserRole === 'teacher' && selectedUser.roles && selectedUser.roles.includes('exam_controller'));
+    const isAdminOrController = currentUserRole === 'admin' || selectedUser.roles?.includes('exam_controller');
 
     if (isAdminOrController) {
         relevantSchedules = examSchedules.filter(s => s.examId === examId);
@@ -6062,123 +6101,69 @@ async function generateEntryReport(examId) {
         return;
     }
     
-    // --- MODIFIED: Build the full report data and store it globally ---
     const rawReportData = [];
     relevantSchedules.forEach(schedule => {
-        const { classId, division, subjectId } = schedule;
-        const studentsInClass = students.filter(s => s.classId === classId && s.division === division);
-        const totalStudents = studentsInClass.length;
-
-        if (totalStudents === 0) return;
-
-        let enteredCount = 0;
-        studentsInClass.forEach(student => {
-            const markId = `${examId}_${student.id}_${subjectId}`;
-            if (marks[markId]) {
-                enteredCount++;
-            }
-        });
-        
-        const className = classes.find(c => c.id === classId)?.name || 'N/A';
-        const subjectName = subjects.find(sub => sub.id === subjectId)?.name || 'N/A';
+        const studentsInClass = students.filter(s => s.classId === schedule.classId && s.division === schedule.division);
+        if (studentsInClass.length === 0) return;
+        const enteredCount = studentsInClass.filter(student => marks[`${examId}_${student.id}_${schedule.subjectId}`]).length;
         
         rawReportData.push({
-            classId,
-            className,
-            division,
-            subjectId,
-            subjectName,
-            total: totalStudents,
+            classId: schedule.classId,
+            className: classes.find(c => c.id === schedule.classId)?.name || 'N/A',
+            division: schedule.division,
+            subjectId: schedule.subjectId,
+            subjectName: subjects.find(sub => sub.id === schedule.subjectId)?.name || 'N/A',
+            total: studentsInClass.length,
             entered: enteredCount,
-            pending: totalStudents - enteredCount
+            pending: studentsInClass.length - enteredCount
         });
     });
 
-    // Store the data in the global variable and sort it
     reportData = rawReportData.sort((a,b) => (a.className + a.division + a.subjectName).localeCompare(b.className + b.division + b.subjectName));
-    
-    // Render the filters and the table
     renderReportControlsAndTable(examId);
 }
 
 /**
- * Renders the full report UI including filters and the table.
- * @param {string} examId - The ID of the exam.
+ * Renders the filters and the table for the overall report view.
  */
 function renderReportControlsAndTable(examId) {
     const container = document.getElementById('entry-report-container');
-
     if (reportData.length === 0) {
-        container.innerHTML = '<div class="alert alert-warning">No subjects have been scheduled for this exam.</div>';
+        container.innerHTML = '<div class="alert alert-warning">No subjects scheduled for this exam.</div>';
         return;
     }
     
-    // Get unique filter options from the report data
-    const classOptions = [...new Set(reportData.map(d => d.classId))].map(id => {
-        const c = classes.find(c => c.id === id);
-        return c ? `<option value="${c.id}">${c.name}</option>` : '';
-    }).join('');
-    
+    const classOptions = [...new Set(reportData.map(d => d.classId))].map(id => `<option value="${id}">${classes.find(c => c.id === id)?.name || ''}</option>`).join('');
     const divisionOptions = [...new Set(reportData.map(d => d.division))].map(d => `<option value="${d}">${d}</option>`).join('');
-    
-    const subjectOptions = [...new Set(reportData.map(d => d.subjectId))].map(id => {
-        const sub = subjects.find(s => s.id === id);
-        return sub ? `<option value="${sub.id}">${sub.name}</option>` : '';
-    }).join('');
+    const subjectOptions = [...new Set(reportData.map(d => d.subjectId))].map(id => `<option value="${id}">${subjects.find(s => s.id === id)?.name || ''}</option>`).join('');
 
-    // Render the controls and a container for the table
     container.innerHTML = `
         <div class="row g-3 align-items-end mb-3">
-            <div class="col-md-3">
-                <label class="form-label">Class</label>
-                <select id="report-filter-class" class="form-select">
-                    <option value="">All Classes</option>
-                    ${classOptions}
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Division</label>
-                <select id="report-filter-division" class="form-select">
-                    <option value="">All Divisions</option>
-                    ${divisionOptions}
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Subject</label>
-                <select id="report-filter-subject" class="form-select">
-                    <option value="">All Subjects</option>
-                    ${subjectOptions}
-                </select>
-            </div>
-            <div class="col-md-3 text-md-end">
-                <button id="toggle-pending-btn" class="btn btn-outline-info btn-sm ${showPendingOnly ? 'active' : ''}">
-        <i class="fas fa-exclamation-triangle me-1"></i> Show Pending Only
-    </button>
-
-    <button id="report-export-pdf-btn" class="btn btn-danger"><i class="fas fa-file-pdf me-2"></i>Export as PDF</button>
-                
+            <div class="col-md-3"><label class="form-label">Class</label><select id="report-filter-class" class="form-select"><option value="">All</option>${classOptions}</select></div>
+            <div class="col-md-2"><label class="form-label">Division</label><select id="report-filter-division" class="form-select"><option value="">All</option>${divisionOptions}</select></div>
+            <div class="col-md-3"><label class="form-label">Subject</label><select id="report-filter-subject" class="form-select"><option value="">All</option>${subjectOptions}</select></div>
+            <div class="col-md-4 text-md-end">
+                <button id="toggle-pending-btn" class="btn btn-outline-info btn-sm ${showPendingOnly ? 'active' : ''}"><i class="fas fa-exclamation-triangle me-1"></i> Show Pending Only</button>
+                <button id="report-export-pdf-btn" class="btn btn-danger btn-sm"><i class="fas fa-file-pdf me-2"></i>Export as PDF</button>
             </div>
         </div>
-        <div id="report-table-container"></div>
-    `;
+        <div id="report-table-container"></div>`;
 
-    // Attach event listeners to the filters
     document.getElementById('report-filter-class').addEventListener('change', filterAndRenderReport);
     document.getElementById('report-filter-division').addEventListener('change', filterAndRenderReport);
     document.getElementById('report-filter-subject').addEventListener('change', filterAndRenderReport);
     document.getElementById('report-export-pdf-btn').addEventListener('click', () => exportReportToPdf(examId));
-    document.getElementById('toggle-pending-btn').addEventListener('click', () => {
-        showPendingOnly = !showPendingOnly; // Flip the state
-        console.log(showPendingOnly);
-        filterAndRenderReport(examId); // Re-render the table with the new filter
+    document.getElementById('toggle-pending-btn').addEventListener('click', (e) => {
+        showPendingOnly = !showPendingOnly;
+        e.currentTarget.classList.toggle('active', showPendingOnly);
+        filterAndRenderReport();
     });
 
-    // Initial render of the table
     filterAndRenderReport();
 }
 
 /**
- * Filters the global reportData and renders the table.
+ * Filters the global report data based on UI controls and renders the summary table.
  */
 function filterAndRenderReport() {
     const classId = document.getElementById('report-filter-class').value;
@@ -6187,34 +6172,23 @@ function filterAndRenderReport() {
     const examId = document.getElementById('entry-report-exam').value;
 
     let filteredData = [...reportData];
-
-    if (classId) {
-        filteredData = filteredData.filter(d => d.classId === classId);
-    }
-    if (division) {
-        filteredData = filteredData.filter(d => d.division === division);
-    }
-    if (subjectId) {
-        filteredData = filteredData.filter(d => d.subjectId === subjectId);
-    }
-    if (showPendingOnly) {
-        filteredData = filteredData.filter(row => row.pending > 0);
-    }
+    if (classId) filteredData = filteredData.filter(d => d.classId === classId);
+    if (division) filteredData = filteredData.filter(d => d.division === division);
+    if (subjectId) filteredData = filteredData.filter(d => d.subjectId === subjectId);
+    if (showPendingOnly) filteredData = filteredData.filter(row => row.pending > 0);
+    
     renderSummaryTableHTML(filteredData, examId);
 }
 
 /**
  * Renders the HTML for the summary table.
- * This is now a separate function for reusability.
- * @param {Array} displayData - The data array to render.
- * @param {string} examId - The ID of the exam.
  */
 function renderSummaryTableHTML(displayData, examId) {
     const container = document.getElementById('report-table-container');
     if (!container) return;
 
     if (displayData.length === 0) {
-        container.innerHTML = '<p class="text-muted text-center p-4">No matching entries found for the selected filters.</p>';
+        container.innerHTML = '<p class="text-muted text-center p-4">No matching entries found.</p>';
         return;
     }
 
@@ -6223,85 +6197,114 @@ function renderSummaryTableHTML(displayData, examId) {
         <div id="report-table-printable" class="table-responsive">
             <table class="table table-bordered table-hover table-sm">
                 <thead class="table-light">
-                    <tr>
-                        <th>Class</th>
-                        <th>Subject</th>
-                        <th class="text-center">Total Students</th>
-                        <th class="text-center text-success">Entered</th>
-                        <th class="text-center text-danger">Pending</th>
-                        <th class="text-center" style="width: 20%;">Status</th>
-                    </tr>
+                    <tr><th>Class</th><th>Subject</th><th class="text-center">Total</th><th class="text-center text-success">Entered</th><th class="text-center text-danger">Pending</th><th class="text-center" style="width: 20%;">Status</th></tr>
                 </thead>
                 <tbody>
                     ${displayData.map(row => {
                         const percentage = row.total > 0 ? (row.entered / row.total) * 100 : 0;
                         const statusClass = percentage === 100 ? 'bg-success' : (percentage > 0 ? 'bg-warning' : 'bg-danger');
-                        return `
+                        return `<tr><td>${row.className} - ${row.division}</td><td>${row.subjectName}</td><td class="text-center">${row.total}</td><td class="text-center">${row.entered}</td><td class="text-center">${row.pending}</td><td>
+                            <div class="progress" style="height: 20px;"><div class="progress-bar ${statusClass}" role="progressbar" style="width: ${percentage}%;">${percentage.toFixed(0)}%</div></div>
+                        </td></tr>`;
+                    }).join('')}
+                </tbody>
+            </table>
+        </div>`;
+    container.innerHTML = tableHTML;
+}
+
+/**
+ * Renders a summary table for the class teacher showing the mark entry status
+ * for each subject in their class for the selected exam.
+ */
+function renderMyClassPendingList(examId) {
+    const container = document.getElementById('my-class-pending-container');
+    if (!container || !selectedUser.classCharge) return;
+
+    const { classId, division } = selectedUser.classCharge;
+    
+    // Get active students in the teacher's class
+    const studentsInClass = students.filter(s => 
+        s.classId === classId && 
+        s.division === division && 
+        s.status !== 'TC Issued' && 
+        s.status !== 'Graduated'
+    );
+
+    // Get all subjects allocated to this specific class and division
+    const subjectsForClass = classroomSubjects.filter(cs => 
+        cs.classId === classId && 
+        cs.division === division
+    );
+    
+    if (studentsInClass.length === 0 || subjectsForClass.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">There are no active students or subjects allocated to your class.</div>';
+        return;
+    }
+
+    // --- NEW: Calculate the entry status for each subject ---
+    const subjectStatusList = subjectsForClass.map(cs => {
+        const subject = subjects.find(s => s.id === cs.subjectId);
+        const totalStudents = studentsInClass.length;
+        
+        // Count how many students have marks entered for this specific subject
+        const enteredCount = studentsInClass.filter(student => {
+            const markId = `${examId}_${student.id}_${cs.subjectId}`;
+            return !!marks[markId]; // Check if a mark entry exists
+        }).length;
+        
+        const pendingCount = totalStudents - enteredCount;
+        const percentage = totalStudents > 0 ? (enteredCount / totalStudents) * 100 : 0;
+        const statusClass = percentage === 100 ? 'bg-success' : (percentage > 0 ? 'bg-warning' : 'bg-danger');
+
+        return {
+            subjectName: subject?.name || 'Unknown Subject',
+            total: totalStudents,
+            entered: enteredCount,
+            pending: pendingCount,
+            percentage,
+            statusClass
+        };
+    }).sort((a, b) => a.subjectName.localeCompare(b.subjectName)); // Sort alphabetically by subject name
+
+    // --- NEW: Render the summary table ---
+    const tableHtml = `
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover table-sm">
+                <thead class="table-light">
+                    <tr>
+                        <th>Subject</th>
+                        <th class="text-center">Total Students</th>
+                        <th class="text-center text-success">Entered</th>
+                        <th class="text-center text-danger">Pending</th>
+                        <th class="text-center" style="width: 25%;">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${subjectStatusList.map(row => `
                         <tr>
-                            <td>${row.className} - ${row.division}</td>
                             <td>${row.subjectName}</td>
                             <td class="text-center">${row.total}</td>
                             <td class="text-center">${row.entered}</td>
                             <td class="text-center">${row.pending}</td>
                             <td>
                                 <div class="progress" style="height: 20px;">
-                                    <div class="progress-bar ${statusClass}" role="progressbar" style="width: ${percentage}%;" aria-valuenow="${percentage}" aria-valuemin="0" aria-valuemax="100">${percentage.toFixed(0)}%</div>
+                                    <div class="progress-bar ${row.statusClass}" role="progressbar" 
+                                         style="width: ${row.percentage}%;" 
+                                         aria-valuenow="${row.percentage}" aria-valuemin="0" aria-valuemax="100">
+                                         ${row.percentage.toFixed(0)}%
+                                    </div>
                                 </div>
                             </td>
                         </tr>
-                        `;
-                    }).join('')}
+                    `).join('')}
                 </tbody>
             </table>
         </div>
     `;
 
-    container.innerHTML = tableHTML;
+    container.innerHTML = tableHtml;
 }
-
-/**
- * Renders the UI for the new "Entry Report" tab.
- */
-async function renderEntryReportTab() {
-    await getData('marks');
-    const container = document.getElementById('entry-report');
-    if (!container) return;
-
-    container.innerHTML = `
-        <div class="row g-3 align-items-end border-bottom pb-3 mb-3">
-            <div class="col-md-6">
-                <label class="form-label fw-bold">Select Exam to Generate Report</label>
-                <select id="entry-report-exam" class="form-select">
-                    <option value="">-- Choose an Exam --</option>
-                    ${exams.map(ex => `<option value="${ex.id}">${ex.name}</option>`).join('')}
-                </select>
-            </div>
-        </div>
-        <div id="entry-report-container" class="mt-4">
-            <p class="text-muted text-center p-5">Please select an exam to view the detailed entry report.</p>
-        </div>
-    `;
-
-    document.getElementById('entry-report-exam').addEventListener('change', (e) => {
-        if (e.target.value) {
-            generateEntryReport(e.target.value);
-        } else {
-            // Clear the report container if no exam is selected
-            document.getElementById('entry-report-container').innerHTML = `<p class="text-muted text-center p-5">Please select an exam to view the detailed entry report.</p>`;
-        }
-    });
-}
-
-
-/**
- * Exports the currently filtered report table to a PDF.
- * This requires the html2canvas and jspdf libraries.
- */
-// --- In your <script type="module"> block ---
-// REPLACE the old exportReportToPdf function with this new, better one.
-
-// --- In your <script type="module"> block ---
-// REPLACE your exportReportToPdf function with this corrected version
 
 const exportReportToPdf = (examId) => {
     // 1. --- Basic Setup ---
@@ -6851,6 +6854,7 @@ function displayConsolidatedTimetable(examId, division) {
 
 async function renderResultsTab() {
   //await syncMarksDataForUser();
+  await syncDataForUser();
     const container = document.getElementById('results');
     container.innerHTML = `
         <div class="d-flex justify-content-end align-items-center p-3 bg-light border rounded mb-3">
@@ -6956,7 +6960,7 @@ async function renderResultsTab() {
         return;
     }
             attachMarksListener(examId,classId, division);
-            generateExamWiseResultsTable(examId, classId, division);
+            //generateExamWiseResultsTable(examId, classId, division);
             printBtn.disabled = false; // Enable print button after report generates
         } else {
             printBtn.disabled = false;
@@ -7010,7 +7014,7 @@ async function renderResultsTab() {
                 const studentId = studentLink.dataset.id; // Get student ID from data-id attribute
                 if (studentId) {
                    //  generateReportCardHTML(studentId, examSelect.value , 'rc-results-container');
-                    document.getElementById('rc-results-container').innerHTML = generateReportCardHTML_Comparison(studentIdToRender, examIds, 'rc-results-container')
+                    document.getElementById('rc-results-container').innerHTML = generateReportCardHTML_Comparison(studentId, examSelect.value, 'rc-results-container')
            
                     // populateAndShowFullStudentModal(studentId); // Call your existing modal function
                 }
@@ -7178,6 +7182,17 @@ async function generateExamWiseResultsTable(examId, classId, division) {
 }
 
 /**
+ * Processes raw data to calculate marks, totals, and grades for each student.
+ * This version now includes the studentId in the results for reliable lookups.
+ * @param {Array} studentsInClass
+ * @param {Array} schedules
+ * @param {object} marksObject
+ * @param {string} examId
+ * @param {string} gradingSystem
+ * @returns {Array} A new array with calculated results for each student.
+ */
+
+/**
  * Processes raw data to calculate marks, totals, and individual grades for each student.
  * @param {Array} studentsInClass
  * @param {Array} schedules
@@ -7225,7 +7240,7 @@ function processExamResultsData(studentsInClass, schedulesForClass, marksObject,
                 if (maxTotal > 0) grandMaxMarks += maxTotal;
             }
 
-            subjectResults.push({ subjectId: subject.id, te, ce, total, pct, grade, teGrade, ceGrade });
+            subjectResults.push({ subjectId: subject.id, te, ce,maxTE,maxCE ,total, pct, grade, teGrade, ceGrade });
         });
 
         const grandPct = grandMaxMarks > 0 ? ((grandTotalMarks / grandMaxMarks) * 100) : 0;
@@ -7971,7 +7986,11 @@ window.toggleExamStatus = async function(examId, newStatus) {
     }
 }
 
-     async function loadMarkEntrySheet(examId, classId, division, subjectId) {
+// =========================================================================
+// --- ✍️ MARK ENTRY MODULE (OPTIMIZED SAVE LOGIC) ---
+// =========================================================================
+
+async function loadMarkEntrySheet(examId, classId, division, subjectId) {
     const container = document.getElementById('mark-entry-sheet');
     if (!examId || !classId || !division || !subjectId) {
         container.innerHTML = `<div class="text-center p-5 text-muted">Please select all filters to enter marks.</div>`;
@@ -7997,7 +8016,6 @@ window.toggleExamStatus = async function(examId, newStatus) {
         return;
     }
     
-    // --- MODIFICATION: Directly fetch marks for this specific class/subject/exam ---
     const marksForSheet = {};
     try {
         const q = query(getCollectionRef('marks'), 
@@ -8014,7 +8032,6 @@ window.toggleExamStatus = async function(examId, newStatus) {
     } catch (error) {
         console.error("Error fetching marks directly:", error);
         showAlert('Could not fetch the latest marks. Data may be from cache.', 'danger');
-        // Fallback to cached marks if direct fetch fails
         studentsInClass.forEach(student => {
             const markId = `${examId}_${student.id}_${subjectId}`;
             if (marks[markId]) {
@@ -8023,16 +8040,8 @@ window.toggleExamStatus = async function(examId, newStatus) {
         });
     }
     
-    // --- Calculate Entered and Pending Counts using the freshly fetched data ---
-    const enteredStudents = [];
-    const notEnteredStudents = [];
-    studentsInClass.forEach(student => {
-        if (marksForSheet[student.id]) {
-            enteredStudents.push(student.name);
-        } else {
-            notEnteredStudents.push(student.name);
-        }
-    });
+    const enteredStudents = studentsInClass.filter(student => marksForSheet[student.id]).map(s => s.name);
+    const notEnteredStudents = studentsInClass.filter(student => !marksForSheet[student.id]).map(s => s.name);
 
     const summaryHTML = `
         <div class="card bg-light p-3 mb-4 border-0">
@@ -8046,9 +8055,7 @@ window.toggleExamStatus = async function(examId, newStatus) {
             <div class="mt-3">
                 <a class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" href="#pending-list-collapse" role="button">Show Pending Student List</a>
                 <div class="collapse mt-2" id="pending-list-collapse">
-                    <ul class="list-group list-group-flush small">
-                        ${notEnteredStudents.map(name => `<li class="list-group-item py-1 bg-light">${name}</li>`).join('')}
-                    </ul>
+                    <ul class="list-group list-group-flush small">${notEnteredStudents.map(name => `<li class="list-group-item py-1 bg-light">${name}</li>`).join('')}</ul>
                 </div>
             </div>` : ''}
         </div>`;
@@ -8057,22 +8064,23 @@ window.toggleExamStatus = async function(examId, newStatus) {
         <thead class="table-light"><tr><th>Student Name</th><th>Admission No.</th><th>Theory / ${maxTE}</th><th>Internal / ${maxCE}</th></tr></thead><tbody>`;
     
     studentsInClass.forEach(student => {
-        const mark = marksForSheet[student.id]; // Use the freshly fetched data
+        const mark = marksForSheet[student.id];
         const teValue = mark?.te === 'AB' ? 'AB' : (mark?.te ?? '');
         const ceValue = mark?.ce === 'AB' ? 'AB' : (mark?.ce ?? '');
+        
+        // --- MODIFICATION: Add data-original-value to track changes ---
         tableHTML += `<tr data-student-id="${student.id}">
             <td class="fw-bold">${student.name}</td><td>${student.admissionNumber}</td>
-            <td><input type="text" name="te" class="form-control form-control-sm" value="${teValue}" data-max="${maxTE}"></td>
-            <td><input type="text" name="ce" class="form-control form-control-sm" value="${ceValue}" data-max="${maxCE}"></td>
+            <td><input type="text" name="te" class="form-control form-control-sm" value="${teValue}" data-max="${maxTE}" data-original-value="${teValue}"></td>
+            <td><input type="text" name="ce" class="form-control form-control-sm" value="${ceValue}" data-max="${maxCE}" data-original-value="${ceValue}"></td>
         </tr>`;
     });
     
-    tableHTML += `</tbody></table></div><div class="text-end mt-3"><button id="save-marks-btn" class="btn btn-success">Save Marks</button></div>`;
+    tableHTML += `</tbody></table></div><div class="text-end mt-3"><button id="save-marks-btn" class="btn btn-success">Save Changes</button></div>`;
     
     container.innerHTML = summaryHTML + tableHTML;
-    document.getElementById('mark-entry-summary-container').innerHTML = ''; // Clear the other container
+    document.getElementById('mark-entry-summary-container').innerHTML = '';
 
-    // Attach event listeners for the input fields
     container.querySelectorAll('input[name="te"], input[name="ce"]').forEach(input => {
         if(input.value.toUpperCase() === 'AB') { input.classList.add('absent-mark'); }
         input.addEventListener('input', (e) => {
@@ -8086,47 +8094,66 @@ window.toggleExamStatus = async function(examId, newStatus) {
     document.getElementById('save-marks-btn').addEventListener('click', () => saveMarks(examId, classId, division, subjectId));
 }
 
-        async function saveMarks(examId, classId, division, subjectId) {
+/**
+ * Saves marks ONLY for the rows that have been changed by the user.
+ */
+async function saveMarks(examId, classId, division, subjectId) {
     const saveButton = document.getElementById('save-marks-btn');
-    if (!saveButton) return; // Exit if button isn't found
+    if (!saveButton) return;
 
-    // Store original content, then disable button and show loading state
     const originalButtonHtml = saveButton.innerHTML;
     saveButton.disabled = true;
-    saveButton.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Saving...`;
+    saveButton.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Saving...`;
 
     try {
         const batch = writeBatch(db);
         const markRows = document.querySelectorAll('#marks-table tbody tr');
+        let changesFound = 0;
 
         markRows.forEach(row => {
             const studentId = row.dataset.studentId;
             const teInput = row.querySelector('input[name="te"]');
             const ceInput = row.querySelector('input[name="ce"]');
-            
-            // Skip if both inputs are empty
-            if (teInput.value.trim() === '' && ceInput.value.trim() === '') {
-                return; // continue to next row
-            }
 
-            const te = teInput.value.toUpperCase() === 'AB' ? 'AB' : (parseInt(teInput.value) || 0);
-            const ce = ceInput.value.toUpperCase() === 'AB' ? 'AB' : (parseInt(ceInput.value) || 0);
+            const originalTE = teInput.dataset.originalValue;
+            const currentTE = teInput.value.trim();
+            const originalCE = ceInput.dataset.originalValue;
+            const currentCE = ceInput.value.trim();
 
-            if (studentId) {
+            // --- MODIFICATION: Check if the row has changed ---
+            if (originalTE !== currentTE || originalCE !== currentCE) {
+                // If both inputs are now empty, it means we are clearing the mark.
+                // For now, we will treat this as a change to save.
+                // A more advanced version could handle deletion.
+                if (currentTE === '' && currentCE === '') {
+                    // Decide if clearing marks should delete the document.
+                    // For simplicity, we'll just skip saving if both are blank.
+                    return; 
+                }
+
+                changesFound++;
+                const te = currentTE.toUpperCase() === 'AB' ? 'AB' : (parseInt(currentTE) || 0);
+                const ce = currentCE.toUpperCase() === 'AB' ? 'AB' : (parseInt(currentCE) || 0);
+                
                 const markId = `${examId}_${studentId}_${subjectId}`;
                 const markRef = getDocRef('marks', markId);
                 batch.set(markRef, { examId, classId, division, subjectId, studentId, te, ce, lastUpdated: serverTimestamp() });
             }
         });
 
-        await batch.commit();
-        showAlert('Marks saved successfully!', 'success');
+        if (changesFound > 0) {
+            await batch.commit();
+            showAlert(`${changesFound} student mark(s) saved successfully!`, 'success');
+            // Reload the sheet to refresh original values and stats
+            loadMarkEntrySheet(examId, classId, division, subjectId); 
+        } else {
+            showAlert('No changes detected to save.', 'info');
+        }
 
     } catch (error) {
         console.error("Error saving marks:", error);
         showAlert("Could not save marks. Please check the console.", "danger");
     } finally {
-        // This block always runs, ensuring the button is restored
         saveButton.disabled = false;
         saveButton.innerHTML = originalButtonHtml;
     }
@@ -8945,7 +8972,7 @@ function generateReportCardHTML_Comparison(studentId, examIds) {
 }
 
         function calculateGrade(score, maxScore) {
-            if (score === 'AB') return 'Ab';
+            if (score === 'AB') return 'AB';
             if (maxScore === 0) return '-';
             const percentage = (score / maxScore) * 100;
             if (percentage >= 90) return 'A+'; if (percentage >= 80) return 'A';
@@ -13724,6 +13751,8 @@ function renderFormBuilder() {
                 <select class="form-select" id="form-target">
                     <option value="student" ${form.target === 'student' ? 'selected' : ''}>Students</option>
                     <option value="teacher" ${form.target === 'teacher' ? 'selected' : ''}>Teachers</option>
+                    <option value="classwise" ${form.target === 'classwise' ? 'selected' : ''}>Class-wise (Teacher fills for students)</option>
+                
                 </select>
             </div>
             <div class="row mb-3">
@@ -13853,41 +13882,41 @@ function renderFieldList(fields) {
     }
 }
 /**
- * Renders a single field card in the form builder.
- * @param {object} field - The field object.
- * @param {number} index - The index of the field.
- * @param {Array<object>} allFields - All fields in the form.
- * @returns {string} The HTML string for the field card.
+ * Renders a single field card in the form builder, now with an optional "Column Header" for amount fields.
  */
 function renderField(field, index, allFields) {
-    const fieldTypes = ['text', 'checkbox', 'dropdown', 'multiselect', 'date'];
+    const fieldTypes = ['text', 'checkbox', 'dropdown', 'multiselect', 'date', 'amount'];
     const typeOptions = fieldTypes.map(type => `<option value="${type}" ${field.type === type ? 'selected' : ''}>${type.charAt(0).toUpperCase() + type.slice(1)}</option>`).join('');
 
-    // Ensure field properties are initialized to prevent 'undefined' in template literals
     const currentField = { 
         label: field.label || '', 
         type: field.type || 'text', 
         options: Array.isArray(field.options) ? field.options : [], 
         helper: field.helper || '', 
         placeholder: field.placeholder || '', 
-        required: !!field.required, 
+        required: !!field.required,
+        totalHeader: field.totalHeader || '', // <-- NEW: Add totalHeader property
         conditions: Array.isArray(field.conditions) ? field.conditions : [] 
     };
+
+    // HTML for the optional column header input, shown only for 'amount' type
+    const totalHeaderInputHtml = currentField.type === 'amount' 
+        ? `<div class="mb-2">
+               <label>Column Header for Totaling (Optional)</label>
+               <input class="form-control" data-field-index="${index}" data-key="totalHeader" value="${currentField.totalHeader}" placeholder="e.g., Travel Expenses">
+               <small class="form-text text-muted">Amounts with the same header will be summed up.</small>
+           </div>`
+        : '';
 
     return `
         <div class="card mb-3">
             <div class="card-body">
                 <div class="row">
-                    <div class="col-md-6 mb-2">
-                        <label>Label</label>
-                        <input class="form-control" data-field-index="${index}" data-key="label" value="${currentField.label}">
-                    </div>
-                    <div class="col-md-6 mb-2">
-                        <label>Type</label>
-                        <select class="form-select" data-field-index="${index}" data-key="type">${typeOptions}</select>
-                    </div>
+                    <div class="col-md-6 mb-2"><label>Label</label><input class="form-control" data-field-index="${index}" data-key="label" value="${currentField.label}"></div>
+                    <div class="col-md-6 mb-2"><label>Type</label><select class="form-select" data-field-index="${index}" data-key="type">${typeOptions}</select></div>
                 </div>
                 ${['dropdown','multiselect'].includes(currentField.type) ? `<div class="mb-2"><label>Options (comma separated)</label><input class="form-control" data-field-index="${index}" data-key="options" value="${currentField.options.join(', ')}"></div>` : ''}
+                ${totalHeaderInputHtml}
                 <div class="row">
                     <div class="col-md-6 mb-2">
                         <label>Helper Text</label>
@@ -13912,7 +13941,9 @@ function renderField(field, index, allFields) {
             </div>
         </div>
     `;
-}/**
+}
+
+/**
  * Renders the conditional logic inputs for a field.
  * @param {object} field - The field object.
  * @param {number} fieldIndex - The index of the field.
@@ -14022,69 +14053,141 @@ async function handleFormSave(e) {
  * Displays all responses for a specific form.
  * @param {string} formId - The ID of the form.
  */
+/**
+ * Displays all responses for a specific form with filters for class and division.
+ * @param {string} formId - The ID of the form.
+ */
 window.viewFormResponses = (formId) => {
     const form = forms.find(f => f.id === formId);
     if (!form) {
         showAlert('Form not found.', 'danger');
-        console.warn('Form not found for viewing responses:', formId);
         return;
     }
-
-    // Filter responses for the specific form
-    const responses = formResponses.filter(r => r.formId === formId);
-
-    const headers = form.fields.map(f => `<th>${f.label}</th>`).join('');
-    const rows = responses.map(r => {
-        // Find the user's name (student or teacher) based on userId
-        const user = students.find(s => s.id === r.userId) || teachers.find(t => t.id === r.userId);
-        const userName = user ? user.name : 'Unknown User';
-
-        const valuesHtml = form.fields.map(f => {
-            const key = f.label.replace(/\s+/g, '_').toLowerCase();
-            const value = r.values[key];
-            return `<td>${value !== undefined && value !== null ? value : '—'}</td>`;
-        }).join('');
-
-        return `
-            <tr>
-                <td>${r.userId}</td>
-                <td>${userName}</td>
-                ${valuesHtml}
-                <td><span class="badge bg-info">${r.status || 'N/A'}</span></td>
-            </tr>
-        `;
-    }).join('');
 
     const mainContent = document.getElementById('main-content');
     if (!mainContent) {
         console.error('Main content element not found!');
         return;
     }
+    
+    // --- NEW: Get class and division options for filters ---
+    const classOptions = classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
 
     mainContent.innerHTML = `
         <h1 class="h2 mb-4">Responses: ${form.title}</h1>
+        
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-4">
+                        <label for="response-class-filter" class="form-label">Filter by Class</label>
+                        <select id="response-class-filter" class="form-select">
+                            <option value="">All Classes</option>
+                            ${classOptions}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="response-division-filter" class="form-label">Filter by Division</label>
+                        <select id="response-division-filter" class="form-select" disabled>
+                            <option value="">All Divisions</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <div class="btn-group">
+                             <button id="export-responses-csv-btn" class="btn btn-success"><i class="fas fa-file-csv me-2"></i>Export CSV</button>
+                             <button id="export-responses-pdf-btn" class="btn btn-danger"><i class="fas fa-file-pdf me-2"></i>Export PDF</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="table-responsive">
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th>User ID</th>
-                        <th>User Name</th>
-                        ${headers}
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>${rows.length ? rows : '<tr><td colspan="100%" class="text-center">No responses yet.</td></tr>'}</tbody>
+            <table class="table table-striped" id="form-responses-table">
+                <thead></thead>
+                <tbody></tbody>
             </table>
         </div>
         <div class="mt-3 text-end">
             <button class="btn btn-secondary" onclick="renderFormManagement()">Back to Forms</button>
         </div>
     `;
+
+    // --- NEW: Logic to handle filtering and re-rendering the table ---
+    const classFilter = document.getElementById('response-class-filter');
+    const divisionFilter = document.getElementById('response-division-filter');
+    const table = document.getElementById('form-responses-table');
+    const thead = table.querySelector('thead');
+    const tbody = table.querySelector('tbody');
+
+    const renderTable = () => {
+        const selectedClassId = classFilter.value;
+        const selectedDivision = divisionFilter.value;
+
+        let filteredResponses = formResponses.filter(r => r.formId === formId);
+
+        // Apply filters if they are selected
+        if (selectedClassId) {
+            const studentIdsInClass = students.filter(s => s.classId === selectedClassId).map(s => s.id);
+            filteredResponses = filteredResponses.filter(r => studentIdsInClass.includes(r.userId));
+        }
+        if (selectedDivision) {
+            const studentIdsInDivision = students.filter(s => s.classId === selectedClassId && s.division === selectedDivision).map(s => s.id);
+            filteredResponses = filteredResponses.filter(r => studentIdsInDivision.includes(r.userId));
+        }
+
+        const headers = ['User ID', 'User Name', ...form.fields.map(f => f.label), 'Status'];
+        thead.innerHTML = `<tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>`;
+
+        if (filteredResponses.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="${headers.length}" class="text-center">No responses match your filters.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = filteredResponses.map(r => {
+            const user = students.find(s => s.id === r.userId) || teachers.find(t => t.id === r.userId);
+            const userName = user ? user.name : 'Unknown User';
+            const valuesHtml = form.fields.map(f => {
+                const key = f.label.replace(/\s+/g, '_').toLowerCase();
+                const value = r.values[key];
+                return `<td>${value !== undefined && value !== null ? value : '—'}</td>`;
+            }).join('');
+
+            return `<tr><td>${r.userId}</td><td>${userName}</td>${valuesHtml}<td><span class="badge bg-info">${r.status || 'N/A'}</span></td></tr>`;
+        }).join('');
+    };
+
+    // Populate division filter when class changes
+    classFilter.addEventListener('change', () => {
+        const selectedClass = classes.find(c => c.id === classFilter.value);
+        divisionFilter.innerHTML = '<option value="">All Divisions</option>';
+        if (selectedClass) {
+            divisionFilter.disabled = false;
+            divisionFilter.innerHTML += selectedClass.divisions.map(d => `<option value="${d}">${d}</option>`).join('');
+        } else {
+            divisionFilter.disabled = true;
+        }
+        renderTable();
+    });
+
+    divisionFilter.addEventListener('change', renderTable);
+    
+    // Attach export listeners
+    document.getElementById('export-responses-csv-btn').addEventListener('click', () => downloadFormResponsesCSV(form.id, classFilter.value, divisionFilter.value));
+    document.getElementById('export-responses-pdf-btn').addEventListener('click', () => downloadStudentSubmissionsPDF(form.id));
+
+
+    // Initial render of the table
+    renderTable();
 };
 // --- TEACHER-SPECIFIC VIEWS ---
 /**
  * Renders the dashboard for teachers to see forms they need to fill
  * and to review submissions from students in their class.
+ */
+/**
+ * Renders an interactive dashboard for teachers to see their personal forms
+ * and select a class form to view student submissions on-demand.
  */
 window.renderTeacherForms = () => {
     const mainContent = document.getElementById('main-content');
@@ -14093,38 +14196,76 @@ window.renderTeacherForms = () => {
         return;
     }
 
-    // Ensure selectedUser and classCharge are available
     if (!selectedUser || !selectedUser.classCharge) {
         mainContent.innerHTML = '<p class="text-danger">Error: Teacher class information not available.</p>';
         return;
     }
 
     const { classId, division } = selectedUser.classCharge;
-    const studentsInClass = students.filter(s => s.classId === classId && s.division === division && s.status !== 'TC Issued').sort((a, b) => a.name.localeCompare(b.name));
-       
-    // Forms targeted specifically to the teacher's class (for student submissions)
+    
+    // Get forms targeted to the teacher's class
     const studentForms = forms.filter(f => 
         f.target === 'student' && 
-        f.isActive && // Only show active forms for student submissions view
+        f.isActive &&
         (!f.classId || f.classId === classId) && 
         (!f.division || f.division === division)
     );
-    const studentSubmissionsHtml = studentForms.length
-        ? studentForms.map(form => renderStudentSubmissionTable(form, studentsInClass)).join('')
-        : '<p class="text-muted">No student forms are assigned to your class.</p>';
+
+    // --- NEW: Create dropdown options from the filtered forms ---
+    const formOptions = studentForms.map(form => `<option value="${form.id}">${form.title}</option>`).join('');
 
     mainContent.innerHTML = `
         <h1 class="h2 mb-4">Teacher Dashboard</h1>
-        <h4 class="mt-4">My Forms</h4>
-        <div id="teacher-personal-forms"></div>
-        <h4 class="mt-5">Student Submissions</h4>
-        ${studentSubmissionsHtml}
+        
+        <div class="card shadow-sm mb-4">
+            <div class="card-header fw-bold">My Personal Forms</div>
+            <div class="card-body" id="teacher-personal-forms">
+                </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header fw-bold">Student Submissions</div>
+            <div class="card-body">
+                <p class="text-muted">Select a form to view the submission status and details for students in your class.</p>
+                <div class="row">
+                    <div class="col-md-8">
+                        <select id="student-form-selector" class="form-select">
+                            <option value="">-- Select a Student Form to Review --</option>
+                            ${formOptions}
+                        </select>
+                    </div>
+                </div>
+                <hr>
+                <div id="student-submission-table-container" class="mt-3">
+                    </div>
+            </div>
+        </div>
     `;
 
-    // Render personal forms into the dedicated container
-    // This will use window.renderMyForms to filter forms relevant to the current teacher (selectedUser)
+    // Render personal forms into its dedicated container
     renderMyForms(document.getElementById('teacher-personal-forms'));
+
+    // --- NEW: Add event listener for the form selector dropdown ---
+    const formSelector = document.getElementById('student-form-selector');
+    const tableContainer = document.getElementById('student-submission-table-container');
+
+    formSelector.addEventListener('change', () => {
+        const selectedFormId = formSelector.value;
+        if (!selectedFormId) {
+            tableContainer.innerHTML = ''; // Clear the container if no form is selected
+            return;
+        }
+
+        const selectedForm = studentForms.find(form => form.id === selectedFormId);
+        if (selectedForm) {
+            // Get active students for this class
+            const studentsInClass = students.filter(s => s.classId === classId && s.division === division && s.status !== 'Inactive' && s.status !== 'Graduated').sort((a, b) => a.name.localeCompare(b.name));
+            // Render the detailed table for the selected form
+            tableContainer.innerHTML = renderStudentSubmissionTable(selectedForm, studentsInClass);
+        }
+    });
 };
+
 
 window.renderTeacherclasswiseForms = () => {
     const mainContent = document.getElementById('main-content');
@@ -14226,145 +14367,151 @@ window.shouldShowFieldForTeacherView = (field, studentValues, allFormFields) => 
  * @param {string} classId - The class ID the teacher is viewing.
  * @param {string} division - The division the teacher is viewing.
  */
+/**
+ * Renders the data entry table for a class-wise form, including a dynamic total row 
+ * and correctly rendering 'amount' fields.
+ */
 function renderClassFormSubmissionTable(form, classId, division) {
-    const studentsInClass = students.filter(s => s.classId === classId && s.division === division && s.status !== 'TC Issued').sort((a, b) => a.name.localeCompare(b.name));
-       const tableContainer = document.getElementById('class-form-response-table');
-
+    const studentsInClass = students
+        .filter(s => s.classId === classId && s.division === division && s.status !== 'TC Issued' && s.status !== 'Graduated')
+        .sort((a, b) => a.name.localeCompare(b.name));
+        
+    const tableContainer = document.getElementById('class-form-response-table');
     if (!tableContainer) {
         console.error('Table response container not found!');
         return;
     }
 
-    // Headers: Student ID, Name, Admission No., then all form fields, then Teacher Comment
-    const headers = ['ID', 'Name', 'Admission No.', ...form.fields.map(f => f.label), 'Comment'];
+    const amountFields = form.fields.filter(f => f.type === 'amount');
+    const columnTotals = {}; 
 
+    const headers = ['ID', 'Name', 'Admission No.', ...form.fields.map(f => f.label), 'Comment'];
     const rows = studentsInClass.map(stu => {
         const response = formResponses.find(r => r.formId === form.id && r.userId === stu.id);
-        const values = response?.values || {}; // Get values from response, or empty object if no response
+        const values = response?.values || {};
 
         const studentDataCells = `
             <td><strong>${stu.id || 'N/A'}</strong></td>
             <td>${stu.name || 'N/A'}</td>
-            <td>${stu.adnumber || 'N/A'}</td> `;
+            <td>${stu.admissionNumber || 'N/A'}</td>`;
 
         const formFieldInputCells = form.fields.map(f => {
             const fieldName = f.label.replace(/\s+/g, '_').toLowerCase();
-            const fieldValue = values[fieldName] !== undefined && values[fieldName] !== null ? values[fieldName] : '';
+            const fieldValue = values[fieldName] ?? '';
 
-            // Determine if the field's input should be disabled based on conditional logic
-            const shouldBeEnabled = window.shouldShowFieldForTeacherView(f, values, form.fields);
-            const disabledAttr = shouldBeEnabled ? '' : 'disabled';
-            const validationPattern = f.validation ? `pattern="${f.validation}"` : ''; // Assuming f.validation holds a regex string
-            const validationTitle = f.validation ? `title="${f.helper || 'Invalid format'}"` : '';
-            
-            let inputHtml = '';
-            switch (f.type) {
-                case 'checkbox':
-                    const isChecked = fieldValue === true || fieldValue === 'true'; // Handle boolean or string 'true'
-                    inputHtml = `<div class="form-check form-check-inline">
-                                    <input class="form-check-input" type="checkbox"
-                                           data-field-name="${fieldName}" data-student-id="${stu.id}"
-                                           ${isChecked ? 'checked' : ''} ${disabledAttr}>
-                                </div>`;
-                    break;
-                case 'dropdown':
-                    const options = (Array.isArray(f.options) ? f.options : [])
-                        .map(o => `<option value="${o}" ${o === fieldValue ? 'selected' : ''}>${o}</option>`)
-                        .join('');
-                    inputHtml = `<select class="form-select form-select-sm"
-                                        data-field-name="${fieldName}" data-student-id="${stu.id}"
-                                        ${disabledAttr}>
-                                    <option value="">—</option>${options}
-                                </select>`;
-                    break;
-                case 'multiselect':
-                     const multiOptions = (Array.isArray(f.options) ? f.options : [])
-                        .map(o => `<option value="${o}" ${Array.isArray(fieldValue) && fieldValue.includes(o) ? 'selected' : ''}>${o}</option>`)
-                        .join('');
-                    inputHtml = `<select class="form-select form-select-sm" multiple
-                                        data-field-name="${fieldName}" data-student-id="${stu.id}"
-                                        ${disabledAttr}>
-                                    ${multiOptions}
-                                </select>`;
-                    break;
-                case 'date':
-                    inputHtml = `<input type="date" class="form-control form-control-sm" value="${fieldValue}"
-                                    data-field-name="${fieldName}" data-student-id="${stu.id}" ${disabledAttr}
-                                    ${validationPattern} ${validationTitle}>`;
-                    break;
-                case 'text':
-                default: // Default to text input
-                    inputHtml = `<input type="text" class="form-control form-control-sm" value="${fieldValue}"
-                                    data-field-name="${fieldName}" data-student-id="${stu.id}" ${disabledAttr}
-                                    ${validationPattern} ${validationTitle}>`;
-                    break;
+            if (f.type === 'amount') {
+                columnTotals[fieldName] = (columnTotals[fieldName] || 0) + (parseFloat(fieldValue) || 0);
             }
 
-            return `<td>
-                        ${inputHtml}
-                        ${f.helper ? `<div class="form-text small text-muted mt-1"><code>${f.helper}</code></div>` : ''}
-                        <div class="invalid-feedback">Please enter a valid value for <strong>${f.label}</strong>.</div>
-                    </td>`;
+            const shouldBeEnabled = window.shouldShowFieldForTeacherView(f, values, form.fields);
+            const disabledAttr = shouldBeEnabled ? '' : 'disabled';
+            let inputHtml = '';
+            
+            // This switch statement now correctly handles the 'amount' type
+            switch (f.type) {
+                case 'checkbox':
+                    const isChecked = fieldValue === true || fieldValue === 'true';
+                    inputHtml = `<div class="form-check d-flex justify-content-center"><input class="form-check-input" type="checkbox" data-field-name="${fieldName}" data-student-id="${stu.id}" ${isChecked ? 'checked' : ''} data-original-value="${isChecked}" ${disabledAttr}></div>`;
+                    break;
+                case 'dropdown':
+                    const options = (f.options || []).map(o => `<option value="${o}" ${o === fieldValue ? 'selected' : ''}>${o}</option>`).join('');
+                    inputHtml = `<select class="form-select form-select-sm" data-field-name="${fieldName}" data-student-id="${stu.id}" data-original-value="${fieldValue}" ${disabledAttr}><option value="">—</option>${options}</select>`;
+                    break;
+                
+                // --- THIS IS THE FIX ---
+                case 'amount':
+                    inputHtml = `<input type="number" class="form-control form-control-sm amount-input" value="${fieldValue}" data-field-name="${fieldName}" data-student-id="${stu.id}" data-original-value="${fieldValue}" ${disabledAttr} step="0.01">`;
+                    break;
+
+                default: // 'text', 'date', etc.
+                    const inputType = f.type === 'date' ? 'date' : 'text';
+                    inputHtml = `<input type="${inputType}" class="form-control form-control-sm" value="${fieldValue}" data-field-name="${fieldName}" data-student-id="${stu.id}" data-original-value="${fieldValue}" ${disabledAttr}>`;
+                    break;
+            }
+            return `<td>${inputHtml}</td>`;
         }).join('');
 
         const teacherComment = response?.teacherComment || '';
-        const commentInputHtml = `
-            <input type="text" class="form-control form-control-sm"
-                   data-field-name="teacherComment" data-student-id="${stu.id}"
-                   value="${teacherComment}">
-        `;
+        const commentInputHtml = `<input type="text" class="form-control form-control-sm" data-field-name="teacherComment" data-student-id="${stu.id}" value="${teacherComment}" data-original-value="${teacherComment}">`;
 
-        return `
-            <tr>
-                ${studentDataCells}
-                ${formFieldInputCells}
-                <td>${commentInputHtml}</td>
-            </tr>`;
+        return `<tr>${studentDataCells}${formFieldInputCells}<td>${commentInputHtml}</td></tr>`;
     }).join('');
 
+    let tfootHtml = '';
+    if (amountFields.length > 0) {
+        const totalCells = form.fields.map(field => {
+            const fieldName = field.label.replace(/\s+/g, '_').toLowerCase();
+            if (field.type === 'amount') {
+                const total = columnTotals[fieldName] || 0;
+                return `<td class="text-center fw-bold" data-total-for="${fieldName}">₹ ${total.toFixed(2)}</td>`;
+            }
+            return '<td></td>';
+        }).join('');
+
+        tfootHtml = `<tfoot id="form-totals-foot-${form.id}"><tr class="table-light"><th colspan="3" class="text-end">Total</th>${totalCells}<th></th></tr></tfoot>`;
+    }
+
     const tableHtml = `
-        <form id="classwise-submissions-form-${form.id}">
+        <form id="classwise-form-${form.id}">
             <div class="card shadow-sm">
                 <div class="card-header fw-bold bg-light d-flex justify-content-between align-items-center">
                     <span>${form.title}</span>
-                    <button type="button" class="btn btn-sm btn-outline-info" onclick="window.downloadFormResponsesCSV('${form.id}', '${classId}', '${division}')">
-                        <i class="fa fa-download me-1"></i> Export CSV
-                    </button>
+                    <div>
+                        <button type="button" class="btn btn-sm btn-outline-info" onclick="window.downloadFormResponsesCSV('${form.id}', '${classId}', '${division}')"><i class="fa fa-download me-1"></i> CSV</button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="window.downloadStudentSubmissionsPDF('${form.id}')"><i class="fas fa-file-pdf me-1"></i>PDF</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.printStudentSubmissions('${form.id}')">
+                            <i class="fas fa-print me-1"></i>Print
+                        </button>
+                        </div>
                 </div>
                 <div class="card-body p-3">
                     <div class="table-responsive" style="max-height: 70vh; overflow-y: auto;">
-                        <table class="table table-sm table-bordered align-middle text-nowrap">
-                            <thead class="table-light sticky-top" style="top: 0; z-index: 1;">
-                                <tr>
-                                    ${headers.map(h => `<th>${h}</th>`).join('')}
-                                </tr>
-                            </thead>
-                            <tbody>${rows.length ? rows : `<tr><td colspan="${headers.length}" class="text-center">No students found or no data to display for this form.</td></tr>`}</tbody>
+                        <table class="table table-sm table-bordered align-middle">
+                            <thead class="table-light sticky-top" style="top: 0; z-index: 1;"><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+                            <tbody>${rows.length ? rows : `<tr><td colspan="${headers.length}" class="text-center">No students found.</td></tr>`}</tbody>
+                            ${tfootHtml}
                         </table>
                     </div>
-                    <div class="text-end mt-3">
-                        <button type="submit" class="btn btn-success" id="save-classwise-data-btn-${form.id}">
-                            <i class="fa fa-save me-1"></i> Save All Changes
-                        </button>
-                    </div>
+                    <div class="text-end mt-3"><button type="submit" class="btn btn-success" id="save-classwise-data-btn-${form.id}"><i class="fa fa-save me-1"></i> Save Changes</button></div>
                 </div>
             </div>
         </form>`;
 
     tableContainer.innerHTML = tableHtml;
 
-    // Attach event listener for the batch save button
+    const formElement = document.getElementById(`classwise-form-${form.id}`);
+    if (formElement && amountFields.length > 0) {
+        formElement.addEventListener('input', (event) => {
+            if (event.target.classList.contains('amount-input')) {
+                const updatedFieldName = event.target.dataset.fieldName;
+                let columnTotal = 0;
+                formElement.querySelectorAll(`input.amount-input[data-field-name="${updatedFieldName}"]`).forEach(input => {
+                    columnTotal += parseFloat(input.value) || 0;
+                });
+                const totalCell = document.querySelector(`#form-totals-foot-${form.id} [data-total-for="${updatedFieldName}"]`);
+                if (totalCell) {
+                    totalCell.textContent = `₹ ${columnTotal.toFixed(2)}`;
+                }
+            }
+        });
+    }
+
     document.getElementById(`save-classwise-data-btn-${form.id}`)?.addEventListener('click', async (e) => {
         e.preventDefault();
         await window.saveTeacherClasswiseForm(form, studentsInClass);
     });
 }
 
-
 // --- New Function for Batch Saving Teacher-Edited Student Form Data ---
 /**
  * Saves all changes made by the teacher in the classwise submission table.
  * This includes updates to student form field values and teacher comments.
+ * @param {object} form - The form object being edited.
+ * @param {Array<object>} studentsInClass - Array of student objects in the teacher's class.
+ */
+/**
+ * Saves all changes made by the teacher in the classwise submission table.
+ * This version efficiently saves only the rows that have been edited.
  * @param {object} form - The form object being edited.
  * @param {Array<object>} studentsInClass - Array of student objects in the teacher's class.
  */
@@ -14378,74 +14525,75 @@ window.saveTeacherClasswiseForm = async (form, studentsInClass) => {
     }
 
     try {
-        const updatePromises = [];
-        const formEl = document.getElementById(`classwise-submissions-form-${form.id}`);
+        const batch = writeBatch(db); // Use a batch for efficient updates
+        const formEl = document.getElementById(`classwise-form-${form.id}`);
+        let changesFound = 0;
 
         for (const student of studentsInClass) {
-            // Find existing response or create a new stub if none exists
+            let hasChanged = false;
             let existingResponse = formResponses.find(r => r.formId === form.id && r.userId === student.id);
-            let currentValues = existingResponse ? { ...existingResponse.values } : {}; // Clone existing values
-            let teacherComment = existingResponse?.teacherComment || '';
+            let currentValues = existingResponse ? { ...existingResponse.values } : {};
 
-            let hasChanged = false; // Flag to track if this student's response needs an update
-
-            // 1. Collect form field values
+            // 1. Check form fields for any changes
             for (const field of form.fields) {
                 const fieldName = field.label.replace(/\s+/g, '_').toLowerCase();
                 const inputElement = formEl.querySelector(`[data-field-name="${fieldName}"][data-student-id="${student.id}"]`);
-
+                
                 if (inputElement) {
+                    const originalValue = inputElement.dataset.originalValue;
                     let newValue;
-                    if (inputElement.type === 'checkbox') {
-                        newValue = inputElement.checked;
-                    } else if (inputElement.tagName === 'SELECT' && inputElement.multiple) {
-                         newValue = Array.from(inputElement.selectedOptions).map(option => option.value);
-                    } else {
-                        newValue = inputElement.value.trim();
-                    }
                     
-                    // Only update if value is different AND field is enabled OR was previously present
-                    const isEnabled = !inputElement.disabled;
-                    if (isEnabled || (currentValues[fieldName] !== undefined)) {
-                        // Check if the value actually changed
-                        if (JSON.stringify(currentValues[fieldName]) !== JSON.stringify(newValue)) {
-                            currentValues[fieldName] = newValue;
-                            hasChanged = true;
-                        }
+                    if (inputElement.type === 'checkbox') {
+                        newValue = String(inputElement.checked); // Compare as strings
+                    } else if (inputElement.multiple) {
+                        newValue = JSON.stringify(Array.from(inputElement.selectedOptions).map(opt => opt.value));
+                    } else {
+                        newValue = inputElement.value;
                     }
+
+                    if (newValue !== originalValue) {
+                        hasChanged = true;
+                    }
+                    // Always update the value in our data object
+                    currentValues[fieldName] = (inputElement.type === 'checkbox') ? inputElement.checked : inputElement.value;
                 }
             }
 
-            // 2. Collect teacher comment
+            // 2. Check teacher comment for any changes
             const commentInput = formEl.querySelector(`[data-field-name="teacherComment"][data-student-id="${student.id}"]`);
+            let newComment = existingResponse?.teacherComment || '';
             if (commentInput) {
-                const newComment = commentInput.value.trim();
-                if (teacherComment !== newComment) {
-                    teacherComment = newComment;
+                if (commentInput.value !== commentInput.dataset.originalValue) {
                     hasChanged = true;
                 }
+                newComment = commentInput.value;
             }
 
-            // If anything has changed for this student's response, prepare an update
+            // 3. If any change was detected, add this student's data to the batch
             if (hasChanged) {
+                changesFound++;
+                const responseId = `${form.id}_${student.id}`;
+                const responseRef = getDocRef('formResponses', responseId);
                 const responseData = {
-                    id: existingResponse ? existingResponse.id : `${form.id}_${student.id}`,
+                    id: responseId,
                     formId: form.id,
                     userId: student.id,
                     values: currentValues,
-                    status: existingResponse?.status || 'submitted', // Maintain existing status, or default if new entry
-                    timestamp: existingResponse?.timestamp || new Date().toISOString(), // Keep original timestamp if existing
-                    teacherComment: teacherComment
+                    status: existingResponse?.status || 'submitted',
+                    timestamp: existingResponse?.timestamp || new Date().toISOString(),
+                    teacherComment: newComment,
+                    submittedBy: selectedUser.id // Track who made the change
                 };
-                updatePromises.push(setDoc(getDocRef('formResponses', responseData.id), responseData));
+                batch.set(responseRef, responseData, { merge: true });
             }
         }
 
-        if (updatePromises.length > 0) {
-            await Promise.all(updatePromises);
-            showAlert('All changes saved successfully!', 'success');
+        // 4. Commit the batch if there were changes
+        if (changesFound > 0) {
+            await batch.commit();
+            showAlert(`${changesFound} student record(s) were updated successfully!`, 'success');
         } else {
-            showAlert('No changes to save.', 'info');
+            showAlert('No changes were detected to save.', 'info');
         }
 
     } catch (error) {
@@ -14456,9 +14604,9 @@ window.saveTeacherClasswiseForm = async (form, studentsInClass) => {
             saveButton.disabled = false;
             saveButton.innerHTML = originalButtonHtml;
         }
+        // Re-render the table to update the "original-value" attributes for the next save
+        renderClassFormSubmissionTable(form, form.classId || studentsInClass[0].classId, studentsInClass[0].division);
     }
-    // Optionally re-render table to reflect any dynamic changes if not using real-time listeners
-    // renderClassFormSubmissionTable(form, form.classId, form.division);
 };
 
 
@@ -14529,7 +14677,7 @@ window.downloadFormResponsesCSV = (formId, classId = null, division = null) => {
 };
 // --- STUDENT-SPECIFIC VIEWS ---
 /**
- * Renders a table of student submissions for a specific form.
+ * Renders a table of student submissions for a specific form, including Export to PDF button.
  * @param {object} form - The form object.
  * @param {Array<object>} studentsInClass - The list of students in the teacher's class.
  * @returns {string} The HTML string for the submission table.
@@ -14541,7 +14689,6 @@ function renderStudentSubmissionTable(form, studentsInClass) {
     const rows = studentsInClass.map(student => {
         const response = formResponses.find(r => r.formId === form.id && r.userId === student.id);
         
-        // Map field values, using the normalized key
         const values = form.fields.map(f => {
             const normalizedLabel = f.label.replace(/\s+/g, '_').toLowerCase();
             const value = response?.values?.[normalizedLabel];
@@ -14568,33 +14715,227 @@ function renderStudentSubmissionTable(form, studentsInClass) {
 
     return `
         <div class="card mb-4">
-            <div class="card-header fw-bold d-flex justify-content-between align-items-items-center">
+            <div class="card-header fw-bold d-flex justify-content-between align-items-center">
                 <span>${form.title}</span>
-                <div>
-                    <button class="btn btn-sm btn-outline-success me-2" onclick="window.finalizeForm('${form.id}')">Finalize All</button>
+                <div class="btn-group">
+                    <button class="btn btn-sm btn-outline-success" onclick="window.finalizeForm('${form.id}')">Finalize All</button>
                     <button class="btn btn-sm btn-outline-secondary" onclick="window.downloadFormResponsesCSV('${form.id}')">
-                        <i class="fa fa-download"></i> Export CSV
+                        <i class="fas fa-file-csv me-1"></i>CSV
                     </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="window.downloadStudentSubmissionsPDF('${form.id}')">
+                        <i class="fas fa-file-pdf me-1"></i>PDF
+                    </button>
+                    
+
                 </div>
             </div>
             <div class="card-body">
                 <div class="table-responsive">
                     <table class="table table-bordered">
                         <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
-                        <tbody>${rows.length ? rows : '<tr><td colspan="${headers.length}" class="text-center">No student responses for this form.</td></tr>'}</tbody>
+                        <tbody>${rows.length ? rows : `<tr><td colspan="${headers.length}" class="text-center">No student responses for this form.</td></tr>`}</tbody>
                     </table>
                 </div>
             </div>
         </div>
     `;
 }
+/**
+ * Generates and downloads a professional PDF of student submissions for a specific form,
+ * using jsPDF-autoTable for a perfectly centered header.
+ * @param {string} formId - The ID of the form to export.
+ */
+window.downloadStudentSubmissionsPDF = (formId) => {
+    const form = forms.find(f => f.id === formId);
+    if (!form) return showAlert('Form not found for PDF export.', 'danger');
+
+    const { classId, division } = selectedUser.classCharge;
+    const studentsInClass = students.filter(s => s.classId === classId && s.division === division && s.status !== 'TC Issued' && s.status !== 'Graduated');
+    const formResponsesForClass = formResponses.filter(r => r.formId === formId && studentsInClass.some(s => s.id === r.userId));
+
+    if (formResponsesForClass.length === 0) {
+        return showAlert('No submitted data to export for this class.', 'info');
+    }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'pt',
+        format: 'a4'
+    });
+    
+    // --- 1. Prepare Header Content ---
+    const headerTitle = schoolDetails.name || 'School Report';
+    const headerSubtitle = schoolDetails.address || '';
+    const formTitle = form.title;
+    const classTitle = `Submissions from Class: ${classes.find(c=>c.id === classId).name} - ${division}`;
+
+    // --- 2. Generate the Header using autoTable ---
+    doc.autoTable({
+        startY: 60, // Start below the logo
+        body: [
+            [{ content: headerTitle, styles: { halign: 'center', fontSize: 18, fontStyle: 'bold' } }],
+            [{ content: headerSubtitle, styles: { halign: 'center', fontSize: 10 } }],
+            [{ content: formTitle, styles: { halign: 'center', fontSize: 14, fontStyle: 'bold' } }],
+            [{ content: classTitle, styles: { halign: 'center', fontSize: 10 } }]
+        ],
+        theme: 'plain', // This makes the table borderless
+        didDrawPage: function (data) {
+            // Add the logo in the didDrawPage hook to ensure it's placed correctly
+            if (schoolDetails.logoUrl) {
+                try {
+                    const logoWidth = 60;
+                    const pageWidth = doc.internal.pageSize.getWidth();
+                    const logoX = (pageWidth - logoWidth) / 2; // Center the logo
+                    doc.addImage(schoolDetails.logoUrl, 'PNG', logoX, 20, logoWidth, 60);
+                } catch (e) { console.warn("Could not add school logo to PDF.", e); }
+            }
+        }
+    });
+
+    // --- 3. Prepare Main Table Content (same as before) ---
+    const amountFields = form.fields.filter(f => f.type === 'amount');
+    const columnTotals = {};
+    const head = [['Sl. No.', 'Admn No.', 'Student Name', ...form.fields.map(f => f.label), 'Teacher Comment']];
+    const body = formResponsesForClass.map((r, index) => {
+        const student = students.find(s => s.id === r.userId);
+        const values = form.fields.map(f => {
+            const key = f.label.replace(/\s+/g, '_').toLowerCase();
+            const value = r.values[key];
+            if (f.type === 'amount') {
+                columnTotals[key] = (columnTotals[key] || 0) + (parseFloat(value) || 0);
+            }
+            if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+            return value !== undefined && value !== null ? String(value) : '';
+        });
+        return [index + 1, student?.admissionNumber || 'N/A', student?.name || r.userId, ...values, r.teacherComment || ''];
+    });
+
+    let foot = [];
+    if (amountFields.length > 0) {
+        const footerRow = ['', '', 'Total', ...form.fields.map(f => {
+            if (f.type === 'amount') {
+                const key = f.label.replace(/\s+/g, '_').toLowerCase();
+                return `Rs. ${(columnTotals[key] || 0).toFixed(2)}`;
+            }
+            return '';
+        }), ''];
+        foot.push(footerRow);
+    }
+
+    // --- 4. Generate the Main Data Table ---
+    doc.autoTable({
+        head: head,
+        body: body,
+        foot: foot,
+        startY: doc.lastAutoTable.finalY + 10, // Start right after the header table
+        theme: 'grid',
+        headStyles: { fillColor: [22, 160, 133], textColor: 255 },
+        footStyles: { fillColor: [241, 196, 15], fontStyle: 'bold', textColor: 44 },
+        styles: { fontSize: 8, cellPadding: 2 },
+        columnStyles: { 2: { fontStyle: 'bold' } }
+    });
+
+    doc.save(`${form.title.replace(/\s+/g, '_')}_Submissions.pdf`);
+}
 
 /**
- * Updates the teacher's comment on a student's form response.
- * @param {string} formId
- * @param {string} studentId
- * @param {string} comment
+ * Generates a print-friendly HTML report of student submissions and opens the print dialog.
+ * @param {string} formId - The ID of the form to print.
  */
+/**
+ * Generates a print-friendly HTML report of student submissions with a side-by-side header layout.
+ * @param {string} formId - The ID of the form to print.
+ */
+window.printStudentSubmissions = (formId) => {
+    const form = forms.find(f => f.id === formId);
+    if (!form) return showAlert('Form not found for printing.', 'danger');
+
+    const { classId, division } = selectedUser.classCharge;
+    const studentsInClass = students.filter(s => s.classId === classId && s.division === division && s.status !== 'TC Issued' && s.status !== 'Graduated');
+    const formResponsesForClass = formResponses.filter(r => r.formId === formId && studentsInClass.some(s => s.id === r.userId));
+
+    if (formResponsesForClass.length === 0) {
+        return showAlert('No submitted data to print for this class.', 'info');
+    }
+
+    const amountFields = form.fields.filter(f => f.type === 'amount');
+    const columnTotals = {};
+
+    // --- 1. Prepare Table Content ---
+    const headers = ['Sl. No.', 'Admn No.', 'Student Name', ...form.fields.map(f => f.label), 'Teacher Comment'];
+    const bodyRows = formResponsesForClass.map((r, index) => {
+        const student = students.find(s => s.id === r.userId);
+        const values = form.fields.map(f => {
+            const key = f.label.replace(/\s+/g, '_').toLowerCase();
+            const value = r.values[key];
+            if (f.type === 'amount') {
+                columnTotals[key] = (columnTotals[key] || 0) + (parseFloat(value) || 0);
+            }
+            if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+            return value !== undefined && value !== null ? String(value) : '';
+        }).join('</td><td class="text-center">');
+        
+        return `<tr>
+                    <td class="text-center">${index + 1}</td>
+                    <td class="text-center">${student?.admissionNumber || 'N/A'}</td>
+                    <td>${student?.name || r.userId}</td>
+                    <td class="text-center">${values}</td>
+                    <td>${r.teacherComment || ''}</td>
+                </tr>`;
+    }).join('');
+
+    let footerRow = '';
+    if (amountFields.length > 0) {
+        const totalCells = form.fields.map(f => {
+            if (f.type === 'amount') {
+                const key = f.label.replace(/\s+/g, '_').toLowerCase();
+                return `<strong>Rs. ${(columnTotals[key] || 0).toFixed(2)}</strong>`;
+            }
+            return '';
+        }).join('</td><td>');
+        footerRow = `<tfoot><tr class="table-light"><td colspan="3" class="text-end"><strong>Total</strong></td><td>${totalCells}</td><td></td></tr></tfoot>`;
+    }
+
+    // --- 2. Assemble the Full HTML for Printing ---
+    const className = classes.find(c => c.id === classId)?.name || '';
+    const reportTitle = `${form.title}`;
+    const subTitle = `Class: ${className} - ${division}`;
+
+    // --- MODIFIED: New header layout with logo on the left ---
+    const contentHtml = `
+        <div class="printable-report">
+            <div class="report-header mb-4">
+                <div class="row align-items-center">
+                    <div class="col-2 text-start">
+                        ${schoolDetails.logoUrl ? `<img src="${schoolDetails.logoUrl}" style="max-height: 80px;">` : ''}
+                    </div>
+                    <div class="col-10 text-center">
+                        <h3>${schoolDetails.name || 'School Report'}</h3>
+                        <p class="mb-0">${schoolDetails.address || ''}</p>
+                    </div>
+                </div>
+                <hr>
+                <div class="text-center">
+                    <h4>${reportTitle}</h4>
+                    <p>${subTitle}</p>
+                </div>
+            </div>
+            <table class="table table-bordered table-sm">
+                <thead><tr><th>${headers.join('</th><th>')}</th></tr></thead>
+                <tbody>${bodyRows}</tbody>
+                ${footerRow}
+            </table>
+        </div>
+    `;
+
+    // --- 3. Use the Generic Print Utility ---
+    printReport({
+        contentHtml: contentHtml,
+        title: form.title.replace(/\s+/g, '_'),
+        extraCss: `table { font-size: 10pt; }` // Optional: smaller font for printing
+    });
+};
 /**
  * Updates the teacher's comment on a student's form response.
  * @param {string} formId
@@ -14756,21 +15097,47 @@ function renderFormCardForUser(form) {
  * @param {object} form - The form object.
  * @returns {string} HTML content for the card body.
  */
+/**
+ * Renders the fields for a form, now including a structured total section with column subtotals.
+ */
 function renderSubmittableForm(form) {
     if (!form.isActive) {
         return '<p class="text-muted">This form is closed and no longer accepting responses.</p>';
     }
 
-    const fieldsHtml = form.fields
-        .map(field => renderFormInputField(field))
-        .join('');
+    const fieldsHtml = form.fields.map(field => renderFormInputField(field)).join('');
+    
+    // --- NEW: Find all unique column headers defined in the form fields ---
+    const totalHeaders = [...new Set(form.fields
+        .filter(f => f.type === 'amount' && f.totalHeader)
+        .map(f => f.totalHeader))];
+
+    // --- NEW: Generate the HTML for the totals section ---
+    let totalsHtml = '';
+    if (totalHeaders.length > 0) {
+        totalsHtml += `<h5 class="mt-4">Summary</h5>`;
+        totalHeaders.forEach(header => {
+            const headerId = header.replace(/\s+/g, '-').toLowerCase();
+            totalsHtml += `
+                <div class="d-flex justify-content-between align-items-center pt-2">
+                    <span class="text-muted">${header}:</span>
+                    <span class="fw-bold">₹ <span id="subtotal-${form.id}-${headerId}">0.00</span></span>
+                </div>`;
+        });
+        // Add the Grand Total line
+        totalsHtml += `<div class="d-flex justify-content-between align-items-center pt-3 mt-2 border-top">
+                           <h5 class="mb-0">Grand Total:</h5>
+                           <h4 class="mb-0 fw-bold text-primary">₹ <span id="cumulative-total-${form.id}">0.00</span></h4>
+                       </div>`;
+    }
 
     return `
         <form id="form-submit-${form.id}" novalidate>
             ${fieldsHtml}
-            <button type="submit" class="btn btn-primary">
-                <i class="fa fa-paper-plane me-1"></i> Submit
-            </button>
+            <div id="total-container-${form.id}">${totalsHtml}</div>
+            <div class="mt-4">
+                <button type="submit" class="btn btn-primary"><i class="fa fa-paper-plane me-1"></i> Submit</button>
+            </div>
         </form>
     `;
 }
@@ -14791,7 +15158,11 @@ function renderSubmittedFormView(form, response) {
         ${response.studentReply ? `<p class="mt-2"><i class="fa fa-reply text-muted me-1"></i><strong>Your Reply:</strong> ${response.studentReply}</p>` : ''}
         ${isFinalized && currentUserRole === 'student' ? `<p class="text-info mt-2"><i class="fa fa-info-circle me-1"></i> This form has been finalized and can no longer be edited.</p>` : ''}
     `;
-}/**
+
+
+}
+
+/**
  * Attaches the conditional logic and event listeners to a submittable form
  * that has already been rendered to the page.
  * @param {object} form - The configuration object for the form to initialize.
@@ -14865,6 +15236,58 @@ function initializeConditionalForm(form) {
 
     // Call it once immediately to set the correct initial visibility of all fields.
     updateVisibility();
+    
+    // --- MODIFIED: Advanced Cumulative Total Calculation Logic ---
+    const amountFields = formEl.querySelectorAll('.amount-field');
+    const grandTotalDisplay = document.getElementById(`cumulative-total-${form.id}`);
+
+    if (amountFields.length > 0) {
+        const updateTotal = () => {
+            let grandTotal = 0;
+            const subTotals = {}; // To store totals for each column header
+
+            // Loop through each amount field to calculate sums
+            amountFields.forEach(input => {
+                // Only calculate if the field is currently visible
+                if (input.closest('div[id^="container_"]').style.display !== 'none') {
+                    const amount = parseFloat(input.value) || 0;
+                    grandTotal += amount;
+
+                    const header = input.dataset.totalHeader;
+                    if (header) { // If it belongs to a column
+                        subTotals[header] = (subTotals[header] || 0) + amount;
+                    }
+                }
+            });
+
+            // Update the grand total display
+            if (grandTotalDisplay) {
+                grandTotalDisplay.textContent = grandTotal.toFixed(2);
+            }
+
+            // Update all the sub-total displays
+            for (const header in subTotals) {
+                const headerId = header.replace(/\s+/g, '-').toLowerCase();
+                const subTotalEl = document.getElementById(`subtotal-${form.id}-${headerId}`);
+                if (subTotalEl) {
+                    subTotalEl.textContent = subTotals[header].toFixed(2);
+                }
+            }
+        };
+
+        formEl.addEventListener('input', (event) => {
+            if (event.target.classList.contains('amount-field')) {
+                updateTotal();
+            }
+        });
+
+        // Update totals when conditional visibility changes
+        formEl.addEventListener('change', updateTotal);
+
+        // Initial calculation on load
+        updateTotal();
+    }
+
 
     formEl.addEventListener('submit', (event) => {
         // We pass both the event and the form's configuration object
@@ -15029,17 +15452,29 @@ async function handleFormSubmission(event, formConfig) {
  * @param {object} field - The field configuration object.
  * @returns {string} The HTML string for the input field.
  */
+
+/**
+ * Renders a single input field for a form.
+ * Now handles the new 'amount' type.
+ */
 function renderFormInputField(field) {
     const name = field.label.replace(/\s+/g, '_').toLowerCase();
     const required = field.required ? 'required' : '';
     const helper = field.helper ? `<small class="form-text text-muted">${field.helper}</small>` : '';
-    
-    // Determine if the field should be hidden initially
     const hasConditions = field.conditions && field.conditions.length > 0;
     const initialStyle = hasConditions ? 'display:none;' : '';
     
     let fieldHtml = '';
     switch (field.type) {
+        // --- NEW CASE for amount fields ---
+        case 'amount':
+            fieldHtml = `
+                <div class="mb-3">
+                    <label for="${name}" class="form-label">${field.label}</label>
+                    <input type="number" class="form-control amount-field" name="${name}" id="${name}" placeholder="${field.placeholder || '0.00'}" min="0" step="0.01" ${required}>
+                    ${helper}
+                </div>`;
+            break;
         case 'checkbox':
             fieldHtml = `<div class="form-check mb-3"><input class="form-check-input" name="${name}" type="checkbox" id="${name}" ${required}><label class="form-check-label" for="${name}">${field.label}</label>${helper}</div>`;
             break;
@@ -15047,13 +15482,11 @@ function renderFormInputField(field) {
             const options = (field.options || []).map(o => `<option value="${o}">${o}</option>`).join('');
             fieldHtml = `<div class="mb-3"><label for="${name}" class="form-label">${field.label}</label><select class="form-select" name="${name}" id="${name}" ${required}><option value="">-- Select --</option>${options}</select>${helper}</div>`;
             break;
-        // ... other cases like multiselect, date, text
         default:
             fieldHtml = `<div class="mb-3"><label for="${name}" class="form-label">${field.label}</label><input type="text" class="form-control" name="${name}" id="${name}" placeholder="${field.placeholder || ''}" ${required}>${helper}</div>`;
             break;
     }
 
-    // Wrap the field in a container div with a unique ID to control its visibility
     return `<div id="container_${name}" style="${initialStyle}">${fieldHtml}</div>`;
 }
 
@@ -18480,6 +18913,7 @@ async function handleFestEntryLogin(festId, houseId) {
         }
         const fest = { id: festDoc.id, ...festDoc.data() };
 
+
         if (fest && fest.housePasswords && fest.housePasswords[houseId] === enteredPassword) {
             showAlert('Login successful! Loading live data...', 'success');
             
@@ -20269,6 +20703,7 @@ async function handleStudentLookup(inputElement) {
 function openEventSelectionModal(row) {
     const studentId = row.dataset.studentid;
     if (!studentId) return showAlert('Please find a valid student first by entering their Admission No.', 'warning');
+    state.managingFest = fest; // Ensure the global state is set for modals
     
     const student = students.find(s => s.id === studentId);
     const festId = state.managingFest.id;
@@ -20276,10 +20711,10 @@ function openEventSelectionModal(row) {
     const currentlySelected = row.dataset.events ? row.dataset.events.split(',') : [];
 
     // EDIT: Get granular limits for Solo/Group events based on their type.
-    const maxOnStageSolo = festSettings.maxOnStageSoloEvents || 2;
-    const maxOnStageGroup = festSettings.maxOnStageGroupEvents || 2;
-    const maxOffStageSolo = festSettings.maxOffStageSoloEvents || 1;
-    const maxOffStageGroup = festSettings.maxOffStageGroupEvents || 1;
+    const maxOnStageSolo = state.managingFest.settings.maxOnStageSoloEvents || 2;
+    const maxOnStageGroup =state.managingFest. settings.maxOnStageGroupEvents || 2;
+    const maxOffStageSolo = state.managingFest.settings.maxOffStageSoloEvents || 1;
+    const maxOffStageGroup =state.managingFest. settings.maxOffStageGroupEvents || 1;
 
     const onStageEvents = festEvents.filter(e => e.festId === festId && (e.category === 'General' || e.category === studentCategory) && e.type !== 'offStage');
     const offStageEvents = festEvents.filter(e => e.festId === festId && (e.category === 'General' || e.category === studentCategory) && e.type === 'offStage');
@@ -24299,7 +24734,11 @@ function saveFormToLocalStorage(formId) {
  * Loads and populates a form with data from localStorage.
  * @param {string} formId The ID of the form to load.
  */
-window. loadFormFromLocalStorage = (formId) =>{
+/**
+ * Loads and populates a form with data from localStorage, now safely ignoring file inputs.
+ * @param {string} formId The ID of the form to load.
+ */
+window.loadFormFromLocalStorage = (formId) => {
     const form = document.getElementById(formId);
     const storageKey = `formData_${currentUserRole}_${formId}`;
     const savedDataJSON = localStorage.getItem(storageKey);
@@ -24310,15 +24749,20 @@ window. loadFormFromLocalStorage = (formId) =>{
     for (const key in savedData) {
         const element = form.elements[key];
         if (element) {
-            if (element.type === 'checkbox') {
-                element.checked = savedData[key];
-            } else {
-                element.value = savedData[key];
+            // --- THIS IS THE FIX ---
+            // Add a check to ensure the element is not a file input before setting its value.
+            if (element.type !== 'file') { 
+                if (element.type === 'checkbox') {
+                    element.checked = savedData[key];
+                } else {
+                    element.value = savedData[key];
+                }
             }
         }
     }
     showAlert('Unsaved form data has been restored.', 'info');
-    localStorage.setItem(storageKey,"");
+    // It's also good practice to clear the data after restoring it
+    localStorage.removeItem(storageKey); 
 }
 
 // Add this event listener to handle browser back/forward buttons
@@ -30576,14 +31020,12 @@ async function handleStudentPromotion() {
     'class-timetable': window.renderClassTimetableView,
     'master-control': window.renderMasterControlModule,
     'progression-mgt': window.renderProgressionModule, // <-- ADD THIS LINE
-
-
 };      
 // --- In your <script type="module"> block ---
 
 const appDb = new Dexie("SchoolAppDB");
 // Increment the version number if you are changing the schema
-appDb.version(4.3).stores({
+appDb.version(4.4).stores({
     classes: "&id, name", // &id means primary key and must be unique
     subjects: "&id, name",
     students: "&id, classId, division, admissionNumber, name",
@@ -30623,7 +31065,10 @@ appDb.version(4.3).stores({
     syllabuses:"&id",
     chapters:"&id",
     syllabusCompletion:"&id",
-    schoolDetails:"&id"
+    schoolDetails:"&id",
+    //forms
+    forms :"&id",
+    formResponses :"&id"
 });
     
 
