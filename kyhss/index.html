@@ -7744,7 +7744,7 @@ function copySubjectWiseColumnData(columnType) {
          * New helper function to calculate an alternate grading scale.
          */
         function calculateGradeType2(score, maxScore) {
-            if (score === 'AB') return 'Ab';
+            if (score === 'AB') return 'AB';
             if (maxScore === 0) return '-';
             const percentage = (score / maxScore) * 100;
             //if (percentage >= 90) return 'O'; // Outstanding
@@ -7753,7 +7753,7 @@ function copySubjectWiseColumnData(columnType) {
             if (percentage >= 45) return 'C';
             if (percentage >= 33) return 'D';
             //if (percentage >= 35) return 'E';
-            return 'F'; // Fail
+            return 'E'; // Fail
         }
         
         /**
