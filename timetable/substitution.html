@@ -659,7 +659,7 @@
                 loadingTeachersMessage.textContent = 'Loading data from database...';
 
                 // Load Timetable Data
-                const timetableDocRef = doc(db, `${basePath}/${FIRESTORE_COLLECTION_TIMETABLES}`, 'mainTimetable');
+                const timetableDocRef = doc(db, `${basePath}/${FIRESTORE_COLLECTION_TIMETABLES}`, 'main2');
                 const timetableDocSnap = await getDoc(timetableDocRef);
                 currentTimetable = timetableDocSnap.exists() ? timetableDocSnap.data() : {};
                 if (!timetableDocSnap.exists()) {
