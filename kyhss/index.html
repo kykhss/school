@@ -19645,7 +19645,7 @@ function renderHouseParticipantRegistration(fest, houseId) {
                         </table>
                     </div>
                     <div class="text-end mt-3">
-                        <button class="btn btn-success" id="save-house-regs-btn" ${!isRegistrationOpen ? 'disabled' : ''}>Save All Registrations</button>
+                        <button class="btn btn-success d-none" id="save-house-regs-btn" ${!isRegistrationOpen ? 'disabled' : ''}>Save All Registrations</button>
                     </div>
                 </div>
                 <div class="tab-pane fade" id="groups-pane" role="tabpanel">
@@ -19694,7 +19694,7 @@ function renderHouseParticipantRegistration(fest, houseId) {
                     <td>${student.name} (${student.admissionNumber})</td>
                     <td>${getStudentClassName(student.classId, student.division)}</td>
                     <td><button class="btn btn-sm btn-outline-secondary manage-events-btn" ${!isRegistrationOpen ? 'disabled' : ''}>Manage Events (<span class="event-count">${eventCount}</span>)</button></td>
-                    <td class="text-end"><button class="btn btn-sm btn-outline-success save-single-reg-btn" title="Save this student's registration" ${!isRegistrationOpen ? 'disabled' : ''}><i class="fas fa-save"></i></button></td>
+                    <td class="text-end"><button class="d-none btn btn-sm btn-outline-success save-single-reg-btn" title="Save this student's registration" ${!isRegistrationOpen ? 'disabled' : ''}><i class="fas fa-save"></i></button></td>
                 </tr>`;
         }).join('');
     };
