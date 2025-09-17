@@ -21853,24 +21853,24 @@ function openEventSelectionModal(row) {
     const studentCategory = getStudentCategory(student);
     const currentlySelected = row.dataset.events ? row.dataset.events.split(',') : [];
 
+    // The limits for group events are no longer needed here
     const maxOnStageSolo = state.managingFest.settings.maxOnStageSoloEvents || 2;
-    const maxOnStageGroup = state.managingFest.settings.maxOnStageGroupEvents || 2;
     const maxOffStageSolo = state.managingFest.settings.maxOffStageSoloEvents || 1;
-    const maxOffStageGroup = state.managingFest.settings.maxOffStageGroupEvents || 1;
 
+    // --- MODIFICATION: The filters now ONLY include solo events (!e.isGroupEvent) ---
     const onStageEvents = festEvents.filter(e => 
         e.festId === festId && 
+        !e.isGroupEvent && // <-- Only solo events
         (e.category === 'General' || e.category === studentCategory) && 
         e.type !== 'offStage' && 
-        // CORRECTED GENDER CHECK:
         (!e.gender || e.gender === 'Common' || ((student.gender === 'M'||student.gender === 'Male') && e.gender === 'Male') || ((student.gender === 'F'||student.gender === 'Female') && e.gender === 'Female'))
     );
 
     const offStageEvents = festEvents.filter(e => 
         e.festId === festId && 
+        !e.isGroupEvent && // <-- Only solo events
         (e.category === 'General' || e.category === studentCategory) && 
         e.type === 'offStage' && 
-        // CORRECTED GENDER CHECK:
         (!e.gender || e.gender === 'Common' || ((student.gender === 'M'||student.gender === 'Male') && e.gender === 'Male') || ((student.gender === 'F'||student.gender === 'Female') && e.gender === 'Female'))
     );
 
@@ -21878,8 +21878,9 @@ function openEventSelectionModal(row) {
     const modalBody = document.getElementById('event-modal-body');
     const saveBtn = document.getElementById('event-modal-save-btn');
     
-    modalTitle.textContent = `Select Events for ${student.name}`;
+    modalTitle.textContent = `Select Solo Events for ${student.name}`;
 
+    // --- MODIFICATION: Simplified UI text ---
     modalBody.innerHTML = `
         <div class="d-flex justify-content-between align-items-center">
             <div>
@@ -21893,36 +21894,39 @@ function openEventSelectionModal(row) {
                 <label class="form-check-label" for="event-type-toggle" id="event-type-label">On-Stage Events</label>
             </div>
         </div>
-        <p class="mb-2"><small>Limits: On-Stage (Solo: ${maxOnStageSolo}, Group: ${maxOnStageGroup}) | Off-Stage (Solo: ${maxOffStageSolo}, Group: ${maxOffStageGroup})</small></p>
+        <p class="mb-2"><small>Limits: On-Stage (Solo: ${maxOnStageSolo}) | Off-Stage (Solo: ${maxOffStageSolo})</small></p>
         
         <div id="selection-summary" class="mb-2">
             <strong>Selected: </strong>
             <span id="selection-count-display" class="badge rounded-pill bg-dark" data-bs-toggle="tooltip" data-bs-placement="top" title="No events selected">
-                0 On-Stage, 0 Off-Stage
             </span>
         </div>
         <hr class="my-2">
         
         <div style="max-height: 400px; overflow-y: auto;">
             <div id="onstage-events-container" class="row g-3">
-                ${onStageEvents.map(event => `
+                ${onStageEvents.map(event => {
+                    const eventId = `event-modal-${event.id}`;
+                    return `
                     <div class="col-md-6">
                         <div class="form-check p-2">
-                            <input class="form-check-input event-modal-checkbox" data-event-type="onStage" data-event-mode="${event.isGroupEvent ? 'group' : 'solo'}" type="checkbox" value="${event.id}" ${currentlySelected.includes(event.id) ? 'checked' : ''}>
-                            <label class="form-check-label">${event.name} (${event.isGroupEvent ? 'Group' : 'Solo'})</label>
+                            <input class="form-check-input event-modal-checkbox" data-event-type="onStage" data-event-mode="solo" type="checkbox" value="${event.id}" id="${eventId}" ${currentlySelected.includes(event.id) ? 'checked' : ''}>
+                            <label class="form-check-label" for="${eventId}">${event.name}</label>
                         </div>
-                    </div>
-                `).join('') || '<p class="text-muted p-3">No On-Stage events available.</p>'}
+                    </div>`;
+                }).join('') || '<p class="text-muted p-3">No On-Stage solo events available.</p>'}
             </div>
             <div id="offstage-events-container" class="row g-3" style="display: none;">
-                ${offStageEvents.map(event => `
+                ${offStageEvents.map(event => {
+                    const eventId = `event-modal-${event.id}`;
+                    return `
                     <div class="col-md-6">
                         <div class="form-check p-2">
-                            <input class="form-check-input event-modal-checkbox" data-event-type="offStage" data-event-mode="${event.isGroupEvent ? 'group' : 'solo'}" type="checkbox" value="${event.id}" ${currentlySelected.includes(event.id) ? 'checked' : ''}>
-                            <label class="form-check-label">${event.name} (${event.isGroupEvent ? 'Group' : 'Solo'})</label>
+                            <input class="form-check-input event-modal-checkbox" data-event-type="offStage" data-event-mode="solo" type="checkbox" value="${event.id}" id="${eventId}" ${currentlySelected.includes(event.id) ? 'checked' : ''}>
+                            <label class="form-check-label" for="${eventId}">${event.name}</label>
                         </div>
-                    </div>
-                `).join('') || '<p class="text-muted p-3">No Off-Stage events available.</p>'}
+                    </div>`;
+                }).join('') || '<p class="text-muted p-3">No Off-Stage solo events available.</p>'}
             </div>
         </div>
     `;
@@ -21956,49 +21960,35 @@ function openEventSelectionModal(row) {
 
         checkedBoxes.forEach(cb => {
             if (cb.dataset.eventType === 'onStage') onStageCount++;
-            if (cb.dataset.eventType === 'offStage') offStageCount++;
+            else if (cb.dataset.eventType === 'offStage') offStageCount++;
             const event = festEvents.find(e => e.id === cb.value);
             if (event) selectedEventNames.push(event.name);
         });
 
-        // Update modal's summary badge
-        countDisplay.textContent = `${onStageCount} On-Stage, ${offStageCount} Off-Stage`;
+        countDisplay.textContent = `On-Stage: ${onStageCount} | Off-Stage: ${offStageCount}`;
         const tooltipTitle = selectedEventNames.length > 0 ? selectedEventNames.join(', ') : 'No events selected';
         countDisplay.setAttribute('data-bs-original-title', tooltipTitle);
         countTooltip.setContent({ '.tooltip-inner': tooltipTitle });
         
-        // --- NEW: Live update the main table row's data ---
         const selectedEventIds = checkedBoxes.map(cb => cb.value);
         row.dataset.events = selectedEventIds.join(',');
         row.querySelector('.event-count').textContent = selectedEventIds.length;
     };
 
     const checkLimit = () => {
-        const counts = {
-            onStage: { solo: 0, group: 0 },
-            offStage: { solo: 0, group: 0 }
-        };
+        const counts = { onStage: 0, offStage: 0 };
         checkboxes.forEach(cb => {
-            if (cb.checked) {
-                counts[cb.dataset.eventType][cb.dataset.eventMode]++;
-            }
+            if (cb.checked) { counts[cb.dataset.eventType]++; }
         });
         
-        const limits = {
-            onStage: { solo: maxOnStageSolo, group: maxOnStageGroup },
-            offStage: { solo: maxOffStageSolo, group: maxOffStageGroup }
-        };
+        const limits = { onStage: maxOnStageSolo, offStage: maxOffStageSolo };
 
         checkboxes.forEach(cb => {
-            const parentDiv = cb.closest('.form-check'); // The container for highlighting
-            
-            // --- NEW: Apply/Remove highlighting class ---
+            const parentDiv = cb.closest('.form-check');
             parentDiv.classList.toggle('event-selected', cb.checked);
-
             if (!cb.checked) {
                 const type = cb.dataset.eventType;
-                const mode = cb.dataset.eventMode;
-                cb.disabled = counts[type][mode] >= limits[type][mode];
+                cb.disabled = counts[type] >= limits[type];
             }
         });
         
@@ -22010,18 +22000,20 @@ function openEventSelectionModal(row) {
     const eventModal = new bootstrap.Modal(document.getElementById('eventSelectionModal'));
 
     saveBtn.onclick = async () => {
-        const selectedEventIds = Array.from(modalBody.querySelectorAll('.event-modal-checkbox:checked')).map(cb => cb.value);
+        const selectedSoloEventIds = Array.from(modalBody.querySelectorAll('.event-modal-checkbox:checked')).map(cb => cb.value);
         const houseId = student.houseId;
         const regId = `${festId}_${studentId}`;
         const existingReg = festRegistrations.find(r => r.id === regId);
 
+        // Get existing GROUP events to preserve them
+        const existingGroupEvents = existingReg?.events.filter(id => festEvents.find(e => e.id === id)?.isGroupEvent) || [];
+        
+        // Combine preserved group events with the newly selected solo events
+        const newEvents = [...new Set([...existingGroupEvents, ...selectedSoloEventIds])];
+
         const registrationData = {
-            id: regId,
-            festId: festId,
-            studentId: studentId,
-            studentName: student.name,
-            houseId: houseId,
-            events: selectedEventIds,
+            id: regId, festId, studentId, studentName: student.name,
+            houseId: houseId, events: newEvents,
             chestNo: existingReg?.chestNo || null
         };
 
