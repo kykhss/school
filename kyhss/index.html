@@ -20515,7 +20515,16 @@ window. openGroupBuilderModal=(groupId, festId, houseId)=> {
         const searchTerm = searchInput.value.toLowerCase();
         const selectedStudentCategory = studentCategoryFilter.value;
         const studentsInOtherGroups = new Set(festGroups.filter(g => g.festId === festId && g.id !== groupId).flatMap(g => g.members.map(m => m.studentId)));
-        
+        const studentGroupCounts = new Map();
+    festGroups
+        .filter(g => g.festId === festId && g.id !== groupId) // Get all other groups in the same fest
+        .forEach(group => {
+            group.members.forEach(member => {
+                const currentCount = studentGroupCounts.get(member.studentId) || 0;
+                studentGroupCounts.set(member.studentId, currentCount + 1);
+            });
+        });
+
         let filteredStudents = studentsInHouse;
 
         // Apply category filter first
