@@ -19599,7 +19599,12 @@ function renderHouseParticipantRegistration(fest, houseId) {
 
     const isRegistrationOpen = fest.registrationOpen === true;
 
-    // --- MODIFIED HTML: Added a new "Group Management" tab and pane ---
+    // --- NEW: Get unique categories and classes for the filters ---
+    const uniqueCategories = [...new Set(eventsForFest.map(e => e.category))].sort();
+    const uniqueClasses = [...new Map(studentsInHouse.map(s => [s.classId, { id: s.classId, name: getStudentClassName(s.classId) }])).values()]
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+    // --- MODIFIED HTML: Added new filters for category and class ---
     container.innerHTML = `
         <div class="ui-card">
             <ul class="nav nav-pills mb-3" id="house-entry-tabs" role="tablist">
@@ -19626,18 +19631,29 @@ function renderHouseParticipantRegistration(fest, houseId) {
                             <i class="fas fa-lock me-2"></i> Registration for this fest is currently closed.
                         </div>
                     ` : ''}
-                    <div class="row mb-3">
-                        <div class="col-md-6">
+                    <div class="row mb-3 g-2">
+                        <div class="col-md-5">
                             <input type="text" id="house-student-search" class="form-control" placeholder="Search students by name or admission no...">
+                        </div>
+                        <div class="col-md-4">
+                             <select id="house-reg-category-filter" class="form-select">
+                                <option value="all">All Categories</option>
+                                ${uniqueCategories.map(cat => `<option value="${cat}">${cat}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <select id="house-reg-class-filter" class="form-select">
+                                <option value="all">All Classes</option>
+                                ${uniqueClasses.map(cls => `<option value="${cls.id}">${cls.name||""}</option>`).join('')}
+                            </select>
                         </div>
                     </div>
                     <div class="table-responsive">
                         <table class="table table-sm" id="house-reg-table">
                             <thead>
                                 <tr>
-                                    <th>Student Name (Admission No.)</th>
-                                    <th>Class</th>
-                                    <th>Events</th>
+                                    <th>Student Name</th>
+                                    <th>Registered Events</th>
                                     <th class="text-end">Action</th>
                                 </tr>
                             </thead>
@@ -19645,7 +19661,7 @@ function renderHouseParticipantRegistration(fest, houseId) {
                         </table>
                     </div>
                     <div class="text-end mt-3">
-                        <button class="btn btn-success d-none" id="save-house-regs-btn" ${!isRegistrationOpen ? 'disabled' : ''}>Save All Registrations</button>
+                        <button class="d-none btn btn-success" id="save-house-regs-btn" ${!isRegistrationOpen ? 'disabled' : ''}>Save All Registrations</button>
                     </div>
                 </div>
                 <div class="tab-pane fade" id="groups-pane" role="tabpanel">
@@ -19678,26 +19694,77 @@ function renderHouseParticipantRegistration(fest, houseId) {
         </div>
     `;
 
-    // --- HELPER FUNCTION TO RENDER THE REGISTRATION TABLE ROWS (Unchanged) ---
-    const renderTableRows = (searchTerm = '') => {
-        const tableBody = container.querySelector('#house-reg-table tbody');
-        const registrationsInHouse = festRegistrations.filter(r => r.festId === fest.id && r.houseId === houseId);
-        const filteredStudents = studentsInHouse.filter(s => 
-            s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-            String(s.admissionNumber || "").toLowerCase().includes(searchTerm.toLowerCase())
+    // --- MODIFIED HELPER FUNCTION: Renders table rows with the updated "Manage" button ---
+const renderTableRows = (searchTerm = '', category = 'all', classId = 'all') => {
+    const tableBody = container.querySelector('#house-reg-table tbody');
+    const registrationsInHouse = festRegistrations.filter(r => r.festId === fest.id && r.houseId === houseId);
+
+    let filteredStudents = studentsInHouse;
+
+    // Apply filters
+    if (searchTerm) {
+        const lowerCaseSearch = searchTerm.toLowerCase();
+        filteredStudents = filteredStudents.filter(s =>
+            s.name.toLowerCase().includes(lowerCaseSearch) ||
+            String(s.admissionNumber || "").toLowerCase().includes(lowerCaseSearch)
         );
-        tableBody.innerHTML = filteredStudents.map(student => {
+    }
+    if (classId !== 'all') {
+        filteredStudents = filteredStudents.filter(s => s.classId === classId);
+    }
+    if (category !== 'all') {
+        filteredStudents = filteredStudents.filter(student => {
             const registration = registrationsInHouse.find(r => r.studentId === student.id);
-            const eventCount = registration?.events.length || 0;
-            return `
-                <tr data-studentid="${student.id}" data-events="${registration?.events.join(',') || ''}">
-                    <td>${student.name} (${student.admissionNumber})</td>
-                    <td>${getStudentClassName(student.classId, student.division)}</td>
-                    <td><button class="btn btn-sm btn-outline-secondary manage-events-btn" ${!isRegistrationOpen ? 'disabled' : ''}>Manage Events (<span class="event-count">${eventCount}</span>)</button></td>
-                    <td class="text-end"><button class="d-none btn btn-sm btn-outline-success save-single-reg-btn" title="Save this student's registration" ${!isRegistrationOpen ? 'disabled' : ''}><i class="fas fa-save"></i></button></td>
+            if (!registration || !registration.events.length) return false;
+            // Check if the student is in any event that matches the selected category
+            return registration.events.some(eventId => {
+                const event = eventsForFest.find(e => e.id === eventId);
+                return event && event.category === category;
+            });
+        });
+    }
+    
+    if (filteredStudents.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="4" class="text-center text-muted">No students match the current filters.</td></tr>`;
+        return;
+    }
+
+    tableBody.innerHTML = filteredStudents.map(student => {
+        const registration = registrationsInHouse.find(r => r.studentId === student.id);
+        const registeredEventIds = registration?.events || [];
+        
+        // --- NEW: Added event count for the badge ---
+        const eventCount = registeredEventIds.length;
+        
+        // Generate HTML for displaying event names as badges
+        const eventsHtml = registeredEventIds.length > 0
+            ? registeredEventIds.map(eventId => {
+                const event = eventsForFest.find(e => e.id === eventId);
+                return `<span class="badge bg-light text-dark me-1">${event ? event.name : 'Unknown Event'}</span>`;
+            }).join('')
+            : `<small class="text-muted">No events registered</small>`;
+
+        // --- MODIFIED: The returned <tr> now includes your requested button style ---
+        return `
+                <tr data-studentid="${student.id}" data-events="${registeredEventIds.join(',') || ''}">
+                    <td>
+                        ${student.name}
+                        <br>
+                        <small class="text-muted">Adm: ${student.admissionNumber} | ${getStudentClassName(student.classId, student.division)}</small>
+                    </td>
+                    <td>${eventsHtml}</td>
+                    <td class="text-end">
+                         <button class="btn btn-sm btn-outline-secondary manage-events-btn" ${!isRegistrationOpen ? 'disabled' : ''} title="Manage this student's events">
+                            <i class="fas fa-edit me-1"></i> Manage
+                            <span class="badge bg-primary rounded-pill event-count-badge ms-2 event-count">${eventCount}</span>
+                         </button>
+                         <button class="d-none btn btn-sm btn-outline-success save-single-reg-btn ms-2" title="Save this student's registration" ${!isRegistrationOpen ? 'disabled' : ''}>
+                            <i class="fas fa-save"></i>
+                         </button>
+                    </td>
                 </tr>`;
         }).join('');
-    };
+};
     
     // --- HELPER FUNCTION TO RENDER THE "VIEW" PANE CONTENT (Unchanged) ---
     const renderViewPaneContent = (filterType = 'all', filterEventId = 'all') => {
@@ -19749,7 +19816,20 @@ function renderHouseParticipantRegistration(fest, houseId) {
         else { listContainer.innerHTML = '<p class="text-muted">No participants registered for the selected event(s).</p>'; }
     };
 
-    // --- ATTACH EVENT LISTENERS (Unchanged) ---
+    // --- MODIFIED EVENT LISTENERS: Now handle the new filters ---
+    const searchInput = document.getElementById('house-student-search');
+    const categoryFilter = document.getElementById('house-reg-category-filter');
+    const classFilter = document.getElementById('house-reg-class-filter');
+    
+    const applyFilters = () => {
+        renderTableRows(searchInput.value, categoryFilter.value, classFilter.value);
+    };
+
+    searchInput.addEventListener('input', applyFilters);
+    categoryFilter.addEventListener('change', applyFilters);
+    classFilter.addEventListener('change', applyFilters);
+    
+    // --- Unchanged Event Listeners ---
     const regTableBody = container.querySelector('#house-reg-table tbody');
     regTableBody.addEventListener('click', (e) => {
         const manageBtn = e.target.closest('.manage-events-btn');
@@ -19758,7 +19838,6 @@ function renderHouseParticipantRegistration(fest, houseId) {
         if (saveBtn) saveSingleHouseRegistration(fest.id, houseId, saveBtn.closest('tr'));
     });
     document.getElementById('save-house-regs-btn').addEventListener('click', () => { saveHouseRegistrationsFromEntryPage(fest.id, houseId); });
-    document.getElementById('house-student-search').addEventListener('input', (e) => { renderTableRows(e.target.value); });
     const typeFilter = document.getElementById('house-event-type-filter');
     const eventFilter = document.getElementById('house-event-filter');
     typeFilter.addEventListener('change', () => {
@@ -19775,10 +19854,9 @@ function renderHouseParticipantRegistration(fest, houseId) {
     renderHouseGroupManagementTab(fest, houseId, isRegistrationOpen);
     
     // --- INITIAL RENDERS ---
-    renderTableRows();
+    renderTableRows(); // Initial render with default filter values
     typeFilter.dispatchEvent(new Event('change'));
 }
-
 
 /**
  * NEW: Renders the content for the "Group Management" tab with a Refresh button.
@@ -20332,7 +20410,17 @@ function renderGroupCard(group, fest) {
  * @param {string} festId - The ID of the active fest.
  * @param {string} houseId - The ID of the house this group belongs to.
  */
-window.openGroupBuilderModal = (groupId, festId, houseId) => {
+/**
+ * Opens a modal window to create/edit a group with a new, more intuitive
+ * click-to-add and remove interface for member selection.
+ */
+/**
+ * Opens a modal window to create/edit a group, now with category filters for both students and events.
+ * @param {string|null} groupId - The ID of the group to edit, or null to create a new one.
+ * @param {string} festId - The ID of the active fest.
+ * @param {string} houseId - The ID of the house this group belongs to.
+ */
+window. openGroupBuilderModal=(groupId, festId, houseId)=> {
     const isEditMode = groupId !== null;
     const group = isEditMode ? festGroups.find(g => g.id === groupId) : null;
     const fest = fests.find(f => f.id === festId);
@@ -20349,27 +20437,27 @@ window.openGroupBuilderModal = (groupId, festId, houseId) => {
             <div class="row">
                 <div class="col-md-5 border-end">
                     <h6 class="mb-3">1. Select Members from Your House</h6>
+                    
+                    <div class="mb-2">
+                        <label for="group-student-category-filter" class="form-label">Filter by Category</label>
+                        <select id="group-student-category-filter" class="form-select">
+                            <option value="all">All Students in House</option>
+                            ${categoryOptions}
+                        </select>
+                    </div>
+                    
                     <input type="text" id="group-member-search" class="form-control mb-2" placeholder="Search by name or admn no...">
                     <div id="group-student-list-container" class="list-group" style="max-height: 350px; overflow-y: auto;">
-                    </div>
+                        </div>
                 </div>
                 <div class="col-md-7">
                     <h6 class="mb-3">2. Name Group & Assign Roles</h6>
-                    <div class="mb-3">
-                        <label class="form-label">Group Name</label>
-                        <input type="text" id="group-builder-name" class="form-control" value="${group?.name || ''}">
-                    </div>
+                    <div class="mb-3"><label class="form-label">Group Name</label><input type="text" id="group-builder-name" class="form-control" value="${group?.name || ''}"></div>
                     <p class="form-label">Selected Members (<span id="group-builder-count">0</span>)</p>
                     <ul id="group-builder-list" class="list-group mb-3" style="max-height: 150px; overflow-y: auto;"></ul>
                     
                     <h6 class="mb-3">3. Assign to Group Events</h6>
-                    <div class="mb-2">
-                        <label for="group-event-category-filter" class="form-label">Filter Events by Category</label>
-                        <select id="group-event-category-filter" class="form-select">
-                            <option value="all">All Categories</option>
-                            ${categoryOptions}
-                        </select>
-                    </div>
+                    <div class="mb-2"><label for="group-event-category-filter" class="form-label">Filter Events by Category</label><select id="group-event-category-filter" class="form-select"><option value="all">All</option>${categoryOptions}</select></div>
                     <select id="group-events-select" class="form-select" multiple size="4"></select>
                 </div>
             </div>
@@ -20380,109 +20468,236 @@ window.openGroupBuilderModal = (groupId, festId, houseId) => {
 
     // --- 3. Get References to Dynamic Elements ---
     const searchInput = document.getElementById('group-member-search');
+    const studentCategoryFilter = document.getElementById('group-student-category-filter');
     const studentListContainer = document.getElementById('group-student-list-container');
     const saveButton = document.getElementById('group-builder-save-btn');
-    const categoryFilter = document.getElementById('group-event-category-filter');
+    const eventCategoryFilter = document.getElementById('group-event-category-filter');
     const eventsSelect = document.getElementById('group-events-select');
+    
+    let selectedStudentIds = new Set(group?.members.map(m => m.studentId) || []);
 
     // --- 4. Define Helper Functions for the Modal ---
 
     const updateBuilderUI = () => {
-        const selectedStudentIds = Array.from(modal.querySelectorAll('.student-group-checkbox:checked')).map(cb => cb.value);
         const builderList = document.getElementById('group-builder-list');
-        document.getElementById('group-builder-count').textContent = selectedStudentIds.length;
+        document.getElementById('group-builder-count').textContent = selectedStudentIds.size;
 
-        if (selectedStudentIds.length === 0) {
-            builderList.innerHTML = '<li class="list-group-item text-muted">Select students from the left...</li>';
+        if (selectedStudentIds.size === 0) {
+            builderList.innerHTML = '<li class="list-group-item text-muted">Click a student from the left to add them.</li>';
             return;
         }
-        builderList.innerHTML = selectedStudentIds.map(studentId => {
+        builderList.innerHTML = Array.from(selectedStudentIds).map(studentId => {
             const student = students.find(s => s.id === studentId);
+            const className = getStudentClassName(student.classId, student.division); // Helper to get full class name
             const currentMember = group?.members.find(m => m.studentId === studentId);
             return `
                 <li class="list-group-item d-flex justify-content-between align-items-center py-1">
-                    <span>${student.name}</span>
-                    <select class="form-select form-select-sm w-auto group-member-role" data-studentid="${student.id}">
-                        <option value="Member" ${currentMember?.role === 'Member' ? 'selected' : ''}>Member</option>
-                        <option value="Captain" ${currentMember?.role === 'Captain' ? 'selected' : ''}>Captain</option>
-                        <option value="Accompanist" ${currentMember?.role === 'Accompanist' ? 'selected' : ''}>Accompanist</option>
-                    </select>
+                    <span>${student.name}( ${className})</span>
+                    <div>
+                        <select class="form-select form-select-sm d-inline-block w-auto me-2 group-member-role" data-studentid="${student.id}">
+                            <option value="Member" ${currentMember?.role === 'Member' ? 'selected' : ''}>Member</option>
+                            <option value="Captain" ${currentMember?.role === 'Captain' ? 'selected' : ''}>Captain</option>
+                        </select>
+                        <button class="btn btn-sm btn-outline-danger py-0 px-1 remove-member-btn" data-student-id="${student.id}">&times;</button>
+                    </div>
                 </li>`;
         }).join('');
     };
     
     const updateEventList = () => {
-        const selectedCategory = categoryFilter.value;
+        const selectedCategory = studentCategoryFilter.value;
         const groupEvents = festEvents.filter(e => e.festId === festId && e.isGroupEvent && (selectedCategory === 'all' || e.category === selectedCategory));
-        
-        // Find events this group is already in
-        const registeredEventIds = new Set();
-        if (group && group.members.length > 0) {
-            const firstMemberReg = festRegistrations.find(r => r.studentId === group.members[0].studentId);
-            firstMemberReg?.events.forEach(eventId => {
-                if (festEvents.find(e => e.id === eventId)?.isGroupEvent) {
-                    registeredEventIds.add(eventId);
-                }
-            });
-        }
-
-        eventsSelect.innerHTML = groupEvents.map(e => `<option value="${e.id}" ${registeredEventIds.has(e.id) ? 'selected' : ''}>${e.name}</option>`).join('') || '<option disabled>No events in this category.</option>';
+        const firstMemberReg = festRegistrations.find(r => r.studentId === group?.members[0]?.studentId);
+        const registeredEventIds = new Set(firstMemberReg?.events || []);
+        eventsSelect.innerHTML = groupEvents.map(e => `<option value="${e.id}" ${registeredEventIds.has(e.id) ? 'selected' : ''}>${e.name}</option>`).join('') || '<option disabled>No events in category.</option>';
     };
-
     const renderStudentList = () => {
         const searchTerm = searchInput.value.toLowerCase();
+        const selectedStudentCategory = studentCategoryFilter.value;
+        const studentsInOtherGroups = new Set(festGroups.filter(g => g.festId === festId && g.id !== groupId).flatMap(g => g.members.map(m => m.studentId)));
         
-        // --- THIS IS THE MODIFIED PART ---
-        // Find which groups students are in, for display purposes only.
-        const studentGroupMap = new Map();
-        festGroups.filter(g => g.festId === festId).forEach(g => {
-            g.members.forEach(m => {
-                if (!studentGroupMap.has(m.studentId)) {
-                    studentGroupMap.set(m.studentId, []);
-                }
-                studentGroupMap.get(m.studentId).push(g.name);
-            });
-        });
+        let filteredStudents = studentsInHouse;
 
-        const filteredStudents = studentsInHouse.filter(s => s.name.toLowerCase().includes(searchTerm) || String(s.admissionNumber || "").toLowerCase().includes(searchTerm));
+        // Apply category filter first
+        if (selectedStudentCategory !== 'all') {
+            filteredStudents = filteredStudents.filter(s => getStudentCategory(s) === selectedStudentCategory);
+        }
 
-        studentListContainer.innerHTML = filteredStudents.map(student => {
-            const isMemberOfThisGroup = group?.members.some(m => m.studentId === student.id);
-            const isChecked = modal.querySelector(`#modal-student-${student.id}`)?.checked || isMemberOfThisGroup;
-            
-            // Get the list of other groups the student is in
-            const otherGroups = (studentGroupMap.get(student.id) || []).filter(name => name !== group?.name);
-            const groupBadge = otherGroups.length > 0 ? `<span class="badge bg-secondary ms-2" title="In groups: ${otherGroups.join(', ')}">In ${otherGroups.length} other group(s)</span>` : '';
+        // Then apply search filter
+        if (searchTerm) {
+            filteredStudents = filteredStudents.filter(s => s.name.toLowerCase().includes(searchTerm) || String(s.admissionNumber || "").toLowerCase().includes(searchTerm));
+        }
 
-            // The 'disabled' logic is now REMOVED, allowing selection.
-            return `
-                <li class="list-group-item">
-                    <div class="form-check">
-                        <input class="form-check-input student-group-checkbox" type="checkbox" value="${student.id}" id="modal-student-${student.id}" ${isChecked ? 'checked' : ''}>
-                        <label class="form-check-label" for="modal-student-${student.id}">
-                            ${student.name} ${groupBadge}
-                        </label>
-                    </div>
-                </li>`;
-        }).join('');
-        // --- END OF MODIFICATION ---
+        studentListContainer.innerHTML = filteredStudents
+    .filter(s => !selectedStudentIds.has(s.id)) // Exclude already selected students
+    .map(student => {
+        const isDisabled = studentsInOtherGroups.has(student.id);
+        const className = getStudentClassName(student.classId, student.division); // Helper to get full class name
 
-        modal.querySelectorAll('.student-group-checkbox').forEach(cb => cb.addEventListener('change', updateBuilderUI));
-    };
+        return `
+            <a href="#" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-2 ${isDisabled ? 'disabled' : ''}" data-student-id="${student.id}">
+                <div>
+                    <strong>${student.name}</strong>
+                    <small class="text-muted d-block">${className} | Admn No: ${student.admissionNumber || 'N/A'}</small>
+                </div>
+                ${isDisabled ? '<span class="badge bg-secondary ms-2">In another group</span>' : ''}
+            </a>`;
+    }).join('');
+
+};
 
     // --- 5. Attach Listeners and Make Initial Calls ---
+    
+    // Add student
+    studentListContainer.addEventListener('click', e => {
+        e.preventDefault();
+        const link = e.target.closest('.list-group-item');
+        if (link && !link.classList.contains('disabled')) {
+            selectedStudentIds.add(link.dataset.studentId);
+            renderStudentList();
+            updateBuilderUI();
+        }
+    });
+
+    // Remove student
+    document.getElementById('group-builder-list').addEventListener('click', e => {
+        const button = e.target.closest('.remove-member-btn');
+        if (button) {
+            selectedStudentIds.delete(button.dataset.studentId);
+            renderStudentList();
+            updateBuilderUI();
+        }
+    });
+    
     searchInput.addEventListener('input', renderStudentList);
-    categoryFilter.addEventListener('change', updateEventList);
-    saveButton.addEventListener('click', () => saveGroupFromBuilder(groupId, festId, houseId, modal));
+    studentCategoryFilter.addEventListener('change', renderStudentList);
+    eventCategoryFilter.addEventListener('change', updateEventList);
+    saveButton.addEventListener('click', () => saveGroupFromBuilder(groupId, festId, houseId, document.getElementById('dynamic-app-modal')));
     
     renderStudentList();
     updateBuilderUI();
     updateEventList();
 }
+window. openGroupBuilderModaloldt=(groupId, festId, houseId)=> {
+    const isEditMode = groupId !== null;
+    const group = isEditMode ? festGroups.find(g => g.id === groupId) : null;
+    const fest = fests.find(f => f.id === festId);
+    
+    // Get all students in the house to start with
+    const studentsInHouse = students.filter(s => s.houseId === houseId);
+    const categoryOptions = ['General', ...(fest.settings?.categories?.map(c => c.name) || [])]
+        .map(cat => `<option value="${cat}">${cat}</option>`).join('');
+
+    const modal = showModal({
+        title: isEditMode ? `Edit Group: ${group.name}` : 'Create New Group',
+        body: `
+            <div class="row">
+                <div class="col-md-5 border-end">
+                    <h6 class="mb-3">1. Available Students (Click to add)</h6>
+                    <input type="text" id="group-member-search" class="form-control mb-2" placeholder="Search by name or admn no...">
+                    <div id="group-available-list" class="list-group" style="max-height: 350px; overflow-y: auto;">
+                        </div>
+                </div>
+                <div class="col-md-7">
+                    <h6 class="mb-3">2. Group Details</h6>
+                    <div class="mb-3"><label class="form-label">Group Name</label><input type="text" id="group-builder-name" class="form-control" value="${group?.name || ''}"></div>
+                    <p class="form-label">Selected Members (<span id="group-builder-count">0</span>)</p>
+                    <ul id="group-builder-list" class="list-group mb-3" style="max-height: 150px; overflow-y: auto;"></ul>
+                    
+                    <h6 class="mb-3">3. Assign to Group Events</h6>
+                    <div class="mb-2"><label for="group-event-category-filter" class="form-label">Filter by Category</label><select id="group-event-category-filter" class="form-select"><option value="all">All</option>${categoryOptions}</select></div>
+                    <select id="group-events-select" class="form-select" multiple size="4"></select>
+                </div>
+            </div>
+        `,
+        footer: `<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                 <button type="button" id="group-builder-save-btn" class="btn btn-primary">${isEditMode ? 'Update Group' : 'Create & Register Group'}</button>`
+    });
+
+    // --- Get References to Dynamic Elements ---
+    const searchInput = document.getElementById('group-member-search');
+    const availableList = document.getElementById('group-available-list');
+    const selectedList = document.getElementById('group-builder-list');
+    const saveButton = document.getElementById('group-builder-save-btn');
+    const categoryFilter = document.getElementById('group-event-category-filter');
+    const eventsSelect = document.getElementById('group-events-select');
+    
+    let selectedStudentIds = new Set(group?.members.map(m => m.studentId) || []);
+
+    // --- Define Helper Functions for the Modal ---
+
+    const renderLists = () => {
+        const searchTerm = searchInput.value.toLowerCase();
+        
+        // Render Available Students
+        availableList.innerHTML = studentsInHouse
+            .filter(s => !selectedStudentIds.has(s.id) && (s.name.toLowerCase().includes(searchTerm) || String(s.admissionNumber).includes(searchTerm)))
+            .map(student => `<a href="#" class="list-group-item list-group-item-action py-2" data-student-id="${student.id}">${student.name}</a>`)
+            .join('');
+
+        // Render Selected Students
+        document.getElementById('group-builder-count').textContent = selectedStudentIds.size;
+        if (selectedStudentIds.size === 0) {
+            selectedList.innerHTML = '<li class="list-group-item text-muted">Click a student from the left to add them.</li>';
+        } else {
+            selectedList.innerHTML = Array.from(selectedStudentIds).map(studentId => {
+                const student = students.find(s => s.id === studentId);
+                const currentMember = group?.members.find(m => m.studentId === studentId);
+                return `
+                    <li class="list-group-item d-flex justify-content-between align-items-center py-1">
+                        <span>${student.name}</span>
+                        <div>
+                            <select class="form-select form-select-sm d-inline-block w-auto me-2 group-member-role" data-studentid="${student.id}">
+                                <option value="Member" ${currentMember?.role === 'Member' ? 'selected' : ''}>Member</option>
+                                <option value="Captain" ${currentMember?.role === 'Captain' ? 'selected' : ''}>Captain</option>
+                            </select>
+                            <button class="btn btn-sm btn-outline-danger py-0 px-1 remove-member-btn" data-student-id="${student.id}">&times;</button>
+                        </div>
+                    </li>`;
+            }).join('');
+        }
+    };
+
+    const updateEventList = () => {
+        const selectedCategory = categoryFilter.value;
+        const groupEvents = festEvents.filter(e => e.festId === festId && e.isGroupEvent && (selectedCategory === 'all' || e.category === selectedCategory));
+        const firstMemberReg = festRegistrations.find(r => r.studentId === group?.members[0]?.studentId);
+        const registeredEventIds = new Set(firstMemberReg?.events || []);
+        eventsSelect.innerHTML = groupEvents.map(e => `<option value="${e.id}" ${registeredEventIds.has(e.id) ? 'selected' : ''}>${e.name}</option>`).join('') || '<option disabled>No events in category.</option>';
+    };
+
+    // --- Attach Listeners and Make Initial Calls ---
+    
+    // Add student
+    availableList.addEventListener('click', e => {
+        e.preventDefault();
+        const link = e.target.closest('.list-group-item');
+        if (link) {
+            selectedStudentIds.add(link.dataset.studentId);
+            renderLists();
+        }
+    });
+
+    // Remove student
+    selectedList.addEventListener('click', e => {
+        const button = e.target.closest('.remove-member-btn');
+        if (button) {
+            selectedStudentIds.delete(button.dataset.studentId);
+            renderLists();
+        }
+    });
+    
+    searchInput.addEventListener('input', renderLists);
+    categoryFilter.addEventListener('change', updateEventList);
+    saveButton.addEventListener('click', () => saveGroupFromBuilder(groupId, festId, houseId, modal));
+    
+    renderLists();
+    updateEventList();
+}
 
 /**
  * Handles the logic for saving a group and registering its members for events.
- * This version now refreshes the group list on success.
+ * This version now correctly refreshes the group list on success.
  */
 async function saveGroupFromBuilder(groupId, festId, houseId, modal) {
     const isEditMode = groupId !== null;
@@ -20490,22 +20705,24 @@ async function saveGroupFromBuilder(groupId, festId, houseId, modal) {
     const memberElements = document.querySelectorAll('#group-builder-list .group-member-role');
     const selectedGroupEventIds = Array.from(document.getElementById('group-events-select').selectedOptions).map(opt => opt.value);
     
+    // 1. Validate the input
     if (!groupName) return showAlert('Please enter a group name.', 'warning');
     if (memberElements.length === 0) return showAlert('Please select at least one member.', 'warning');
     const hasCaptain = Array.from(memberElements).some(el => el.value === 'Captain');
     if (!hasCaptain) return showAlert('Each group must have one Captain.', 'warning');
     if (selectedGroupEventIds.length === 0) return showAlert('Please select at least one group event.', 'warning');
 
+    // 2. Prepare the data for saving
     const members = Array.from(memberElements).map(el => ({ studentId: el.dataset.studentid, role: el.value }));
     const newGroupId = isEditMode ? groupId : `GRP_${Date.now()}`;
     const groupData = { id: newGroupId, name: groupName, festId, houseId, members };
 
     const batch = writeBatch(db);
     
-    // Action 1: Save the group document itself
+    // Action A: Save the group document itself
     batch.set(getDocRef('festGroups', newGroupId), groupData);
 
-    // Action 2: Update the registration for each group member
+    // Action B: Update the registration for each group member
     for (const member of members) {
         const student = students.find(s => s.id === member.studentId);
         if (!student) continue;
@@ -20524,15 +20741,18 @@ async function saveGroupFromBuilder(groupId, festId, houseId, modal) {
         batch.set(getDocRef('festRegistrations', regId), registrationData, { merge: true });
     }
 
+    // 3. Commit the changes and update the UI
     try {
         await batch.commit();
         showAlert(`Group '${groupName}' was ${isEditMode ? 'updated' : 'created'} successfully!`, 'success');
         
         // --- THIS IS THE FIX ---
-        // After saving, we must call the function to redraw the list of groups.
+        // After saving, we re-render the entire registration pane to ensure all parts
+        // of the UI (especially the group list) are up-to-date.
         const fest = state.managingFest;
+        const studentsInHouse = students.filter(s => s.houseId === houseId);
         const isRegistrationOpen = fest.registrationOpen === true;
-        displayHouseGroupsList(fest, houseId, isRegistrationOpen);
+        renderRegisterPane(fest, houseId, studentsInHouse, isRegistrationOpen);
         
         bootstrap.Modal.getInstance(modal).hide();
         
@@ -21689,7 +21909,7 @@ function renderBulkRegistrationView(festId) {
     container.innerHTML = `
         <div class="d-flex justify-content-between align-items-center">
             <h6 class="text-muted">Use this table to quickly add or update participants.</h6>
-            <button class="btn btn-success" id="save-all-regs-btn"><i class="fas fa-save me-2"></i>Save All Changes</button>
+            <button class=" btn btn-success" id="save-all-regs-btn"><i class="fas fa-save me-2"></i>Save All Changes</button>
         </div>
         <div class="table-responsive mt-3">
             <table class="table table-sm" id="bulk-reg-table">
@@ -21838,6 +22058,11 @@ async function handleStudentLookup(inputElement) {
 /**
  * Opens a modal to select events, with live UI updates for highlighting,
  * event counts, and direct saving to the database.
+ * @param {HTMLElement} row The table row (<tr>) element.
+ */
+/**
+ * Opens a modal to select SOLO events for a student, with live UI updates,
+ * direct saving, and a clean, focused interface.
  * @param {HTMLElement} row The table row (<tr>) element.
  */
 function openEventSelectionModal(row) {
@@ -22035,7 +22260,6 @@ function openEventSelectionModal(row) {
 
     eventModal.show();
 }
-
 /**
  * Loads all existing registrations for a fest into the bulk table.
  * @param {string} festId The ID of the fest.
@@ -25963,8 +26187,15 @@ function getStudentAgeCategory(studentDob) {
 
 function getStudentClassName(classId, division) {
     if (!classId) return 'N/A';
+    if(classId&&division){
     const classInfo = classes.find(c => c.id === classId);
     return classInfo ? `${classInfo.name}-${division}` : 'N/A';
+    }
+    if(classId&&!division){
+        const classInfo = classes.find(c => c.id === classId);
+    return classInfo ? `${classInfo.name}` : 'N/A';
+
+    }
 }
 window.deleteFestItem = async(collectionName, id, rerenderFunctionName) =>{
     // Add specific checks for cascading deletes if needed
