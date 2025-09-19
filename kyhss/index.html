@@ -20531,16 +20531,17 @@ window. openGroupBuilderModal=(groupId, festId, houseId)=> {
         studentListContainer.innerHTML = filteredStudents
     .filter(s => !selectedStudentIds.has(s.id)) // Exclude already selected students
     .map(student => {
-        const isDisabled = studentsInOtherGroups.has(student.id);
+        // Get the actual count for the student. Assumes 'studentGroupCounts' is a Map.
+        const groupCount = studentGroupCounts.get(student.id) || 0;
         const className = getStudentClassName(student.classId, student.division); // Helper to get full class name
 
         return `
-            <a href="#" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-2 ${isDisabled ? 'disabled' : ''}" data-student-id="${student.id}">
+            <a href="#" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-2" data-student-id="${student.id}">
                 <div>
                     <strong>${student.name}</strong>
                     <small class="text-muted d-block">${className} | Admn No: ${student.admissionNumber || 'N/A'}</small>
                 </div>
-                ${isDisabled ? '<span class="badge bg-secondary ms-2">In another group</span>' : ''}
+                ${groupCount > 0 ? `<span class="badge bg-info ms-2">In ${groupCount} other group(s)</span>` : ''}
             </a>`;
     }).join('');
 
