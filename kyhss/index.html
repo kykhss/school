@@ -20762,8 +20762,8 @@ async function saveGroupFromBuilder(groupId, festId, houseId, modal) {
         const fest = state.managingFest;
         const studentsInHouse = students.filter(s => s.houseId === houseId);
         const isRegistrationOpen = fest.registrationOpen === true;
-        renderRegisterPane(fest, houseId, studentsInHouse, isRegistrationOpen);
-        
+        //renderRegisterPane(fest, houseId, studentsInHouse, isRegistrationOpen);
+        displayHouseGroupsList(fest, houseId, isRegistrationOpen);
         bootstrap.Modal.getInstance(modal).hide();
         
     } catch (error) {
