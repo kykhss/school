@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Fest Scoreboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Teko:wght@500;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --gold: #FFD700;
+            --silver: #C0C0C0;
+            --bronze: #CD7F32;
+            --bg-dark-blue: #0a192f;
+            --text-light: #ccd6f6;
+            --text-accent: #64ffda;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-dark-blue);
+            color: var(--text-light);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        .scoreboard-container {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            grid-template-rows: auto 1fr;
+            height: 100vh;
+            gap: 1rem;
+            padding: 1rem;
+        }
+
+        .scoreboard-header {
+            grid-column: 1 / -1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid var(--text-accent);
+            padding-bottom: 0.5rem;
+        }
+
+        .scoreboard-header h1 {
+            font-family: 'Teko', sans-serif;
+            font-size: 3.5rem;
+            color: var(--text-accent);
+            margin: 0;
+            line-height: 1;
+        }
+        
+        #fest-selector-container {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 100;
+        }
+
+        .house-rankings {
+            grid-row: 2 / 3;
+            background-color: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            padding: 1rem;
+            overflow-y: auto;
+        }
+
+        .house-rankings h3 {
+            font-family: 'Teko', sans-serif;
+            font-size: 2.5rem;
+            color: var(--text-accent);
+            border-bottom: 1px solid var(--text-light);
+            padding-bottom: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .house-card {
+            background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            transition: all 0.3s ease;
+            border-left: 5px solid transparent;
+        }
+
+        .house-card.rank-1 {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+            border-left-color: var(--gold);
+        }
+
+        .house-card .rank {
+            font-family: 'Teko', sans-serif;
+            font-size: 3rem;
+            line-height: 1;
+        }
+
+        .house-card .house-name {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .house-card .points {
+            font-family: 'Teko', sans-serif;
+            font-size: 2.5rem;
+            color: var(--text-accent);
+        }
+
+        .main-content {
+            grid-column: 2 / 3;
+            grid-row: 2 / 3;
+            display: grid;
+            grid-template-rows: 55% 45%;
+            gap: 1rem;
+            overflow: hidden;
+        }
+
+        .event-toppers, .score-matrix {
+            background-color: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            padding: 1rem;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .event-toppers h3, .score-matrix h3 {
+            font-family: 'Teko', sans-serif;
+            font-size: 2.5rem;
+        }
+
+        .toppers-grid-container {
+            height: calc(100% - 60px);
+            overflow-y: auto;
+        }
+        
+        .matrix-scroll-container {
+            height: calc(100% - 60px);
+            overflow: hidden; /* Hide outer scrollbar */
+        }
+        
+        .matrix-category {
+            display: none; /* Hide all categories by default */
+            height: 100%;
+            overflow-x: auto; /* Enable horizontal scroll on the category div */
+        }
+        .matrix-category.active {
+            display: block; /* Show only the active category */
+        }
+
+        .topper-card {
+            background-color: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+            border-top: 4px solid;
+        }
+
+        .topper-card.position-1 { border-color: var(--gold); }
+        .topper-card.position-2 { border-color: var(--silver); }
+        .topper-card.position-3 { border-color: var(--bronze); }
+
+        .topper-card img {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid #fff;
+        }
+        
+        .matrix-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .matrix-table th, .matrix-table td {
+            padding: 0.5rem;
+            text-align: center;
+            white-space: nowrap;
+        }
+        .matrix-table th {
+            font-family: 'Teko', sans-serif;
+            font-size: 1.2rem;
+        }
+        .matrix-table .house-header, .matrix-table th:first-child {
+            text-align: left;
+            position: sticky;
+            left: 0;
+            background-color: var(--bg-dark-blue);
+            z-index: 1;
+        }
+
+    </style>
+</head>
+<body>
+    <div id="fest-selector-container">
+        <select id="fest-select" class="form-select bg-dark text-white">
+            <option value="">Select a Fest</option>
+        </select>
+    </div>
+
+    <div class="scoreboard-container">
+        <div class="scoreboard-header">
+            <h1 id="fest-title">Live Scoreboard</h1>
+            <div id="current-time" class="fs-4 font-monospace"></div>
+        </div>
+
+        <div class="house-rankings">
+            <h3><i class="fas fa-trophy me-2"></i>House Standings</h3>
+            <div id="house-rankings-list">
+                <p class="text-center p-5">Loading data...</p>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="event-toppers">
+                <h3><i class="fas fa-award me-2"></i>Event Toppers - <span id="topper-view-type">On-LIVE</span></h3>
+                <div class="toppers-grid-container">
+                    <div id="event-toppers-grid" class="row g-3">
+                        <p class="text-center p-5">Loading data...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="score-matrix">
+                <h3><i class="fas fa-th me-2"></i>Score Matrix - <span id="matrix-view-type">On-Stage</span></h3>
+                <div class="matrix-scroll-container">
+                    <div id="matrix-content"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, getDocs, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- CONFIGURATION ---
+        const appId = 'school-management-app';
+        const firebaseConfig = {
+            apiKey: "AIzaSyAu5TDMWepJX7naoG5H3WpGJ1yxAu01whg",
+            authDomain: "timetables-470dd.firebaseapp.com",
+            projectId: "timetables-470dd",
+            storageBucket: "timetables-470dd.appspot.com",
+            messagingSenderId: "925422681424",
+            appId: "1:925422681424:web:df91ce9de4dfef9c5ec055"
+        };
+
+        // --- GLOBAL STATE ---
+        let db;
+        let fests = [], festHouses = [], festEvents = [], festRegistrations = [], festResults = [], students = [], classes = [];
+        let currentViewType = 'onStage';
+        let viewSwitchInterval;
+        let categorySwitchInterval;
+        let currentCategoryIndex = 0;
+        let topperSwitchInterval;
+        let currentTopperEventIndex = 0;
+
+        // --- INITIALIZATION ---
+        async function initializeScoreboard() {
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            await populateFestSelector();
+            updateTime();
+            setInterval(updateTime, 1000);
+        }
+
+        async function populateFestSelector() {
+            const festSelect = document.getElementById('fest-select');
+            const festSnapshot = await getDocs(collection(db, `/artifacts/${appId}/public/data/fests`));
+            fests = festSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            
+            festSelect.innerHTML = '<option value="">Select a Fest</option>';
+            fests.forEach(fest => {
+                festSelect.innerHTML += `<option value="${fest.id}">${fest.name}</option>`;
+            });
+            
+            festSelect.addEventListener('change', () => loadDataForFest(festSelect.value));
+        }
+
+        function loadDataForFest(festId) {
+            if (!festId) return;
+
+            document.getElementById('fest-title').textContent = fests.find(f => f.id === festId)?.name || 'Live Scoreboard';
+            
+            if (viewSwitchInterval) clearInterval(viewSwitchInterval);
+            if (categorySwitchInterval) clearInterval(categorySwitchInterval);
+            if (topperSwitchInterval) clearInterval(topperSwitchInterval);
+
+            const collectionsToLoad = ['festHouses', 'festEvents', 'festRegistrations', 'festResults', 'students', 'classes'];
+            collectionsToLoad.forEach(name => {
+                onSnapshot(collection(db, `/artifacts/${appId}/public/data/${name}`), (snapshot) => {
+                    const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                    switch(name) {
+                        case 'festHouses': festHouses = data; break;
+                        case 'festEvents': festEvents = data; break;
+                        case 'festRegistrations': festRegistrations = data; break;
+                        case 'festResults': festResults = data; break;
+                        case 'students': students = data; break;
+                        case 'classes': classes = data; break;
+                    }
+                    renderAllComponents(festId);
+                });
+            });
+
+            viewSwitchInterval = setInterval(() => {
+                const hasOnStage = festEvents.some(e => e.festId === festId && (e.type || 'onStage') === 'onStage');
+                const hasOffStage = festEvents.some(e => e.festId === festId && e.type === 'offStage');
+                
+                if (hasOnStage && hasOffStage) {
+                    currentViewType = currentViewType === 'onStage' ? 'offStage' : 'onStage';
+                }
+                
+                renderAllComponents(festId);
+            }, 30000);
+
+            topperSwitchInterval = setInterval(() => {
+                const eventsWithResults = festResults.filter(r => {
+                    const event = festEvents.find(e => e.id === r.eventId);
+                    return event && event.festId === festId && (event.type || 'onStage') === currentViewType;
+                });
+                if (eventsWithResults.length > 0) {
+                    currentTopperEventIndex = (currentTopperEventIndex + 1) % eventsWithResults.length;
+                    renderEventToppers(festId, currentViewType);
+                }
+            }, 10000);
+        }
+
+        // --- DATA PROCESSING ---
+        function calculateFinalResults(festId) {
+            const housePoints = {};
+            festHouses.forEach(h => housePoints[h.id] = 0);
+
+            const relevantResults = festResults.filter(r => r.festId === festId);
+
+            for (const result of relevantResults) {
+                for (const standing of result.results) {
+                    if (standing.points > 0) {
+                        const registration = festRegistrations.find(r => r.festId === festId && r.studentId === standing.studentId);
+                        if (registration?.houseId && housePoints.hasOwnProperty(registration.houseId)) {
+                            housePoints[registration.houseId] += standing.points;
+                        }
+                    }
+                }
+            }
+            return { housePoints };
+        }
+
+        // --- RENDERING FUNCTIONS ---
+        function renderAllComponents(festId) {
+            renderHouseRankings(festId);
+            renderEventToppers(festId, currentViewType);
+            renderScoreMatrix(festId, currentViewType);
+        }
+
+        function renderHouseRankings(festId) {
+            const container = document.getElementById('house-rankings-list');
+            const { housePoints } = calculateFinalResults(festId);
+            const sortedHouses = Object.entries(housePoints).sort(([, a], [, b]) => b - a);
+
+            if (sortedHouses.length === 0) {
+                container.innerHTML = '<p class="text-muted">No houses defined.</p>';
+                return;
+            }
+
+            container.innerHTML = sortedHouses.map(([houseId, points], index) => {
+                const house = festHouses.find(h => h.id === houseId);
+                if (!house) return '';
+                const rank = index + 1;
+                return `
+                    <div class="house-card ${rank === 1 ? 'rank-1' : ''}" style="border-left-color: ${house.color};">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div class="d-flex align-items-center">
+                                <div class="rank me-3">#${rank}</div>
+                                <div>
+                                    <div class="house-name">${house.name}</div>
+                                </div>
+                            </div>
+                            <div class="points">${points} pts</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderEventToppers(festId, eventType) {
+            const container = document.getElementById('event-toppers-grid');
+            document.getElementById('topper-view-type').textContent = eventType === 'onStage' ? 'On-LIVE' : 'Off-Stage';
+            
+            const eventsWithResults = festResults
+                .filter(r => {
+                    const event = festEvents.find(e => e.id === r.eventId);
+                    return event && event.festId === festId && (event.type || 'onStage') === eventType;
+                })
+                .sort((a, b) => (b.timestamp?.toMillis() || 0) - (a.timestamp?.toMillis() || 0));
+
+            if (eventsWithResults.length === 0) {
+                container.innerHTML = `<p class="text-center p-5 col-12">No results entered for ${eventType} events yet.</p>`;
+                return;
+            }
+
+            const resultToShow = eventsWithResults[currentTopperEventIndex % eventsWithResults.length];
+            const event = festEvents.find(e => e.id === resultToShow.eventId);
+            const winners = resultToShow.results.filter(r => r.position <= 3);
+            
+            let toppersHtml = `<h5 class="col-12 text-white mt-3">${event.name} (${event.category})</h5>`;
+            winners.forEach(topper => {
+                const student = students.find(s => s.id === topper.studentId);
+                
+                if (!student) {
+                    console.warn(`Student with ID ${topper.studentId} not found. Skipping topper display.`);
+                    return;
+                }
+
+                const registration = festRegistrations.find(r => r.studentId === student.id);
+                const house = registration ? festHouses.find(h => h.id === registration.houseId) : null;
+                const photoUrl = student.photoDriveId ? `https://drive.google.com/thumbnail?id=${student.photoDriveId}&sz=150` : 'https://placehold.co/100x100/e9ecef/6c757d?text=Photo';
+                
+                toppersHtml += `
+                    <div class="col-md-4 col-lg-3">
+                        <div class="topper-card position-${topper.position}">
+                            <img src="${photoUrl}" alt="${student.name}">
+                            <h6 class="mt-2 mb-0">${student.name}</h6>
+                            <p class="small text-muted">${house?.name || ''}</p>
+                            <div class="fw-bold">${topper.points} Points</div>
+                        </div>
+                    </div>`;
+            });
+            
+            container.innerHTML = toppersHtml;
+        }
+
+        function renderScoreMatrix(festId, eventType) {
+            const matrixContent = document.getElementById('matrix-content');
+            document.getElementById('matrix-view-type').textContent = eventType === 'onStage' ? 'On-Stage' : 'Off-Stage';
+
+            const events = festEvents.filter(e => e.festId === festId && (e.type || 'onStage') === eventType);
+            if (events.length === 0) {
+                matrixContent.innerHTML = `<p class="text-center p-5">No ${eventType} events defined.</p>`;
+                return;
+            }
+
+            const eventsByCategory = events.reduce((acc, event) => {
+                const category = event.category || 'General';
+                if (!acc[category]) acc[category] = [];
+                acc[category].push(event);
+                return acc;
+            }, {});
+
+            const categories = Object.keys(eventsByCategory);
+            if (categories.length === 0) {
+                 matrixContent.innerHTML = `<p class="text-center p-5">No events with results for this type.</p>`;
+                 return;
+            }
+
+            let allTablesHtml = '';
+            categories.forEach((category, index) => {
+                const categoryEvents = eventsByCategory[category].sort((a,b) => a.name.localeCompare(b.name));
+                allTablesHtml += `
+                    <div class="matrix-category" id="matrix-category-${index}">
+                        <h5 class="text-accent mt-3">${category}</h5>
+                        <table class="matrix-table">
+                            <thead>
+                                <tr>
+                                    <th class="house-header">House</th>
+                                    ${categoryEvents.map(e => `<th>${e.name}</th>`).join('')}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${festHouses.map(house => {
+                                    let rowHtml = `<tr><td class="house-header" style="color:${house.color};"><strong>${house.name}</strong></td>`;
+                                    categoryEvents.forEach(event => {
+                                        const result = festResults.find(r => r.eventId === event.id);
+                                        if (result) {
+                                            let housePointsInEvent = 0;
+                                            result.results.forEach(standing => {
+                                                const registration = festRegistrations.find(r => r.studentId === standing.studentId);
+                                                if (registration && registration.houseId === house.id) {
+                                                    housePointsInEvent += standing.points;
+                                                }
+                                            });
+                                            rowHtml += `<td>${housePointsInEvent > 0 ? housePointsInEvent : '-'}</td>`;
+                                        } else {
+                                            rowHtml += `<td><span style="color: var(--gold);" title="Results not entered">-</span></td>`;
+                                        }
+                                    });
+                                    rowHtml += `</tr>`;
+                                    return rowHtml;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            });
+            matrixContent.innerHTML = allTablesHtml;
+
+            if (categorySwitchInterval) clearInterval(categorySwitchInterval);
+            currentCategoryIndex = 0;
+            
+            const categoryDivs = matrixContent.querySelectorAll('.matrix-category');
+            if (categoryDivs.length > 0) {
+                categoryDivs[0].classList.add('active');
+                
+                if (categoryDivs.length > 1) {
+                    categorySwitchInterval = setInterval(() => {
+                        categoryDivs[currentCategoryIndex].classList.remove('active');
+                        currentCategoryIndex = (currentCategoryIndex + 1) % categoryDivs.length;
+                        categoryDivs[currentCategoryIndex].classList.add('active');
+                    }, 20000);
+                }
+            }
+        }
+
+        // --- UTILITIES ---
+        function updateTime() {
+            const timeEl = document.getElementById('current-time');
+            if (timeEl) {
+                timeEl.textContent = new Date().toLocaleTimeString('en-IN');
+            }
+        }
+
+        // --- START APP ---
+        initializeScoreboard();
+
+    </script>
+</body>
+</html>
