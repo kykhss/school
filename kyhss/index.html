@@ -24665,7 +24665,7 @@ window.saveHouseAllocations = async function() {
 /**
  * Renders the Scoring tab with new filters for Category.
  */
-function renderFestScoringTab() {
+function function renderFestScoringTab() {
     const container = document.getElementById('fest-scoring');
     if (!container || !state.managingFest) return;
     
@@ -24677,17 +24677,25 @@ function renderFestScoringTab() {
         <div class="ui-card">
             <h5 class="section-header"><i class="fas fa-marker me-2"></i> Enter Scores for ${state.managingFest.name}</h5>
             <div class="row g-3 align-items-end">
-                <div class="col-md-6">
+                <div class="col-md-4">
                     <label class="form-label">1. Filter by Category</label>
                     <select id="scoring-category-filter" class="form-select">
                         <option value="all">All Categories</option>
                         ${categoryOptions}
                     </select>
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label">2. Select Event to Score</label>
+                <div class="col-md-4">
+                    <label class="form-label">2. Filter by Type</label>
+                    <select id="scoring-type-filter" class="form-select">
+                        <option value="all">All Types</option>
+                        <option value="onStage">On-Stage</option>
+                        <option value="offStage">Off-Stage</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">3. Select Event to Score</label>
                     <select id="scoring-event-select" class="form-select" disabled>
-                        <option>-- Select Category --</option>
+                        <option>-- Select Filters --</option>
                     </select>
                 </div>
             </div>
@@ -24704,32 +24712,42 @@ function renderFestScoringTab() {
  */
 function attachScoringTabListeners() {
     const categoryFilter = document.getElementById('scoring-category-filter');
+    const typeFilter = document.getElementById('scoring-type-filter'); // New filter
     const eventSelect = document.getElementById('scoring-event-select');
 
-    // When the category changes, update the list of available events
-    categoryFilter.addEventListener('change', () => {
+    // This function now reads from BOTH filters to populate the event list
+    const updateEventDropdown = () => {
         const selectedCategory = categoryFilter.value;
+        const selectedType = typeFilter.value; // Read value from the new filter
         let eventsToDisplay = festEvents.filter(e => e.festId === state.managingFest.id);
         
+        // Apply category filter
         if (selectedCategory !== 'all') {
             eventsToDisplay = eventsToDisplay.filter(e => e.category === selectedCategory);
+        }
+        
+        // Apply event type filter
+        if (selectedType !== 'all') {
+            eventsToDisplay = eventsToDisplay.filter(e => (e.type || 'onStage') === selectedType);
         }
         
         eventsToDisplay.sort((a, b) => a.name.localeCompare(b.name));
 
         if (eventsToDisplay.length > 0) {
             eventSelect.innerHTML = `<option value="">-- Select an event --</option>` + 
-                eventsToDisplay.map(e => `<option value="${e.id}">${e.name} (${e.gender === 'Male' ? 'Boys' : 'Girls'})</option>`).join('');
+                eventsToDisplay.map(e => `<option value="${e.id}">${e.name} (${e.gender === 'Male' ? 'Boys' : e.gender === 'Female' ? 'Girls' : 'Common'})</option>`).join('');
             eventSelect.disabled = false;
         } else {
-            eventSelect.innerHTML = '<option>-- No events in this category --</option>';
+            eventSelect.innerHTML = '<option>-- No events found --</option>';
             eventSelect.disabled = true;
         }
-        // Clear the scoring sheet when the filter changes
+        // Clear the scoring sheet whenever filters change
         document.getElementById('scoring-sheet-container').innerHTML = `<p class="text-muted p-4 text-center">Please select an event to enter scores.</p>`;
-    });
+    };
 
-    // When an event is selected, render the scoring sheet
+    // Attach listeners to all relevant filters
+    categoryFilter.addEventListener('change', updateEventDropdown);
+    typeFilter.addEventListener('change', updateEventDropdown); // Add listener for the new filter
     eventSelect.addEventListener('change', () => {
         const eventId = eventSelect.value;
         if (eventId) {
@@ -24737,8 +24755,8 @@ function attachScoringTabListeners() {
         }
     });
 
-    // Initial population of event list
-    categoryFilter.dispatchEvent(new Event('change'));
+    // Initial population of the event dropdown
+    updateEventDropdown();
 }
 
 /**
