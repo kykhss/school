@@ -23859,16 +23859,31 @@ window.toggleEventTypeView = (studentId, typeToShow) => {
  * @param {string} studentId - The ID of the student.
  * @param {string} festId - The ID of the fest.
  */
-window.saveSingleStudentRegistration = async(studentId, festId)=> {
+window.saveSingleStudentRegistration = async (studentId, festId) => {
     const studentAccordion = document.getElementById(`student-item-${studentId}`);
     if (!studentAccordion) return;
 
     const student = students.find(s => s.id === studentId);
-    const selectedEventIds = Array.from(studentAccordion.querySelectorAll('.event-checkbox:checked')).map(cb => cb.value);
+
+    // 1. Get ONLY the newly selected SOLO events from the checkboxes that are not disabled.
+    // This prevents any disabled group event checkboxes from being included.
+    const selectedSoloEventIds = Array.from(
+        studentAccordion.querySelectorAll('.event-checkbox:checked:not(:disabled)')
+    ).map(cb => cb.value);
+
+    // 2. Get the student's EXISTING registration to find their current group events.
+    const existingReg = festRegistrations.find(r => r.festId === festId && r.studentId === studentId);
+    
+    // 3. Find all existing GROUP event registrations and PRESERVE them.
+    const existingGroupEvents = existingReg?.events.filter(
+        id => festEvents.find(e => e.id === id)?.isGroupEvent
+    ) || [];
+
+    // 4. Combine the preserved group events with the newly selected solo events.
+    // Using a Set handles any duplicates automatically and safely.
+    const newEvents = [...new Set([...existingGroupEvents, ...selectedSoloEventIds])];
 
     const regId = `${festId}_${studentId}`;
-    const existingReg = festRegistrations.find(r => r.id === regId);
-
     const registrationData = {
         id: regId,
         festId: festId,
@@ -23876,17 +23891,17 @@ window.saveSingleStudentRegistration = async(studentId, festId)=> {
         studentName: student.name,
         houseId: existingReg?.houseId || student.houseId || null,
         chestNo: existingReg?.chestNo || null,
-        events: selectedEventIds
+        events: newEvents // Use the correctly combined list of events
     };
 
     try {
         await setDoc(getDocRef('festRegistrations', regId), registrationData);
         showAlert(`Registration updated for ${student.name}.`, 'success');
         
-        // Update the event count badge on the accordion header
+        // Update the event count badge on the accordion header to reflect the new total
         const badge = studentAccordion.querySelector('.event-count-badge');
         if (badge) {
-            badge.textContent = `${selectedEventIds.length} Events`;
+            badge.textContent = `${newEvents.length} Events`;
         }
 
     } catch (error) {
