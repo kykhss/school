@@ -24665,7 +24665,7 @@ window.saveHouseAllocations = async function() {
 /**
  * Renders the Scoring tab with new filters for Category.
  */
-function function renderFestScoringTab() {
+function renderFestScoringTab() {
     const container = document.getElementById('fest-scoring');
     if (!container || !state.managingFest) return;
     
@@ -24707,9 +24707,6 @@ function function renderFestScoringTab() {
     attachScoringTabListeners();
 }
 
-/**
- * Attaches event listeners for the Scoring tab filters.
- */
 function attachScoringTabListeners() {
     const categoryFilter = document.getElementById('scoring-category-filter');
     const typeFilter = document.getElementById('scoring-type-filter'); // New filter
