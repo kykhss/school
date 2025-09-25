@@ -191,7 +191,16 @@
             background-color: var(--bg-dark-blue);
             z-index: 1;
         }
-
+/* --- A SIMPLER CSS FOR VERTICAL HEADERS --- */
+.vertical-header {
+    writing-mode: vertical-lr; /* Changes text flow to vertical */
+    text-orientation: mixed;   /* Keeps text upright */
+    white-space: nowrap;
+    text-align: center;
+    vertical-align: middle;
+    padding: 10px 5px; /* Adjust padding for aesthetics */
+    height: 180px;      /* Ensure enough height for the text */
+}
     </style>
 </head>
 <body>
@@ -249,7 +258,7 @@
 
         // --- GLOBAL STATE ---
         let db;
-        let fests = [], festHouses = [], festEvents = [], festRegistrations = [], festResults = [], students = [], classes = [];
+        let fests = [], festHouses = [], festEvents = [], festRegistrations = [], festResults = [], students = [], classes = [],festGroups=[];
         let currentViewType = 'onStage';
         let viewSwitchInterval;
         let categorySwitchInterval;
@@ -288,7 +297,7 @@
             if (categorySwitchInterval) clearInterval(categorySwitchInterval);
             if (topperSwitchInterval) clearInterval(topperSwitchInterval);
 
-            const collectionsToLoad = ['festHouses', 'festEvents', 'festRegistrations', 'festResults', 'students', 'classes'];
+            const collectionsToLoad = ['festHouses', 'festEvents', 'festRegistrations','festGroups', 'festResults', 'students', 'classes'];
             collectionsToLoad.forEach(name => {
                 onSnapshot(collection(db, `/artifacts/${appId}/public/data/${name}`), (snapshot) => {
                     const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -299,6 +308,7 @@
                         case 'festResults': festResults = data; break;
                         case 'students': students = data; break;
                         case 'classes': classes = data; break;
+                        case 'festGroups': festGroups = data; break;
                     }
                     renderAllComponents(festId);
                 });
@@ -328,24 +338,49 @@
         }
 
         // --- DATA PROCESSING ---
-        function calculateFinalResults(festId) {
-            const housePoints = {};
-            festHouses.forEach(h => housePoints[h.id] = 0);
+        /**
+ * Calculates aggregate points for houses from all saved results,
+ * correctly handling both solo and group events.
+ * @param {string} festId The ID of the fest to calculate results for.
+ * @returns {object} An object containing aggregated points.
+ */
+function calculateFinalResults(festId) {
+    const housePoints = {};
+    festHouses.forEach(h => housePoints[h.id] = 0); // Initialize all houses with 0 points
 
-            const relevantResults = festResults.filter(r => r.festId === festId);
+    const relevantResults = festResults.filter(r => r.festId === festId);
 
-            for (const result of relevantResults) {
-                for (const standing of result.results) {
-                    if (standing.points > 0) {
-                        const registration = festRegistrations.find(r => r.festId === festId && r.studentId === standing.studentId);
-                        if (registration?.houseId && housePoints.hasOwnProperty(registration.houseId)) {
-                            housePoints[registration.houseId] += standing.points;
-                        }
+    for (const result of relevantResults) {
+        for (const standing of result.results) {
+            if (standing.points > 0) {
+                let houseId = null;
+
+                // --- THIS IS THE FIX ---
+                // Case 1: It's a solo event with a studentId
+                if (standing.studentId) {
+                    const registration = festRegistrations.find(r => r.festId === festId && r.studentId === standing.studentId);
+                    if (registration) {
+                        houseId = registration.houseId;
+                    }
+                } 
+                // Case 2: It's a group event with a groupId
+                else if (standing.groupId) {
+                    const group = festGroups.find(g => g.id === standing.groupId);
+                    if (group) {
+                        // A group's house is stored directly in its own document
+                        houseId = group.houseId;
                     }
                 }
+
+                // If a valid house was found (for either a solo or group event), add the points.
+                if (houseId && housePoints.hasOwnProperty(houseId)) {
+                    housePoints[houseId] += standing.points;
+                }
             }
-            return { housePoints };
         }
+    }
+    return { housePoints };
+}
 
         // --- RENDERING FUNCTIONS ---
         function renderAllComponents(festId) {
@@ -423,7 +458,7 @@
                             <img src="${photoUrl}" alt="${student.name}">
                             <h6 class="mt-2 mb-0">${student.name}</h6>
                             <p class="small text-muted">${house?.name || ''}</p>
-                            <div class="fw-bold">${topper.points} Points</div>
+                            <div class="fw-bold">${topper.position} Position</div>
                         </div>
                     </div>`;
             });
@@ -431,86 +466,100 @@
             container.innerHTML = toppersHtml;
         }
 
-        function renderScoreMatrix(festId, eventType) {
-            const matrixContent = document.getElementById('matrix-content');
-            document.getElementById('matrix-view-type').textContent = eventType === 'onStage' ? 'On-Stage' : 'Off-Stage';
+        /**
+ * Renders the score matrix with simple vertical headers and correct score calculation.
+ */
+function renderScoreMatrix(festId, eventType) {
+    const matrixContent = document.getElementById('matrix-content');
+    document.getElementById('matrix-view-type').textContent = eventType === 'onStage' ? 'On-Stage' : 'Off-Stage';
 
-            const events = festEvents.filter(e => e.festId === festId && (e.type || 'onStage') === eventType);
-            if (events.length === 0) {
-                matrixContent.innerHTML = `<p class="text-center p-5">No ${eventType} events defined.</p>`;
-                return;
-            }
+    const events = festEvents.filter(e => e.festId === festId && (e.type || 'onStage') === eventType);
+    if (events.length === 0) {
+        matrixContent.innerHTML = `<p class="text-center p-5">No ${eventType} events defined.</p>`;
+        return;
+    }
 
-            const eventsByCategory = events.reduce((acc, event) => {
-                const category = event.category || 'General';
-                if (!acc[category]) acc[category] = [];
-                acc[category].push(event);
-                return acc;
-            }, {});
+    const eventsByCategory = events.reduce((acc, event) => {
+        const category = event.category || 'General';
+        if (!acc[category]) acc[category] = [];
+        acc[category].push(event);
+        return acc;
+    }, {});
 
-            const categories = Object.keys(eventsByCategory);
-            if (categories.length === 0) {
-                 matrixContent.innerHTML = `<p class="text-center p-5">No events with results for this type.</p>`;
-                 return;
-            }
+    const categories = Object.keys(eventsByCategory);
+    if (categories.length === 0) {
+        matrixContent.innerHTML = `<p class="text-center p-5">No events with results for this type.</p>`;
+        return;
+    }
 
-            let allTablesHtml = '';
-            categories.forEach((category, index) => {
-                const categoryEvents = eventsByCategory[category].sort((a,b) => a.name.localeCompare(b.name));
-                allTablesHtml += `
-                    <div class="matrix-category" id="matrix-category-${index}">
-                        <h5 class="text-accent mt-3">${category}</h5>
-                        <table class="matrix-table">
-                            <thead>
-                                <tr>
-                                    <th class="house-header">House</th>
-                                    ${categoryEvents.map(e => `<th>${e.name}</th>`).join('')}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${festHouses.map(house => {
-                                    let rowHtml = `<tr><td class="house-header" style="color:${house.color};"><strong>${house.name}</strong></td>`;
-                                    categoryEvents.forEach(event => {
-                                        const result = festResults.find(r => r.eventId === event.id);
-                                        if (result) {
-                                            let housePointsInEvent = 0;
-                                            result.results.forEach(standing => {
-                                                const registration = festRegistrations.find(r => r.studentId === standing.studentId);
-                                                if (registration && registration.houseId === house.id) {
-                                                    housePointsInEvent += standing.points;
-                                                }
-                                            });
-                                            rowHtml += `<td>${housePointsInEvent > 0 ? housePointsInEvent : '-'}</td>`;
-                                        } else {
-                                            rowHtml += `<td><span style="color: var(--gold);" title="Results not entered">-</span></td>`;
+    let allTablesHtml = '';
+    categories.forEach((category, index) => {
+        const categoryEvents = eventsByCategory[category].sort((a,b) => a.name.localeCompare(b.name));
+        allTablesHtml += `
+            <div class="matrix-category" id="matrix-category-${index}">
+                <h5 class="text-accent mt-3">${category}</h5>
+                <table class="matrix-table">
+                    <thead>
+                        <tr>
+                            <th class="house-header">House</th>
+                            
+                            <!-- THIS IS THE MODIFIED PART -->
+                            ${categoryEvents.map(e => `<th class="vertical-header">${e.name}</th>`).join('')}
+                        
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${festHouses.map(house => {
+                            let rowHtml = `<tr><td class="house-header" style="color:${house.color};"><strong>${house.name}</strong></td>`;
+                            categoryEvents.forEach(event => {
+                                const result = festResults.find(r => r.eventId === event.id);
+                                if (result) {
+                                    let housePointsInEvent = 0;
+                                    result.results.forEach(standing => {
+                                        let participantHouseId = null;
+                                        if (standing.groupId) {
+                                            const group = festGroups.find(g => g.id === standing.groupId);
+                                            if (group) participantHouseId = group.houseId;
+                                        } else if (standing.studentId) {
+                                            const registration = festRegistrations.find(r => r.studentId === standing.studentId);
+                                            if (registration) participantHouseId = registration.houseId;
+                                        }
+                                        if (participantHouseId === house.id) {
+                                            housePointsInEvent += standing.points;
                                         }
                                     });
-                                    rowHtml += `</tr>`;
-                                    return rowHtml;
-                                }).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-            });
-            matrixContent.innerHTML = allTablesHtml;
+                                    rowHtml += `<td>${housePointsInEvent > 0 ? housePointsInEvent : '-'}</td>`;
+                                } else {
+                                    rowHtml += `<td><span class="text-muted" title="Results not entered">-</span></td>`;
+                                }
+                            });
+                            rowHtml += `</tr>`;
+                            return rowHtml;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    });
+    matrixContent.innerHTML = allTablesHtml;
 
-            if (categorySwitchInterval) clearInterval(categorySwitchInterval);
-            currentCategoryIndex = 0;
-            
-            const categoryDivs = matrixContent.querySelectorAll('.matrix-category');
-            if (categoryDivs.length > 0) {
-                categoryDivs[0].classList.add('active');
-                
-                if (categoryDivs.length > 1) {
-                    categorySwitchInterval = setInterval(() => {
-                        categoryDivs[currentCategoryIndex].classList.remove('active');
-                        currentCategoryIndex = (currentCategoryIndex + 1) % categoryDivs.length;
-                        categoryDivs[currentCategoryIndex].classList.add('active');
-                    }, 20000);
-                }
-            }
+    // The rest of your interval/switching logic remains the same
+    if (categorySwitchInterval) clearInterval(categorySwitchInterval);
+    currentCategoryIndex = 0;
+    
+    const categoryDivs = matrixContent.querySelectorAll('.matrix-category');
+    if (categoryDivs.length > 0) {
+        categoryDivs[0].classList.add('active');
+        
+        if (categoryDivs.length > 1) {
+            categorySwitchInterval = setInterval(() => {
+                categoryDivs[currentCategoryIndex].classList.remove('active');
+                currentCategoryIndex = (currentCategoryIndex + 1) % categoryDivs.length;
+                categoryDivs[currentCategoryIndex].classList.add('active');
+            }, 20000);
         }
+    }
+}
 
         // --- UTILITIES ---
         function updateTime() {
