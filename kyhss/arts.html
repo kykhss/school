@@ -20881,7 +20881,7 @@ window. openGroupBuilderModal=(groupId, festId, houseId)=> {
                     <ul id="group-builder-list" class="list-group mb-3" style="max-height: 150px; overflow-y: auto;"></ul>
                     
                     <h6 class="mb-3">3. Assign to Group Events</h6>
-                    <div class="mb-2"><label for="group-event-category-filter" class="form-label">Filter Events by Category</label><select id="group-event-category-filter" class="form-select"><option value="all">All</option>${categoryOptions}</select></div>
+                    <div class="mb-2 d-none"><label for="group-event-category-filter" class="form-label">Filter Events by Category</label><select id="group-event-category-filter" class="form-select"><option value="all">All</option>${categoryOptions}</select></div>
                     <select id="group-events-select" class="form-select" multiple size="4"></select>
                 </div>
             </div>
@@ -20895,7 +20895,7 @@ window. openGroupBuilderModal=(groupId, festId, houseId)=> {
     const studentCategoryFilter = document.getElementById('group-student-category-filter');
     const studentListContainer = document.getElementById('group-student-list-container');
     const saveButton = document.getElementById('group-builder-save-btn');
-    const eventCategoryFilter = document.getElementById('group-event-category-filter');
+    //const eventCategoryFilter = document.getElementById('group-event-category-filter');
     const eventsSelect = document.getElementById('group-events-select');
     
     let selectedStudentIds = new Set(group?.members.map(m => m.studentId) || []);
@@ -21007,10 +21007,10 @@ window. openGroupBuilderModal=(groupId, festId, houseId)=> {
     
     searchInput.addEventListener('input', renderStudentList);
     studentCategoryFilter.addEventListener('change', renderStudentList);
-    eventCategoryFilter.addEventListener('change', updateEventList);
+    studentCategoryFilter.addEventListener('change', updateEventList);
     saveButton.addEventListener('click', () => saveGroupFromBuilder(groupId, festId, houseId, document.getElementById('dynamic-app-modal')));
     
-    renderStudentList();
+    //renderStudentList();
     updateBuilderUI();
     updateEventList();
 }
@@ -25413,6 +25413,12 @@ function attachScoringTabListeners() {
  * @param {string} festId - The ID of the fest.
  * @param {string} eventId - The ID of the specific event.
  */
+/**
+ * Renders the score entry sheet, and now also includes a summary of 
+ * first prize winners for all events in the same category/type, with a print button.
+ * @param {string} festId - The ID of the fest.
+ * @param {string} eventId - The ID of the specific event.
+ */
 function renderScoringSheet(festId, eventId) {
     const container = document.getElementById('scoring-sheet-container');
     const event = festEvents.find(e => e.id === eventId);
@@ -25427,7 +25433,7 @@ function renderScoringSheet(festId, eventId) {
     let headerHtml = '';
 
     if (event.isGroupEvent) {
-        headerHtml = `<th>Group / Captain</th><th>House</th><th>Points Awarded</th>`;
+        headerHtml = `<th>Group / Captain / Members</th><th>House</th><th>Points Awarded</th>`;
         const participatingGroups = festGroups.filter(group => 
             group.festId === festId &&
             group.members.some(member => 
@@ -25447,11 +25453,21 @@ function renderScoringSheet(festId, eventId) {
             const captainName = students.find(s => s.id === captain?.studentId)?.name || 'N/A';
             const captainRegistration = festRegistrations.find(r => r.studentId === captain?.studentId);
             const house = festHouses.find(h => h.id === captainRegistration?.houseId);
+            
+            const otherMembersChestNos = group.members
+                .filter(m => m.role !== 'Captain')
+                .map(member => festRegistrations.find(r => r.studentId === member.studentId)?.chestNo || 'N/A')
+                .join(', ');
+
             const savedPoints = existingResult?.results.find(res => res.groupId === group.id)?.points || '';
 
             return `
                 <tr data-groupid="${group.id}">
-                    <td><strong>${group.name}</strong><br><small class="text-muted">Captain: ${captainName}</small></td>
+                    <td>
+                        <strong>${group.name}</strong><br>
+                        <small class="text-muted">Captain: ${captainName}</small><br>
+                        <small class="text-muted">Members: ${otherMembersChestNos}</small>
+                    </td>
                     <td><span class="color-dot-display me-2" style="background-color:${house?.color || '#ccc'};"></span>${house?.name || 'N/A'}</td>
                     <td><input type="number" class="form-control form-control-sm score-points-input" value="${savedPoints}" min="0" placeholder="0"></td>
                 </tr>`;
@@ -25466,6 +25482,8 @@ function renderScoringSheet(festId, eventId) {
             return;
         }
         
+        participants.sort((a,b) => (a.chestNo || a.studentName).localeCompare(b.chestNo || b.studentName, undefined, { numeric: true }));
+        
         tableBodyHtml = participants.map(p => {
             const house = festHouses.find(h => h.id === p.houseId);
             const savedPoints = existingResult?.results.find(res => res.studentId === p.studentId)?.points || '';
@@ -25478,14 +25496,43 @@ function renderScoringSheet(festId, eventId) {
         }).join('');
     }
 
+    // --- Generate the Winners Summary ---
+    const eventCategory = event.category;
+    const eventType = event.type || 'onStage';
+    const { winnersListHtml, hasWinners } = generateWinnersSummaryHTML(festId, eventCategory, eventType);
+    let winnersHtml = '';
+
+    if (hasWinners) {
+        winnersHtml = `
+            <div class="mt-4 pt-3 border-top" id="winners-summary-section">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h6 class="text-info">First Prize Winners (${eventCategory} - ${eventType === 'onStage' ? 'On-Stage' : 'Off-Stage'})</h6>
+                    
+                    <!-- THIS IS THE NEW PRINT BUTTON -->
+                    <button class="btn btn-sm btn-outline-secondary no-print" onclick="window.printWinnersSummary('${festId}', '${eventCategory}', '${eventType}')">
+                        <i class="fas fa-print me-1"></i> Print Summary
+                    </button>
+
+                </div>
+                ${winnersListHtml}
+            </div>`;
+    }
+    
+    // --- Assemble final container HTML ---
+    const backButton = `<button class="btn btn-sm btn-secondary mb-3 no-print" onclick="window.showScoringEventsList()"><i class="fas fa-arrow-left me-2"></i>Back to Events List</button>`;
+    
     container.innerHTML = `
-        <h5 class="section-header"><i class="fas fa-clipboard-check me-2"></i> Score Entry: ${event.name} (${event.category} - ${event.gender === 'Male' ? 'Boys' : 'Girls'})</h5>
+        ${backButton}
+        <h5 class="section-header"><i class="fas fa-clipboard-check me-2"></i> Score Entry: ${event.name}</h5>
         <div class="table-responsive">
             <table class="table table-bordered">
                 <thead class="table-light"><tr>${headerHtml}</tr></thead>
                 <tbody>${tableBodyHtml}</tbody>
             </table>
         </div>
+        
+        ${winnersHtml} 
+        
         <div class="text-end mt-3 border-top pt-3">
             <button class="btn btn-success" onclick="window.saveEventScores('${festId}', '${eventId}', ${event.isGroupEvent})">
                 <i class="fas fa-save me-2"></i>Save Scores
@@ -25493,40 +25540,173 @@ function renderScoringSheet(festId, eventId) {
         </div>
     `;
 }
+/**
+ * Generates the HTML for the winners' summary list.
+ * This is a helper function used by both the scoring sheet and the print function.
+ * @param {string} festId 
+ * @param {string} category 
+ * @param {string} eventType 
+ * @returns {object} An object containing the HTML and a boolean indicating if winners were found.
+ */
+/**
+ * Generates the HTML for a summary list of 1st, 2nd, and 3rd place winners,
+ * including their house, for a given set of events.
+ * @param {string} festId 
+ * @param {string} category 
+ * @param {string} eventType 
+ * @returns {object} An object containing the HTML and a boolean indicating if winners were found.
+ */
+function generateWinnersSummaryHTML(festId, category, eventType) {
+    const relevantEvents = festEvents.filter(e => e.festId === festId && e.category === category && (e.type || 'onStage') === eventType);
+    const winnersByEvent = []; // This will hold the HTML for each event's summary table
 
-window.saveEventScores = async (festId, eventId) => {
-    const resultsWithPoints = [];
-    document.querySelectorAll('#scoring-sheet-container tr[data-studentid]').forEach(row => {
-        const studentId = row.dataset.studentid;
-        const pointsInput = row.querySelector('.score-points-input');
-        const points = parseInt(pointsInput.value, 10) || 0;
+    // Helper to get the correct suffix for ranks (1st, 2nd, 3rd)
+    const getRankSuffix = (rank) => {
+        if (rank === 1) return 'st';
+        if (rank === 2) return 'nd';
+        if (rank === 3) return 'rd';
+        return 'th';
+    };
 
-        if (points > 0) {
-            resultsWithPoints.push({ studentId, points });
+    relevantEvents.forEach(ev => {
+        const resultDoc = festResults.find(r => r.eventId === ev.id);
+        // Find all results with position 1, 2, or 3
+        const topThree = resultDoc?.results.filter(res => res.position <= 3) || [];
+
+        if (topThree.length > 0) {
+            let eventWinnersHtml = `
+                <div class="event-summary mb-3">
+                    <strong>${ev.name}</strong>
+                    <table class="table table-sm table-borderless small mb-0">
+            `;
+
+            topThree.forEach(standing => {
+                let winnerName = 'N/A';
+                let houseName = 'N/A';
+                let houseColor = '#6c757d'; // Default gray color
+
+                // Find the house for both solo and group winners
+                if (standing.studentId) {
+                    const registration = festRegistrations.find(r => r.studentId === standing.studentId);
+                    const student = students.find(s => s.id === standing.studentId);
+                    winnerName = student ? `${student.name} <small class="text-muted">(${getStudentClassName(student.classId, student.division)})</small>` : 'Unknown Student';
+                    const house = festHouses.find(h => h.id === registration?.houseId);
+                    if (house) {
+                        houseName = house.name;
+                        houseColor = house.color;
+                    }
+                } else if (standing.groupId) {
+                    const group = festGroups.find(g => g.id === standing.groupId);
+                    if (group) {
+                        winnerName = `${group.name} (Group)`;
+                        const house = festHouses.find(h => h.id === group.houseId);
+                        if (house) {
+                            houseName = house.name;
+                            houseColor = house.color;
+                        }
+                    }
+                }
+
+                // Add the table row for this winner
+                eventWinnersHtml += `
+                    <tr>
+                        <td style="width: 15%;"><strong>${standing.position}</strong><sup style="font-size: 0.8em;">${getRankSuffix(standing.position)}</sup></td>
+                        <td>${winnerName}</td>
+                        <td style="width: 25%;"><span class="badge" style="background-color:${houseColor}; color:white;">${houseName}</span></td>
+                    </tr>
+                `;
+            });
+
+            eventWinnersHtml += `</table></div>`;
+            winnersByEvent.push(eventWinnersHtml);
         }
     });
 
-    // --- THIS IS THE CORRECTED LOGIC ---
+    if (winnersByEvent.length > 0) {
+        return {
+            // Join all the individual event tables into one block
+            winnersListHtml: winnersByEvent.join('<hr class="my-2">'),
+            hasWinners: true
+        };
+    }
 
-    // 1. Sort by points first to prepare for ranking.
+    return { winnersListHtml: '', hasWinners: false };
+}
+
+/**
+ * Main function to trigger the printing of the winners' summary.
+ * @param {string} festId 
+ * @param {string} category 
+ * @param {string} eventType 
+ */
+window.printWinnersSummary = function(festId, category, eventType) {
+    const fest = fests.find(f => f.id === festId);
+    if (!fest) return;
+
+    const { winnersListHtml, hasWinners } = generateWinnersSummaryHTML(festId, category, eventType);
+
+    if (!hasWinners) {
+        showAlert('No winners found in this category to print.', 'info');
+        return;
+    }
+
+    const reportTitle = `First Prize Winners`;
+    const subTitle = `${fest.name} | Category: ${category} | Type: ${eventType === 'onStage' ? 'On-Stage' : 'Off-Stage'}`;
+
+    const contentHtml = `
+        <div class="printable-report">
+            <h4 class="text-center">${reportTitle}</h4>
+            <p class="text-center text-muted">${subTitle}</p>
+            <hr>
+            ${winnersListHtml}
+        </div>
+    `;
+
+    printReport({
+        contentHtml,
+        title: `Winners_${category}_${eventType}`
+    });
+}
+
+window.saveEventScores = async (festId, eventId, isGroupEvent) => {
+    const resultsWithPoints = [];
+    
+    // --- THIS IS THE FIX ---
+    // Use the correct query selector based on whether it's a group event or not.
+    if (isGroupEvent) {
+        document.querySelectorAll('#scoring-sheet-container tr[data-groupid]').forEach(row => {
+            const groupId = row.dataset.groupid;
+            const pointsInput = row.querySelector('.score-points-input');
+            const points = parseInt(pointsInput.value, 10) || 0;
+
+            if (points > 0) {
+                resultsWithPoints.push({ groupId, points }); // Save with groupId
+            }
+        });
+    } else {
+        document.querySelectorAll('#scoring-sheet-container tr[data-studentid]').forEach(row => {
+            const studentId = row.dataset.studentid;
+            const pointsInput = row.querySelector('.score-points-input');
+            const points = parseInt(pointsInput.value, 10) || 0;
+
+            if (points > 0) {
+                resultsWithPoints.push({ studentId, points }); // Save with studentId
+            }
+        });
+    }
+
+    // The rest of the logic for ranking and saving works for both types
     resultsWithPoints.sort((a, b) => b.points - a.points);
-
-    // 2. Use external variables to track the rank and the last score.
     let lastPoints = -1;
     let lastRank = 0;
 
     const finalResults = resultsWithPoints.map((result, index) => {
-        // If the score is different from the last one, the rank is the current index + 1.
         if (result.points !== lastPoints) {
             lastRank = index + 1;
         }
-        // Update the last score for the next iteration.
         lastPoints = result.points;
-        // Return the result with the correctly assigned rank.
         return { ...result, position: lastRank };
     });
-
-    // --- END OF CORRECTION ---
 
     const resultId = `${festId}_${eventId}`;
     const resultData = { id: resultId, festId, eventId, results: finalResults };
@@ -25534,8 +25714,11 @@ window.saveEventScores = async (festId, eventId) => {
     try {
         await setDoc(getDocRef('festResults', resultId), resultData);
         showAlert('Scores saved successfully!', 'success');
-
-        // Re-render dashboard to show updated scores
+        
+        // Re-render the event status list and dashboard to show the update
+        if (document.getElementById('scoring-events-list-container')) {
+            renderScoringEventsList();
+        }
         if (document.getElementById('fest-dashboard')) {
             renderFestDashboardTab();
         }
@@ -25544,8 +25727,6 @@ window.saveEventScores = async (festId, eventId) => {
         showAlert('Failed to save scores. See console for details.', 'danger');
     }
 };
-
-
 
 
 
