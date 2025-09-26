@@ -717,6 +717,21 @@
 </div>
 
 
+<!-- Add this new modal to the end of your HTML body -->
+<div class="modal fade" id="studentListModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="studentListModalLabel">Student List</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="studentListModalBody">
+                <!-- Student list will be rendered here -->
+            </div>
+        </div>
+    </div>
+</div>
+
    <!-- Cropper CSS -->
 <link href="https://unpkg.com/cropperjs/dist/cropper.min.css" rel="stylesheet"/>
 
@@ -7526,6 +7541,7 @@ function renderSubjectWiseResultView() {
     divisionSelect.addEventListener('change', () => {
         const classId = classSelect.value;
         const division = divisionSelect.value;
+        attachMarksListener([{ classId: classId, division: division }]);
         const allocated = classroomSubjects.filter(cs => cs.classId === classId && cs.division === division);
         subjectSelect.innerHTML = allocated.map(a => {
             const subject = subjects.find(s => s.id === a.subjectId);
@@ -7587,11 +7603,21 @@ function generateSubjectWiseTable() {
     const selectedExams = selectedExamIds.map(id => exams.find(e => e.id === id)).filter(Boolean);
     const results = processSubjectWiseResults(studentsInClass, selectedExams, subjectId, gradingSystem);
 
-    if (sortBy === 'name') results.sort((a, b) => a.student.name.localeCompare(b.student.name));
-    else if (sortBy === 'admnno') results.sort((a, b) => (a.student.admissionNumber || '').localeCompare(b.student.admissionNumber || '', undefined, { numeric: true }));
-    else if (sortBy === 'gender') results.sort((a, b) => (a.student.gender || "").localeCompare(b.student.gender || ""));
-    else results.sort((a, b) => b.totalSum - a.totalSum);
-    
+    // --- THIS IS THE CORRECTED SORTING LOGIC ---
+
+if (sortBy === 'name') {
+    results.sort((a, b) => a.student.name.localeCompare(b.student.name));
+} else if (sortBy === 'admnno') {
+    // FIX: Treat admissionNumber purely as a string for reliable sorting of complex IDs.
+    // The String() wrapper ensures that even if the value is a number, it's compared as a string.
+    results.sort((a, b) => 
+        String(a.student.admissionNumber || '').localeCompare(String(b.student.admissionNumber || ''))
+    );
+} else if (sortBy === 'gender') {
+    results.sort((a, b) => (a.student.gender || "").localeCompare(b.student.gender || ""));
+} else {
+    results.sort((a, b) => b.totalSum - a.totalSum);
+}
     results.forEach((res, i) => res.rank = i + 1);
 
     container.innerHTML = renderSubjectWiseTableHTML(results, selectedExams, displayMode, subjectId, colorCodeSystem);
@@ -7788,13 +7814,13 @@ function copySubjectWiseColumnData(columnType) {
             if (score === 'AB') return 'Ab';
             if (maxScore === 0) return '-';
             const percentage = (score / maxScore) * 100;
-            if (percentage >= 90) return 'O'; // Outstanding
-            if (percentage >= 80) return 'A';
+            //if (percentage >= 90) return 'O'; // Outstanding
+            if (percentage >= 90) return 'A';
             if (percentage >= 70) return 'B';
-            if (percentage >= 60) return 'C';
-            if (percentage >= 50) return 'D';
-            if (percentage >= 35) return 'E';
-            return 'F'; // Fail
+            if (percentage >= 50) return 'C';
+            if (percentage >= 30) return 'D';
+            //if (percentage >= 30) return 'E';
+            return 'E'; // Fail
         }
         
         /**
@@ -25530,14 +25556,15 @@ function renderScoringSheet(festId, eventId) {
                 <tbody>${tableBodyHtml}</tbody>
             </table>
         </div>
-        
-        ${winnersHtml} 
-        
         <div class="text-end mt-3 border-top pt-3">
             <button class="btn btn-success" onclick="window.saveEventScores('${festId}', '${eventId}', ${event.isGroupEvent})">
                 <i class="fas fa-save me-2"></i>Save Scores
             </button>
         </div>
+        
+        ${winnersHtml} 
+        
+        
     `;
 }
 /**
@@ -26076,41 +26103,60 @@ window.printHouseRankings = function() {
 function generateHouseRankingReportHTML(reportData) {
     if (!reportData) return '<p>Could not generate report data.</p>';
 
-    // --- Section 1: Final Standings Table ---
+    // --- Section 1: Final Standings Table (No change) ---
     const finalStandingsTable = `
         <h5 class="section-header">Final Standings</h5>
         <table class="table table-sm table-bordered">
-            <thead class="table-light"><tr><th>Rank</th><th>House</th><th>Total Points</th></tr></thead>
+            <thead class="table-light"><tr><th>Rank</th><th>House</th><th>On-Stage Pts</th><th>Off-Stage Pts</th><th>Total Points</th></tr></thead>
             <tbody>
                 ${reportData.houses.map(h => `
                     <tr>
                         <td class="text-center fw-bold">${h.finalRank}</td>
                         <td><span class="color-dot-display" style="background-color:${h.houseColor};"></span>${h.houseName}</td>
+                        <td class="text-center">${h.onStagePoints}</td>
+                        <td class="text-center">${h.offStagePoints}</td>
                         <td class="text-center fw-bold">${h.totalPoints}</td>
                     </tr>
                 `).join('')}
             </tbody>
         </table>`;
 
-    // --- Section 2: Category-wise Score Breakdown ---
-    const categoryBreakdownTable = `
-        <h5 class="section-header mt-4">Category-wise Score Breakdown</h5>
-        <table class="table table-sm table-bordered text-center">
-            <thead class="table-light">
-                <tr><th>House</th>${reportData.categories.map(cat => `<th>${cat}</th>`).join('')}<th>Grand Total</th></tr>
-            </thead>
-            <tbody>
-                ${reportData.houses.map(h => `
-                    <tr>
-                        <td class="text-start">${h.houseName}</td>
-                        ${reportData.categories.map(cat => `<td>${h.categoryPoints[cat] || 0}</td>`).join('')}
-                        <td class="fw-bold">${h.totalPoints}</td>
-                    </tr>
-                `).join('')}
-            </tbody>
-        </table>`;
-        
-    // --- Section 3: House-wise Toppers ---
+    // --- Section 2: Helper to create breakdown tables ---
+    const createBreakdownTable = (title, eventType) => {
+        return `
+            <h5 class="section-header mt-4">${title} Score Breakdown</h5>
+            <table class="table table-sm table-bordered text-center">
+                <thead class="table-light">
+                    <tr><th>House</th>${reportData.categories.map(cat => `<th>${cat}</th>`).join('')}<th>Total</th></tr>
+                </thead>
+                <tbody>
+                    ${reportData.houses.map(h => `
+                        <tr>
+                            <td class="text-start">${h.houseName}</td>
+                            ${reportData.categories.map(cat => `<td>${h.categoryPoints[eventType][cat] || 0}</td>`).join('')}
+                            <td class="fw-bold">${h[eventType === 'onStage' ? 'onStagePoints' : 'offStagePoints']}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>`;
+    };
+
+    // --- Section 3: NEW Category-wise Toppers ---
+    const categoryToppersSection = `
+        <h5 class="section-header mt-4">Category-wise Top Performers</h5>
+        <div class="row g-3">
+            ${Object.entries(reportData.categoryToppers).map(([category, topper]) => `
+                <div class="col-md-6 col-lg-4">
+                    <div class="ui-card h-100 text-center">
+                        <h6 class="text-primary">${category} Topper</h6>
+                        <p class="fw-bold mb-0">${topper.studentName}</p>
+                        <span class="badge bg-success">${topper.points} pts</span>
+                    </div>
+                </div>
+            `).join('')}
+        </div>`;
+
+    // --- Section 4: House-wise Toppers (No change) ---
     const houseToppersSection = `
         <h5 class="section-header mt-4">House-wise Top Performers</h5>
         <div class="row g-3">
@@ -26134,11 +26180,16 @@ function generateHouseRankingReportHTML(reportData) {
     return `
         <div class="printable-report">
             ${finalStandingsTable}
-            ${categoryBreakdownTable}
+            ${createBreakdownTable('On-Stage', 'onStage')}
+            ${createBreakdownTable('Off-Stage', 'offStage')}
+            ${categoryToppersSection}
             ${houseToppersSection}
         </div>
     `;
 }
+
+
+
 /**
  * Calculates and aggregates all data needed for the final house ranking report.
  * @param {string} festId The ID of the fest to analyze.
@@ -26152,14 +26203,13 @@ function generateHouseRankingReportData(festId) {
     const houseData = {};
     festHouses.forEach(h => {
         houseData[h.id] = {
-            houseId: h.id,
-            houseName: h.name,
-            houseColor: h.color,
-            totalPoints: 0,
-            categoryPoints: {},
+            houseId: h.id, houseName: h.name, houseColor: h.color,
+            totalPoints: 0, onStagePoints: 0, offStagePoints: 0,
+            categoryPoints: { onStage: {}, offStage: {} },
             studentPoints: {} // { studentId: points }
         };
     });
+    const categoryStudentPoints = {}; // { category: { studentId: points } }
 
     const relevantResults = festResults.filter(r => r.festId === festId);
 
@@ -26169,31 +26219,36 @@ function generateHouseRankingReportData(festId) {
         if (!event) return;
 
         result.results.forEach(standing => {
-            let participants = [];
-            if (standing.studentId) {
-                // It's a solo event result
-                participants.push(festRegistrations.find(r => r.studentId === standing.studentId && r.festId === festId));
-            } else if (standing.groupId) {
-                // It's a group event result
-                const group = festGroups.find(g => g.id === standing.groupId);
-                group?.members.forEach(member => {
-                    participants.push(festRegistrations.find(r => r.studentId === member.studentId && r.festId === festId));
-                });
-            }
+            if (!standing.points || standing.points <= 0) return;
+            const points = standing.points;
+            const category = event.category || 'General';
+            const eventType = event.type || 'onStage';
             
-            participants.filter(Boolean).forEach(reg => {
-                if (reg && reg.houseId && houseData[reg.houseId]) {
-                    const points = standing.points || 0;
-                    const category = event.category || 'General';
+            let houseId = null;
+            // CORRECTLY FIND HOUSE FOR SOLO OR GROUP
+            if (standing.groupId) {
+                const group = festGroups.find(g => g.id === standing.groupId);
+                if (group) houseId = group.houseId;
+            } else if (standing.studentId) {
+                const registration = festRegistrations.find(r => r.studentId === standing.studentId);
+                if (registration) houseId = registration.houseId;
+            }
 
-                    // Add to house total
-                    houseData[reg.houseId].totalPoints += points;
-                    // Add to category-specific total for the house
-                    houseData[reg.houseId].categoryPoints[category] = (houseData[reg.houseId].categoryPoints[category] || 0) + points;
-                    // Add to individual student's total for that house
-                    houseData[reg.houseId].studentPoints[reg.studentId] = (houseData[reg.houseId].studentPoints[reg.studentId] || 0) + points;
+            if (houseId && houseData[houseId]) {
+                // Add points to all relevant totals
+                houseData[houseId].totalPoints += points;
+                houseData[houseId][eventType === 'onStage' ? 'onStagePoints' : 'offStagePoints'] += points;
+                houseData[houseId].categoryPoints[eventType][category] = (houseData[houseId].categoryPoints[eventType][category] || 0) + points;
+                
+                // Add points to individual students for house-wise toppers
+                if (standing.studentId) {
+                    houseData[houseId].studentPoints[standing.studentId] = (houseData[houseId].studentPoints[standing.studentId] || 0) + points;
+                    
+                    // Add points to the category-wise student tracker
+                    if (!categoryStudentPoints[category]) categoryStudentPoints[category] = {};
+                    categoryStudentPoints[category][standing.studentId] = (categoryStudentPoints[category][standing.studentId] || 0) + points;
                 }
-            });
+            }
         });
     });
 
@@ -26204,28 +26259,42 @@ function generateHouseRankingReportData(festId) {
     finalHouseArray.forEach(house => {
         house.toppers = Object.entries(house.studentPoints)
             .sort(([, pointsA], [, pointsB]) => pointsB - pointsA)
-            .slice(0, 3) // Get top 3
+            .slice(0, 3)
             .map(([studentId, points]) => ({
                 studentId,
                 studentName: students.find(s => s.id === studentId)?.name || 'Unknown',
                 points
             }));
     });
+    
+    // Calculate Category Toppers
+    const categoryToppers = {};
+    for (const category in categoryStudentPoints) {
+        const topPerformer = Object.entries(categoryStudentPoints[category])
+            .sort((a, b) => b[1] - a[1])[0]; // Get the top entry
+        if (topPerformer) {
+            const [studentId, points] = topPerformer;
+            categoryToppers[category] = {
+                studentName: students.find(s => s.id === studentId)?.name || 'Unknown',
+                points
+            };
+        }
+    }
 
     // Sort houses by total points to determine final rank
     finalHouseArray.sort((a, b) => b.totalPoints - a.totalPoints);
-    finalHouseArray.forEach((house, index) => {
-        house.finalRank = index + 1;
-    });
+    finalHouseArray.forEach((house, index) => { house.finalRank = index + 1; });
 
     return {
         festName: fest.name,
         categories: [...new Set(festEvents.filter(e => e.festId === festId).map(e => e.category))].sort(),
-        houses: finalHouseArray
+        houses: finalHouseArray,
+        categoryToppers: categoryToppers
     };
 }
+
 /**
- * 1. Main function to orchestrate the generation and printing of the championships report.
+ * Main function to orchestrate the generation and printing of the championships report.
  */
 window.printIndividualChampionships = function() {
     if (!state.managingFest) {
@@ -26233,13 +26302,13 @@ window.printIndividualChampionships = function() {
     }
     showAlert('Generating Individual Championships report...', 'info');
 
-    // Calculate all the data first
+    // Calculate all the new, detailed data
     const reportData = calculateIndividualChampionships(state.managingFest.id);
     if (!reportData) {
         return showAlert('Could not generate data for the report.', 'danger');
     }
 
-    // Build the HTML from the data
+    // Build the new, detailed HTML from the data
     const contentHtml = generateIndividualChampionshipsHTML(reportData);
     
     // Prepare a professional header for the printout
@@ -26252,9 +26321,9 @@ window.printIndividualChampionships = function() {
         </div>
     `;
 
-    // Define specific CSS for this report
     const extraCss = `
-        .winner-card { border: 2px solid #0d6efd; page-break-inside: avoid; }
+        .printable-section { page-break-inside: avoid; }
+        .winner-card { border: 2px solid #0d6efd; }
         .winner-photo { width: 120px; height: 120px; object-fit: cover; border: 3px solid #fff; box-shadow: 0 0 10px rgba(0,0,0,0.2); }
         .section-header { padding-bottom: 5px; margin-bottom: 10px; border-bottom: 1px solid #eee; }
     `;
@@ -26268,9 +26337,9 @@ window.printIndividualChampionships = function() {
         pageSize: 'A4 portrait'
     });
 }
-
 /**
- * 2. Calculates the top male and female performers based on solo event points.
+ * Calculates category-wise and type-wise individual championships (Kalathilakam, Kalaprathibha, Sargaprathibha).
+ * This function correctly considers ONLY solo event points.
  * @param {string} festId The ID of the fest to analyze.
  * @returns {object|null} A structured object with all report data, or null if it fails.
  */
@@ -26278,48 +26347,50 @@ function calculateIndividualChampionships(festId) {
     const fest = fests.find(f => f.id === festId);
     if (!fest) return null;
 
-    const studentPoints = {}; // { studentId: { points: number, gender: 'M'/'F' } }
+    // 1. Aggregate points into a detailed structure: { category: { eventType: { gender: { studentId: points } } } }
+    const categoryPoints = {};
 
     const relevantResults = festResults.filter(r => r.festId === festId);
 
     relevantResults.forEach(result => {
         const event = festEvents.find(e => e.id === result.eventId);
-        // CRITICAL: Skip group events
+        
+        // CRITICAL: This line ensures only SOLO events are counted.
         if (!event || event.isGroupEvent) {
-            return;
+            return; // Skip this result entirely if it's for a group event.
         }
 
         result.results.forEach(standing => {
-            // Only process results for individual students
             if (standing.studentId && standing.points > 0) {
                 const student = students.find(s => s.id === standing.studentId);
                 if (student) {
-                    if (!studentPoints[student.id]) {
-                        studentPoints[student.id] = { points: 0, gender: student.gender };
-                    }
-                    studentPoints[student.id].points += standing.points;
+                    const studentCategory = getStudentCategory(student);
+                    const eventType = event.type || 'onStage'; // Default to 'onStage'
+                    const studentGender = student.gender; // 'M' or 'F'
+
+                    // Initialize nested objects if they don't exist
+                    if (!categoryPoints[studentCategory]) categoryPoints[studentCategory] = { onStage: { M: {}, F: {} }, offStage: { M: {}, F: {} } };
+                    if (!categoryPoints[studentCategory][eventType]) categoryPoints[studentCategory][eventType] = { M: {}, F: {} };
+                    if (!categoryPoints[studentCategory][eventType][studentGender]) categoryPoints[studentCategory][eventType][studentGender] = {};
+                    
+                    // Add points
+                    const currentPoints = categoryPoints[studentCategory][eventType][studentGender][student.id] || 0;
+                    categoryPoints[studentCategory][eventType][studentGender][student.id] = currentPoints + standing.points;
                 }
             }
         });
     });
 
-    const allPerformers = Object.entries(studentPoints).map(([studentId, data]) => ({
-        studentId,
-        points: data.points,
-        gender: data.gender
-    }));
+    // 2. Process the aggregated points to find winners for each category
+    const championshipsByCategory = {};
 
-    // Separate and sort male and female performers
-    const topFemale = allPerformers.filter(p => p.gender === 'F').sort((a, b) => b.points - a.points);
-    const topMale = allPerformers.filter(p => p.gender === 'M').sort((a, b) => b.points - a.points);
-
-    // Function to enrich student data for the report
-    const enrichStudentData = (performer) => {
-        const student = students.find(s => s.id === performer.studentId);
-        const registration = festRegistrations.find(r => r.studentId === performer.studentId && r.festId === festId);
+    const enrichStudentData = (studentId, points) => {
+        const student = students.find(s => s.id === studentId);
+        const registration = festRegistrations.find(r => r.studentId === studentId && r.festId === festId);
         const house = festHouses.find(h => h.id === registration?.houseId);
         return {
-            ...performer,
+            studentId,
+            points,
             studentName: student?.name || 'Unknown',
             className: getStudentClassName(student?.classId, student?.division),
             houseName: house?.name || 'N/A',
@@ -26327,28 +26398,42 @@ function calculateIndividualChampionships(festId) {
         };
     };
 
+    for (const category in categoryPoints) {
+        championshipsByCategory[category] = {};
+        ['onStage', 'offStage'].forEach(eventType => {
+            
+            const malePerformers = Object.entries(categoryPoints[category][eventType]['M'] || {})
+                .map(([studentId, points]) => ({ studentId, points }))
+                .sort((a, b) => b.points - a.points);
+
+            const femalePerformers = Object.entries(categoryPoints[category][eventType]['F'] || {})
+                .map(([studentId, points]) => ({ studentId, points }))
+                .sort((a, b) => b.points - a.points);
+            
+            championshipsByCategory[category][eventType] = {
+                topMale: malePerformers.length > 0 ? enrichStudentData(malePerformers[0].studentId, malePerformers[0].points) : null,
+                topFemale: femalePerformers.length > 0 ? enrichStudentData(femalePerformers[0].studentId, femalePerformers[0].points) : null,
+                topFiveMale: malePerformers.slice(0, 5).map(p => enrichStudentData(p.studentId, p.points)),
+                topFiveFemale: femalePerformers.slice(0, 5).map(p => enrichStudentData(p.studentId, p.points))
+            };
+        });
+    }
+
     return {
         festName: fest.name,
-        kalathilakam: topFemale.length > 0 ? enrichStudentData(topFemale[0]) : null,
-        kalaprathibha: topMale.length > 0 ? enrichStudentData(topMale[0]) : null,
-        topFemalePerformers: topFemale.slice(0, 5).map(enrichStudentData),
-        topMalePerformers: topMale.slice(0, 5).map(enrichStudentData)
+        championshipsByCategory
     };
 }
 
 /**
- * 3. Generates the final HTML for the championship report.
+ * 3. Generates the final HTML for the category-wise championship report.
  * @param {object} reportData The data from calculateIndividualChampionships.
  * @returns {string} The complete HTML string for the report.
  */
 function generateIndividualChampionshipsHTML(reportData) {
     const fest = state.managingFest;
+    const championships = reportData.championshipsByCategory;
     
-    // --- DYNAMIC TITLES ---
-    const femaleChampionTitle = fest.eventType === 'Sports' ? 'Individual Champion (Girl)' : 'Kalathilakam';
-    const maleChampionTitle = fest.eventType === 'Sports' ? 'Individual Champion (Boy)' : 'Kalaprathibha';
-
-
     const renderWinnerCard = (title, winner) => {
         if (!winner) {
             return `<div class="ui-card text-center p-5"><h5 class="section-header">${title}</h5><p class="text-muted">No winner found.</p></div>`;
@@ -26365,7 +26450,7 @@ function generateIndividualChampionshipsHTML(reportData) {
     };
 
     const renderToppersList = (title, toppers) => {
-        if (toppers.length === 0) return '';
+        if (!toppers || toppers.length === 0) return '';
         return `
             <h6 class="mt-4">${title}</h6>
             <table class="table table-sm table-striped">
@@ -26376,23 +26461,54 @@ function generateIndividualChampionshipsHTML(reportData) {
             </table>`;
     };
 
-    return `
-        <div class="row">
-            <div class="col-md-6">
-                ${renderWinnerCard(femaleChampionTitle, reportData.kalathilakam)}
-                ${renderToppersList('Top 5 Female Performers', reportData.topFemalePerformers)}
-            </div>
-            <div class="col-md-6">
-                ${renderWinnerCard(maleChampionTitle, reportData.kalaprathibha)}
-                ${renderToppersList('Top 5 Male Performers', reportData.topMalePerformers)}
-            </div>
-        </div>
-    `;
-}
+    let fullHtml = '';
+    const sortedCategories = Object.keys(championships).sort(); // Sort categories alphabetically
 
-/**
- * Reads filter values and triggers the printing of the category entry sheet.
- */
+    sortedCategories.forEach(category => {
+        const categoryData = championships[category];
+        
+        // Dynamic Titles based on fest type
+        const femaleOnStageTitle = fest.eventType === 'Sports' ? 'Individual Champion (Girl)' : 'Kalathilakam';
+        const maleOnStageTitle = fest.eventType === 'Sports' ? 'Individual Champion (Boy)' : 'Kalaprathibha';
+        const femaleOffStageTitle = 'Sargaprathibha (Girl)';
+        const maleOffStageTitle = 'Sargaprathibha (Boy)';
+
+        fullHtml += `
+            <div class="card shadow-sm mb-4 printable-section">
+                <div class="card-header bg-primary text-white text-center">
+                    <h3 class="mb-0">${category} Category Champions</h3>
+                </div>
+                <div class="card-body">
+                    <h4 class="text-center text-muted">On-Stage</h4>
+                    <div class="row">
+                        <div class="col-md-6">
+                            ${renderWinnerCard(femaleOnStageTitle, categoryData.onStage.topFemale)}
+                            ${renderToppersList('Top 5 On-Stage Performers (Girls)', categoryData.onStage.topFiveFemale)}
+                        </div>
+                        <div class="col-md-6">
+                            ${renderWinnerCard(maleOnStageTitle, categoryData.onStage.topMale)}
+                            ${renderToppersList('Top 5 On-Stage Performers (Boys)', categoryData.onStage.topFiveMale)}
+                        </div>
+                    </div>
+                    <hr class="my-4">
+                    <h4 class="text-center text-muted">Off-Stage</h4>
+                     <div class="row">
+                        <div class="col-md-6">
+                            ${renderWinnerCard(femaleOffStageTitle, categoryData.offStage.topFemale)}
+                            ${renderToppersList('Top 5 Off-Stage Performers (Girls)', categoryData.offStage.topFiveFemale)}
+                        </div>
+                        <div class="col-md-6">
+                            ${renderWinnerCard(maleOffStageTitle, categoryData.offStage.topMale)}
+                            ${renderToppersList('Top 5 Off-Stage Performers (Boys)', categoryData.offStage.topFiveMale)}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    return fullHtml || '<p class="alert alert-info">No championship data available to display.</p>';
+}
 /**
  * Reads filter values and triggers the printing of the category entry sheet.
  */
@@ -32749,12 +32865,19 @@ let gradeDistributionChart = null;
 /**
  * Renders the Grade Distribution tab content.
  */
-function renderExamReportsGradeDistributionTab() { // Renamed from renderExamControlGradeDistributionTab
-    const container = document.getElementById('exam-reports-grade-dist'); // Updated ID
+/**
+ * Renders the NEW Grade Distribution tab content with the matrix and reverse lookup tool.
+ */
+function renderExamReportsGradeDistributionTab() {
+    const container = document.getElementById('exam-reports-grade-dist');
     if (!container) return;
 
-    const classOptions = `<option value="all">-- All Classes --</option>${classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}`;
-
+    // Filter for classes that actually have students to avoid empty options
+    const studentClassIds = [...new Set(students.map(s => s.classId))];
+    const classOptions = `<option value="">-- Select Class --</option>${classes
+        .filter(c => studentClassIds.includes(c.id))
+        .sort((a,b) => (a.order || 99) - (b.order || 99)) // Sort by class order
+        .map(c => `<option value="${c.id}">${c.name}</option>`).join('')}`;
 
     container.innerHTML = `
         <div class="ui-card mb-4">
@@ -32779,134 +32902,213 @@ function renderExamReportsGradeDistributionTab() { // Renamed from renderExamCon
                     </select>
                 </div>
             </div>
-            <div class="text-end mt-3">
-                <button id="generate-grade-dist-btn" class="btn btn-primary">Generate Distribution</button>
-            </div>
         </div>
         <div id="grade-dist-results-container" class="mt-4">
-            <p class="text-muted text-center p-4">Select filters and click 'Generate Distribution'.</p>
-        </div>
-        <div id="grade-dist-chart-container" class="mt-4" style="height: 400px;">
-            <canvas id="grade-distribution-chart"></canvas>
+            <p class="text-muted text-center p-4">Please select a class to generate the report.</p>
         </div>
     `;
 
     const examSelect = document.getElementById('grade-dist-exam-select');
     const classSelect = document.getElementById('grade-dist-class-select');
     const gradingSystemSelect = document.getElementById('grade-dist-grading-system');
-    const generateBtn = document.getElementById('generate-grade-dist-btn');
-    const resultsContainer = document.getElementById('grade-dist-results-container');
-    const chartCanvas = document.getElementById('grade-distribution-chart');
 
-    const generateDistribution = () => {
-        const selectedExamId = examSelect.value;
-        const selectedClassId = classSelect.value;
-        const selectedGradingSystem = gradingSystemSelect.value;
-
-        displayGradeDistribution(selectedExamId, selectedClassId, selectedGradingSystem);
-    };
-
-    generateBtn.addEventListener('click', generateDistribution);
-
-    // Initial load
-    if (exams.length > 0 || classes.length > 0) {
-        generateDistribution();
-    }
+    // Attach listeners to all filters
+    [examSelect, classSelect, gradingSystemSelect].forEach(el => {
+        el.addEventListener('change', () => {
+            const selectedClassId = classSelect.value;
+            if (selectedClassId) { // Only generate if a class is selected
+                displayGradeDistribution(examSelect.value, selectedClassId, gradingSystemSelect.value);
+            }
+        });
+    });
 }
 
-
 /**
- * Displays the grade distribution table and chart.
+ * Displays the detailed grade distribution table with a two-row header,
+ * division-wise counts, and a total for each grade.
  * @param {string} examId - 'all' or a specific exam ID.
- * @param {string} classId - 'all' or a specific class ID.
+ * @param {string} classId - A specific class ID.
  * @param {string} gradingSystem - 'type1' or 'type2'.
  */
 function displayGradeDistribution(examId, classId, gradingSystem) {
     const resultsContainer = document.getElementById('grade-dist-results-container');
-    const chartCanvas = document.getElementById('grade-distribution-chart');
-
     resultsContainer.innerHTML = `<div class="text-center p-4"><div class="spinner-border"></div><p>Calculating distribution...</p></div>`;
-    if (gradeDistributionChart) {
-        gradeDistributionChart.destroy();
-        gradeDistributionChart = null;
-    }
 
-    // Determine students to analyze
-    let studentsToAnalyze = students;
-    if (classId !== 'all') {
-        studentsToAnalyze = studentsToAnalyze.filter(s => s.classId === classId);
-    }
-
-    if (studentsToAnalyze.length === 0) {
-        resultsContainer.innerHTML = `<p class="alert alert-info text-center">No students found for analysis in this selection.</p>`;
+    const classObject = classes.find(c => c.id === classId);
+    if (!classObject) {
+        resultsContainer.innerHTML = `<p class="alert alert-danger">Selected class not found.</p>`;
         return;
     }
 
-    const gradeCounts = {};
+    const studentsToAnalyze = students.filter(s => s.classId === classId);
+    const divisions = classObject.divisions.sort();
+    const subjectsInClass = classroomSubjects.filter(cs => cs.classId === classId)
+        .map(cs => subjects.find(s => s.id === cs.subjectId))
+        .filter(Boolean)
+        .filter((v,i,a)=>a.findIndex(t=>(t.id === v.id))===i)
+        .sort((a,b) => a.name.localeCompare(b.name));
+    
     const gradeScale = gradingSystem === 'type1'
-        ? ['A+', 'A', 'B+', 'B', 'C+', 'C', 'D', 'E', 'F', 'AB']
+        ? ['A+', 'A', 'B+', 'B', 'C+', 'C', 'D', 'E', 'AB']
         : ['O', 'A', 'B', 'C', 'D', 'E', 'F', 'AB'];
 
-    // Initialize counts for all grades
-    gradeScale.forEach(grade => gradeCounts[grade] = 0);
-    gradeCounts['N/A'] = 0; // For subjects without marks/schedules
+    // 1. Aggregate data (No change here)
+    const subjectGradeData = {};
+    subjectsInClass.forEach(sub => {
+        subjectGradeData[sub.id] = {};
+        gradeScale.forEach(grade => {
+            subjectGradeData[sub.id][grade] = {};
+            divisions.forEach(div => {
+                subjectGradeData[sub.id][grade][div] = [];
+            });
+        });
+        subjectGradeData[sub.id]['N/A'] = {};
+    });
 
     studentsToAnalyze.forEach(student => {
-        let relevantSchedules = examSchedules;
+        let schedules = examSchedules.filter(sch => sch.classId === student.classId && sch.division === student.division);
         if (examId !== 'all') {
-            relevantSchedules = relevantSchedules.filter(s => s.examId === examId);
+            schedules = schedules.filter(s => s.examId === examId);
         }
-        // Filter schedules for subjects actually belonging to the student's class
-        relevantSchedules = relevantSchedules.filter(sch =>
-            sch.classId === student.classId &&
-            sch.division === student.division
-        );
-
-        relevantSchedules.forEach(schedule => {
+        
+        schedules.forEach(schedule => {
             const markId = `${schedule.examId}_${student.id}_${schedule.subjectId}`;
             const mark = marks[markId];
             const maxTotal = (schedule.maxTE || 0) + (schedule.maxCE || 0);
-
             let grade = 'N/A';
             if (mark) {
-                const te = mark.te === 'AB' ? 'AB' : Number(mark.te || 0);
-                const ce = mark.ce === 'AB' ? 'AB' : Number(mark.ce || 0);
-                const total = te === 'AB' || ce === 'AB' ? 'AB' : te + ce;
+                const total = (mark.te === 'AB' || mark.ce === 'AB') ? 'AB' : (Number(mark.te) || 0) + (Number(mark.ce) || 0);
                 grade = (total === 'AB') ? 'AB' : (maxTotal > 0 ? (gradingSystem === 'type1' ? calculateGrade(total, maxTotal) : calculateGradeType2(total, maxTotal)) : 'N/A');
             }
-
-            if (gradeCounts[grade] !== undefined) {
-                gradeCounts[grade]++;
-            } else {
-                gradeCounts['N/A']++; // Catch unexpected grades or missing data
+            if (subjectGradeData[schedule.subjectId]?.[grade]?.[student.division]) {
+                subjectGradeData[schedule.subjectId][grade][student.division].push(student.id);
             }
         });
     });
 
-    // Display results in a table
-    let tableHtml = `
-        <table class="table table-bordered table-sm">
-            <thead><tr><th>Grade</th><th>Count</th><th>Percentage</th></tr></thead>
-            <tbody>`;
-    let totalGrades = 0;
-    gradeScale.forEach(grade => totalGrades += gradeCounts[grade]);
-    totalGrades += gradeCounts['N/A']; // Include N/A in total for percentage calculation
+    // 2. Render the new table with two-row headers and a total column for each grade
+    const numDivisions = divisions.length;
+    const gradeHeaders = gradeScale.map(g => `<th colspan="${numDivisions + 1}">${g}</th>`).join('');
+    const divisionSubHeaders = divisions.map(div => `<th>${div}</th>`).join('') + '<th class="table-info">Total</th>';
+    const repeatedDivisionHeaders = gradeScale.map(() => divisionSubHeaders).join('');
 
-    gradeScale.forEach(grade => {
-        const count = gradeCounts[grade];
-        const percentage = totalGrades > 0 ? ((count / totalGrades) * 100).toFixed(1) : '0.0';
-        tableHtml += `<tr><td>${grade}</td><td>${count}</td><td>${percentage}%</td></tr>`;
+    const tableRows = subjectsInClass.map(sub => {
+        const totalStudentsForSubject = studentsToAnalyze.filter(s => 
+            classroomSubjects.some(cs => cs.classId === classId && cs.subjectId === sub.id && cs.division === s.division)
+        ).length;
+
+        const gradeCells = gradeScale.map(grade => {
+            let gradeTotal = 0;
+            const divisionCellsHtml = divisions.map(div => {
+                const count = subjectGradeData[sub.id]?.[grade]?.[div]?.length || 0;
+                gradeTotal += count;
+                return `<td>${count > 0 ? `<a href="#" class="grade-count-cell" data-subject-id="${sub.id}" data-grade="${grade}" data-division="${div}">${count}</a>` : '0'}</td>`;
+            }).join('');
+            
+            // Add the total cell for this grade
+            return divisionCellsHtml + `<td class="table-info fw-bold">${gradeTotal}</td>`;
+        }).join('');
+        
+        return `<tr>
+                    <td><strong>${sub.name}</strong></td>
+                    ${gradeCells}
+                    <td class="fw-bold">${totalStudentsForSubject}</td>
+                </tr>`;
+    }).join('');
+    
+    const mainTableHtml = `
+        <div class="ui-card mb-4">
+            <h5 class="section-header">Grade Distribution Matrix for ${classObject.name}</h5>
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm text-center">
+                    <thead class="table-light">
+                        <tr>
+                            <th rowspan="2" class="align-middle">Subject</th>
+                            ${gradeHeaders}
+                            <th rowspan="2" class="align-middle">Total Students</th>
+                        </tr>
+                        <tr>
+                            ${repeatedDivisionHeaders}
+                        </tr>
+                    </thead>
+                    <tbody>${tableRows}</tbody>
+                </table>
+            </div>
+        </div>
+    `;
+
+    // The reverse lookup tool HTML remains the same
+    const subjectOptions = subjectsInClass.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+    const gradeOptions = gradeScale.map(g => `<option value="${g}">${g}</option>`).join('');
+    const reverseLookupHtml = `
+        <div class="ui-card">
+            <h5 class="section-header">Find Students by Grade</h5>
+            <div class="row g-3 align-items-end">
+                <div class="col-md-5"><label class="form-label">Subject</label><select id="reverse-subject-select" class="form-select">${subjectOptions}</select></div>
+                <div class="col-md-4"><label class="form-label">Grade</label><select id="reverse-grade-select" class="form-select">${gradeOptions}</select></div>
+                <div class="col-md-3 d-grid"><button id="find-students-btn" class="btn btn-primary">Find Students</button></div>
+            </div>
+            <div id="reverse-lookup-results" class="mt-3"></div>
+        </div>
+    `;
+
+    resultsContainer.innerHTML = mainTableHtml + reverseLookupHtml;
+
+    // 4. Attach Event Listeners (no change here)
+    resultsContainer.addEventListener('click', e => {
+        if (e.target.classList.contains('grade-count-cell')) {
+            e.preventDefault();
+            const { subjectId, grade, division } = e.target.dataset;
+            showStudentsInModal(subjectId, grade, division, subjectGradeData);
+        }
     });
-    // Add N/A row
-    if (gradeCounts['N/A'] > 0) {
-        const naPercentage = totalGrades > 0 ? ((gradeCounts['N/A'] / totalGrades) * 100).toFixed(1) : '0.0';
-        tableHtml += `<tr><td>N/A</td><td>${gradeCounts['N/A']}</td><td>${naPercentage}%</td></tr>`;
-    }
-    tableHtml += `</tbody></table>`;
-    resultsContainer.innerHTML = tableHtml;
+    document.getElementById('find-students-btn').addEventListener('click', () => {
+        const subjectId = document.getElementById('reverse-subject-select').value;
+        const grade = document.getElementById('reverse-grade-select').value;
+        const resultDiv = document.getElementById('reverse-lookup-results');
+        
+        let allStudentIds = [];
+        divisions.forEach(div => {
+            const studentIdsInDiv = subjectGradeData[subjectId]?.[grade]?.[div] || [];
+            allStudentIds.push(...studentIdsInDiv);
+        });
 
-    // Render the chart
-    renderGradeDistributionChart(gradeCounts, gradeScale, chartCanvas);
+        if (allStudentIds.length === 0) {
+            resultDiv.innerHTML = `<p class="text-muted">No students found with grade ${grade} in this subject.</p>`;
+            return;
+        }
+
+        const studentList = [...new Set(allStudentIds)].map(id => students.find(s => s.id === id))
+            .sort((a,b) => a.name.localeCompare(b.name));
+
+        resultDiv.innerHTML = `<ul class="list-group">${studentList.map(s => `<li class="list-group-item">${s.name} (${s.admissionNumber}) - Div: ${s.division}</li>`).join('')}</ul>`;
+    });
+}
+/**
+ * Helper function to show a list of students in the modal popup.
+ */
+function showStudentsInModal(subjectId, grade, division, data) {
+    const studentIds = data[subjectId]?.[grade]?.[division] || [];
+    const subjectName = subjects.find(s => s.id === subjectId)?.name || 'Unknown Subject';
+    
+    const modalTitle = document.getElementById('studentListModalLabel');
+    const modalBody = document.getElementById('studentListModalBody');
+    const modal = new bootstrap.Modal(document.getElementById('studentListModal'));
+
+    modalTitle.textContent = `Students with grade '${grade}' in ${subjectName} (Div: ${division})`;
+
+    if (studentIds.length === 0) {
+        modalBody.innerHTML = '<p>No students found.</p>';
+    } else {
+        const studentList = studentIds.map(id => students.find(s => s.id === id))
+            .sort((a,b) => a.name.localeCompare(b.name));
+        modalBody.innerHTML = `
+            <ul class="list-group">
+                ${studentList.map(s => `<li class="list-group-item">${s.name} (${s.admissionNumber})</li>`).join('')}
+            </ul>`;
+    }
+
+    modal.show();
 }
 
 /**
@@ -33938,9 +34140,7 @@ async function startMigration() {
         // 1. Fetch all marks for the selected exam that are in the OLD format.
         // The old format has a composite ID like 'examId_studentId_subjectId'.
         const oldMarksQuery = query(getCollectionRef('marks'),
-        where('examId', '==', examId),
-                where('classId', '==', '2025-2026_VII'),
-                where('division', '==', 'C')
+        where('examId', '==', examId)
     );
         const querySnapshot = await getDocs(oldMarksQuery);
         const oldMarks = querySnapshot.docs.map(doc => doc.data());
