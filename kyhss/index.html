@@ -780,6 +780,11 @@
 <script src="https://cdn.jsdelivr.net/npm/davidshimjs-qrcodejs/qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/pizzip@3.1.5/dist/pizzip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docxtemplater@3.47.1/build/docxtemplater.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+
     <script type="module">
       // Correct import for side effects
         
@@ -2254,9 +2259,46 @@ function showMainApp() {
     // navigateTo(initialViewId, false);
 }
 // Add all of these new functions to your main <script> block
+/**
+ * A self-contained alert function for external pages like the Judge's Portal.
+ * It creates and removes its own HTML, so it has no dependencies on the main app.
+ * @param {string} message - The message to display.
+ * @param {string} type - 'success', 'danger', or 'warning'.
+ */
+function showAlertForExternalPage(message, type = 'danger') {
+    const alertId = 'external-alert';
+    // Remove any existing alert
+    document.getElementById(alertId)?.remove();
+
+    const alertColor = type === 'success' ? 'bg-success' : type === 'warning' ? 'bg-warning text-dark' : 'bg-danger';
+    const alertIcon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-triangle';
+
+    const alertHtml = `
+        <div id="${alertId}" class="position-fixed top-0 start-50 translate-middle-x p-3" style="z-index: 2050;">
+            <div class="alert ${alertColor} text-white d-flex align-items-center shadow-lg" role="alert">
+                <i class="fas ${alertIcon} me-2"></i>
+                <div>${message}</div>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', alertHtml);
+    const alertEl = document.getElementById(alertId);
+
+    // Automatically remove the alert after 4 seconds
+    setTimeout(() => {
+        alertEl?.remove();
+    }, 4000);
+}
+
+
+// =========================================================================
+// --- 2. UPDATED JUDGING MODULE FUNCTIONS ---
+// =========================================================================
 
 /**
- * Checks the URL hash for #fest-judge and renders the judging login page if found.
+ * Checks the URL for judge mode, fetches only the necessary data, and then
+ * calls the main rendering function which handles the rest of the logic.
  * @returns {Promise<boolean>} True if the app is in judging mode, false otherwise.
  */
 async function checkForJudgingMode() {
@@ -2266,11 +2308,21 @@ async function checkForJudgingMode() {
         const eventId = params.get('event');
 
         if (festId && eventId) {
+            document.body.innerHTML = `<div class="vh-100 d-flex align-items-center justify-content-center"><div class="spinner-border text-primary"></div><p class="ms-3">Loading Scoring Sheet...</p></div>`;
+
             try {
-                // Fetch only the necessary data directly from Firestore
-                const festDoc = await getDoc(getDocRef('fests', festId));
-                const eventDoc = await getDoc(getDocRef('festEvents', eventId));
-                
+                // Fetch all necessary data in parallel
+                const festDocPromise = getDoc(getDocRef('fests', festId));
+                const eventDocPromise = getDoc(getDocRef('festEvents', eventId));
+                const housesPromise = getDocs(getCollectionRef('festHouses'));
+                const participantsQuery = query(getCollectionRef('festRegistrations'), where('festId', '==', festId), where('events', 'array-contains', eventId));
+                const participantsPromise = getDocs(participantsQuery);
+                const groupsPromise = getDocs(getCollectionRef('festGroups'));
+
+                const [festDoc, eventDoc, housesSnapshot, participantsSnapshot, groupsSnapshot] = await Promise.all([
+                    festDocPromise, eventDocPromise, housesPromise, participantsPromise, groupsPromise
+                ]);
+
                 if (!festDoc.exists() || !eventDoc.exists()) {
                     document.body.innerHTML = `<div class="alert alert-danger m-5">Error: Invalid Fest or Event ID in the link.</div>`;
                     return true;
@@ -2278,11 +2330,14 @@ async function checkForJudgingMode() {
 
                 const festData = { id: festDoc.id, ...festDoc.data() };
                 const eventData = { id: eventDoc.id, ...eventDoc.data() };
+                const housesData = housesSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                const participantsData = participantsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                const groupsData = groupsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
-                // Hide the main app and show the special judging login page
-                document.getElementById('app-container').style.display = 'none';
-                renderJudgingLoginPage(festData, eventData);
-                return true; // We are in judging mode
+                // Recreate the basic app shell and render the sheet
+                document.body.innerHTML = '<div id="app-container" style="display: block;"><main id="main-content"></main></div>';
+                renderJudgingSheet(festData, eventData, participantsData, housesData, groupsData);
+                return true;
 
             } catch (error) {
                 console.error("Error fetching data for judging mode:", error);
@@ -2294,198 +2349,145 @@ async function checkForJudgingMode() {
     return false; // Not in judging mode
 }
 
-/**
- * Renders the special login page for a judge.
- */
-function renderJudgingLoginPage(festData, eventData) {
-    const judgeLoginDiv = document.createElement('div');
-    judgeLoginDiv.id = 'fest-judge-login-screen';
-    judgeLoginDiv.className = 'vh-100 d-flex align-items-center justify-content-center bg-light';
-    
-    judgeLoginDiv.innerHTML = `
-        <div class="card shadow-lg" style="width: 100%; max-width: 420px;">
-            <div class="card-body p-5">
-                <div class="text-center mb-4">
-                    <i class="fas fa-gavel fa-3x text-primary"></i>
-                    <h1 class="mt-3 h3 fw-bold">Judge's Portal</h1>
-                    <p class="text-muted">Event: <strong>${eventData.name}</strong></p>
-                </div>
-                <form id="fest-judge-login-form">
-                    <div class="mb-3">
-                        <label class="form-label">Enter Your Judge Code</label>
-                        <input type="password" id="fest-judge-code" class="form-control form-control-lg text-center" required>
-                    </div>
-                    <div class="d-grid mt-4">
-                        <button type="submit" class="btn btn-primary btn-lg">Access Scoring Sheet</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(judgeLoginDiv);
-
-    document.getElementById('fest-judge-login-form').addEventListener('submit', (e) => {
-        e.preventDefault();
-        handleJudgeLogin(festData, eventData);
-    });
-}
 
 /**
- * Validates the judge's code and renders the scoring sheet on success.
+ * Renders the digital scoring sheet OR the submitted results for an event.
+ * @param {object} festData - The full fest object.
+ * @param {object} eventData - The full event object.
+ * @param {Array} participants - The pre-filtered list of participants for this event.
+ * @param {Array} houses - The list of all fest houses.
+ * @param {Array} groups - The list of all fest groups.
  */
-async function handleJudgeLogin(festData, eventData) {
-    const enteredCode = document.getElementById('fest-judge-code').value.trim().toUpperCase();
-    const validCodes = festData.judgeCodes || [];
-
-    const judge = validCodes.find(j => j.code === enteredCode);
-
-    if (judge) {
-        showAlert('Login successful!', 'success');
-        document.getElementById('fest-judge-login-screen').remove();
-        document.getElementById('app-container').style.display = 'block'; // Show the main container again
-        renderJudgingSheet(festData, eventData, judge);
-    } else {
-        showAlert('Invalid Judge Code. Please try again.', 'danger');
-    }
-}
-
-/**
- * Renders the actual digital scoring sheet for the judge.
- */
-async function renderJudgingSheet(festData, eventData, judge) {
+async function renderJudgingSheet(festData, eventData, participants, houses, groups) {
     const mainContent = document.getElementById('main-content');
     mainContent.innerHTML = `<div class="container py-4"><div id="judging-sheet-content">Loading...</div></div>`;
     const container = document.getElementById('judging-sheet-content');
 
-    // Check if results have already been submitted
+    // 1. Check if results have already been submitted
     const resultDoc = await getDoc(getDocRef('festResults', `${festData.id}_${eventData.id}`));
     if (resultDoc.exists()) {
+        const results = resultDoc.data().results || [];
         container.innerHTML = `
             <div class="alert alert-info text-center">
                 <h4 class="alert-heading">Results Already Submitted</h4>
-                <p>The results for this event have been finalized and cannot be changed from this page.</p>
-                <p class="mb-0">Thank you for your contribution.</p>
+                <p>The results for <strong>${eventData.name}</strong> have been finalized.</p>
+                <hr>
+                <h5 class="mt-3">Submitted Rankings:</h5>
+                <ul class="list-group">
+                    ${results.map(r => {
+                        const participantName = r.studentId
+                            ? participants.find(p => p.studentId === r.studentId)?.studentName
+                            : groups.find(g => g.id === r.groupId)?.name;
+                        return `<li class="list-group-item"><strong>${r.position}${r.position === 1 ? 'st' : r.position === 2 ? 'nd' : 'rd'} Place:</strong> ${participantName || 'Unknown'}</li>`;
+                    }).join('')}
+                </ul>
             </div>`;
         return;
     }
 
-    // Fetch participants for this event
-    const q = query(getCollectionRef('festRegistrations'), where('festId', '==', festData.id), where('events', 'array-contains', eventData.id));
-    const snapshot = await getDocs(q);
-    const participants = snapshot.docs.map(doc => doc.data());
-    
+    // 2. If no results, render the scoring sheet
     if (participants.length === 0) {
         container.innerHTML = `<div class="alert alert-warning">No participants found for this event.</div>`;
         return;
     }
+    
+    let participantsToDisplay = eventData.isGroupEvent 
+        ? [...new Set(participants.map(p => groups.find(g => g.members.some(m => m.studentId === p.studentId))?.id).filter(Boolean))].map(id => groups.find(g=>g.id===id))
+        : participants;
 
-    const positionOptions = `
-        <option value="0">-- Position --</option>
-        <option value="1">1st Place</option>
-        <option value="2">2nd Place</option>
-        <option value="3">3rd Place</option>
-    `;
-
+    const positionOptions = `<option value="0">-- Position --</option><option value="1">1st</option><option value="2">2nd</option><option value="3">3rd</option>`;
+    
     container.innerHTML = `
-        <div class="text-center">
-            <h3>${eventData.name}</h3>
-            <p class="text-muted">Scoring Sheet for ${judge.name}</p>
-        </div>
+        <div class="text-center"><h3>${eventData.name}</h3><p class="text-muted">Digital Scoring Sheet</p></div>
         <div class="table-responsive mt-4">
             <table class="table" id="judging-table">
-                <thead><tr><th>Participant</th><th>Chest No.</th><th>House</th><th>Position</th></tr></thead>
+                <thead><tr><th>Participant</th><th>Chest No. / Captain</th><th>House</th><th>Position</th></tr></thead>
                 <tbody>
-                    ${participants.map(p => `
-                        <tr data-participant-id="${p.isGroup ? p.groupId : p.studentId}" data-is-group="${p.isGroup || false}">
-                            <td><strong>${p.studentName || p.groupName}</strong></td>
-                            <td>${p.chestNo || 'N/A'}</td>
-                            <td>${festHouses.find(h => h.id === p.houseId)?.name || 'N/A'}</td>
-                            <td><select class="form-select position-select">${positionOptions}</select></td>
-                        </tr>
-                    `).join('')}
+                    ${participantsToDisplay.map(p => {
+                        const isGroup = eventData.isGroupEvent;
+                        const participantId = isGroup ? p.id : p.studentId;
+                        const participantName = isGroup ? p.name : p.studentName;
+                        const house = houses.find(h => h.id === p.houseId);
+                        let subtext = isGroup ? `Captain: ${students.find(s => s.id === p.members.find(m=>m.role==='Captain')?.studentId)?.name || 'N/A'}` : p.chestNo || 'N/A';
+                        return `
+                        <tr data-participant-id="${participantId}" data-is-group="${isGroup}">
+                            <td><strong>${participantName}</strong></td><td>${subtext}</td>
+                            <td>${house?.name || 'N/A'}</td><td><select class="form-select position-select">${positionOptions}</select></td>
+                        </tr>`;
+                    }).join('')}
                 </tbody>
             </table>
         </div>
-        <div class="text-end mt-4">
-            <button class="btn btn-success btn-lg" onclick="window.saveJudgeResults('${festData.id}', '${eventData.id}', '${judge.code}')">
-                Submit Final Results
-            </button>
+        <div class="text-end mt-4 pt-3 border-top">
+            <div class="mb-3">
+                <label for="judge-code-confirm" class="form-label fw-bold">Enter Your Judge Code to Submit:</label>
+                <input type="password" id="judge-code-confirm" class="form-control form-control-lg text-center" style="max-width: 300px; margin-left: auto;">
+            </div>
+            <button id="submit-results-btn" class="btn btn-success btn-lg">Submit Final Results</button>
         </div>
     `;
+    
+    document.getElementById('submit-results-btn').addEventListener('click', () => {
+        saveJudgeResults(festData, eventData, participants, groups);
+    });
 }
 
+
 /**
- * Saves the judge's scores to the database.
+ * Saves the judge's scores to the database after verifying the confirmation code.
  */
-window.saveJudgeResults = async (festId, eventId, judgeCode) => {
-    const event = festEvents.find(e => e.id === eventId);
+window.saveJudgeResults = async (festData, eventData, participants, groups) => {
+    const enteredCode = document.getElementById('judge-code-confirm').value.trim().toUpperCase();
+    const judge = (festData.judgeCodes || []).find(j => j.code === enteredCode);
+
+    if (!judge) {
+        return showAlertForExternalPage('The entered Judge Code is incorrect. Please try again.', 'danger');
+    }
+
     const resultsToSave = [];
     let hasDuplicatePosition = false;
-
     const selectedPositions = new Set();
+
     document.querySelectorAll('#judging-table .position-select').forEach(select => {
         const position = parseInt(select.value);
         if (position > 0) {
-            if (selectedPositions.has(position)) {
-                hasDuplicatePosition = true;
-            }
+            if (selectedPositions.has(position)) hasDuplicatePosition = false;
             selectedPositions.add(position);
             
             const row = select.closest('tr');
             const isGroup = row.dataset.isGroup === 'true';
             let points = 0;
             if (isGroup) {
-                if (position === 1) points = 10;
-                else if (position === 2) points = 5;
-                else if (position === 3) points = 3;
+                if (position === 1) points = 10; else if (position === 2) points = 5; else if (position === 3) points = 3;
             } else {
-                if (position === 1) points = 5;
-                else if (position === 2) points = 3;
-                else if (position === 1) points = 1;
+                if (position === 1) points = 5; else if (position === 2) points = 3; else if (position === 3) points = 1;
             }
 
-            const resultEntry = {
-                position: position,
-                points: points
-            };
-            if (isGroup) {
-                resultEntry.groupId = row.dataset.participantId;
-            } else {
-                resultEntry.studentId = row.dataset.participantId;
-            }
+            const resultEntry = { position, points };
+            if (isGroup) resultEntry.groupId = row.dataset.participantId;
+            else resultEntry.studentId = row.dataset.participantId;
             resultsToSave.push(resultEntry);
         }
     });
 
-    if (hasDuplicatePosition) {
-        return showAlert('Each position (1st, 2nd, 3rd) can only be assigned once. Please correct the selections.', 'danger');
-    }
-    if (resultsToSave.length === 0) {
-        return showAlert('Please assign at least one position before submitting.', 'warning');
-    }
-
+    if (hasDuplicatePosition) return showAlertForExternalPage('Each position (1st, 2nd, 3rd) can only be assigned once.', 'danger');
+    if (resultsToSave.length === 0) return showAlertForExternalPage('Please assign at least one position before submitting.', 'warning');
     if (!confirm('Are you sure you want to submit these results? This action is final.')) return;
 
-    const resultId = `${festId}_${eventId}`;
+    const resultId = `${festData.id}_${eventData.id}`;
     const resultData = {
-        id: resultId,
-        festId,
-        eventId,
-        results: resultsToSave.sort((a,b) => a.position - b.position), // Sort by position
-        judgedBy: judgeCode,
+        id: resultId, festId: festData.id, eventId: eventData.id,
+        results: resultsToSave.sort((a,b) => a.position - b.position),
+        judgedBy: judge.code,
         judgedAt: serverTimestamp()
     };
 
     try {
         await setDoc(getDocRef('festResults', resultId), resultData);
-        document.getElementById('judging-sheet-content').innerHTML = `
-            <div class="alert alert-success text-center">
-                <h4 class="alert-heading">Thank You!</h4>
-                <p>Results for <strong>${event.name}</strong> have been successfully submitted.</p>
-            </div>`;
+        renderJudgingSheet(festData, eventData, participants, groups, houses); // Re-render to show the "Already Submitted" view
     } catch (error) {
         console.error("Error submitting judge results:", error);
-        showAlert('Failed to submit results. Please check your connection and try again.', 'danger');
+        showAlertForExternalPage('Failed to submit results. Please try again.', 'danger');
     }
 };
 
@@ -16975,6 +16977,9 @@ const getReportsModuleHtml = () => `
                         <hr>
                         <div id="report-filters-container" class="mt-3"></div>
                         <div class="text-center mt-4"><button id="generate-report-btn" class="btn btn-primary btn-lg">Generate Final Report</button></div>
+                        <div id="report-output-section" class="mt-4">
+            </div>
+
                     </div>
                 </div>
             </div>
@@ -16988,6 +16993,7 @@ const getReportsModuleHtml = () => `
     
     ${createCustomFieldModal()}
     ${createRelatedFieldModal()}
+    
 `;
 /**
  * Creates the HTML for the Word Merge UI.
@@ -17003,16 +17009,27 @@ function getWordMergeUIHtml() {
                 Generate a Word document by merging your report data into a .docx template.
             </p>
             <div class="row g-3">
-                <div class="col-md-6">
-                    <label for="word-template-input" class="form-label">1. Upload your .docx Template</label>
-                    <input class="form-control" type="file" id="word-template-input" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
-                </div>
-                <div class="col-md-6 d-flex align-items-end">
-                    <button class="btn btn-primary w-100" id="generate-word-btn" disabled>
-                        <i class="fas fa-file-word me-2"></i>2. Generate & Download Document
-                    </button>
-                </div>
-            </div>
+    <div class="col-md-6">
+        <label for="word-template-input" class="form-label">1. Upload your .docx Template</label>
+        <input class="form-control" type="file" id="word-template-input" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+        <small id="word-template-name" class="form-text text-muted mt-1"></small>
+    </div>
+    <div class="col-md-6 d-flex align-items-end">
+        <button class="btn btn-info w-100" id="generate-preview-btn">
+            <i class="fas fa-eye me-2"></i>2. Generate Report Preview
+        </button>
+    </div>
+</div>
+
+<div id="download-section" class="text-center mt-4 d-none">
+    <hr>
+    <p class="fw-bold">Preview generated successfully. You can now download the document.</p>
+    <button class="btn btn-primary btn-lg" id="download-word-btn">
+        <i class="fas fa-file-word me-2"></i>3. Download as Word Document
+    </button>
+</div>
+
+<div id="report-preview-container" class="mt-4 table-responsive"></div>
             <hr>
             <div class="text-center">
                 <p class="mb-2 text-muted">Don't have a template? Get a sample based on your currently selected fields.</p>
@@ -17023,45 +17040,151 @@ function getWordMergeUIHtml() {
         </div>
     </div>
     `;
+
+// Make sure to call the new listener function when your page loads
+attachNewWordMergeListeners();
+
 }
 /**
  * Attaches event listeners for the Word Merge UI.
  */
-function attachWordMergeListeners() {
-    const templateInput = document.getElementById('word-template-input');
-    const generateBtn = document.getElementById('generate-word-btn');
-    const demoBtn = document.getElementById('download-demo-template-btn');
 
-    // Enable the generate button only when a template file is selected.
+ // A variable to hold the fetched data so we can reuse it
+let fetchedReportData = [];
+
+function attachNewWordMergeListeners() {
+    const templateInput = document.getElementById('word-template-input');
+    const templateNameEl = document.getElementById('word-template-name');
+    const previewBtn = document.getElementById('generate-preview-btn');
+    const downloadSection = document.getElementById('download-section');
+    const downloadBtn = document.getElementById('download-word-btn');
+
+    // --- Logic to show the selected filename ---
     templateInput?.addEventListener('change', () => {
         if (templateInput.files.length > 0) {
-            generateBtn.disabled = false;
+            templateNameEl.textContent = `Selected: ${templateInput.files[0].name}`;
         } else {
-            generateBtn.disabled = true;
+            templateNameEl.textContent = '';
         }
     });
 
-    // Handle the final document generation.
-    generateBtn?.addEventListener('click', async () => {
+    // --- Logic for the PREVIEW button ---
+    previewBtn?.addEventListener('click', async () => {
+        showAlert('Fetching report data...', 'info');
+        const config = getReportConfiguration();
+        
+        // Fetch the data and store it in our variable
+        fetchedReportData = await getReportData(config.collection, config);
+        
+        // Optional: Display the data in an HTML table preview
+        renderPreviewTable(fetchedReportData); 
+
+        showAlert('Preview generated. Ready to download.', 'success');
+        
+        // Show the download button
+        downloadSection.classList.remove('d-none');
+    });
+
+    // --- Logic for the DOWNLOAD button ---
+    downloadBtn?.addEventListener('click', async () => {
         const templateFile = templateInput.files[0];
         if (!templateFile) {
             return showAlert('Please select a template file first.', 'warning');
         }
         
-        showAlert('Generating Word document...', 'info');
-        const config = getReportConfiguration();
-        const reportData = await getReportData(config.collection, config);
-        
-        // This is the conceptual function from our previous discussion.
-        // You would need to add the 'docxtemplater' library to your project for this to work.
-        await generateWordDocument(templateFile, reportData);
+        // Use the ALREADY FETCHED data. No 'await' delay here!
+        // This direct action is what the browser will allow.
+        await generateWordDocument(templateFile, fetchedReportData);
     });
-
-    // Handle the demo template download.
-    demoBtn?.addEventListener('click', downloadDemoTemplate);
 }
 
+// Helper function to display a preview (optional but recommended)
+function renderPreviewTable(data) {
+    const container = document.getElementById('report-preview-container');
+    if (!data || data.length === 0) {
+        container.innerHTML = '<p class="text-center">No data to preview.</p>';
+        return;
+    }
+    const headers = Object.keys(data[0]);
+    const headerHtml = headers.map(h => `<th>${h}</th>`).join('');
+    const bodyHtml = data.map(row => {
+        const cells = headers.map(h => `<td>${row[h]}</td>`).join('');
+        return `<tr>${cells}</tr>`;
+    }).join('');
 
+    container.innerHTML = `
+        <table class="table table-bordered table-striped">
+            <thead><tr>${headerHtml}</tr></thead>
+            <tbody>${bodyHtml}</tbody>
+        </table>
+    `;
+}
+
+// Add this new function to your script.
+// It requires the 'pizzip' and 'docxtemplater' libraries to be loaded.
+
+/**
+ * Generates and downloads a Word document by merging report data with a user-provided template.
+ * @param {File} templateFile The .docx template file uploaded by the user.
+ * @param {Array<Object>} reportData An array of objects representing the report's data rows.
+ */
+async function generateWordDocument(templateFile, reportData) {
+    // Check if a template file was provided.
+    if (!templateFile) {
+        return showAlert('No template file selected.', 'warning');
+    }
+
+    const reader = new FileReader();
+
+    // This function runs if the file can't be read.
+    reader.onerror = function(error) {
+        console.error('FileReader error:', error);
+        showAlert('Error: Failed to read the template file.', 'danger');
+    };
+
+    // This function runs when the file has been successfully read into memory.
+    reader.onload = function(e) {
+        try {
+            // Get the binary content of the file.
+            const content = e.target.result;
+
+            // Unzip the .docx content (a .docx is a zip file).
+            const zip = new PizZip(content);
+
+            // Create a docxtemplater instance from the unzipped content.
+            const doc = new docxtemplater(zip, {
+                paragraphLoop: true,
+                linebreaks: true,
+            });
+
+            // Set the data for the template. The key 'data' must match your template loop tag, e.g., {#data}.
+            doc.setData({
+                data: reportData
+            });
+
+            // Perform the data substitution. This is where errors from a bad template can occur.
+            doc.render();
+
+            // Generate the final document as a binary blob.
+            const out = doc.getZip().generate({
+                type: 'blob',
+                mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            });
+
+            // Provide feedback and trigger the download using FileSaver.js.
+            showAlert('Document generated. Your download will begin shortly...', 'info');
+            saveAs(out, 'Generated_Report.docx');
+
+        } catch (error) {
+            // Catch errors from PizZip or docxtemplater (e.g., a corrupted template).
+            console.error('Docxtemplater error:', error);
+            showAlert(`Error: Could not generate document. Check the template for errors. Details: ${error.message}`, 'danger');
+        }
+    };
+
+    // Start the file reading process.
+    reader.readAsBinaryString(templateFile);
+}
 /**
  * Generates and downloads a basic Word template containing placeholders
  * for all currently selected fields.
@@ -17137,6 +17260,8 @@ function attachAllModuleListeners() {
         selectedFieldsList.addEventListener('change', handleSelectedFieldInputs);
         initializeDragAndDrop(selectedFieldsList);
     }
+
+    attachNewWordMergeListeners();
 }
 
 /**
@@ -17926,19 +18051,31 @@ function createCardsLayout(data, selectedFields) {
     
     return cardsHtml;
 }
-async function generateAndRenderReport() {
+/**
+ * Asynchronously generates and renders a report into the UI.
+ * It handles loading states, configuration checks, and data fetching errors.
+ */
+window.generateAndRenderReport = async () => {
+    // 1. Find the main container for the report. Exit if it's not on the page.
     const outputSection = document.getElementById('report-output-section');
-    if (!outputSection) return;
+    if (!outputSection) {
+        console.error('Error: Report output section not found.');
+        return;
+    }
 
+    // 2. Get the report name from the input field, with a fallback default.
     const reportName = document.getElementById('report-name')?.value || 'Generated Report';
-    
+
+    // 3. Dynamically create the appropriate "Save" button based on context.
+    // Using a separate variable makes the main HTML template cleaner.
     const saveButtonHtml = currentLoadedReport ? `
         <div class="btn-group">
             <button id="update-report-config-btn" class="btn btn-success"><i class="fas fa-save me-2"></i>Update</button>
             <button id="save-as-new-report-btn" class="btn btn-outline-success"><i class="fas fa-plus me-2"></i>Save as New</button>
         </div>` : `<button id="save-report-config-btn" class="btn btn-success"><i class="fas fa-save me-2"></i>Save Config</button>`;
 
-    outputSection.innerHTML = `
+    // 4. Define the report's HTML structure.
+    const reportShellHtml = `
         <div class="card shadow">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center mb-3 no-print">
@@ -17952,23 +18089,37 @@ async function generateAndRenderReport() {
                 <div id="report-content-container" class="table-responsive"></div>
             </div>
         </div>`;
-    
-    const contentContainer = document.getElementById('report-content-container');
-    const reportTitleEl = document.getElementById('report-output-title');
 
-    outputSection.classList.remove('d-none');
+    // 5. Inject the HTML and get references to the newly created elements.
+    outputSection.innerHTML = reportShellHtml;
+    
+    // **THE FIX**: Query within 'outputSection' to reliably find the new elements.
+    const contentContainer = outputSection.querySelector('#report-content-container');
+    const reportTitleEl = outputSection.querySelector('#report-output-title');
+
+    // 6. Set the title and show a loading spinner to the user.
     reportTitleEl.textContent = reportName;
     contentContainer.innerHTML = `<div class="text-center p-5"><div class="spinner-border text-primary"></div><p class="mt-2">Generating report...</p></div>`;
+    outputSection.classList.remove('d-none'); // Make the whole section visible.
 
-    const config = getReportConfiguration();
-    if (!config) {
-        contentContainer.innerHTML = '<p class="text-danger">Could not generate report due to missing configuration.</p>';
-        return;
+    // 7. Get data and render the report, with robust error handling.
+    try {
+        const config = getReportConfiguration();
+        if (!config) {
+            // Create a specific error for bad configuration.
+            throw new Error('Report configuration is missing or invalid.');
+        }
+
+        const data = await getReportData(config.collection, config);
+        
+        // This function is now only responsible for rendering the final data.
+        renderReportOutput(data, config); 
+    } catch (error) {
+        console.error('Failed to generate report:', error);
+        // Display a user-friendly error message inside the report content area.
+        contentContainer.innerHTML = `<div class="alert alert-danger"><strong>Failed to generate report:</strong> ${error.message}</div>`;
     }
-    
-    const data = await getReportData(config.collection, config);
-    renderReportOutput(data, config);
-}
+};
 
 /**
  * Downloads the current report data as a CSV file.
@@ -20110,52 +20261,80 @@ window.renderFestManagement = () => {
 // =========================================================================
 
 /**
- * Renders the "Data Entry Links" tab for the Fest Manager.
+ * Renders the "Data Entry Links" tab, now with unique, direct-access links for each judge.
  */
 function renderFestDataEntryLinksTab() {
     const container = document.getElementById('fest-data-entry');
     if (!container || !state.managingFest) return;
 
     const housePasswords = state.managingFest.housePasswords || {};
+    const judgeCodes = state.managingFest.judgeCodes || [];
+    const festId = state.managingFest.id;
 
-    container.innerHTML = `
-        <h5 class="section-header"><i class="fas fa-key me-2"></i>Manage Data Entry Access</h5>
-        <p class="text-muted">Set a password for each house to grant them access to a simplified participant entry page for this fest. Share the generated link with the house captain.</p>
+    // --- HTML for House Captain Links (Unchanged) ---
+    const houseLinksHtml = `
+        <h5 class="section-header mt-4"><i class="fas fa-key me-2"></i>Manage House Captain Access</h5>
         <div class="table-responsive">
             <table class="table">
-                <thead>
-                    <tr>
-                        <th>House</th>
-                        <th>Set Password</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
+                <thead><tr><th>House</th><th>Set Password</th><th>Actions</th></tr></thead>
                 <tbody>
                     ${festHouses.map(house => `
                         <tr data-house-id="${house.id}">
-                            <td class="align-middle">
-                                <span class="color-dot-display" style="background-color:${house.color};"></span>
-                                <strong>${house.name}</strong>
-                            </td>
-                            <td>
-                                <div class="input-group">
-                                    <input type="text" class="form-control house-password-input" placeholder="Enter password..." value="${housePasswords[house.id] || ''}">
-                                    <button class="btn btn-outline-primary" onclick="window.saveHousePassword('${state.managingFest.id}', '${house.id}')">Save</button>
-                                </div>
-                            </td>
-                            <td>
-                                <button class="btn btn-secondary" onclick="window.copyShareableLink('${state.managingFest.id}', '${house.id}')" ${!housePasswords[house.id] ? 'disabled' : ''}>
-                                    <i class="fas fa-copy me-2"></i>Copy Link
-                                </button>
-                            </td>
-                        </tr>
-                    `).join('')}
+                            <td class="align-middle"><strong>${house.name}</strong></td>
+                            <td><div class="input-group"><input type="text" class="form-control house-password-input" value="${housePasswords[house.id] || ''}"><button class="btn btn-outline-primary" onclick="window.saveHousePassword('${festId}', '${house.id}')">Save</button></div></td>
+                            <td><button class="btn btn-secondary" onclick="window.copyShareableLink('${festId}', '${house.id}')" ${!housePasswords[house.id] ? 'disabled' : ''}><i class="fas fa-copy me-2"></i>Copy Link</button></td>
+                        </tr>`).join('')}
                 </tbody>
             </table>
-        </div>
-    `;
-}
+        </div>`;
 
+    // --- NEW: HTML for Judge Links ---
+    const judgeLinksHtml = `
+        <h5 class="section-header mt-5"><i class="fas fa-gavel me-2"></i>Generate Judge Scoring Links</h5>
+        <p class="text-muted small">Select an event and copy the unique link for each judge. The link includes their secret code, so they will not need to log in.</p>
+        <div class="row g-2 align-items-end">
+            <div class="col-md-8">
+                <label for="judge-link-event-select" class="form-label">Select Event</label>
+                <select id="judge-link-event-select" class="form-select">
+                    <option value="">-- Choose an event --</option>
+                    ${festEvents.filter(e => e.festId === festId).sort((a,b) => a.name.localeCompare(b.name)).map(e => `<option value="${e.id}">${e.name}</option>`).join('')}
+                </select>
+            </div>
+        </div>
+        <div id="judge-links-list" class="mt-3"></div>
+    `;
+
+    container.innerHTML = houseLinksHtml + judgeLinksHtml;
+
+    // --- Add listener for the new event selector ---
+    document.getElementById('judge-link-event-select').addEventListener('change', (e) => {
+        const eventId = e.target.value;
+        const listContainer = document.getElementById('judge-links-list');
+        if (!eventId) {
+            listContainer.innerHTML = '';
+            return;
+        }
+
+        if (judgeCodes.length === 0) {
+            listContainer.innerHTML = '<p class="text-warning">No judge codes have been created. Please add them in the "Setup" tab first.</p>';
+            return;
+        }
+
+        listContainer.innerHTML = `
+            <ul class="list-group">
+                ${judgeCodes.map(judge => {
+                    const judgeLink = `${window.location.href.split('#')[0]}#fest-judge?fest=${festId}&event=${eventId}&code=${judge.code}`;
+                    return `
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span><strong>${judge.name}</strong> (Code: ${judge.code})</span>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="navigator.clipboard.writeText('${judgeLink}'); showAlert('Link for ${judge.name} copied!', 'success');">
+                            <i class="fas fa-copy me-2"></i>Copy Link
+                        </button>
+                    </li>`;
+                }).join('')}
+            </ul>`;
+    });
+}
 /**
  * Saves the password for a specific house for the current fest.
  * @param {string} festId - The ID of the fest.
@@ -27615,20 +27794,17 @@ function generateAnnouncementSheetHTML(festId, selectedEventIds) {
 // Find your printEventResultSheet function and replace it with this version:
 
 /**
- * Generates and prints the result sheet(s) with QR codes.
- * This version adds user feedback and a check for the QR code library.
+ * Generates and prints the result sheet(s) with QR codes, now using a reliable
+ * callback to ensure QR codes are rendered before printing.
  */
 window.printEventResultSheet = function() {
-    // Safety check for the QR Code library
     if (typeof QRCode === 'undefined') {
-        showAlert('QR Code library is not available. Cannot generate sheets.', 'danger');
-        console.error("QRCode.js library not found. Please ensure it's loaded.");
-        return;
+        return showAlert('QR Code library is not available.', 'danger');
     }
-
     if (!state.managingFest) {
         return showAlert('Please select a fest first.', 'warning');
     }
+
     const festId = state.managingFest.id;
     const selectedEventIds = Array.from(document.getElementById('report-event-multiselect').selectedOptions).map(opt => opt.value);
 
@@ -27636,9 +27812,9 @@ window.printEventResultSheet = function() {
         return showAlert('Please select at least one event.', 'warning');
     }
     
-    // Provide user feedback that the process has started
     showAlert(`Generating ${selectedEventIds.length} result sheet(s)...`, 'info');
 
+    // 1. Generate the HTML with only the placeholders for the QR codes
     let allSheetsHtml = '';
     selectedEventIds.forEach(eventId => {
         const singleSheetHtml = generateEventResultSheetHTML(festId, eventId);
@@ -27649,20 +27825,24 @@ window.printEventResultSheet = function() {
 
     if (!allSheetsHtml) return;
 
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = allSheetsHtml;
-    
-    tempDiv.querySelectorAll('.qr-code-placeholder').forEach(placeholder => {
-        const eventId = placeholder.dataset.eventId;
-        const judgeUrl = `${window.location.href.split('#')[0]}#fest-judge?fest=${festId}&event=${eventId}`;
-        new QRCode(placeholder, {
-            text: judgeUrl,
-            width: 100,
-            height: 100,
-            correctLevel: QRCode.CorrectLevel.H
+    // --- THIS IS THE FIX ---
+    // 2. Define the callback function that will generate the QR codes
+    const generateQRCodesInPrintWindow = (pWindow) => {
+        pWindow.document.querySelectorAll('.qr-code-placeholder').forEach(placeholder => {
+            const eventId = placeholder.dataset.eventId;
+            const judgeUrl = `${window.location.href.split('#')[0]}#fest-judge?fest=${festId}&event=${eventId}`;
+            
+            // This 'new QRCode()' will now run inside the print window's context
+            new pWindow.QRCode(placeholder, {
+                text: judgeUrl,
+                width: 100,
+                height: 100,
+                correctLevel: QRCode.CorrectLevel.H
+            });
         });
-    });
-
+    };
+    
+    // 3. Call the print utility, passing in the HTML and the new callback function
     const extraCss = `
         .printable-page { page-break-after: always; }
         .printable-page:last-child { page-break-after: avoid; }
@@ -27671,8 +27851,9 @@ window.printEventResultSheet = function() {
     `;
 
     printReport({ 
-        contentHtml: tempDiv.innerHTML,
+        contentHtml: allSheetsHtml,
         title: `Result_Sheets_${state.managingFest.name}`, 
+        onLoadCallback: generateQRCodesInPrintWindow, // Pass the function here
         extraCss 
     });
 }
@@ -29846,20 +30027,20 @@ function generateAndPrintSeatingPlanSummary(examId, date, reportType, classIdFil
 }
 
 /**
- * A robust, centralized function for printing HTML content in a new window.
- * Handles custom headers, styles, and waits for content to load before printing.
+ * A generic and reliable utility to print HTML content in a new window,
+ * with a callback that runs after the content is loaded, ensuring all
+ * dynamic elements like QR codes are rendered before printing.
+ *
  * @param {object} options - The printing options.
- * @param {string} options.contentHtml - The HTML string of the main content to print.
- * @param {string} options.title - The title of the document.
- * @param {string} [options.customHeaderHtml=''] - Optional HTML for a header.
- * @param {string} [options.extraCss=''] - Optional additional CSS styles.
- * @param {string} [options.pageSize='A4 portrait'] - Page size and orientation.
+ * @param {string} options.contentHtml - The main HTML content to print.
+ * @param {string} options.title - The document title.
+ * @param {function} [options.onLoadCallback=null] - A function to run inside the new window once it loads.
+ * @param {string} [options.extraCss=''] - Any additional CSS styles for the printout.
  */
-function printReport({ contentHtml, title, customHeaderHtml = '', extraCss = '', pageSize = 'A4 portrait' }) {
+function printReport({ contentHtml, title, onLoadCallback = null, extraCss = '' }) {
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
-        showAlert('Please allow pop-ups to generate reports.', 'warning');
-        return;
+        return showAlert('Please allow pop-ups for printing.', 'warning');
     }
 
     printWindow.document.write(`
@@ -29867,39 +30048,37 @@ function printReport({ contentHtml, title, customHeaderHtml = '', extraCss = '',
         <html lang="en">
         <head>
             <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>${title}</title>
             <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+            <script src="https://cdn.jsdelivr.net/npm/davidshimjs-qrcodejs/qrcode.min.js"><\/script>
             <style>
-                body { 
-                    font-family: 'Inter', sans-serif; 
-                    margin: 0;
-                }
-                @page {
-                    size: ${pageSize};
-                    margin: 0.5cm;
-                }
-                @media print {
-                    body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-                    .no-print { display: none !important; }
-                    .hall-ticket-page, .room-summary-item, .qp-label, .room-label {
-                        page-break-inside: avoid;
-                    }
-                }
+                body { font-family: 'Inter', sans-serif; -webkit-print-color-adjust: exact !important; color-adjust: exact !important; }
+                @page { size: A4 portrait; margin: 1cm; }
+                .table { border-collapse: collapse !important; }
+                th, td { border: 1px solid #dee2e6 !important; padding: .4rem .4rem; }
+                .no-print { display: none !important; }
                 ${extraCss}
             </style>
         </head>
-        <body>
-            ${customHeaderHtml ? `<header>${customHeaderHtml}</header>` : ''}
-            <main>${contentHtml}</main>
-        </body>
+        <body>${contentHtml}</body>
         </html>
     `);
 
     printWindow.document.close();
+
+    // This is the crucial part: wait for the content to fully load
     printWindow.onload = function() {
-        printWindow.focus();
+        // If a callback was provided, run it now inside the new window's context
+        if (onLoadCallback) {
+            onLoadCallback(printWindow);
+        }
+        
+        // Use a small timeout to ensure the browser has time to render the QR codes
+        setTimeout(() => {
+            printWindow.focus();
+            printWindow.print();
+            printWindow.close();
+        }, 250); // A 250ms delay is usually enough
     };
 }
 /**
@@ -35743,6 +35922,12 @@ function printContentOfDiv(divId, title = 'Report', options = {}) {
 <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script> 
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.5.13/dist/cropper.min.js"></script>
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pizzip/3.1.5/pizzip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/docxtemplater/3.47.1/docxtemplater.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.0/FileSaver.min.js"></script>
+
 
 </body>
 </html>
