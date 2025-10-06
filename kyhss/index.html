@@ -1080,6 +1080,7 @@ function waitForCollectionLoad(collectionName) {
   { id: 'holiday-mgt', icon: 'fa-calendar-alt', text: 'Holiday Management' },
   { id: 'syllabus-tracker', icon: 'fa-tasks', text: 'Syllabus Tracker' },
   { id: 'form-mgt', icon: 'fa-wpforms', text: 'Form Creator' },
+  { id: 'classwise-forms', icon: 'fa-edit', text: 'ClassWiseEntry' },
   { id: 'reports', icon: 'fa-chart-bar', text: 'Reports' }, // <-- ADD THIS LINE
   { id: 'school-details', icon: 'fa-university', text: 'School Details' }, // <-- ADD THIS
   { id: 'vehicle-mgt', icon: 'fa-bus', text: 'Vehicle Mgt' }, // <-- ADD THIS LINE
@@ -6824,7 +6825,9 @@ const exportReportToPdf = (examId) => {
     showAlert('PDF export successful!', 'success');
 };
 
-// Reverted and enhanced version of renderExamScheduleTab
+/**
+ * Renders the main UI for the "Schedule" tab with multi-division checkbox selection.
+ */
 function renderExamScheduleTab() {
     const container = document.getElementById('schedule');
     if (!container) return;
@@ -6870,7 +6873,6 @@ function renderExamScheduleTab() {
         }
     };
 
-    // This event listener now filters divisions based on teacher's allocation
     classSelect.addEventListener('change', () => {
         const selectedClassId = classSelect.value;
         divisionContainer.innerHTML = '';
@@ -6879,7 +6881,7 @@ function renderExamScheduleTab() {
         if (currentUserRole === 'teacher') {
             const teacherAllocationsForClass = classroomSubjects.filter(cs => cs.teacherId === selectedUser.id && cs.classId === selectedClassId);
             divisionsToShow = [...new Set(teacherAllocationsForClass.map(a => a.division))];
-        } else { // For admin
+        } else {
             const cls = classes.find(c => c.id === selectedClassId);
             if (cls) divisionsToShow = cls.divisions;
         }
@@ -6897,53 +6899,39 @@ function renderExamScheduleTab() {
     divisionContainer.addEventListener('change', updateScheduleView);
     examSelect.addEventListener('change', updateScheduleView);
     
-    // Initial population of divisions for the first class
     if (classSelect.options.length > 0) {
         classSelect.dispatchEvent(new Event('change'));
-    } else if (currentUserRole === 'teacher') {
-        // Display a message if the teacher has no classes assigned
-        document.getElementById('schedule-sheet').innerHTML = `<p class="text-center p-5 text-muted">You have no classes allocated to schedule exams.</p>`;
     }
 }
 
-// Reverted and enhanced version of loadScheduleSheet
+/**
+ * Loads the scheduling data entry table for a class, applying the data to all selected divisions.
+ */
 async function loadScheduleSheet(examId, classId, divisions) {
     const container = document.getElementById('schedule-sheet');
-    container.innerHTML = `<div class="text-center p-5"><div class="spinner-border text-primary" role="status"></div></div>`;
+    container.innerHTML = `<div class="text-center p-5"><div class="spinner-border text-primary"></div></div>`;
 
     const selectedExam = exams.find(ex => ex.id === examId);
-
-    // --- NEW: Role-based filtering logic ---
     const subjectIds = new Set();
     let relevantSubjects;
 
-    // Check if the user is an admin or has the 'exam_controller' role
-    const isAdminOrController = currentUserRole === 'admin' || (currentUserRole === 'teacher' && selectedUser.roles && selectedUser.roles.includes('exam_controller'));
+    const isAdminOrController = currentUserRole === 'admin' || (currentUserRole === 'teacher' && selectedUser.roles?.includes('exam_controller'));
 
     if (isAdminOrController) {
-        // Admins/Controllers see all subjects for the selected class and division(s)
-        relevantSubjects = classroomSubjects.filter(cs =>
-            cs.classId === classId && divisions.includes(cs.division)
-        );
+        relevantSubjects = classroomSubjects.filter(cs => cs.classId === classId && divisions.includes(cs.division));
     } else {
-        // Teachers only see subjects they are personally allocated to
-        relevantSubjects = classroomSubjects.filter(cs =>
-            cs.classId === classId &&
-            cs.teacherId === selectedUser.id &&
-            divisions.includes(cs.division)
-        );
+        relevantSubjects = classroomSubjects.filter(cs => cs.classId === classId && cs.teacherId === selectedUser.id && divisions.includes(cs.division));
     }
 
     relevantSubjects.forEach(cs => subjectIds.add(cs.subjectId));
-    // --- End of new logic ---
-
-    const allocatedSubjects = Array.from(subjectIds).map(id => subjects.find(s => s.id === id)).filter(Boolean);
+    const allocatedSubjects = Array.from(subjectIds).map(id => subjects.find(s => s.id === id)).filter(Boolean).sort((a,b)=>a.name.localeCompare(b.name));
 
     if (allocatedSubjects.length === 0) {
-        container.innerHTML = `<div class="alert alert-warning">No subjects are allocated for this class/division combination that match your permissions.</div>`;
+        container.innerHTML = `<div class="alert alert-warning">No subjects allocated for this combination that match your permissions.</div>`;
         return;
     }
 
+    // Pre-fill the form using the schedule from the FIRST selected division
     const existingSchedules = examSchedules.filter(s => s.examId === examId && s.classId === classId && s.division === divisions[0]);
 
     let tableHTML = `
@@ -6951,34 +6939,19 @@ async function loadScheduleSheet(examId, classId, divisions) {
         <div class="table-responsive">
             <table id="schedule-table" class="table table-bordered table-sm">
                 <thead class="table-light">
-                    <tr>
-                        <th>Subject</th>
-                        <th>Exam Date</th>
-                        <th>Session (FN/AN)</th>
-                        <th>Max Marks (Theory)</th>
-                        <th>Max Marks (Internal)</th>
-                    </tr>
+                    <tr><th>Subject</th><th>Exam Date</th><th>Session (FN/AN)</th><th>Max Marks (Theory)</th><th>Max Marks (Internal)</th><th class="text-end">Actions</th></tr>
                 </thead>
                 <tbody>`;
     
     allocatedSubjects.forEach(subject => {
-        if (selectedExam?.sector && subject?.sector && selectedExam.sector !== subject.sector) {
-            return;
-        }
-
         const schedule = existingSchedules.find(es => es.subjectId === subject.id);
-        tableHTML += `<tr data-subject-id="${subject.id}">
+        tableHTML += `<tr data-subject-id="${subject.id}" data-schedule-id="${schedule?.id || ''}">
             <td class="fw-bold">${subject.name}</td>
             <td><input type="date" name="date" value="${schedule?.date || ''}" class="form-control form-control-sm"></td>
-            <td>
-                <select name="session" class="form-select form-select-sm">
-                    <option value="">--</option>
-                    <option value="FN" ${schedule?.session === 'FN' ? 'selected' : ''}>FN</option>
-                    <option value="AN" ${schedule?.session === 'AN' ? 'selected' : ''}>AN</option>
-                </select>
-            </td>
-            <td><input type="number" name="maxTE" value="${schedule?.maxTE || ''}" placeholder="e.g., 80" class="form-control form-control-sm"></td>
-            <td><input type="number" name="maxCE" value="${schedule?.maxCE || ''}" placeholder="e.g., 20" class="form-control form-control-sm"></td>
+            <td><select name="session" class="form-select form-select-sm"><option value="">--</option><option value="FN" ${schedule?.session === 'FN' ? 'selected' : ''}>FN</option><option value="AN" ${schedule?.session === 'AN' ? 'selected' : ''}>AN</option></select></td>
+            <td><input type="number" name="maxTE" value="${schedule?.maxTE || ''}" class="form-control form-control-sm"></td>
+            <td><input type="number" name="maxCE" value="${schedule?.maxCE || ''}" class="form-control form-control-sm"></td>
+            <td class="text-end">${schedule ? `<button class="btn btn-sm btn-outline-danger" onclick="deleteExamSchedule('${schedule.id}')"><i class="fas fa-trash"></i></button>` : ''}</td>
         </tr>`;
     });
 
@@ -6986,6 +6959,20 @@ async function loadScheduleSheet(examId, classId, divisions) {
     container.innerHTML = tableHTML;
     document.getElementById('save-schedule-btn').addEventListener('click', () => saveExamSchedule(examId, classId, divisions));
 }
+/**
+ * Deletes a single exam schedule entry.
+ */
+window.deleteExamSchedule = async (scheduleId) => {
+    if (!confirm("Are you sure you want to delete this schedule entry?")) return;
+
+    try {
+        await deleteDoc(getDocRef('examSchedules', scheduleId));
+        showAlert('Schedule entry deleted successfully.', 'success');
+    } catch (error) {
+        console.error("Error deleting schedule:", error);
+        showAlert("Failed to delete schedule entry.", "danger");
+    }
+};
 
 // Reverted and enhanced version of saveExamSchedule
 async function saveExamSchedule(examId, classId, divisions) {
@@ -8619,7 +8606,7 @@ async function saveMarks(examId, classId, division, subjectId) {
             await batch.commit();
             showAlert(`${changesFound} student mark(s) saved successfully!`, 'success');
             // Reload the sheet to refresh original values and stats
-            loadMarkEntrySheet(examId, classId, division, subjectId); 
+            loadMarkEntrySheetobject(examId, classId, division, subjectId); 
         } else {
             showAlert('No changes detected to save.', 'info');
         }
@@ -8810,7 +8797,7 @@ async function saveMarksobject(examId, classId, division, subjectId) {
             await batch.commit();
             showAlert(`${changesFound} student mark(s) saved successfully!`, 'success');
             // Reload the sheet to refresh the "original values" and entry stats
-            loadMarkEntrySheet(examId, classId, division, subjectId); 
+            loadMarkEntrySheetobject(examId, classId, division, subjectId); 
         } else {
             showAlert('No changes were detected to save.', 'info');
         }
@@ -15014,6 +15001,7 @@ window.toggleFormStatus = async (id) => {
             showAlert(`Form ${form.isActive ? 'deactivated' : 'activated'} successfully.`, 'success');
             // The UI is expected to update via real-time listeners.
             // If not, you would call renderFormManagement() here.
+            renderFormManagement();
         } catch (error) {
             console.error('Failed to toggle form status:', error);
             showAlert('Failed to update form status. Please try again.', 'danger');
@@ -15070,7 +15058,6 @@ async function handleFormSave(e) {
  * Displays all responses for a specific form with filters for class and division.
  * @param {string} formId - The ID of the form.
  */
-
 /**
  * Displays all responses for a specific form with filters, a serial number column,
  * and a professional, filtered print option.
@@ -15346,63 +15333,165 @@ window.renderTeacherForms = () => {
 };
 
 
+/**
+ * Renders the Classwise Forms view. The UI adapts based on the user's role.
+ * - For Admins: Shows filters for class and division to view any class's form data.
+ * - For Teachers: Automatically shows forms relevant to their assigned class charge.
+ */
 window.renderTeacherclasswiseForms = () => {
     const mainContent = document.getElementById('main-content');
-    if (!mainContent) {
-        console.error('Main content element not found!');
-        return;
+    if (!mainContent) return;
+
+    // --- 1. ADMIN VIEW ---
+    if (currentUserRole === 'admin') {
+        const classOptions = classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+
+        mainContent.innerHTML = `
+            <h1 class="h2 mb-4">📋 Classwise Form Data Entry (Admin View)</h1>
+            <div class="card shadow-sm mb-4">
+                <div class="card-body">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-4">
+                            <label for="admin-class-filter" class="form-label fw-bold">Select Class</label>
+                            <select id="admin-class-filter" class="form-select">
+                                <option value="">-- Choose a Class --</option>
+                                ${classOptions}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="admin-division-filter" class="form-label fw-bold">Select Division</label>
+                            <select id="admin-division-filter" class="form-select" disabled>
+                                <option value="">--</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <button id="admin-show-forms-btn" class="btn btn-primary w-100">Show Available Forms</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="class-form-selection-container"></div>
+            <div id="class-form-response-table" class="mt-4"></div>
+        `;
+
+        const classSelect = document.getElementById('admin-class-filter');
+        const divisionSelect = document.getElementById('admin-division-filter');
+        const showFormsBtn = document.getElementById('admin-show-forms-btn');
+
+        // Populate divisions when a class is selected
+        classSelect.addEventListener('change', () => {
+            const classId = classSelect.value;
+            const selectedClass = classes.find(c => c.id === classId);
+            divisionSelect.innerHTML = '<option value="">--</option>';
+            divisionSelect.disabled = true;
+            if (selectedClass) {
+                divisionSelect.innerHTML += selectedClass.divisions.map(d => `<option value="${d}">${d}</option>`).join('');
+                divisionSelect.disabled = false;
+            }
+        });
+
+        // Show the form selector when the "Show Forms" button is clicked
+        showFormsBtn.addEventListener('click', () => {
+            const classId = classSelect.value;
+            const division = divisionSelect.value;
+            if (!classId || !division) {
+                return showAlert('Please select both a class and a division.', 'warning');
+            }
+            renderFormSelectorForAdmin(classId, division);
+        });
+
+    } 
+    // --- 2. TEACHER VIEW ---
+    else {
+        if (!selectedUser?.classCharge) {
+            mainContent.innerHTML = '<p class="alert alert-danger">Error: Your class charge information is not available.</p>';
+            return;
+        }
+
+        const { classId, division } = selectedUser.classCharge;
+        const teacherClassName = classes.find(c => c.id === classId)?.name || `Class ${classId}`;
+
+        const classForms = forms.filter(f =>
+            f.target === 'classwise' &&
+            (!f.classId || f.classId === classId) &&
+            (!f.division || f.division === division)
+        );
+
+        mainContent.innerHTML = `
+            <h1 class="h2 mb-4">📋 Classwise Forms for ${teacherClassName} - ${division}</h1>
+            <div class="mb-4 d-flex align-items-center gap-2">
+                <label for="class-form-selector" class="form-label mb-0 fw-bold">Select Form:</label>
+                <select class="form-select w-auto" id="class-form-selector">
+                    <option value="">-- Choose a form to review --</option>
+                    ${classForms.map(f => `<option value="${f.id}">${f.title}</option>`).join('')}
+                </select>
+            </div>
+            <div id="class-form-response-table">
+                <p class="text-muted">Please select a form from the dropdown to view and manage student data.</p>
+            </div>
+        `;
+
+        document.getElementById('class-form-selector')?.addEventListener('change', e => {
+            const formId = e.target.value;
+            const container = document.getElementById('class-form-response-table');
+            if (!formId) {
+                container.innerHTML = '<p class="text-muted">Please select a form to view data.</p>';
+                return;
+            }
+            const selectedForm = classForms.find(f => f.id === formId);
+            if (selectedForm) {
+                renderClassFormSubmissionTable(selectedForm, classId, division);
+            }
+        });
     }
+};
 
-    if (!selectedUser || !selectedUser.classCharge) {
-        mainContent.innerHTML = '<p class="alert alert-danger">Error: Teacher class information not available.</p>';
-        return;
-    }
-
-    const { classId, division } = selectedUser.classCharge;
-    const teacherClassName = classes.find(c => c.id === classId)?.name || `Class ${classId}`;
-
-    // Filter forms that are specifically targeted as 'classwise' AND active
-    // And match the teacher's class/division or are for 'All' classes/divisions.
+/**
+ * Helper function for the Admin view to render the form selector after class/division is chosen.
+ */
+function renderFormSelectorForAdmin(classId, division) {
+    const container = document.getElementById('class-form-selection-container');
+    
+    // Filter forms that are relevant for the selected class/division
     const classForms = forms.filter(f =>
-        f.target === 'classwise' && // Assuming a new 'classwise' target type for these forms
-        f.isActive &&
+        f.target === 'classwise' &&
         (!f.classId || f.classId === classId) &&
         (!f.division || f.division === division)
     );
 
-    // Initial render of the dashboard structure
-    mainContent.innerHTML = `
-        <h1 class="h2 mb-4">📋 Classwise Forms for ${teacherClassName} - ${division}</h1>
-        <div class="mb-4 d-flex align-items-center gap-2">
-            <label for="class-form-selector" class="form-label mb-0 fw-bold">Select Form:</label>
-            <select class="form-select w-auto" id="class-form-selector">
-                <option value="">-- Choose a form to review --</option>
-                ${classForms.map(f => `<option value="${f.id}">${f.title}</option>`).join('')}
-            </select>
-        </div>
-        <div id="class-form-response-table">
-            <p class="text-muted">Please select a form from the dropdown to view and manage student data.</p>
+    if (classForms.length === 0) {
+        container.innerHTML = '<p class="alert alert-warning mt-3">No "Classwise" forms are available for the selected class and division.</p>';
+        document.getElementById('class-form-response-table').innerHTML = ''; // Clear any old table
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="card shadow-sm mt-3">
+            <div class="card-body">
+                <div class="mb-2 d-flex align-items-center gap-2">
+                    <label for="admin-form-selector" class="form-label mb-0 fw-bold">Select Form:</label>
+                    <select class="form-select w-auto" id="admin-form-selector">
+                        <option value="">-- Choose a form --</option>
+                        ${classForms.map(f => `<option value="${f.id}">${f.title}</option>`).join('')}
+                    </select>
+                </div>
+            </div>
         </div>
     `;
 
-    // Event listener for form selection dropdown
-    document.getElementById('class-form-selector')?.addEventListener('change', e => {
+    document.getElementById('admin-form-selector').addEventListener('change', e => {
         const formId = e.target.value;
+        const tableContainer = document.getElementById('class-form-response-table');
         if (!formId) {
-            document.getElementById('class-form-response-table').innerHTML = '<p class="text-muted">Please select a form from the dropdown to view and manage student data.</p>';
+            tableContainer.innerHTML = '';
             return;
         }
-
         const selectedForm = classForms.find(f => f.id === formId);
-        if (!selectedForm) {
-            showAlert('Selected form not found.', 'danger');
-            return;
+        if (selectedForm) {
+            renderClassFormSubmissionTable(selectedForm, classId, division);
         }
-
-        // Render the detailed table for the selected form
-        renderClassFormSubmissionTable(selectedForm, classId, division);
     });
-};
+}
 
 // --- New Helper Function for Conditional Field Display in Teacher View ---
 /**
@@ -15469,14 +15558,16 @@ function renderClassFormSubmissionTable(form, classId, division) {
     const columnTotals = {}; 
 
     // --- CORRECTION: Removed 'ID' from the visible headers ---
-    const headers = ['Name', 'Admission No.', ...form.fields.map(f => f.label), 'Comment'];
-    
+    const headers = ['Sl.No','Name', 'Admission No.', ...form.fields.map(f => f.label), 'Comment'];
+    var slno = 0;
     const rows = studentsInClass.map(stu => {
+        slno++
         const response = formResponses.find(r => r.formId === form.id && r.userId === stu.id);
         const values = response?.values || {};
 
         // --- CORRECTION: Removed the hidden <td> for the ID to fix column alignment ---
         const studentDataCells = `
+            <td>${slno}</td>
             <td>${stu.name || 'N/A'}</td>
             <td>${stu.admissionNumber || 'N/A'}</td>`;
 
@@ -15540,7 +15631,7 @@ function renderClassFormSubmissionTable(form, classId, division) {
                     <span>${form.title}</span>
                     <div class="btn-group mt-2 mt-md-0">
                         <button type="button" class="btn btn-sm btn-outline-info" onclick="window.downloadFormResponsesCSV('${form.id}', '${classId}', '${division}')"><i class="fa fa-download me-1"></i> CSV</button>
-                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="window.downloadStudentSubmissionsPDF('${form.id}')"><i class="fas fa-file-pdf me-1"></i>PDF</button>
+                        <button type="button" class="btn btn-sm btn-outline-danger d-none" onclick="window.downloadStudentSubmissionsPDF('${form.id}')"><i class="fas fa-file-pdf me-1"></i>PDF</button>
                         <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.printStudentSubmissions('${form.id}')"><i class="fas fa-print me-1"></i>Print</button>
                     </div>
                 </div>
@@ -15575,7 +15666,7 @@ function renderClassFormSubmissionTable(form, classId, division) {
             }
         });
     }
-
+    
     document.getElementById(`save-classwise-data-btn-${form.id}`)?.addEventListener('click', async (e) => {
         e.preventDefault();
         await window.saveTeacherClasswiseForm(form, studentsInClass);
@@ -15839,7 +15930,6 @@ window.downloadStudentSubmissionsPDF = (formId) => {
 
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({
-        orientation: 'landscape',
         unit: 'pt',
         format: 'a4'
     });
