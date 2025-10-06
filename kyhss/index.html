@@ -15070,9 +15070,10 @@ async function handleFormSave(e) {
  * Displays all responses for a specific form with filters for class and division.
  * @param {string} formId - The ID of the form.
  */
+
 /**
- * Displays all responses for a specific form with filters for class and division,
- * a dynamic total row for amount fields, and a filtered print option.
+ * Displays all responses for a specific form with filters, a serial number column,
+ * and a professional, filtered print option.
  * @param {string} formId - The ID of the form.
  */
 window.viewFormResponses = (formId) => {
@@ -15120,13 +15121,8 @@ window.viewFormResponses = (formId) => {
             </div>
         </div>
 
-        <div class="table-responsive">
-            <table class="table table-striped" id="form-responses-table">
-                <thead></thead>
-                <tbody></tbody>
-                <tfoot></tfoot>
-            </table>
-        </div>
+        <div id="form-responses-printable-area">
+            </div>
         <div class="mt-3 text-end">
             <button class="btn btn-secondary" onclick="renderFormManagement()">Back to Forms</button>
         </div>
@@ -15134,10 +15130,7 @@ window.viewFormResponses = (formId) => {
 
     const classFilter = document.getElementById('response-class-filter');
     const divisionFilter = document.getElementById('response-division-filter');
-    const table = document.getElementById('form-responses-table');
-    const thead = table.querySelector('thead');
-    const tbody = table.querySelector('tbody');
-    const tfoot = table.querySelector('tfoot');
+    const printableArea = document.getElementById('form-responses-printable-area');
 
     const renderTable = () => {
         const selectedClassId = classFilter.value;
@@ -15154,16 +15147,10 @@ window.viewFormResponses = (formId) => {
             filteredResponses = filteredResponses.filter(r => studentIdsInDivision.includes(r.userId));
         }
 
-        const headers = ['User ID', 'User Name', ...form.fields.map(f => f.label), 'Status'];
-        thead.innerHTML = `<tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>`;
-
-        if (filteredResponses.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="${headers.length}" class="text-center">No responses match your filters.</td></tr>`;
-            tfoot.innerHTML = ''; // Clear footer if no data
-            return;
-        }
-
-        tbody.innerHTML = filteredResponses.map(r => {
+        // --- NEW: Add "Sl. No." to the headers ---
+        const headers = ['Sl. No.', 'User Name', ...form.fields.map(f => f.label), 'Status'];
+        
+        const bodyRows = filteredResponses.map((r, index) => {
             const user = students.find(s => s.id === r.userId) || teachers.find(t => t.id === r.userId);
             const userName = user ? user.name : 'Unknown User';
             const valuesHtml = form.fields.map(f => {
@@ -15171,10 +15158,12 @@ window.viewFormResponses = (formId) => {
                 const value = r.values[key];
                 return `<td>${value !== undefined && value !== null ? value : '—'}</td>`;
             }).join('');
-            return `<tr><td>${r.userId}</td><td>${userName}</td>${valuesHtml}<td><span class="badge bg-info">${r.status || 'N/A'}</span></td></tr>`;
+            // --- NEW: Add the index+1 for the Sl. No. cell ---
+            return `<tr><td>${index + 1}</td><td>${userName}</td>${valuesHtml}<td><span class="badge bg-info">${r.status || 'N/A'}</span></td></tr>`;
         }).join('');
 
-        // --- NEW: Calculate and Render Totals Row ---
+        // --- NEW: Calculate Totals Row ---
+        let footerHtml = '';
         const amountFields = form.fields.filter(f => f.type === 'amount');
         if (amountFields.length > 0) {
             const totalCells = form.fields.map(field => {
@@ -15185,10 +15174,18 @@ window.viewFormResponses = (formId) => {
                 }
                 return '<td></td>';
             }).join('');
-            tfoot.innerHTML = `<tr class="table-light"><th colspan="2" class="text-end">Total</th>${totalCells}<th></th></tr>`;
-        } else {
-            tfoot.innerHTML = ''; // Ensure footer is empty if no amount fields
+            footerHtml = `<tfoot class="table-light"><tr class="table-light"><th colspan="2" class="text-end">Total</th>${totalCells}<th></th></tr></tfoot>`;
         }
+        
+        printableArea.innerHTML = `
+            <div class="table-responsive">
+                <table class="table table-striped" id="form-responses-table">
+                    <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+                    <tbody>${bodyRows.length > 0 ? bodyRows : `<tr><td colspan="${headers.length}" class="text-center">No responses match your filters.</td></tr>`}</tbody>
+                    ${footerHtml}
+                </table>
+            </div>
+        `;
     };
 
     classFilter.addEventListener('change', () => {
@@ -15205,34 +15202,31 @@ window.viewFormResponses = (formId) => {
 
     divisionFilter.addEventListener('change', renderTable);
     
-    // Attach export and print listeners
-    document.getElementById('export-responses-csv-btn').addEventListener('click', () => downloadFormResponsesCSV(form.id, classFilter.value, divisionFilter.value));
-    document.getElementById('export-responses-pdf-btn').addEventListener('click', () => downloadStudentSubmissionsPDF(form.id));
+    // --- MODIFIED: Updated Print Logic ---
     document.getElementById('print-filtered-responses-btn').addEventListener('click', () => {
         const tableHtml = document.getElementById('form-responses-table').outerHTML;
         const className = classFilter.options[classFilter.selectedIndex]?.text || 'All Classes';
-        const divisionName = divisionFilter.options[divisionFilter.selectedIndex]?.text || 'All Divisions';
+        const divisionName = divisionFilter.value ? ` - ${divisionFilter.value}` : '';
         
-        const reportTitle = `${form.title}`;
-        const subTitle = `by: ${className} - ${divisionName}`;
-const customHeaderHtml = `
-        <div style="text-align: center; margin-bottom: 20px;">
-            ${schoolDetails.logoUrl ? `<img src="${schoolDetails.logoUrl}" alt="School Logo" style="max-height: 80px;">` : ''}
-            <h3>${schoolDetails.name || 'School Name'}</h3>
-            <h5>${reportTitle}</h5>
-            <h4 class="text-muted">${subTitle}</h4>
-
-        </div>
-    `;
+        // Create a detailed header for the printout
+        const headerInfo = {
+            title: `Form Responses: ${form.title}`,
+            subTitle: `Filtered by: ${className}${divisionName}`
+        };
+        
+        // Call the universal print utility
         printReport({
-            contentHtml: `<div class="printable-report">${tableHtml}</div>`,
-            title: form.title,
-            reportHeader: { title: reportTitle, subTitle: subTitle },
-            customHeaderHtml: customHeaderHtml
+            contentHtml: `<div class="printable-report">${generateReportHeaderHTML(headerInfo)}${tableHtml}</div>`,
+            title: form.title.replace(/\s+/g, '_'),
+            extraCss: 'table { font-size: 9pt; }'
         });
     });
 
-    renderTable();
+    // Attach other export listeners (unchanged)
+    document.getElementById('export-responses-csv-btn').addEventListener('click', () => downloadFormResponsesCSV(form.id, classFilter.value, divisionFilter.value));
+    document.getElementById('export-responses-pdf-btn').addEventListener('click', () => downloadStudentSubmissionsPDF(form.id));
+    
+    renderTable(); // Initial render
 };
 
 /**
