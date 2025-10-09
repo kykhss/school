@@ -181,7 +181,7 @@
                     <p class="text-red-600 font-bold text-sm">IMPORTANT: After paying, you MUST enter the UPI Transaction ID below to confirm.</p>
                     <div class="mt-2">
                         <label class="block text-sm font-medium text-gray-700">UPI Transaction ID (UTR)</label>
-                        <input type="text" id="upi-transaction-id" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" placeholder="Enter or auto-detect from screenshot" required>
+                        <input type="text" id="upi-transaction-id" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" placeholder="auto-detect from screenshot" readonly required>
                     </div>
 
                     <div class="mt-4">
@@ -246,6 +246,8 @@
     let currentAcademicYear = '';
     let allAcademicYears = [];
     let feesListenerUnsubscribe = null;
+    // Add this near 'feesListenerUnsubscribe'
+let leaveListenerUnsubscribe = null;
 
 
     const state = {
@@ -440,6 +442,11 @@ function initialize() {
         feesListenerUnsubscribe(); // Detach the listener
         feesListenerUnsubscribe = null; // Reset the variable
     }
+    if (leaveListenerUnsubscribe) {
+        leaveListenerUnsubscribe();
+        leaveListenerUnsubscribe = null;
+    }
+
 
     document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
     document.getElementById(viewId).classList.add('active');
@@ -969,7 +976,50 @@ async function fetchAcademicsData({ force = false } = {}) {
         `;
         renderFestDetails();
     }
-    
+    function renderFestDetails() {
+    const container = document.getElementById('fest-details-container');
+    const fests = cache.fests || [];
+    const festEvents = cache.festEvents || [];
+    const festRegistrations = cache.festRegistrations || [];
+
+    if (fests.length === 0) {
+        container.innerHTML = '<p class="text-muted">No fests are scheduled at this time.</p>';
+        return;
+    }
+
+    // Create a simple Set of event IDs the student is registered for.
+    // This makes checking for registrations inside the loop very fast.
+    const registeredEventIds = new Set(festRegistrations.map(reg => reg.eventId));
+
+    const html = fests.map(fest => {
+        // Find all events that belong to the current fest AND the student has registered for.
+        const registeredEventsForThisFest = festEvents.filter(event =>
+            event.festId === fest.id && registeredEventIds.has(event.id)
+        );
+
+        return `
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">${fest.name}</h5>
+                </div>
+                <div class="card-body">
+                    ${registeredEventsForThisFest.length > 0 ? `
+                        <h6 class="card-subtitle mb-2 text-muted">My Registered Events:</h6>
+                        <ul class="list-group list-group-flush">
+                            ${registeredEventsForThisFest.map(event => `
+                                <li class="list-group-item">${event.name}</li>
+                            `).join('')}
+                        </ul>
+                    ` : `
+                        <p class="text-muted">You have not registered for any events in this fest.</p>
+                    `}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    container.innerHTML = html;
+}
     function renderProfileView() {
         const container = document.getElementById('profile-view');
         const student = state.student;
@@ -1005,10 +1055,31 @@ async function fetchAcademicsData({ force = false } = {}) {
                      </div>
                      <button type="submit" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-700">Submit Request</button>
                  </form>
+                 
              </div>
+             <div class="card shadow-sm mt-4">
+            <div class="card-body">
+                <h5 class="card-title">My Leave Applications</h5>
+                <div id="leave-history-container">
+                    <p class="text-muted">Loading leave history...</p>
+                </div>
+            </div>
+        </div>
+
         `;
-    }
+    document.getElementById('leave-application-form').addEventListener('submit', handleLeaveApplication);
+loadLeaveHistory();
+
     
+    // The event listener for delete/edit buttons remains the same
+    document.getElementById('leave-history-container').addEventListener('click', (e) => {
+        const button = e.target.closest('.delete-leave-btn');
+        if (button) {
+            const leaveId = button.dataset.leaveId;
+            handleDeleteLeave(leaveId);
+        }
+    });
+}
     // --- G. EVENT LISTENERS & INITIALIZATION ---
     document.addEventListener('DOMContentLoaded', () => {
         initialize();
@@ -1110,8 +1181,8 @@ async function fetchAcademicsData({ force = false } = {}) {
         renderExamDetailsForYear();
         renderHallTicketDetails();
         renderTeacherDetails();
-        renderTimetable();
-        renderSyllabusDetails();
+        //renderTimetable();
+        //renderSyllabusDetails();
     }
 
     function renderExamDetailsForYear() {
@@ -1347,8 +1418,8 @@ function openPaymentModal(balance) {
 
         const upiId = state.schoolDetails.upiId || 'default@upi';
         const payeeName = state.schoolDetails.upiPayeeName || 'School Name';
-        const transactionNote = `Fee for Admn No: ${state.student.admissionNumber}`;
-        const upiURI = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(payeeName)}&am=${amount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(transactionNote)}`;
+        const transactionNote = `Fee for Admn No: ${state.student.admissionNumber}-Name: ${state.student.admissionNumber}class: ${state.student.classId}-${state.student.division}`;
+        const upiURI = `upi://pay?pa=${upiId}&am=${amount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(transactionNote)}`;
         
         new QRCode(qrContainer, { text: upiURI, width: 180, height: 180 });
         upiUriDisplay.textContent = upiURI;
@@ -1551,6 +1622,9 @@ if (screenshotInput) {
                      alert(`Warning: The amount detected in the screenshot (₹${detectedAmount}) does not match the amount for the generated QR code (₹${lockedPaymentAmount}). Please ensure you paid the correct amount.`);
                 }
                 document.getElementById('payment-amount').value = detectedAmount;
+                document.getElementById('payment-amount').viewonly = true;
+                document.getElementById('payment-amount').disabled = true;
+                document.getElementById('generate-qr-btn').disabled = true;
             }
             if (utrMatch) utrField.value = utrMatch[0].replace(/\s/g, '');
 
@@ -1634,6 +1708,172 @@ dexieDb.version(6).stores({ // Increased version number for the schema change
     studentFeeSetups: 'id,studentId',
     receipts: 'id,studentId'
 });
+
+// Make sure you have these imported at the top of your script
+// import { doc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+/**
+ * Handles the submission of a leave application.
+ * Saves the leave data nested under a single document for the student.
+ */
+async function handleLeaveApplication(e) {
+        // This line is critical. It stops the page from reloading.
+    e.preventDefault();
+
+    const leaveDate = document.getElementById('leave-date').value;
+    const leaveReason = document.getElementById('leave-reason').value;
+    const student = state.student;
+
+    if (!leaveDate || !leaveReason) {
+        alert('Please fill in all fields.');
+        return;
+    }
+
+    // Create a unique ID for this specific leave request to use as a key in the map.
+    // Using the date and the current timestamp makes it unique.
+    const leaveId = `${leaveDate}_${Date.now()}`;
+
+    // This is the data for the specific leave application
+    const newLeaveData = {
+        leaveDate,
+        leaveReason,
+        status: 'pending',
+        createdAt: serverTimestamp()
+    };
+    
+    // Prepare the full payload. Using dot notation (`leaves.${leaveId}`)
+    // tells Firestore to add a new entry to the 'leaves' map.
+    const updatePayload = {
+        studentId: student.id,
+        studentName: student.name, // Also save name for easier display in admin apps
+        classId: student.classId,
+        division: student.division,
+        [`leaves.${leaveId}`]: newLeaveData
+    };
+
+    // Create a reference to the document. The document's ID is the student's ID.
+    const docRef = doc(db, `/artifacts/${appId}/public/data/leaveApplications`, student.id);
+
+    // Show loading indicator
+    const loadingOverlay = document.getElementById('loading-overlay');
+    loadingOverlay.classList.remove('d-none');
+
+    try {
+        // Use setDoc with { merge: true }. This will create the document if it
+        // doesn't exist or add/update the new leave without overwriting old ones.
+        await setDoc(docRef, updatePayload, { merge: true });
+        
+        alert('Leave application submitted successfully!');
+        document.getElementById('leave-application-form').reset();
+        
+        // You might want to add logic here to refresh a list of submitted leaves if you display them
+
+    } catch (error) {
+        console.error("Error submitting leave application:", error);
+        alert('An error occurred. Please try again.');
+    } finally {
+        loadingOverlay.classList.add('d-none');
+    }
+}
+/**
+ * Processes the raw leave document data into a sorted array of leave objects.
+ * @param {object} rawLeaveData - The document object fetched from Firestore.
+ * @returns {Array} A flat, sorted array of leave objects.
+ */
+/**
+ * Processes the raw leave document data, extracting leave entries from 
+ * top-level keys that start with 'leaves.'.
+ * @param {object} rawLeaveData - The document object fetched from Firestore.
+ * @returns {Array} A flat, sorted array of leave objects.
+ */
+function processLeaveData(rawLeaveData) {
+    if (!rawLeaveData) {
+        return [];
+    }
+
+    const leavesArray = []; // Initialize as an empty array
+
+    // Loop through every key in the entire document
+    for (const key in rawLeaveData) {
+        // Check if the key is a leave entry by its prefix
+        if (key.startsWith('leaves.')) {
+            // The key is like "leaves.2025-10-09_someId".
+            // We split it to get the unique leaveId.
+            const [, leaveId] = key.split('.');
+            const leaveData = rawLeaveData[key];
+            
+            // Create the final object, adding the id
+            const leaveObject = {
+                id: leaveId,
+                ...leaveData
+            };
+            
+            leavesArray.push(leaveObject);
+        }
+    }
+    
+    // After collecting all leaves, sort them with the newest first
+    return leavesArray.sort((a, b) => new Date(b.leaveDate) - new Date(a.leaveDate));
+}
+// This function now uses the generic getData and a specific processor
+async function loadLeaveHistory() {
+    const studentId = state.student.id;
+
+    // Step 1: Use getData to fetch the single document for the student.
+    // This will automatically use Dexie for caching.
+    const rawLeaveDoc = await getData({
+        collectionName: 'leaveApplications',
+        tableName: 'leaveApplications', // Specify table name for Dexie
+        docId: studentId
+    });
+
+    // Step 2: Process the raw document into a clean array
+    const processedLeaves = processLeaveData(rawLeaveDoc);
+
+    // Step 3: Render the final array to the UI
+    renderLeaveHistory(processedLeaves);
+}
+// This function is purely for rendering the UI
+function renderLeaveHistory(leavesArray) {
+    const container = document.getElementById('leave-history-container');
+    
+    if (!leavesArray || leavesArray.length === 0) {
+        container.innerHTML = '<p class="text-muted">You have not applied for any leave.</p>';
+        return;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const html = leavesArray.map(leave => {
+        const leaveDate = new Date(leave.leaveDate);
+        const canModify = leaveDate >= today && leave.status === 'pending';
+        const statusColor = leave.status === 'approved' ? 'success' : (leave.status === 'rejected' ? 'danger' : 'warning');
+
+        return `
+            <div class="list-group-item d-flex justify-content-between align-items-start">
+                <div>
+                    <p class="mb-1"><strong>Date:</strong> ${leave.leaveDate}</p>
+                    <p class="mb-1 small text-muted">${leave.leaveReason}</p>
+                </div>
+                <div class="d-flex flex-column align-items-end">
+                    <span class="badge bg-${statusColor} mb-2">${leave.status}</span>
+                    ${canModify ? `
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-danger delete-leave-btn" data-leave-id="${leave.id}" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    container.innerHTML = `<div class="list-group">${html}</div>`;
+}
+
+
 </script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.1/dist/tesseract.min.js"></script>
 </body>
