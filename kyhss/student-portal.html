@@ -1,0 +1,1641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Portal V2</title>
+    <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/davidshimjs-qrcodejs/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.1/dist/tesseract.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5;
+        }
+        #main-portal { display: none; }
+        .view {
+            display: none;
+            padding-bottom: 80px; /* Space for bottom nav */
+        }
+        .view.active {
+            display: block;
+        }
+        .bottom-nav {
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+        }
+        .nav-item.active i, .nav-item.active span {
+            color: #2563eb; /* Tailwind's blue-600 */
+        }
+        .nav-item.active {
+            transform: translateY(-2px);
+            transition: transform 0.2s;
+        }
+        .card {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            transition: all 0.3s ease-in-out;
+        }
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+        
+        /* Skeleton Loader Styles */
+        .skeleton-box {
+            background-color: #e5e7eb;
+            border-radius: 0.5rem;
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            50% { opacity: .5; }
+        }
+
+        /* Fade-in Animation for Loaded Content */
+        .fade-in {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Print Styles */
+        .hall-ticket-page {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 1cm;
+            margin: 1rem auto;
+            border: 1px solid #d1d5db;
+            background: white;
+            box-shadow: 0 0 0.5cm rgba(0,0,0,0.5);
+        }
+        @media print {
+            body, .hall-ticket-page { margin: 0; box-shadow: none; border: none; }
+            .no-print { display: none; }
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <div id="loading-overlay" class="fixed inset-0 bg-white bg-opacity-80 z-[9999] hidden justify-center items-center flex-col">
+        <div class="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600"></div>
+        <p class="mt-4 text-gray-600 font-medium">Please wait...</p>
+    </div>
+
+    <div id="login-screen" class="min-h-screen flex items-center justify-center bg-gray-100 p-4">
+        <div class="w-full max-w-md">
+            <div class="card p-8">
+                <div class="text-center mb-6">
+                    <i class="fas fa-user-graduate fa-3x text-blue-600"></i>
+                    <h1 class="mt-4 text-2xl font-bold text-gray-800">Student Portal</h1>
+                    <p class="text-gray-500">Please sign in to continue</p>
+                </div>
+                <form id="student-login-form">
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="student-admn">Admission Number</label>
+                        <input class="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" type="text" id="student-admn" placeholder="Last 4 digits of Admission No." style="text-transform: uppercase;">
+                    </div>
+                    <div class="mb-6">
+                         <label class="block text-gray-700 text-sm font-bold mb-2" for="student-dob">Password</label>
+                        <input class="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" type="password" id="student-dob" placeholder="Your year of birth (YYYY)">
+                    </div>
+                    <button type="submit" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-700 transition duration-300">Sign In</button>
+                    <div id="login-error" class="text-red-500 text-sm text-center mt-3"></div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div id="main-portal">
+        <header class="bg-white shadow-md sticky top-0 z-40 p-4 flex justify-between items-center no-print">
+             <div class="flex items-center">
+                <img id="header-profile-pic" src="https://placehold.co/40x40/E2E8F0/4A5568?text=S" alt="Profile" class="w-10 h-10 rounded-full object-cover">
+                <div class="ml-3">
+                    <h1 id="header-student-name" class="text-lg font-bold text-gray-800 leading-tight">Student Name</h1>
+                    <p id="header-student-class" class="text-xs text-gray-500"></p>
+                </div>
+            </div>
+            <button id="logout-btn" class="text-gray-500 hover:text-red-600 transition-colors">
+                <i class="fas fa-sign-out-alt fa-lg"></i>
+            </button>
+        </header>
+
+        <main class="p-4">
+            <div id="home-view" class="view" data-loaded="false"></div>
+            <div id="academics-view" class="view" data-loaded="false"></div>
+            <div id="fees-view" class="view" data-loaded="false"></div>
+            <div id="activities-view" class="view" data-loaded="false"></div>
+            <div id="profile-view" class="view" data-loaded="true"></div> </main>
+
+        <nav class="bottom-nav fixed bottom-0 left-0 right-0 bg-white h-16 flex justify-around items-center no-print z-40">
+            <button class="nav-item text-center text-gray-500 active" data-view="home-view"><i class="fas fa-home fa-lg"></i><span class="text-xs block mt-1">Home</span></button>
+            <button class="nav-item text-center text-gray-500" data-view="academics-view"><i class="fas fa-book-open fa-lg"></i><span class="text-xs block mt-1">Academics</span></button>
+            <button class="nav-item text-center text-gray-500" data-view="fees-view"><i class="fas fa-receipt fa-lg"></i><span class="text-xs block mt-1">Fees</span></button>
+            <button class="nav-item text-center text-gray-500" data-view="activities-view"><i class="fas fa-trophy fa-lg"></i><span class="text-xs block mt-1">Activities</span></button>
+            <button class="nav-item text-center text-gray-500" data-view="profile-view"><i class="fas fa-user-circle fa-lg"></i><span class="text-xs block mt-1">Profile</span></button>
+        </nav>
+    </div>
+
+    <div id="paymentModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden no-print">
+    <div class="relative top-20 mx-auto p-5 border w-full max-w-lg shadow-lg rounded-md bg-white">
+        <div class="flex justify-between items-center pb-3 border-b">
+            <p class="text-2xl font-bold">Pay Fees via UPI</p>
+            <button id="close-payment-modal" class="cursor-pointer z-50">
+                <i class="fas fa-times text-gray-400"></i>
+            </button>
+        </div>
+
+        <div class="mt-3">
+            <div class="md:flex">
+                <div class="md:w-1/2 text-center p-4">
+                    <h6 class="font-semibold">1. Scan QR Code</h6>
+                    <div id="qr-code-container" class="p-3 border rounded bg-gray-100 my-2 min-h-[200px] flex items-center justify-center">
+                        <p class="text-center text-gray-500">Enter an amount and click "Generate QR" to begin.</p>
+                    </div>
+                    <p id="upi-uri-display" class="text-xs text-gray-500 break-all"></p>
+                </div>
+
+                <div class="md:w-1/2 p-4">
+                    <h6 class="font-semibold">2. Enter Amount & Pay</h6>
+                    <div class="mb-3">
+                        <label class="block text-sm font-medium text-gray-700">Amount to Pay (INR)</label>
+                        <div class="flex items-center space-x-2">
+                             <input type="number" id="payment-amount" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-lg">
+                        </div>
+                         <button id="generate-qr-btn" class="mt-2 w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded-md hover:bg-indigo-700">Generate QR Code</button>
+                    </div>
+                    
+                    <div class="p-3 rounded-md bg-blue-50 text-blue-800">
+                        <p class="font-bold">Balance Due: <span id="modal-balance-due">₹0.00</span></p>
+                    </div>
+                    <hr class="my-4">
+                    <h6 class="font-semibold">3. Confirm Your Payment</h6>
+                    <p class="text-red-600 font-bold text-sm">IMPORTANT: After paying, you MUST enter the UPI Transaction ID below to confirm.</p>
+                    <div class="mt-2">
+                        <label class="block text-sm font-medium text-gray-700">UPI Transaction ID (UTR)</label>
+                        <input type="text" id="upi-transaction-id" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" placeholder="Enter or auto-detect from screenshot" required>
+                    </div>
+
+                    <div class="mt-4">
+                        <label class="block text-sm font-medium text-gray-700">Upload Payment Screenshot</label>
+                        <input type="file" id="upi-screenshot" accept="image/*" class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                        
+                        <div id="ocr-spinner" class="hidden mt-2 flex items-center justify-center">
+                            <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+                            <p class="ml-2 text-sm text-gray-600">Scanning image...</p>
+                        </div>
+                        
+                        <p id="scan-status" class="text-sm text-gray-500 mt-1">Upload to auto-detect details.</p>
+                        <div id="screenshot-preview" class="mt-2 hidden">
+                            <img id="screenshot-img" class="max-h-48 rounded-md border border-gray-200 shadow-sm" alt="Screenshot preview">
+                        </div>
+                    </div>
+                    <div class="mt-4 space-y-3">
+                         <a href="#" id="pay-with-upi-app-btn" class="block md:hidden w-full text-center bg-green-600 text-white font-bold py-2 px-4 rounded-md hover:bg-green-700 opacity-50 cursor-not-allowed">
+                             <i class="fas fa-mobile-alt mr-2"></i>Pay with UPI App
+                         </a>
+                         <button id="confirm-payment-btn" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">Confirm Payment</button>
+                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+    <div id="hallTicketModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden no-print">
+         <div class="relative top-10 mx-auto p-5 border w-full max-w-4xl shadow-lg rounded-md bg-white">
+             <div class="flex justify-between items-center pb-3 border-b">
+                <p class="text-2xl font-bold">Hall Ticket Preview</p>
+                <button id="close-hallticket-modal" class="cursor-pointer z-50">
+                    <i class="fas fa-times text-gray-400"></i>
+                </button>
+            </div>
+            <div id="hall-ticket-modal-body" class="my-4"></div>
+             <div class="text-right">
+                <button id="print-hall-ticket-btn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-700">
+                    <i class="fas fa-print mr-2"></i>Print
+                </button>
+            </div>
+        </div>
+    </div>
+
+<script type="module">
+    // --- FIREBASE SDK IMPORTS ---
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getFirestore, doc, collection, getDoc, getDocs, query, where, setDoc, serverTimestamp, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    // --- 1. CONFIG & STATE ---
+    const firebaseConfig = {
+        apiKey: "AIzaSyAu5TDMWepJX7naoG5H3WpGJ1yxAu01whg",
+        authDomain: "timetables-470dd.firebaseapp.com",
+        projectId: "timetables-470dd",
+        storageBucket: "timetables-470dd.appspot.com",
+        messagingSenderId: "925422681424",
+        appId: "1:925422681424:web:df91ce9de4dfef9c5ec055"
+    };
+
+    let db;
+    const appId = 'school-management-app';
+    let currentAcademicYear = '';
+    let allAcademicYears = [];
+    let feesListenerUnsubscribe = null;
+
+
+    const state = {
+        student: null, schoolDetails: {}, classes: [], subjects: [], teachers: [],
+        classroomSubjects: [], exams: [], examSchedules: [], marks: {}, 
+        attendance: {}, holidays: [], timetable: {}, fests: [], festEvents: [],
+        festRegistrations: [], forms: [], formResponses: [], studentFeeSetups: {}, 
+        receipts: {}, pendingPayments: [], syllabusCompletion: [], examRooms: [],
+        festHouses: [],
+    };
+
+    const cache = { // Cache for fetched data collections
+        subjects: null, teachers: null, classroomSubjects: null, exams: null, 
+        examSchedules: null, holidays: null, timetable: null, fests: null, 
+        festEvents: null, festRegistrations: null, syllabusCompletion: null,
+        examRooms: null, festHouses: null, studentFeeSetups: {}, receipts: {},
+        marks: null, attendance: null,pendingPayments: []
+    };
+/**
+ * A unified function to get data. It checks the local cache (Dexie) first,
+ * then falls back to Firestore if needed, and updates the cache automatically.
+ * * @param {object} options - The options for fetching data.
+ * @param {string} options.collectionName - The name of the collection (e.g., 'subjects').
+ * @param {string|null} [options.docId=null] - The ID of a specific document to fetch.
+ * @param {Array} [options.queryConstraints=[]] - An array of Firestore queries (e.g., [where('studentId', '==', id)]).
+ * @param {boolean} [options.force=false] - If true, it will bypass the cache and fetch directly from Firestore.
+ * @returns {Promise<any>} The requested data (document object or array of documents).
+ */
+/**
+ * A unified function to get data.
+ * @param {string} options.collectionName - The full path of the Firestore collection.
+ * @param {string|null} [options.tableName=null] - The simple name of the Dexie table. If null, it's inferred from collectionName.
+ * ... other params
+ */
+async function getData({ collectionName, tableName = null, docId = null, queryConstraints = [], force = false }) {
+    // Determine the actual table name for Dexie.
+    // If a tableName isn't provided, it guesses from the last part of the Firestore path.
+    const dexieTableName = tableName || collectionName.split('/').pop();
+
+    // 1. Handle Single Document Fetch
+    if (docId) {
+        if (!force) {
+            // UPDATED: Use dexieTableName
+            const cachedDoc = await dexieDb[dexieTableName]?.get(docId);
+            if (cachedDoc) {
+                console.log(`[Cache] Fetched doc '${collectionName}/${docId}' from Dexie.`);
+                return cachedDoc;
+            }
+        }
+        const docRef = doc(db, `/artifacts/${appId}/public/data/${collectionName}`, docId);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+            const data = { id: docSnap.id, ...docSnap.data() };
+            // UPDATED: Use dexieTableName
+            await dexieDb[dexieTableName].put(data);
+            console.log(`[Firestore] Fetched doc '${collectionName}/${docId}' and updated cache.`);
+            return data;
+        }
+        return null;
+    }
+
+    // 2. Handle Collection Fetch
+    if (!force && queryConstraints.length === 0) {
+        // UPDATED: Use dexieTableName
+        const cachedCollection = await dexieDb[dexieTableName]?.toArray();
+        if (cachedCollection && cachedCollection.length > 0) {
+            console.log(`[Cache] Fetched collection '${collectionName}' from Dexie.`);
+            return cachedCollection;
+        }
+    }
+
+    let collectionRef = collection(db, `/artifacts/${appId}/public/data/${collectionName}`);
+    if (queryConstraints.length > 0) {
+        collectionRef = query(collectionRef, ...queryConstraints);
+    }
+    
+    const snapshot = await getDocs(collectionRef);
+    const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    if (queryConstraints.length === 0) {
+        // UPDATED: Use dexieTableName
+        await dexieDb[dexieTableName].clear();
+    }
+    // UPDATED: Use dexieTableName. This is the line that caused the error.
+    await dexieDb[dexieTableName].bulkPut(data);
+    console.log(`[Firestore] Fetched collection '${collectionName}' and updated cache.`);
+    
+    return data;
+}
+
+async function syncAllData() {
+    console.log('Starting background data sync...');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    loadingOverlay.classList.remove('d-none');
+    try {
+        const collectionsToSync = [
+            'classes', 'schoolDetails', 'subjects', 'teachers', 'classroomSubjects',
+            'exams', 'examSchedules', 'holidays', 'fests', 'festEvents', 'festHouses',
+            'syllabusCompletion', 'examRooms'
+        ];
+
+        // Force a refresh for all static collections
+        const syncPromises = collectionsToSync.map(name => getData({ collectionName: name, force: true }));
+        await Promise.all(syncPromises);
+
+        // Also force-refresh the student-specific data for the current view
+        await fetchFeesData({ force: true });
+        await fetchAcademicsData({ force: true });
+        await fetchActivitiesData({ force: true });
+
+        console.log('Background data sync completed.');
+        const activeView = document.querySelector('.view.active');
+        if (activeView) {
+            activeView.dataset.loaded = 'false';
+            navigateTo(activeView.id); // Re-render the current view with fresh data
+        }
+    } catch (error) {
+        console.error('Error during background sync:', error);
+    } finally {
+        loadingOverlay.classList.add('d-none');
+    }
+}
+
+    // --- 2. CORE APP LOGIC ---
+function initialize() {
+        try {
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            //console.log("Firebase Initialized for Student Portal");
+        } catch (e) {
+            console.error("Firebase initialization failed:", e);
+            document.getElementById('login-error').textContent = "Could not connect to services.";
+        }
+    }
+
+    async function handleLogin(e) {
+        e.preventDefault();
+        const admnNoSuffix = document.getElementById('student-admn').value.toUpperCase();
+        const dobYear = document.getElementById('student-dob').value;
+        const loginError = document.getElementById('login-error');
+        loginError.textContent = '';
+
+        if (!admnNoSuffix || !dobYear) {
+            loginError.textContent = 'Please fill in all fields.'; return;
+        }
+
+        const loadingOverlay = document.getElementById('loading-overlay');
+        loadingOverlay.style.display = 'flex';
+
+        try {
+            const studentsRef = collection(db, `/artifacts/${appId}/public/data/students`);
+            const studentsSnapshot = await getDocs(studentsRef);
+            let foundStudent = null;
+
+            studentsSnapshot.forEach(doc => {
+                const studentData = doc.data();
+                if (studentData.admissionNumber && String(studentData.admissionNumber).toUpperCase().endsWith(admnNoSuffix)) {
+                    foundStudent = { id: doc.id, ...studentData };
+                }
+            });
+
+            if (foundStudent && (foundStudent.dob || '').startsWith(dobYear)) {
+                state.student = foundStudent;
+                await initializeAppState();
+                showPortal();
+            } else {
+                loginError.textContent = 'Invalid credentials. Please try again.';
+            }
+        } catch (error) {
+            console.error("Login error:", error);
+            loginError.textContent = 'An error occurred during login.';
+        } finally {
+            loadingOverlay.style.display = 'none';
+        }
+    }
+
+    function showPortal() {
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('main-portal').style.display = 'block';
+        renderHeader();
+        renderProfileView(); // Profile is static, render it once
+        navigateTo('home-view');
+    }
+    
+    function handleLogout() {
+        window.location.reload(); // Simplest way to reset everything
+    }
+
+    async function navigateTo(viewId) {
+    // NEW: Unsubscribe from the old fees listener if it exists
+    if (feesListenerUnsubscribe) {
+        feesListenerUnsubscribe(); // Detach the listener
+        feesListenerUnsubscribe = null; // Reset the variable
+    }
+
+    document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
+    document.getElementById(viewId).classList.add('active');
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.toggle('active', item.dataset.view === viewId);
+    });
+    window.scrollTo(0, 0);
+
+    const viewElement = document.getElementById(viewId);
+    if (viewElement.dataset.loaded !== 'true') {
+        await loadViewData(viewId);
+    }
+}
+    async function loadViewData(viewId) {
+    const viewContainer = document.getElementById(viewId);
+    
+    switch (viewId) {
+        case 'home-view':
+            renderHomeSkeleton(viewContainer);
+            await fetchDashboardData();
+            populateHomeData(viewContainer);
+            break;
+        case 'academics-view':
+            renderAcademicsSkeleton(viewContainer);
+            await fetchAcademicsData();
+            populateAcademicsData(viewContainer);
+            break;
+
+        // --- REPLACED SECTION ---
+        case 'fees-view':
+            renderFeesSkeleton(viewContainer);
+            // First, fetch the non-real-time data like fee setups
+            await fetchFeesData({ force: true }); 
+
+            // Then, set up the REAL-TIME listener for pending payments
+            const pendingPaymentsPath = `/artifacts/${appId}/public/data/feeData/${currentAcademicYear}/pendingPayments`;
+            const q = query(collection(db, pendingPaymentsPath), where('studentId', '==', state.student.id));
+
+            feesListenerUnsubscribe = onSnapshot(q, (snapshot) => {
+                const pendingPayments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                
+                // Update your local cache with the latest data
+                cache.pendingPayments[currentAcademicYear] = pendingPayments;
+                
+                console.log('Real-time update: Pending payments list refreshed.');
+                
+                // Re-render the UI with the new data
+                populateFeesData(viewContainer);
+            }, (error) => {
+                console.error("Error with real-time listener:", error);
+            });
+            break;
+        // --- END REPLACED SECTION ---
+
+        case 'activities-view':
+            renderActivitiesSkeleton(viewContainer);
+            await fetchActivitiesData();
+            populateActivitiesData(viewContainer);
+            break;
+    }
+    // Note: We don't set dataset.loaded to true for the fees view
+    // because its content is now dynamic.
+    if (viewId !== 'fees-view') {
+         viewContainer.dataset.loaded = 'true';
+    }
+}
+    
+    // --- C. DATA FETCHING (MODULARIZED) ---
+    
+    async function fetchCollection(collectionName, path) {
+        const ref = collection(db, path || `/artifacts/${appId}/public/data/${collectionName}`);
+        const snapshot = await getDocs(ref);
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    }
+
+    // This function replaces fetchInitialData()
+    // This function replaces fetchInitialData()
+async function initializeAppState() {
+    // 1. Fetch the absolute minimum data needed to make the UI work initially
+    const promises = [
+        getData({ collectionName: 'classes' }).then(data => cache.classes = data),
+        getData({ collectionName: 'schoolDetails' }).then(data => state.schoolDetails = data[0] || {})
+    ];
+    await Promise.all(promises);
+
+    // 2. Set up the crucial academic year state
+    if (state.student && state.student.feeDetails) {
+        // Get available years from the student's own data
+        allAcademicYears = [...new Set(Object.keys(state.student.feeDetails))].sort().reverse();
+    }
+    
+    // If no years are found, calculate a default current year
+    if (allAcademicYears.length === 0) {
+        const now = new Date();
+        // Academic year in India typically starts in April/June. Let's assume March cutoff.
+        const currentYear = now.getFullYear();
+        currentAcademicYear = now.getMonth() >= 3 
+            ? `${currentYear}-${currentYear + 1}` 
+            : `${currentYear - 1}-${currentYear}`;
+        allAcademicYears.push(currentAcademicYear);
+    } else {
+        // Default to the most recent academic year
+        currentAcademicYear = allAcademicYears[0];
+    }
+    
+    console.log(`App state initialized. Current academic year set to: ${currentAcademicYear}`);
+}
+
+    async function fetchDashboardData({ force = false } = {}) {
+    const student = state.student;
+    const today = new Date();
+    
+    // Prepare IDs for document fetching
+    const timetableId = `${student.classId}_${student.division}`;
+    const monthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+    const feeCollectionPath = `feeData/${currentAcademicYear}`;
+
+    // Use Promise.all to fetch all required data in parallel
+    await Promise.all([
+        // Fetch timetable document
+        getData({ 
+            collectionName: 'timetables', 
+            docId: timetableId, 
+            force 
+        }).then(data => cache.timetable = data ? data.schedule : {}),
+
+        // Fetch attendance document for the current month
+        getData({ 
+            collectionName: 'attendance', 
+            docId: monthKey, 
+            force 
+        }).then(data => cache.attendance = data || {}),
+
+        // Fetch subjects collection
+        getData({ 
+            collectionName: 'subjects', 
+            force 
+        }).then(data => cache.subjects = data),
+
+        // Fetch ONLY this student's fee setup (more efficient!)
+        getData({
+            collectionName: `${feeCollectionPath}/studentFeeSetups`,
+            queryConstraints: [ where('studentId', '==', student.id) ],
+            force
+        }).then(data => cache.studentFeeSetups[currentAcademicYear] = data),
+        
+        // Fetch ONLY this student's receipts (more efficient!)
+        getData({
+            collectionName: `${feeCollectionPath}/receipts`,
+            queryConstraints: [ where('studentId', '==', student.id) ],
+            force
+        }).then(data => cache.receipts[currentAcademicYear] = data)
+    ]);
+}
+
+
+
+    async function fetchFeesData({ force = false } = {}) {
+    const year = currentAcademicYear;
+    const feePath = `feeData/${year}`;
+
+    const promises = [
+        // Fetch only THIS student's fee setup
+        getData({
+            collectionName: `${feePath}/studentFeeSetups`, // Full path for Firestore
+            tableName: 'studentFeeSetups',                // Simple name for Dexie
+            queryConstraints: [ where('studentId', '==', state.student.id) ],
+            force
+        }).then(data => cache.studentFeeSetups[year] = data),
+
+        // Fetch only THIS student's receipts
+        getData({
+            collectionName: `${feePath}/receipts`, // Full path for Firestore
+            tableName: 'receipts',                 // Simple name for Dexie
+            queryConstraints: [ where('studentId', '==', state.student.id) ],
+            force
+        }).then(data => cache.receipts[year] = data),
+
+        // Fetch only THIS student's pending payments
+        getData({
+            collectionName: `${feePath}/pendingPayments`, // Full path for Firestore
+            tableName: 'pendingPayments',                 // Simple name for Dexie
+            queryConstraints: [ where('studentId', '==', state.student.id) ],
+            force
+        }).then(data => cache.pendingPayments[year] = data)
+    ];
+
+    await Promise.all(promises);
+}
+/**
+ * Fetches the marks document for a student and transforms the data
+ * from top-level keys (e.g., 'marks.examId.subjectId') into a
+ * format grouped by examId.
+ * @param {string} academicYear - The academic year to fetch.
+ * @param {string} studentId - The ID of the student.
+ * @returns {Promise<object>} An object with exam IDs as keys and arrays of marks as values.
+ */
+async function fetchAndProcessMarks(academicYear, studentId) {
+    const marksCollectionName = `marks-${academicYear}`;
+    const markDocRef = doc(db,`/artifacts/${appId}/public/data/${marksCollectionName}`, studentId);
+
+    try {
+        const docSnap = await getDoc(markDocRef);
+
+        if (!docSnap.exists()) {
+            console.log(`No marks document found for student ${studentId} in year ${academicYear}`);
+            return []; // Return an empty array if no marks exist
+        }
+
+        const studentMarksDoc = docSnap.data();
+        const processedMarks = []; // Initialize as an empty array
+        
+        for (const key in studentMarksDoc) {
+            if (key.startsWith('marks.')) {
+                const [, examId, subjectId] = key.split('.');
+                const markData = studentMarksDoc[key];
+                
+                const flatMark = {
+                    examId: examId,
+                    subjectId: subjectId,
+                    studentId: studentId,
+                    te: markData.te || 0,
+                    ce: markData.ce || 0
+                };
+                
+                processedMarks.push(flatMark);
+            }
+        }
+        
+        return processedMarks;
+
+    } catch (error) {
+        console.error("Error fetching or processing marks:", error);
+        return []; // Return empty array on error
+    }
+}
+
+
+/**
+ * Processes a student's marks document to group marks by exam.
+ * @param {object} studentMarksDoc - The raw document data from Firestore.
+ * @returns {object} An object with exam IDs as keys and arrays of marks as values.
+ */
+/**
+ * Processes a student's marks document to create a flat array of all marks.
+ * @param {object} studentMarksDoc - The raw document data from Firestore.
+ * @returns {Array} A flat array of mark objects.
+ */
+function processMarks(studentMarksDoc) {
+    // Initialize as an empty array
+    const processedMarks = []; 
+    const studentId = studentMarksDoc.studentId;
+
+    // Loop through every key in the entire document
+    for (const key in studentMarksDoc) {
+        // Check if the key is a mark entry
+        if (key.startsWith('marks.')) {
+            const [, examId, subjectId] = key.split('.');
+            const markData = studentMarksDoc[key];
+            
+            // Create the "flat" mark object for the UI
+            const flatMark = {
+                examId: examId,
+                subjectId: subjectId,
+                studentId: studentId,
+                te: markData.te || 0,
+                ce: markData.ce || 0
+            };
+            
+            // Push the object directly into the array
+            processedMarks.push(flatMark);
+        }
+    }
+    
+    return processedMarks;
+}
+
+async function fetchAcademicsData({ force = false } = {}) {
+    // Define all non-mark collections needed for this view
+    const collectionsToFetch = [
+        'subjects', 'teachers', 'classroomSubjects', 'exams', 
+        'examSchedules', 'syllabusCompletion', 'examRooms'
+    ];
+    
+    // Create a list of promises to fetch all non-mark data in parallel
+    const promises = collectionsToFetch.map(name => { // Added {
+        if (name === 'examSchedules' || name === 'syllabusCompletion' || name === 'classroomSubjects') {
+            // Added "return"
+            return getData({
+                collectionName: name,
+                tableName: name,
+                queryConstraints: [ where('classId', '==', state.student.classId) ],
+                force
+            }).then(data => cache[name] = data);
+        } else {
+            // Added "return"
+            return getData({
+                collectionName: name,
+                tableName: name,
+                force
+            }).then(data => cache[name] = data);
+        }
+    }); // Added }
+
+    // Call our dedicated function to get and process marks
+    promises.push(
+        fetchAndProcessMarks(currentAcademicYear, state.student.id)
+            .then(processedData => {
+                cache.marks = processedData;
+            })
+    );
+
+    await Promise.all(promises);
+}
+    async function fetchActivitiesData({ force = false } = {}) {
+    const student = state.student;
+    
+    // Define the static collections needed for this view
+    const staticCollections = ['fests', 'festEvents', 'festHouses'];
+
+    // Create a list of promises for the static collections
+    const promises = staticCollections.map(name =>
+        getData({ collectionName: name,
+            tableName: name,
+            force
+        }).then(data => cache[name] = data)
+    );
+
+    // Add a promise for the student-specific data (fest registrations)
+    promises.push(
+        getData({
+            collectionName: 'festRegistrations',
+            tableName: 'festRegistrations', 
+            queryConstraints: [ where('studentId', '==', student.id) ], // Efficiently gets only this student's data
+            force
+        }).then(data => cache.festRegistrations = data)
+    );
+
+    // Fetch all data in parallel
+    await Promise.all(promises);
+}
+
+    // --- D. UI RENDERING & SKELETONS ---
+
+    function renderHomeSkeleton(container) {
+        container.innerHTML = `
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-gray-800">Dashboard</h2>
+                <div class="skeleton-box h-8 w-24 rounded-md"></div>
+            </div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="card p-4"><div class="skeleton-box h-8 w-8 mx-auto mb-2 rounded-full"></div><div class="skeleton-box h-5 w-24 mx-auto mb-1"></div><div class="skeleton-box h-6 w-16 mx-auto"></div></div>
+                <div class="card p-4"><div class="skeleton-box h-8 w-8 mx-auto mb-2 rounded-full"></div><div class="skeleton-box h-5 w-24 mx-auto mb-1"></div><div class="skeleton-box h-6 w-20 mx-auto"></div></div>
+            </div>
+            <div class="card p-4 mt-6">
+                <div class="skeleton-box h-6 w-48 mb-4"></div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <div class="skeleton-box h-16"></div><div class="skeleton-box h-16"></div><div class="skeleton-box h-16"></div><div class="skeleton-box h-16"></div>
+                </div>
+            </div>`;
+    }
+
+    function renderAcademicsSkeleton(container) {
+        container.innerHTML = `
+            <div class="flex justify-between items-center mb-4">
+                 <h2 class="text-2xl font-bold text-gray-800">Academics</h2>
+                 <div class="skeleton-box h-10 w-40 rounded-md"></div>
+            </div>
+            <div class="card p-4 mb-6"><div class="skeleton-box h-6 w-1/2 mb-4"></div><div class="skeleton-box h-10 w-full mb-4"></div><div class="skeleton-box h-40 w-full"></div></div>
+            <div class="card p-4 mb-6"><div class="skeleton-box h-6 w-1/3 mb-4"></div><div class="skeleton-box h-12 w-full"></div></div>
+            <div class="card p-4 mb-6"><div class="skeleton-box h-6 w-1/4 mb-4"></div><div class="skeleton-box h-24 w-full"></div></div>
+        `;
+    }
+
+    function renderFeesSkeleton(c){c.innerHTML=`<h2 class="text-2xl font-bold text-gray-800 mb-4">My Fees</h2><div class="grid grid-cols-1 md:grid-cols-3 gap-4"><div class="card p-4"><div class="skeleton-box h-5 w-24 mb-2"></div><div class="skeleton-box h-8 w-32"></div></div><div class="card p-4"><div class="skeleton-box h-5 w-20 mb-2"></div><div class="skeleton-box h-8 w-28"></div></div><div class="card p-4"><div class="skeleton-box h-5 w-24 mb-2"></div><div class="skeleton-box h-8 w-32"></div></div></div><div class="text-center my-6"><div class="skeleton-box h-12 w-48 mx-auto rounded-lg"></div></div><div class="card p-4 mt-6"><div class="skeleton-box h-6 w-1/2 mb-4"></div><div class="space-y-3"><div class="skeleton-box h-5"></div><div class="skeleton-box h-5"></div></div></div><div class="card p-4 mt-6"><div class="skeleton-box h-6 w-1/3 mb-4"></div><div class="space-y-4"><div class="skeleton-box h-10"></div></div></div>`;}
+   
+
+    function renderActivitiesSkeleton(container) {
+        container.innerHTML = `
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Activities & Fests</h2>
+            <div class="card p-4 mb-6"><div class="skeleton-box h-6 w-1/3 mb-4"></div>
+            <div class="flex items-center"><div class="skeleton-box w-12 h-12 rounded-full mr-4"></div>
+            <div class="skeleton-box h-6 w-1/2"></div></div></div>
+            <div class="card p-4"><div class="skeleton-box h-6 w-1/2 mb-4"></div>
+            <div class="skeleton-box h-5 w-1/3 mb-2"></div><div class="skeleton-box h-4 w-1/4"></div>
+            </div>
+        `;
+    }
+
+    function renderHeader() {
+        document.getElementById('header-student-name').textContent = state.student.name;
+        if (state.student.photoDriveId) {
+             document.getElementById('header-profile-pic').src = `https://drive.google.com/thumbnail?id=${state.student.photoDriveId}&sz=w100-h100`;
+        }
+        const className = cache.classes.find(c => c.id === state.student.classId)?.name || 'N/A';
+        document.getElementById('header-student-class').textContent = `Class ${className} - ${state.student.division}`;
+    }
+
+    function populateHomeData(container) {
+        const attendancePercentage = calculateAttendancePercentage();
+        const setup = (cache.studentFeeSetups[currentAcademicYear] || []).find(sfs => sfs.studentId === state.student.id);
+        const payments = cache.receipts[currentAcademicYear] || [];
+        const totalPaid = payments.filter(r => r.studentId === state.student.id && !r.isCancelled).reduce((sum, p) => sum + p.totalAmount, 0);
+        const balance = setup ? (setup.totalPayable - totalPaid) : 0;
+        
+        container.innerHTML = `
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-gray-800">Dashboard</h2>
+                <button id="refresh-dashboard-btn" class="text-blue-600 hover:text-blue-800 transition-colors font-semibold py-1 px-3 rounded-md bg-blue-100 hover:bg-blue-200">
+                    <i class="fas fa-sync-alt mr-2"></i>Refresh
+                </button>
+            </div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 fade-in">
+                 <div class="card text-center p-4">
+                    <i class="fas fa-calendar-check text-3xl text-green-500 mb-2"></i>
+                    <span class="font-bold text-gray-700">Attendance</span>
+                    <span class="text-lg block font-semibold text-gray-800">${attendancePercentage}%</span>
+                </div>
+                 <div class="card text-center p-4">
+                    <i class="fas fa-receipt text-3xl text-yellow-500 mb-2"></i>
+                    <span class="font-bold text-gray-700">Fee Balance</span>
+                    <span class="text-lg block font-semibold text-gray-800">₹${balance.toFixed(2)}</span>
+                </div>
+            </div>
+            <div class="card p-4 mt-6 fade-in" style="animation-delay: 0.2s;">
+                <h3 class="font-bold text-lg text-gray-700 mb-3"><i class="fas fa-clock mr-2 text-gray-400"></i>Today's Timetable</h3>
+                <div id="today-timetable"></div>
+            </div>
+        `;
+
+        renderTodayTimetable();
+        document.getElementById('refresh-dashboard-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('refresh-dashboard-btn');
+            btn.innerHTML = `<i class="fas fa-sync-alt mr-2 animate-spin"></i>Refreshing...`;
+            btn.disabled = true;
+            document.getElementById('home-view').dataset.loaded = 'false';
+            cache.attendance = null; // force refetch
+            await loadViewData('home-view');
+        });
+    }
+
+    function populateAcademicsData(container) {
+        const yearOptions = allAcademicYears.map(year => `<option value="${year}" ${year === currentAcademicYear ? 'selected' : ''}>${year}</option>`).join('');
+        container.innerHTML = `
+            <div class="flex justify-between items-center mb-4 fade-in">
+                 <h2 class="text-2xl font-bold text-gray-800">Academics</h2>
+                 <select id="academic-year-select" class="p-2 border rounded-md bg-white shadow-sm">${yearOptions}</select>
+            </div>
+            <div id="academics-content-for-year"></div>
+        `;
+        document.getElementById('academic-year-select').addEventListener('change', (e) => {
+            currentAcademicYear = e.target.value;
+            renderAcademicsForYear();
+        });
+        renderAcademicsForYear();
+    }
+    
+    function populateFeesData(container) {
+        const setup = (cache.studentFeeSetups[currentAcademicYear] || []).find(sfs => sfs.studentId === state.student.id);
+        const payments = (cache.receipts[currentAcademicYear] || []).filter(r => r.studentId === state.student.id);
+        const pendingPayments = cache.pendingPayments[currentAcademicYear] || [];
+        let totalPaid = payments.filter(r => !r.isCancelled).reduce((sum, p) => sum + p.totalAmount, 0);
+        const balance = setup ? (setup.totalPayable - totalPaid) : 0;
+
+        container.innerHTML = `
+            <h2 class="text-2xl font-bold text-gray-800 mb-4 fade-in">My Fees (${currentAcademicYear})</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 fade-in">
+                <div class="card bg-blue-500 text-white p-4"><h3 class="font-semibold">Total Payable</h3><p class="text-3xl font-bold">₹${setup?.totalPayable.toFixed(2) || '0.00'}</p></div>
+                <div class="card bg-green-500 text-white p-4"><h3 class="font-semibold">Total Paid</h3><p class="text-3xl font-bold">₹${totalPaid.toFixed(2)}</p></div>
+                <div class="card bg-red-500 text-white p-4"><h3 class="font-semibold">Balance Due</h3><p class="text-3xl font-bold">₹${balance.toFixed(2)}</p></div>
+            </div>
+            <div class="text-center my-6 fade-in"><button id="pay-online-btn" class="bg-green-600 text-white font-bold py-3 px-6 rounded-lg text-lg hover:bg-green-700 transition"><i class="fas fa-qrcode mr-2"></i>Pay Online</button></div>
+            <div class="card p-4 mt-6 fade-in"><h3 class="font-bold text-lg text-gray-700 mb-2">Fee Breakdown</h3>${setup ? `<ul class="text-sm space-y-2"><li class="flex justify-between"><span>Arrears:</span> <span>₹ ${setup.arrears?.toFixed(2) || '0.00'}</span></li><li class="flex justify-between"><span>Tuition:</span> <span>₹ ${setup.tf1?.toFixed(2)} / ${setup.tf2?.toFixed(2)} / ${setup.tf3?.toFixed(2)}</span></li><li class="flex justify-between"><span>Vehicle:</span> <span>₹ ${setup.vf1?.toFixed(2)} / ${setup.vf2?.toFixed(2)} / ${setup.vf3?.toFixed(2)}</span></li><li class="flex justify-between text-red-600"><span>Concession:</span> <span>- ₹ ${setup.concession?.toFixed(2) || '0.00'}</span></li></ul>` : '<p class="text-gray-500">Fee structure not set.</p>'}</div>
+            <div class="card p-4 mt-6 fade-in"><h3 class="font-bold text-lg text-gray-700 mb-2">Payment History</h3>${payments.length > 0 ? `<ul class="space-y-3">${payments.map(p => `<li class="flex justify-between items-center text-sm border-b pb-2 last:border-b-0"><div><p class="font-semibold">Receipt: ${p.receiptNo}</p><p class="text-gray-500">Date: ${new Date(p.date.seconds * 1000).toLocaleDateString('en-GB')}</p></div><span class="font-bold ${p.isCancelled ? 'text-red-500' : 'text-green-600'}">₹ ${p.totalAmount.toFixed(2)} ${p.isCancelled ? '(Cancelled)' : ''}</span></li>`).join('')}</ul>` : '<p class="text-gray-500">No approved payments.</p>'}</div>
+            ${pendingPayments.length > 0 ? `
+<div class="card p-4 mt-6 fade-in border-l-4 border-yellow-400">
+  <h3 class="font-bold text-lg text-yellow-800 mb-2">Pending Payments</h3>
+  <p class="text-sm text-gray-600 mb-3">These payments are awaiting approval.</p>
+  <ul class="space-y-3">
+    ${pendingPayments.map(p => {
+      // Map statuses to Tailwind colors
+      let statusColors = {
+        'Pending': 'bg-yellow-200 text-yellow-800',
+        'approved': 'bg-green-200 text-green-800',
+        'rejected': 'bg-red-200 text-red-800'
+      };
+      let badgeClass = statusColors[p.status] || 'bg-gray-200 text-gray-800';
+
+      return `
+        <li class="flex justify-between items-center text-sm border-b pb-2 last:border-b-0">
+          <div>
+            <p class="font-semibold">UTR: ${p.transactionId}</p>
+            <p class="text-gray-500">Submitted: ${p.submissionDate ? new Date(p.submissionDate.seconds * 1000).toLocaleDateString('en-GB') : 'N/A'}</p>
+          </div>
+          <div class="text-right">
+            <span class="font-bold text-gray-800">₹ ${p.amount.toFixed(2)}</span>
+            <span class="block text-xs font-semibold px-2 py-0.5 rounded-full mt-1 ${badgeClass}">
+              ${p.status}
+            </span>
+          </div>
+        </li>
+      `;
+    }).join('')}
+  </ul>
+</div>
+` : ''}
+`;
+        document.getElementById('pay-online-btn').addEventListener('click', () => openPaymentModal(balance));
+    }
+
+    function populateActivitiesData(container) {
+        const student = state.student;
+        const house = cache.festHouses.find(h => h.id === student.houseId);
+
+        container.innerHTML = `
+            <h2 class="text-2xl font-bold text-gray-800 mb-4 fade-in">Activities & Fests</h2>
+            <div class="card p-4 mb-6 fade-in">
+                <h3 class="font-bold text-lg text-gray-700">My House</h3>
+                <div class="flex items-center mt-2">
+                    <div class="w-12 h-12 rounded-full mr-4" style="background-color: ${house?.color || '#ccc'}"></div>
+                    <div>
+                        <p class="text-xl font-semibold">${house?.name || 'Not Assigned'}</p>
+                    </div>
+                </div>
+            </div>
+            <div id="fest-details-container" class="space-y-4 fade-in"></div>
+        `;
+        renderFestDetails();
+    }
+    
+    function renderProfileView() {
+        const container = document.getElementById('profile-view');
+        const student = state.student;
+        const className = cache.classes.find(c => c.id === student.classId)?.name || 'N/A';
+        
+        container.innerHTML = `
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">My Profile</h2>
+            <div class="card p-4">
+                <div class="text-center">
+                    <img src="${student.photoDriveId ? `https://drive.google.com/thumbnail?id=${student.photoDriveId}&sz=w200-h200` : 'https://placehold.co/128x128'}" class="w-32 h-32 rounded-full mx-auto object-cover mb-4 shadow-md">
+                    <h3 class="text-xl font-bold">${student.name}</h3>
+                    <p class="text-gray-500">${className} - ${student.division}</p>
+                </div>
+                <div class="mt-6 border-t border-gray-200 pt-6">
+                    <dl class="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
+                        <div class="sm:col-span-1"><dt class="text-sm font-medium text-gray-500">Admission No.</dt><dd class="mt-1 text-sm text-gray-900">${student.admissionNumber}</dd></div>
+                        <div class="sm:col-span-1"><dt class="text-sm font-medium text-gray-500">Date of Birth</dt><dd class="mt-1 text-sm text-gray-900">${student.dob}</dd></div>
+                        <div class="sm:col-span-1"><dt class="text-sm font-medium text-gray-500">Father's Name</dt><dd class="mt-1 text-sm text-gray-900">${student.fatherName}</dd></div>
+                        <div class="sm:col-span-1"><dt class="text-sm font-medium text-gray-500">Contact</dt><dd class="mt-1 text-sm text-gray-900">${student.mobile1}</dd></div>
+                    </dl>
+                </div>
+            </div>
+            <div class="card p-4 mt-6">
+                 <h3 class="font-bold text-lg text-gray-700 mb-3">Apply for Leave</h3>
+                 <form id="leave-application-form" class="space-y-4">
+                     <div>
+                         <label for="leave-date" class="block text-sm font-medium text-gray-700">Date of Leave</label>
+                         <input type="date" id="leave-date" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                     </div>
+                     <div>
+                         <label for="leave-reason" class="block text-sm font-medium text-gray-700">Reason</label>
+                         <textarea id="leave-reason" rows="3" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"></textarea>
+                     </div>
+                     <button type="submit" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-700">Submit Request</button>
+                 </form>
+             </div>
+        `;
+    }
+    
+    // --- G. EVENT LISTENERS & INITIALIZATION ---
+    document.addEventListener('DOMContentLoaded', () => {
+        initialize();
+        
+        document.getElementById('student-login-form')?.addEventListener('submit', handleLogin);
+        document.getElementById('logout-btn')?.addEventListener('click', handleLogout);
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', () => navigateTo(item.dataset.view));
+        });
+        
+        document.getElementById('close-payment-modal')?.addEventListener('click', () => document.getElementById('paymentModal').classList.add('hidden'));
+        document.getElementById('confirm-payment-btn')?.addEventListener('click', confirmPayment); 
+        document.getElementById('close-hallticket-modal')?.addEventListener('click', () => document.getElementById('hallTicketModal').classList.add('hidden'));
+        document.getElementById('print-hall-ticket-btn')?.addEventListener('click', () => {
+             const content = document.getElementById('hall-ticket-modal-body').innerHTML;
+             const printWindow = window.open('', '_blank');
+             printWindow.document.write(`<html><head><title>Print Hall Ticket</title><script src="https://cdn.tailwindcss.com"><\/script><style>.hall-ticket-page{border:none; box-shadow:none; margin:0;} body{margin:0;}<\/style></head><body>${content}</body></html>`);
+             printWindow.document.close();
+             setTimeout(() => { printWindow.print(); printWindow.close(); }, 500);
+        });
+    });
+    
+    function renderTodayTimetable() {
+        const container = document.getElementById('today-timetable');
+        const today = new Date();
+        const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+        const todayName = days[today.getDay()];
+        const todaySchedule = cache.timetable[todayName];
+
+        if (!todaySchedule) {
+            container.innerHTML = `<p class="text-gray-500">No classes scheduled for today.</p>`;
+            return;
+        }
+
+        container.innerHTML = `
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                ${Object.keys(todaySchedule).sort((a,b) => a-b).map(period => {
+                    const subjectId = todaySchedule[period];
+                    const subject = cache.subjects.find(s => s.id === subjectId);
+                    return `
+                    <div class="p-2 bg-gray-100 rounded-md">
+                        <p class="font-semibold text-gray-500">Period ${period}</p>
+                        <p class="font-bold text-gray-800">${subject?.name || 'Free'}</p>
+                    </div>`;
+                }).join('')}
+            </div>
+        `;
+    }
+    
+    function calculateAttendancePercentage() {
+        const classKey = `${state.student.classId}-${state.student.division}`;
+        const attendanceData = cache.attendance;
+        let totalWorkingDays = 0;
+        let presentSessions = 0;
+        
+        for(const day in attendanceData) {
+            if(!isNaN(day) && attendanceData[day][classKey]?.status === 'SUBMITTED') {
+                totalWorkingDays++;
+                const exception = attendanceData[day][classKey].exceptions?.[state.student.id];
+                if(!exception) {
+                    presentSessions += 2;
+                } else {
+                    if(exception.FN) presentSessions++;
+                    if(exception.AN) presentSessions++;
+                }
+            }
+        }
+        return totalWorkingDays > 0 ? ((presentSessions / (totalWorkingDays * 2)) * 100).toFixed(1) : '100.0';
+    }
+
+    
+    function renderAcademicsForYear() {
+        const container = document.getElementById('academics-content-for-year');
+        
+        container.innerHTML = `
+            <div class="card p-4 mb-6">
+                <h3 class="font-bold text-lg text-gray-700 mb-3"><i class="fas fa-poll-h mr-2"></i>Exam Results</h3>
+                <select id="exam-select" class="w-full p-2 border rounded-md bg-gray-50 mb-4"></select>
+                <div id="exam-details"></div>
+            </div>
+            <div class="card p-4 mb-6">
+                <h3 class="font-bold text-lg text-gray-700 mb-3"><i class="fas fa-ticket-alt mr-2"></i>Hall Tickets & Seating</h3>
+                <div id="hall-ticket-details"></div>
+            </div>
+            <div class="card p-4 mb-6">
+                <h3 class="font-bold text-lg text-gray-700 mb-3"><i class="fas fa-chalkboard-teacher mr-2"></i>My Teachers</h3>
+                <div id="teacher-details"></div>
+            </div>
+            <div class="card p-4 mb-6">
+                <h3 class="font-bold text-lg text-gray-700 mb-3"><i class="fas fa-calendar-alt mr-2"></i>Weekly Timetable</h3>
+                <div id="timetable-details" class="overflow-x-auto"></div>
+            </div>
+            <div class="card p-4">
+                <h3 class="font-bold text-lg text-gray-700 mb-3"><i class="fas fa-tasks mr-2"></i>Syllabus Completion</h3>
+                <div id="syllabus-details"></div>
+            </div>
+        `;
+
+        renderExamDetailsForYear();
+        renderHallTicketDetails();
+        renderTeacherDetails();
+        renderTimetable();
+        renderSyllabusDetails();
+    }
+
+    function renderExamDetailsForYear() {
+        const examSelect = document.getElementById('exam-select');
+        const student = state.student;
+        console.log(cache.examSchedules);
+        const examsForStudent = [...new Set(cache.examSchedules
+            .filter(s => s.classId === student.classId && s.division === student.division)
+            .map(s => cache.exams.find(e => e.id === s.examId && e.isPublished))
+        )].filter(Boolean);
+
+        if (examsForStudent.length === 0) {
+            examSelect.innerHTML = '<option>No exams found for this year</option>';
+            document.getElementById('exam-details').innerHTML = '';
+            return;
+        }
+        examSelect.innerHTML = examsForStudent.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
+        examSelect.addEventListener('change', () => renderSingleExamResult(examSelect.value));
+        renderSingleExamResult(examSelect.value);
+    }
+    
+    function renderSingleExamResult(examId) {
+    const container = document.getElementById('exam-details');
+    const student = state.student;
+    const schedules = cache.examSchedules.filter(s => s.examId === examId && s.classId === student.classId && s.division === student.division);
+    
+    // CORRECTED: Filter the marks array directly
+    const marksForExam = cache.marks.filter(m => m.examId === examId);
+
+    if(schedules.length === 0) {
+        container.innerHTML = `<p class="text-gray-500">Results not published for this exam.</p>`;
+        return;
+    }
+
+    let totalMarks = 0, maxTotalMarks = 0;
+    const results = schedules.map(schedule => {
+        const mark = marksForExam.find(m => m.subjectId === schedule.subjectId);
+        const total = (mark && mark.te !== 'AB' && mark.ce !== 'AB') ? (Number(mark.te) || 0) + (Number(mark.ce) || 0) : 'AB';
+        const maxTotal = (schedule.maxTE || 0) + (schedule.maxCE || 0);
+        
+        if(total !== 'AB') {
+            totalMarks += total;
+            maxTotalMarks += maxTotal;
+        }
+        
+        return {
+            subject: cache.subjects.find(s => s.id === schedule.subjectId)?.name || 'N/A',
+            te: mark?.te ?? 'N/A',
+            ce: mark?.ce ?? 'N/A',
+            total,
+            maxTotal
+        };
+    });
+
+    const percentage = maxTotalMarks > 0 ? (totalMarks / maxTotalMarks * 100).toFixed(2) : 0;
+
+    // The rest of your HTML generation for the table remains the same...
+    container.innerHTML = `
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm text-left text-gray-500">
+                <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-2">Subject</th>
+                        <th class="px-4 py-2 text-center">Theory</th>
+                        <th class="px-4 py-2 text-center">Internal</th>
+                        <th class="px-4 py-2 text-center">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${results.map(r => `
+                    <tr class="bg-white border-b">
+                        <td class="px-4 py-2 font-medium text-gray-900">${r.subject}</td>
+                        <td class="px-4 py-2 text-center">${r.te}</td>
+                        <td class="px-4 py-2 text-center">${r.ce}</td>
+                        <td class="px-4 py-2 text-center font-bold">${r.total}/${r.maxTotal}</td>
+                    </tr>
+                    `).join('')}
+                </tbody>
+                <tfoot class="bg-gray-100 font-semibold">
+                    <tr>
+                        <td colspan="3" class="px-4 py-2 text-right">Grand Total:</td>
+                        <td class="px-4 py-2 text-center">${totalMarks}/${maxTotalMarks} (${percentage}%)</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    `;
+}
+
+    function renderHallTicketDetails() {
+        const container = document.getElementById('hall-ticket-details');
+        const student = state.student;
+        const activeExamsWithRegNo = cache.exams.filter(e => e.published && student.examRegNumbers?.[e.id]);
+
+        if (activeExamsWithRegNo.length === 0) {
+            container.innerHTML = `<p class="text-gray-500">No active hall tickets available.</p>`;
+            return;
+        }
+        
+        container.innerHTML = activeExamsWithRegNo.map(exam => {
+            const regNo = student.examRegNumbers[exam.id];
+            const hasAllocation = Object.keys(student.examRoomAllocations || {}).some(key => key.startsWith(exam.id));
+
+            return `
+            <div class="flex justify-between items-center p-3 border rounded-md mb-2">
+                <div>
+                    <p class="font-semibold">${exam.name}</p>
+                    <p class="text-sm text-gray-600">Reg No: ${regNo}</p>
+                </div>
+                ${hasAllocation ? `<button class="bg-blue-500 text-white px-3 py-1 rounded-md text-sm" onclick="window.showHallTicket('${exam.id}')">View Ticket</button>` : '<span class="text-sm text-gray-400">Seating not assigned</span>'}
+            </div>
+            `}).join('');
+        
+        window.showHallTicket = (examId) => {
+            const hallTicketModal = document.getElementById('hallTicketModal');
+            const modalBody = document.getElementById('hall-ticket-modal-body');
+            modalBody.innerHTML = generateSingleHallTicketHTML(state.student.id, examId);
+            hallTicketModal.classList.remove('hidden');
+        }
+    }
+    
+    function renderTeacherDetails() {
+        const container = document.getElementById('teacher-details');
+        const student = state.student;
+        const classTeacher = cache.teachers.find(t => t.classCharge?.classId === student.classId && t.classCharge?.division === student.division);
+        const subjectTeachers = cache.classroomSubjects
+            .filter(cs => cs.classId === student.classId && cs.division === student.division)
+            .map(cs => ({
+                subject: cache.subjects.find(s => s.id === cs.subjectId)?.name || 'Unknown',
+                teacher: cache.teachers.find(t => t.id === cs.teacherId)?.name || 'N/A'
+            }))
+            .sort((a, b) => a.subject.localeCompare(b.subject));
+            
+        container.innerHTML = `
+            <p class="mb-3"><strong>Class Teacher:</strong> ${classTeacher?.name || 'Not Assigned'}</p>
+            <ul class="space-y-2 text-sm">
+                ${subjectTeachers.map(st => `<li class="flex justify-between p-2 bg-gray-50 rounded-md"><span>${st.subject}</span><span class="text-gray-600">${st.teacher}</span></li>`).join('')}
+            </ul>
+        `;
+    }
+
+    function renderTimetable() {
+        const container = document.getElementById('timetable-details');
+        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const periods = Array.from({length: 8}, (_,i) => i+1);
+
+        let tableHTML = `<table class="w-full text-xs text-center"><thead><tr class="bg-gray-100"><th class="p-1 border">Day</th>${periods.map(p => `<th class="p-1 border">${p}</th>`).join('')}</tr></thead><tbody>`;
+        days.forEach(day => {
+            tableHTML += `<tr class="border-b"><td class="p-1 border font-semibold">${day.substring(0,3)}</td>`;
+            const daySchedule = cache.timetable[day] || {};
+            periods.forEach(period => {
+                const subjectId = daySchedule[period];
+                const subject = subjectId ? cache.subjects.find(s => s.id === subjectId) : null;
+                tableHTML += `<td class="p-1 border">${subject?.name || '-'}</td>`;
+            });
+            tableHTML += `</tr>`;
+        });
+        tableHTML += `</tbody></table>`;
+        container.innerHTML = tableHTML;
+    }
+
+    function renderSyllabusDetails() {
+        const container = document.getElementById('syllabus-details');
+        const student = state.student;
+        const subjectsForStudent = cache.classroomSubjects.filter(cs => cs.classId === student.classId && cs.division === student.division);
+        
+        if (subjectsForStudent.length === 0) {
+            container.innerHTML = `<p class="text-gray-500">Syllabus information is not available.</p>`;
+            return;
+        }
+
+        let accordionHTML = '<div class="space-y-2">';
+        subjectsForStudent.forEach(cs => {
+            const subject = cache.subjects.find(s => s.id === cs.subjectId);
+            const completions = cache.syllabusCompletion.filter(sc => sc.classId === student.classId && sc.division === student.division && sc.subjectId === cs.subjectId);
+            const totalTopics = 1; // Placeholder: you'd need to fetch syllabuses collection
+            const percentage = totalTopics > 0 ? (completions.length / totalTopics * 100).toFixed(0) : 0;
+            
+            accordionHTML += `
+                <div>
+                    <div class="flex justify-between items-center">
+                        <span class="font-semibold">${subject.name}</span>
+                        <span class="text-sm text-gray-600">${percentage}% complete</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5 mt-1">
+                        <div class="bg-blue-600 h-2.5 rounded-full" style="width: ${percentage}%"></div>
+                    </div>
+                </div>
+            `;
+        });
+        accordionHTML += `</div>`;
+        container.innerHTML = accordionHTML;
+    }
+
+    
+
+    // This variable will hold the amount for which the QR was generated
+let lockedPaymentAmount = 0;
+
+function openPaymentModal(balance) {
+    const paymentModal = document.getElementById('paymentModal');
+    const amountInput = document.getElementById('payment-amount');
+    const generateBtn = document.getElementById('generate-qr-btn');
+    const qrContainer = document.getElementById('qr-code-container');
+    const upiLinkButton = document.getElementById('pay-with-upi-app-btn');
+    
+    // Reset state when opening the modal
+    document.getElementById('modal-balance-due').textContent = `₹ ${balance.toFixed(2)}`;
+    amountInput.value = balance > 0 ? balance.toFixed(2) : '';
+    amountInput.disabled = false;
+    generateBtn.disabled = false;
+    lockedPaymentAmount = 0;
+    qrContainer.innerHTML = '<p class="text-center text-gray-500">Enter an amount and click "Generate QR" to begin.</p>';
+    upiLinkButton.classList.add('opacity-50', 'cursor-not-allowed');
+    upiLinkButton.href = '#';
+
+    const generateQRCode = () => {
+        const amount = parseFloat(amountInput.value);
+        const upiUriDisplay = document.getElementById('upi-uri-display');
+        qrContainer.innerHTML = '';
+        
+        if (isNaN(amount) || amount <= 0) {
+            qrContainer.innerHTML = '<p class="text-center text-red-500">Please enter a valid amount.</p>';
+            return;
+        }
+        
+        // --- Lock the amount ---
+        lockedPaymentAmount = amount;
+        amountInput.disabled = true;
+        generateBtn.disabled = true;
+        
+        upiLinkButton.classList.remove('opacity-50', 'cursor-not-allowed');
+
+        const upiId = state.schoolDetails.upiId || 'default@upi';
+        const payeeName = state.schoolDetails.upiPayeeName || 'School Name';
+        const transactionNote = `Fee for Admn No: ${state.student.admissionNumber}`;
+        const upiURI = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(payeeName)}&am=${amount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(transactionNote)}`;
+        
+        new QRCode(qrContainer, { text: upiURI, width: 180, height: 180 });
+        upiUriDisplay.textContent = upiURI;
+        upiLinkButton.href = upiURI;
+    };
+    
+    // Clear QR code if amount is changed, forcing regeneration
+    amountInput.addEventListener('input', () => {
+        if (lockedPaymentAmount > 0) {
+            qrContainer.innerHTML = '<p class="text-center text-orange-500">Amount changed. Please generate a new QR code.</p>';
+            lockedPaymentAmount = 0;
+            generateBtn.disabled = false;
+            upiLinkButton.classList.add('opacity-50', 'cursor-not-allowed');
+            upiLinkButton.href = '#';
+        }
+    });
+
+    generateBtn.addEventListener('click', generateQRCode);
+    paymentModal.classList.remove('hidden');
+}
+
+
+// Make sure you import getDoc from Firebase at the top of your script
+// import { getFirestore, doc, setDoc, getDoc, serverTimestamp } from "...";
+
+async function confirmPayment() {
+    const amount = parseFloat(document.getElementById('payment-amount').value);
+    const transactionId = document.getElementById('upi-transaction-id').value.trim();
+    const stored = sessionStorage.getItem('paymentDetails');
+    let storedDetails = stored ? JSON.parse(stored) : {};
+
+    if (!transactionId) {
+        alert('Please enter the UPI Transaction ID (UTR).');
+        return;
+    }
+
+    const loadingOverlay = document.getElementById('loading-overlay');
+    loadingOverlay.style.display = 'flex';
+    
+    // Create a reference to the document using the transaction ID
+    const paymentRef = doc(db, `/artifacts/${appId}/public/data/feeData/${currentAcademicYear}/pendingPayments`, transactionId);
+
+    try {
+        // Step 1: Try to get the document first
+        const docSnap = await getDoc(paymentRef);
+
+        // Step 2: Check if the document already exists
+        if (docSnap.exists()) {
+            // If it exists, alert the user, show the details, and close the main modal
+            alert('This transaction ID has already been submitted.');
+            showExistingPaymentPopup(docSnap.data());
+            document.getElementById('paymentModal').classList.add('hidden'); // NEW: Close the modal
+        } else {
+            // If it does NOT exist, save the new payment data
+            const paymentData = {
+                studentId: state.student.id,
+                studentName: state.student.name,
+                classId: state.student.classId,
+                division: state.student.division,
+                amount,
+                transactionId,
+                submissionDate: serverTimestamp(),
+                financialYear: currentAcademicYear,
+                status: 'pending',
+                details: storedDetails
+            };
+            
+            await setDoc(paymentRef, paymentData);
+            alert('Payment submitted for verification! It will reflect once approved.');
+            document.getElementById('paymentModal').classList.add('hidden');
+        }
+    } catch (error) {
+        console.error("Error checking/submitting payment:", error);
+        alert('An error occurred. Please try again.');
+    } finally {
+        loadingOverlay.style.display = 'none';
+    }
+}
+function showExistingPaymentPopup(data) {
+    // Create the popup elements
+    const popupOverlay = document.createElement('div');
+    popupOverlay.style.position = 'fixed';
+    popupOverlay.style.top = '0';
+    popupOverlay.style.left = '0';
+    popupOverlay.style.width = '100%';
+    popupOverlay.style.height = '100%';
+    popupOverlay.style.backgroundColor = 'rgba(0,0,0,0.5)';
+    popupOverlay.style.display = 'flex';
+    popupOverlay.style.justifyContent = 'center';
+    popupOverlay.style.alignItems = 'center';
+    popupOverlay.style.zIndex = '10000';
+    popupOverlay.id = 'existing-payment-popup';
+
+    // Format the date nicely
+    const submissionDate = data.submissionDate ? data.submissionDate.toDate().toLocaleString('en-IN') : 'N/A';
+
+    popupOverlay.innerHTML = `
+        <div style="background: white; padding: 25px; border-radius: 8px; width: 90%; max-width: 400px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+            <h4 style="margin-top: 0;">Transaction Already Submitted</h4>
+            <p>A payment with this ID was already recorded with the following details:</p>
+            <ul style="list-style: none; padding: 0;">
+                <li><strong>Student:</strong> ${data.studentName}</li>
+                <li><strong>Amount:</strong> ₹${data.amount.toFixed(2)}</li>
+                <li><strong>Status:</strong> ${data.status}</li>
+                <li><strong>Submitted On:</strong> ${submissionDate}</li>
+            </ul>
+            <button id="close-popup-btn" style="width: 100%; padding: 10px; border: none; background-color: #0d6efd; color: white; border-radius: 5px; cursor: pointer;">Close</button>
+        </div>
+    `;
+
+    // Add the popup to the page
+    document.body.appendChild(popupOverlay);
+
+    // Add event listener to the close button
+    document.getElementById('close-popup-btn').addEventListener('click', () => {
+        popupOverlay.remove();
+    });
+}
+
+    function generateSingleHallTicketHTML(studentId, examId) {
+        // This function would contain the detailed HTML structure of the hall ticket
+        // For brevity, a placeholder is returned. Replace with your full hall ticket HTML.
+        const student = state.students.find(s => s.id === studentId);
+        return `<div>Hall ticket for ${student.name} for exam ${examId}</div>`;
+    }
+
+    // --- 5. EVENT LISTENERS & INITIALIZATION ---
+    document.addEventListener('DOMContentLoaded', () => {
+        const loginForm = document.getElementById('student-login-form');
+        const logoutBtn = document.getElementById('logout-btn');
+        const navItems = document.querySelectorAll('.nav-item');
+        const closePaymentModalBtn = document.getElementById('close-payment-modal');
+        const confirmPaymentBtn = document.getElementById('confirm-payment-btn');
+        const closeHallTicketModalBtn = document.getElementById('close-hallticket-modal');
+        const printHallTicketBtn = document.getElementById('print-hall-ticket-btn');
+
+        initialize();
+        
+        loginForm?.addEventListener('submit', handleLogin);
+        logoutBtn?.addEventListener('click', handleLogout);
+        navItems.forEach(item => {
+            item.addEventListener('click', () => navigateTo(item.dataset.view));
+        });
+        closePaymentModalBtn?.addEventListener('click', () => document.getElementById('paymentModal').classList.add('hidden'));
+        confirmPaymentBtn?.addEventListener('click', confirmPayment); 
+        closeHallTicketModalBtn?.addEventListener('click', () => document.getElementById('hallTicketModal').classList.add('hidden'));
+        printHallTicketBtn?.addEventListener('click', () => {
+             const content = document.getElementById('hall-ticket-modal-body').innerHTML;
+             const printWindow = window.open('', '_blank');
+             printWindow.document.write(`<html><head><title>Print Hall Ticket</title><link href="https://cdn.tailwindcss.com/stylesheet"><style>@media print{.no-print{display:none;}} .hall-ticket-page{border:none; box-shadow:none; margin:0;} body{margin:0;}</style></head><body>${content}</body></html>`);
+             printWindow.document.close();
+             setTimeout(() => { printWindow.print(); printWindow.close(); }, 250);
+        });
+    });
+
+// MODIFIED Screenshot Processing Logic
+const screenshotInput = document.getElementById('upi-screenshot');
+const utrField = document.getElementById('upi-transaction-id');
+const confirmBtn = document.getElementById('confirm-payment-btn');
+const scanStatus = document.getElementById('scan-status');
+const previewContainer = document.getElementById('screenshot-preview');
+const previewImg = document.getElementById('screenshot-img');
+const ocrSpinner = document.getElementById('ocr-spinner'); // Get the spinner
+
+if (screenshotInput) {
+    sessionStorage.removeItem('paymentDetails');
+    confirmBtn.disabled = true;
+
+    screenshotInput.addEventListener('change', async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        // Show preview
+        const reader = new FileReader();
+        reader.onload = e => {
+            previewImg.src = e.target.result;
+            previewContainer.classList.remove('hidden');
+        };
+        reader.readAsDataURL(file);
+
+        // --- NEW: Show spinner, hide status text ---
+        scanStatus.classList.add('hidden');
+        ocrSpinner.classList.remove('hidden');
+        confirmBtn.disabled = true;
+        confirmBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+        try {
+            const { data: { text } } = await Tesseract.recognize(file, 'eng');
+            console.log('Extracted text:', text);
+
+            const utrMatch = text.match(/\b([0-9]{4})\s?([0-9]{4})\s?([0-9]{4})\b|\b[4-9]\d{9,11}\b/);
+            const amtMatch = text.match(/(?:₹|INR|Rs\.?)\s?([\d,]+(?:\.\d{1,2})?)/i);
+            const dateMatch = text.match(/\b\d{1,2}[-/\.]\d{1,2}[-/\.]\d{2,4}\b/);
+            const timeMatch = text.match(/\b\d{1,2}:\d{2}\s?(?:AM|PM)?\b/);
+            
+            // --- Autofill and Validate Amount ---
+            if (amtMatch) {
+                const detectedAmount = parseFloat(amtMatch[1].replace(/,/g, ''));
+                if (lockedPaymentAmount > 0 && detectedAmount !== lockedPaymentAmount) {
+                     alert(`Warning: The amount detected in the screenshot (₹${detectedAmount}) does not match the amount for the generated QR code (₹${lockedPaymentAmount}). Please ensure you paid the correct amount.`);
+                }
+                document.getElementById('payment-amount').value = detectedAmount;
+            }
+            if (utrMatch) utrField.value = utrMatch[0].replace(/\s/g, '');
+
+            // --- Build details message ---
+            const details = [
+                utrMatch ? `UTR: ${utrMatch[0]}` : null,
+                amtMatch ? `Amount: ₹${amtMatch[1]}` : null,
+                dateMatch ? `Date: ${dateMatch[0]}` : null,
+                timeMatch ? `Time: ${timeMatch[0]}` : null
+            ].filter(Boolean).join(' | ');
+
+            const detailsdata = {
+                utr: utrMatch ? utrMatch[0].replace(/\s/g, '') : null,
+                amount: amtMatch ? amtMatch[1].replace(/,/g, '') : null,
+                date: dateMatch ? dateMatch[0] : null,
+                time: timeMatch ? timeMatch[0] : null,
+                uploadedAt: new Date().toISOString()
+            };
+            
+            if (utrMatch) {
+                scanStatus.textContent = `✅ Extracted: ${details}`;
+                confirmBtn.disabled = false;
+                confirmBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                sessionStorage.setItem('paymentDetails', JSON.stringify(detailsdata));
+            } else {
+                scanStatus.textContent = `⚠️ Could not detect UTR. ${details ? "Found: " + details : ""}`;
+            }
+
+        } catch (error) {
+            console.error('OCR Error:', error);
+            scanStatus.textContent = '❌ Failed to scan image. Try a clearer screenshot.';
+        } finally {
+            // --- NEW: Hide spinner, show status text ---
+            ocrSpinner.classList.add('hidden');
+            scanStatus.classList.remove('hidden');
+        }
+    });
+
+    // Manual entry validation
+    utrField.addEventListener('input', () => {
+        const valid = /^[0-9A-Z]{12,22}$/.test(utrField.value.trim()); // Standard UTR length
+        confirmBtn.disabled = !valid;
+        confirmBtn.classList.toggle('opacity-50', !valid);
+        confirmBtn.classList.toggle('cursor-not-allowed', !valid);
+    });
+}
+// --- DEXIE DB SETUP ---
+const dexieDb = new Dexie('studentPortalDB');
+dexieDb.version(6).stores({ // Increased version number for the schema change
+    // --- METADATA ---
+    meta: 'collection',
+    collections: 'name',
+
+    // --- STUDENT DATA (with indices for querying) ---
+    students: 'id,admissionNumber',
+    marks: 'id,studentId,examId',
+    pendingPayments: 'id,studentId',
+    festRegistrations: 'id,studentId,eventId',
+    leaveApplications: 'id,studentId',
+
+    // --- STATIC & CACHED COLLECTIONS (all defined here) ---
+    classes: 'id',
+    schoolDetails: 'id',
+    subjects: 'id',
+    teachers: 'id',
+    classroomSubjects: 'id',
+    exams: 'id',
+    examSchedules: 'id',
+    holidays: 'id',
+    fests: 'id',
+    festEvents: 'id',
+    festHouses: 'id',
+    syllabusCompletion: 'id',
+    examRooms: 'id',
+
+    // --- DOCUMENT-BASED CACHES ---
+    timetable: 'id',
+    attendance: 'id',
+    
+    // --- YEAR-BASED COLLECTIONS ---
+    studentFeeSetups: 'id,studentId',
+    receipts: 'id,studentId'
+});
+</script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.1/dist/tesseract.min.js"></script>
+</body>
+</html>
+
