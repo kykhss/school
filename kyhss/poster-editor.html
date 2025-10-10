@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced DIV-Based Poster Editor</title>
+    <title>Advanced Poster Editor</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Allen&family=Inter:wght@400;700;900&family=Lato:wght@400;700&family=Montserrat:wght@400;700;900&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
@@ -44,28 +44,26 @@
             height: var(--poster-height);
             position: relative;
             overflow: hidden;
-            background-color: #ccc; /* Fallback color */
+            background-color: #ccc;
             box-shadow: var(--shadow);
             flex-shrink: 0;
+            touch-action: none; /* Prevents default browser touch actions */
         }
         .poster-element {
             position: absolute;
             user-select: none;
         }
         .editable {
-            cursor: move;
+            cursor: grab;
         }
-        .non-admin-mode .editable {
+        /* User mode only allows limited interaction */
+        .non-admin-mode .editable:not(#photo-1) {
             cursor: default;
-        }
-        /* MODIFICATION: Make photo cursor 'move' for non-admin */
-        .non-admin-mode #photo-1.editable {
-             cursor: move;
         }
         .editable p {
             margin: 0;
             padding: 0;
-            pointer-events: none; /* Allows click-through to the parent div */
+            pointer-events: none;
         }
         .selected {
             outline: 2px dashed var(--accent-color);
@@ -81,6 +79,7 @@
             bottom: -5px;
             right: -5px;
             cursor: se-resize;
+            touch-action: none;
         }
         /* MODIFICATION: Hide resize handle for non-admins */
         .non-admin-mode .resize-handle {
@@ -88,11 +87,11 @@
         }
 
         .photo-container {
+            position: relative;
             display: flex;
             justify-content: center;
             align-items: center;
             overflow: hidden;
-            position: relative;
         }
         .loading-spinner {
             position: absolute;
@@ -149,6 +148,32 @@
         .hidden { display: none !important; }
         header { width: 100%; max-width: 1600px; text-align: center; margin-bottom: 1rem; }
         .header-controls { display: flex; justify-content: center; gap: 1rem; margin-top: 1rem; flex-wrap: wrap; }
+        
+        /* --- MOBILE FRIENDLY / SCALING FIX (Recommended for usability) --- */
+        @media (max-width: 950px) {
+            .main-container {
+                flex-direction: column; 
+                align-items: center;
+                gap: 1rem;
+            }
+            /* Scale the poster down on small screens */
+            #poster-container {
+                transform: scale(0.65); 
+                margin: -90px 0; /* Adjust margin to center the scaled item */
+            }
+            #controls-panel {
+                width: 95%; /* Make controls panel nearly full width */
+                min-width: 95%;
+            }
+            .header-controls {
+                gap: 0.5rem;
+                padding: 0 10px;
+            }
+            .btn {
+                padding: 0.5rem 0.75rem;
+                font-size: 0.9rem;
+            }
+        }
     </style>
 </head>
 <body>
@@ -164,7 +189,7 @@
         </div>
     </header>
 <div id="loading" style="display:none;"></div>
-    <div class="main-container" style="width: 21cm; height: 29.7cm">
+    <div class="main-container">
         <div id="poster-container"></div>
         <div id="controls-panel">
             <div id="no-selection-message">
@@ -199,8 +224,8 @@
                         <option value="bold">Bold</option>
                     </select>
                 </div>
-                <div id="image-controls" class="control-group">
-                     <div id="container-properties">
+                 <div id="image-controls" class="control-group">
+                    <div id="container-properties">
                         <h3>Container Properties</h3>
                         <div class="btn-group">
                             <div>
@@ -231,6 +256,9 @@
                             <option value="contain">Contain</option>
                         </select>
                         <br><br>
+                        <label for="image-zoom">Zoom (%)</label>
+<input type="range" id="image-zoom" min="100" max="300" value="100">
+<br><br>
                         <label for="image-pos-x">Image Position X (%)</label>
                         <input type="range" id="image-pos-x" min="0" max="100" value="50">
                         <br><br>
@@ -252,531 +280,519 @@
             </div>
         </div>
     </div>
-    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script>
-        const poster = document.getElementById('poster-container');
-        let selectedElement = null;
-        let currentEditingExamId = null;
-        let user = null;
-        let data = {};
+<script>
+    const poster = document.getElementById('poster-container');
+    let selectedElement = null;
+    let currentEditingExamId = null;
+    let user = null;
+    let data = {};
+    let studentphoto = null;
+    let backgroundImage = null;
 
-        function getExamIdAndUserFromUrl() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const paramValue = urlParams.get('examId');
-            if(urlParams.get('name')){
-            data = {name:urlParams.get('name'),className: urlParams.get('className')
-                    ,photoDriveId: urlParams.get('photoDriveId'),rank: urlParams.get('rank')};
-            }
-            if (paramValue) {
-                [currentEditingExamId, user] = paramValue.split(',');
-            }
-            console.log(`Exam ID: ${currentEditingExamId}, User: ${user}`);
+    // --- Utility Functions ---
+
+    function getExamIdAndUserFromUrl() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const paramValue = urlParams.get('examId');
+        data = {
+            name: urlParams.get('name') || 'STUDENT NAME',
+            className: urlParams.get('className') || 'CLASS',
+            photoDriveId: urlParams.get('photoDriveId'),
+            rank: urlParams.get('rank')
+        };
+        if (paramValue) {
+            [currentEditingExamId, user] = paramValue.split(',');
         }
+        user = user || 'user'; 
+        console.log(`Exam ID: ${currentEditingExamId}, User: ${user}`);
+    }
 
-        let studentphoto = null;
-        let backgroundImage = null;
+    function rgbToHex(rgb) {
+        if (!rgb || !rgb.startsWith('rgb')) return '#000000';
+        let [r, g, b] = rgb.match(/\d+/g).map(Number);
+        return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
+    }
 
-        async function getSafeImageFromDrive(fileId) {
-            const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyBkmSNI8H6eotJjuQabNL5EpMaQbVNTru3w_06onbOSXbGboJ3WvwBWbwwfaGnK6ktjg/exec';
+    async function getSafeImageFromDrive(fileId) {
+        // Replace with your live Google Apps Script deployment URL
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyBkmSNI8H6eotJjuQabNL5EpMaQbVNTru3w_06onbOSXbGboJ3WvwBWbwwfaGnK6ktjg/exec';
+        
+        if (!fileId) return null;
+
+        try {
             const response = await fetch(`${SCRIPT_URL}?fileId=${fileId}`);
-            if (!response.ok) throw new Error('Network response from Apps Script was not ok.');
             const result = await response.json();
             if (result.success) {
                 studentphoto = result.imageData;
                 return result.imageData;
             } else {
-                studentphoto = null;
-                throw new Error(`Apps Script Error: ${result.error}`);
+                console.error(`Apps Script Error: ${result.error}`);
+                return null;
             }
+        } catch (error) {
+            console.error("Error fetching photo from Drive:", error);
+            return null;
         }
- 
-        const defaultState = {
-            elements: [
-                { id: 'background-1', type: 'background', top: 0, left: 0, width: 540, height: 675, zIndex: 0, imgSrc:backgroundImage, isEditable: false },
-                { id: 'photo-1', type: 'photo', top: 150, left: 180, width: 180, height: 240, zIndex: 1, borderWidth: 5, borderColor: '#FFFFFF', borderRadius: 0, imgSrc: 'https://placehold.co/1080x1350/003366/FFFFFF?text=', imageFit: 'cover', imagePosX: 50, imagePosY: 50, isEditable: true },
-                { id: 'text-name', type: 'text', top: 460, left: 135, width: 270, height: 'auto', zIndex: 2, content: data?`Class ${data.class}`:'XVI-A', fontSize: 60, color: '#FFD700', fontFamily: 'Inter', fontWeight: 'bold', textAlign: 'left', isEditable: true },
-                { id: 'text-class', type: 'text', top: 530, left: 67, width: 'auto', height: 'auto', zIndex: 2, content: data?`Class ${data.name}`:'MY NAME IS ', fontSize: 36, color: '#FFFFFF', fontFamily: 'Inter', fontWeight: 'bold', textAlign: 'left', isEditable: true },
-            ]
-        };
-
-        async function generateElementDOM(state) {
-            const el = document.createElement('div');
-            el.id = state.id;
-            el.classList.add('poster-element');
-            el.style.top = `${state.top}px`;
-            el.style.left = `${state.left}px`;
-            el.style.width = `${state.width}px`;
-            el.style.height = state.height === 'auto' ? 'auto' : `${state.height}px`;
-            el.style.zIndex = state.zIndex;
-            
-            if (state.isEditable) {
-                el.classList.add('editable');
-            }
-
-            if (state.type === 'photo' || state.type === 'background') {
-                if(data && data.photoDriveId && state.type === 'photo'){
-                    try {
-                        await getSafeImageFromDrive(data.photoDriveId)
-                    } catch(e) {
-                        console.error("Could not load student photo:", e);
-                    }
-                } else {
-                    studentphoto=null;
-                }
+    }
     
-                el.classList.add(state.type === 'photo' ? 'photo-container' : 'background-image');
-                el.style.border = `${state.borderWidth || 0}px solid ${state.borderColor || '#000000'}`;
-                el.style.borderRadius = `${state.borderRadius || 0}%`;
-                const img = document.createElement('img');
-                img.src = (state.type === 'photo') ? (studentphoto || state.imgSrc) : backgroundImage; 
-                img.crossOrigin = "anonymous";
-                if (state.type === 'photo') {
-                    img.classList.add(state.imageFit);
-                    img.style.objectPosition = `${state.imagePosX}% ${state.imagePosY}%`;
-                }
-                el.appendChild(img);
-            } else if (state.type === 'text') {
-                const p = document.createElement('p');
-                let newContent = state.content; 
-                switch (state.id) {
-                    case 'text-class': if (data && data.name) newContent = `${data.name}`; break;
-                    case 'text-name': if (data && data.className) newContent = `Class: ${data.className}`; break;
-                }
-                p.textContent = newContent;
-                p.style.fontSize = `${state.fontSize}px`;
-                p.style.color = state.color;
-                p.style.fontFamily = state.fontFamily;
-                p.style.fontWeight = state.fontWeight;
-                p.style.textAlign = state.textAlign;
-                el.appendChild(p);
-            }
-            poster.appendChild(el);
-            
-            if (user === 'admin' && state.isEditable) {
-                makeDraggableAndResizable(el);
-            } else if (user !== 'admin' && state.id === 'photo-1') {
-                 makeDraggableAndResizable(el); // Also make photo draggable for user
-            }
+    // --- Poster State Definition (UPDATED with imageZoom) ---
+
+    const defaultState = {
+        elements: [
+            { id: 'background-1', type: 'background', top: 0, left: 0, width: 540, height: 675, zIndex: 0, imgSrc: '', isEditable: false },
+            { id: 'photo-1', type: 'photo', top: 150, left: 180, width: 180, height: 240, zIndex: 1, borderWidth: 5, borderColor: '#FFFFFF', borderRadius: 0, imgSrc: 'https://placehold.co/1080x1350/003366/FFFFFF?text=Placeholder+Image', imageFit: 'cover', imagePosX: 50, imagePosY: 50, imageZoom: 100, isEditable: true },
+            { id: 'text-class', type: 'text', top: 460, left: 135, width: 270, height: 'auto', zIndex: 2, content: 'Class: XVI-A', fontSize: 60, color: '#FFD700', fontFamily: 'Inter', fontWeight: 'bold', textAlign: 'left', isEditable: true },
+            { id: 'text-name', type: 'text', top: 530, left: 67, width: 'auto', height: 'auto', zIndex: 2, content: 'MY NAME IS', fontSize: 36, color: '#FFFFFF', fontFamily: 'Inter', fontWeight: 'bold', textAlign: 'left', isEditable: true },
+        ]
+    };
+
+    // --- DOM Generation and Interactivity ---
+
+    function makeDraggableAndResizable(el) {
+        let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+        
+        function dragMouseDown(e) {
+            e.preventDefault();
+            if (user !== 'admin' && el.id !== 'photo-1') return;
+
+            pos3 = e.clientX;
+            pos4 = e.clientY;
+            document.onmouseup = closeDragElement;
+            document.onmousemove = elementDrag;
+            selectElement(el);
         }
         
-        function loadState(state) {
-            document.getElementById('loading').style.display = 'block';
-            poster.innerHTML = '';
-            const promises = state.elements.map(generateElementDOM);
-            Promise.all(promises).then(() => {
-                document.getElementById('loading').style.display = 'none';
-            });
+        function elementDrag(e) {
+            e.preventDefault();
+            pos1 = pos3 - e.clientX;
+            pos2 = pos4 - e.clientY;
+            pos3 = e.clientX;
+            pos4 = e.clientY;
+            el.style.top = (el.offsetTop - pos2) + "px";
+            el.style.left = (el.offsetLeft - pos1) + "px";
+            if(user === 'admin') autoSaveToLocal();
         }
 
-        function selectElement(el) {
-            if (selectedElement) {
-                selectedElement.classList.remove('selected');
-                const handle = selectedElement.querySelector('.resize-handle');
-                if (handle) handle.remove();
+        function closeDragElement() {
+            document.onmouseup = null;
+            document.onmousemove = null;
+        }
+        
+        el.onmousedown = dragMouseDown;
+
+        const handle = el.querySelector('.resize-handle');
+        if (handle && user === 'admin') {
+            handle.onmousedown = function(e) {
+                e.stopPropagation();
+                let startX = e.clientX, startY = e.clientY;
+                let startWidth = parseInt(document.defaultView.getComputedStyle(el).width, 10);
+                let startHeight = parseInt(document.defaultView.getComputedStyle(el).height, 10);
+
+                function doResize(e) {
+                    el.style.width = (startWidth + e.clientX - startX) + 'px';
+                    el.style.height = (startHeight + e.clientY - startY) + 'px';
+                    updateControlsPanel();
+                }
+                function stopResize() {
+                    document.removeEventListener('mousemove', doResize);
+                    document.removeEventListener('mouseup', stopResize);
+                    autoSaveToLocal();
+                }
+                document.addEventListener('mousemove', doResize);
+                document.addEventListener('mouseup', stopResize);
+            };
+        } else if (handle) {
+            handle.remove();
+        }
+    }
+    
+    async function generateElementDOM(state) {
+        const el = document.createElement('div');
+        el.id = state.id;
+        el.classList.add('poster-element');
+        el.style.top = `${state.top}px`;
+        el.style.left = `${state.left}px`;
+        el.style.width = state.width === 'auto' ? 'auto' : `${state.width}px`;
+        el.style.height = state.height === 'auto' ? 'auto' : `${state.height}px`;
+        el.style.zIndex = state.zIndex;
+        
+        if (state.isEditable || state.id === 'photo-1') {
+            el.classList.add('editable');
+        }
+
+        if (state.type === 'photo' || state.type === 'background') {
+            el.classList.add(state.type === 'photo' ? 'photo-container' : 'background-image');
+            el.style.border = `${state.borderWidth || 0}px solid ${state.borderColor || '#000000'}`;
+            el.style.borderRadius = `${state.borderRadius || 0}%`;
+            
+            if (state.type === 'photo') {
+                const photoSrc = studentphoto || state.imgSrc;
+                el.style.backgroundImage = `url('${photoSrc}')`;
+                el.style.backgroundRepeat = 'no-repeat';
+                
+                // --- ZOOM FIX: Apply custom background-size if zoom is used ---
+                if (state.imageZoom && state.imageZoom > 100) {
+                    el.style.backgroundSize = `${state.imageZoom}%`;
+                } else {
+                    el.style.backgroundSize = state.imageFit; // 'cover' or 'contain'
+                }
+                // --- END ZOOM FIX ---
+
+                el.style.backgroundPosition = `${state.imagePosX}% ${state.imagePosY}%`;
+                
+                // Add an empty img tag for HTML structure/compatibility
+                const img = document.createElement('img');
+                img.src = ''; 
+                img.crossOrigin = "anonymous";
+                el.appendChild(img);
+                
+            } else {
+                const img = document.createElement('img');
+                img.src = backgroundImage || state.imgSrc;
+                img.style.objectFit = 'cover';
+                img.crossOrigin = "anonymous";
+                el.appendChild(img);
             }
-            if (el && el.classList.contains('editable')) {
+
+        } else if (state.type === 'text') {
+
+            const p = document.createElement('p');
+            let newContent = state.content; 
+
+            if (state.id === 'text-class' && data.className) {
+                newContent = `Class: ${data.className}`;
+            } else if (state.id === 'text-name' && data.name) {
+                newContent = `${data.name}`;
+            }
+            
+            p.textContent = newContent;
+            p.style.fontSize = `${state.fontSize}px`;
+            p.style.color = state.color;
+            p.style.fontFamily = state.fontFamily;
+            p.style.fontWeight = state.fontWeight;
+            p.style.textAlign = state.textAlign;
+            el.appendChild(p);
+        }
+        poster.appendChild(el);
+        
+        if (el.classList.contains('editable')) {
+            makeDraggableAndResizable(el);
+        }
+    }
+    
+    // --- Core Editor Logic ---
+
+    function loadState(state) {
+        const loadingEl = document.getElementById('loading');
+        loadingEl.style.display = 'block';
+        loadingEl.innerHTML = `<div class="loading-spinner"><div class="spinner"></div></div>`;
+        
+        poster.innerHTML = '';
+        
+        Promise.all(state.elements.map(generateElementDOM)).then(() => {
+            loadingEl.style.display = 'none';
+        });
+    }
+
+    function selectElement(el) {
+        if (selectedElement) {
+            selectedElement.classList.remove('selected');
+            const handle = selectedElement.querySelector('.resize-handle');
+            if (handle) handle.remove();
+        }
+        if (el && el.classList.contains('editable')) {
+            if (user !== 'admin' && el.id !== 'photo-1') {
+                selectedElement = null;
+            } else {
                 selectedElement = el;
                 selectedElement.classList.add('selected');
-                
-                if (user === 'admin') { 
+                if(user === 'admin') {
                     const handle = document.createElement('div');
                     handle.className = 'resize-handle';
                     selectedElement.appendChild(handle);
-                    // This is the call that enables resizing:
-                    attachResizeLogic(handle, selectedElement); 
                 }
-            } else {
-                selectedElement = null;
             }
-            updateControlsPanel();
+        } else {
+            selectedElement = null;
         }
+        updateControlsPanel();
+    }
 
+    const controls = {
+        text: document.getElementById('text-controls'),
+        image: document.getElementById('image-controls'),
+        layer: document.getElementById('layer-controls'),
+        noSelection: document.getElementById('no-selection-message'),
+        panel: document.getElementById('selected-item-controls'),
+        imgContainerProps: document.querySelectorAll('#image-width, #image-height, #border-radius, #border-width, #border-color'),
+    };
 
-        function makeDraggableAndResizable(el) {
-            let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
-            
-            // Helper to get X/Y from mouse or touch event
-            function getCoords(e) {
-                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-                return { clientX, clientY };
-            }
-
-            function dragMouseDown(e) {
-                e.preventDefault();
-                const { clientX, clientY } = getCoords(e);
-                
-                pos3 = clientX;
-                pos4 = clientY;
-                
-                document.addEventListener('mouseup', closeDragElement);
-                document.addEventListener('mousemove', elementDrag);
-                document.addEventListener('touchend', closeDragElement);
-                document.addEventListener('touchmove', elementDrag, { passive: false });
-
-                selectElement(el);
-            }
-            
-            function elementDrag(e) {
-                e.preventDefault();
-                const { clientX, clientY } = getCoords(e);
-                
-                pos1 = pos3 - clientX;
-                pos2 = pos4 - clientY;
-                pos3 = clientX;
-                pos4 = clientY;
-                
-                el.style.top = (el.offsetTop - pos2) + "px";
-                el.style.left = (el.offsetLeft - pos1) + "px";
-                
-                if (user === 'admin') autoSaveToLocal();
-            }
-
-            function closeDragElement() {
-                document.removeEventListener('mouseup', closeDragElement);
-                document.removeEventListener('mousemove', elementDrag);
-                document.removeEventListener('touchend', closeDragElement);
-                document.removeEventListener('touchmove', elementDrag);
-            }
-            
-            // Attach both mouse and touch listeners to the element for dragging
-            el.addEventListener('mousedown', dragMouseDown);
-            el.addEventListener('touchstart', dragMouseDown, { passive: false });
-
-            // No resize logic here (it's in attachResizeLogic)
+    function updateControlsPanel() {
+        if (!selectedElement) {
+            controls.noSelection.classList.remove('hidden');
+            controls.panel.classList.add('hidden');
+            return;
         }
         
-        const controls = {
-            text: document.getElementById('text-controls'),
-            image: document.getElementById('image-controls'),
-            layer: document.getElementById('layer-controls'),
-            noSelection: document.getElementById('no-selection-message'),
-            panel: document.getElementById('selected-item-controls'),
-            containerProps: document.getElementById('container-properties'),
-            imageProps: document.getElementById('image-properties')
-        };
+        controls.noSelection.classList.add('hidden');
+        controls.panel.classList.remove('hidden');
 
-        function updateControlsPanel() {
-            if (!selectedElement) {
-                controls.noSelection.classList.remove('hidden');
-                controls.panel.classList.add('hidden');
-                return;
-            }
-            controls.noSelection.classList.add('hidden');
-            controls.panel.classList.remove('hidden');
+        const isText = selectedElement.querySelector('p');
+        const isPhoto = selectedElement.classList.contains('photo-container');
 
-            const isText = selectedElement.querySelector('p');
-            controls.text.classList.toggle('hidden', !isText);
-            controls.image.classList.toggle('hidden', isText);
-
-            // MODIFICATION: Logic for user vs admin view
-            if (user !== 'admin') {
-                controls.text.classList.add('hidden');
-                controls.layer.classList.add('hidden');
-                if (selectedElement.id === 'photo-1') {
-                    controls.image.classList.remove('hidden');
-                    controls.containerProps.classList.add('hidden');
-                    controls.imageProps.classList.remove('hidden');
-                } else {
-                    controls.image.classList.add('hidden');
-                }
-            } else {
-                // Admin can see everything
-                controls.containerProps.classList.remove('hidden');
-                controls.imageProps.classList.remove('hidden');
-                controls.layer.classList.remove('hidden');
-            }
-
-            if (isText) {
-                const p = selectedElement.querySelector('p');
-                document.getElementById('text-content').value = p.textContent;
-                document.getElementById('font-size').value = parseInt(p.style.fontSize);
-                document.getElementById('font-color').value = rgbToHex(p.style.color);
-                document.getElementById('font-family').value = p.style.fontFamily;
-                document.getElementById('font-weight').value = p.style.fontWeight;
-            } else { // Is image
-                const img = selectedElement.querySelector('img');
-                document.getElementById('image-width').value = selectedElement.offsetWidth;
-                document.getElementById('image-height').value = selectedElement.offsetHeight;
-                document.getElementById('border-radius').value = parseInt(selectedElement.style.borderRadius) || 0;
-                document.getElementById('border-width').value = parseInt(selectedElement.style.borderWidth) || 0;
-                document.getElementById('border-color').value = rgbToHex(selectedElement.style.borderColor);
-                document.getElementById('image-fit').value = img.classList.contains('cover') ? 'cover' : 'contain';
-                const [posX, posY] = img.style.objectPosition.split(' ').map(p => parseInt(p) || 50);
-                document.getElementById('image-pos-x').value = posX;
-                document.getElementById('image-pos-y').value = posY;
-            }
-        }
+        controls.text.classList.toggle('hidden', !isText || user !== 'admin');
+        controls.layer.classList.toggle('hidden', user !== 'admin');
+        controls.image.classList.toggle('hidden', !isPhoto && user !== 'admin');
         
-        function getPosterState() {
-            const state = { elements: [] };
-            poster.querySelectorAll('.poster-element').forEach(el => {
-                const common = {
-                    id: el.id, top: el.offsetTop, left: el.offsetLeft,
-                    width: el.offsetWidth, height: el.offsetHeight,
-                    zIndex: el.style.zIndex || 0, isEditable: el.classList.contains('editable')
-                };
-                if (el.classList.contains('photo-container') || el.classList.contains('background-image')) {
-                    const img = el.querySelector('img');
-                    const [posX, posY] = (img.style.objectPosition || '50% 50%').split(' ').map(p => parseInt(p) || 50);
-                    state.elements.push({
-                        ...common, type: el.classList.contains('photo-container') ? 'photo' : 'background',
-                        borderWidth: parseInt(el.style.borderWidth) || 0, borderColor: el.style.borderColor,
-                        borderRadius: parseInt(el.style.borderRadius) || 0,
-                        imageFit: img.classList.contains('cover') ? 'cover' : 'contain', imagePosX: posX, imagePosY: posY
-                    });
-                } else {
-                    const p = el.querySelector('p');
-                    state.elements.push({
-                        ...common, type: 'text', height: 'auto', content: p.textContent, fontSize: parseInt(p.style.fontSize),
-                        color: p.style.color, fontFamily: p.style.fontFamily,
-                        fontWeight: p.style.fontWeight, textAlign: p.style.textAlign
-                    });
-                }
+        if (isText) {
+            const p = selectedElement.querySelector('p');
+            document.getElementById('text-content').value = p.textContent;
+            document.getElementById('font-size').value = parseInt(p.style.fontSize);
+            document.getElementById('font-color').value = rgbToHex(p.style.color);
+            document.getElementById('font-family').value = p.style.fontFamily;
+            document.getElementById('font-weight').value = p.style.fontWeight;
+        } 
+        
+        if (isPhoto) {
+            controls.imgContainerProps.forEach(el => {
+                const parentDiv = el.closest('.btn-group') || el.closest('div[id]');
+                if (parentDiv) parentDiv.style.display = user === 'admin' ? '' : 'none';
             });
-            return state;
-        }
 
-        function autoSaveToLocal() {
-            if (!currentEditingExamId || user !== 'admin') return;
-            const state = getPosterState();
-            localStorage.setItem(`posterDraft_${currentEditingExamId}`, JSON.stringify(state));
-            console.log("Draft saved locally for admin.");
-        }
-
-        function rgbToHex(rgb) {
-            if (!rgb || !rgb.startsWith('rgb')) return '#000000';
-            let [r, g, b] = rgb.match(/\d+/g).map(Number);
-            return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
-        }
-        
-        document.addEventListener('DOMContentLoaded', () => {
-            getExamIdAndUserFromUrl();
-            backgroundImage = data.rank === '1' ? 'tr-1t1.png' :
-                              data.rank === '2' ? 'tr-1t2.png' :
-                              data.rank === '3' ? 'tr-1t3.png' : 'tr-1t1.png';
-        
-            if (user === 'admin') {
-                setupAdminMode();
+            document.getElementById('image-width').value = selectedElement.offsetWidth;
+            document.getElementById('image-height').value = selectedElement.offsetHeight;
+            document.getElementById('border-radius').value = parseInt(selectedElement.style.borderRadius) || 0;
+            document.getElementById('border-width').value = parseInt(selectedElement.style.borderWidth) || 0;
+            document.getElementById('border-color').value = rgbToHex(selectedElement.style.borderColor);
+            
+            const currentSize = selectedElement.style.backgroundSize;
+            
+            // --- ZOOM FIX: Read current zoom level and set sliders ---
+            if (currentSize && currentSize.includes('%') && parseInt(currentSize) > 100) {
+                document.getElementById('image-fit').value = 'cover'; // Assume cover for zoomed state
+                document.getElementById('image-zoom').value = parseInt(currentSize);
             } else {
-                setupUserMode();
+                // If background-size is 'cover' or 'contain', set the fit dropdown and reset zoom slider
+                document.getElementById('image-fit').value = currentSize.includes('contain') ? 'contain' : 'cover';
+                document.getElementById('image-zoom').value = 100;
             }
             
-            document.getElementById('download-btn').addEventListener('click', (e) => {
-                e.preventDefault();
-                selectElement(null);
-                html2canvas(poster, { allowTaint: true, useCORS: true }).then(canvas => {
-                    const link = document.createElement('a');
-                    link.download = `${data.name || 'poster'}.png`;
-                    link.href = canvas.toDataURL('image/png');
-                    link.click();
+            const pos = selectedElement.style.backgroundPosition || '50% 50%';
+            const [posX, posY] = pos.split(' ').map(p => parseInt(p) || 50);
+            document.getElementById('image-pos-x').value = posX;
+            document.getElementById('image-pos-y').value = posY;
+            // --- END ZOOM FIX ---
+        }
+    }
+    
+    function getPosterState() {
+        const state = { elements: [] };
+        poster.querySelectorAll('.poster-element').forEach(el => {
+            const common = {
+                id: el.id,
+                top: el.offsetTop, left: el.offsetLeft,
+                width: el.offsetWidth, height: el.offsetHeight,
+                zIndex: el.style.zIndex || 0,
+                isEditable: el.classList.contains('editable')
+            };
+            if (el.classList.contains('photo-container') || el.classList.contains('background-image')) {
+                const isPhoto = el.classList.contains('photo-container');
+                const [posX, posY] = (el.style.backgroundPosition || '50% 50%').split(' ').map(p => parseInt(p) || 50);
+                const size = el.style.backgroundSize || 'cover';
+                
+                let imageFit = 'cover';
+                let imageZoom = 100;
+
+                // --- ZOOM FIX: Determine saved zoom state ---
+                if (size.includes('%')) {
+                    imageZoom = parseInt(size) || 100;
+                    imageFit = 'cover'; // Assume cover for zooming on an image
+                } else {
+                    imageFit = size.includes('contain') ? 'contain' : 'cover';
+                }
+                // --- END ZOOM FIX ---
+
+
+                state.elements.push({
+                    ...common, 
+                    type: isPhoto ? 'photo' : 'background',
+                    borderWidth: parseInt(el.style.borderWidth) || 0,
+                    borderColor: el.style.borderColor,
+                    borderRadius: parseInt(el.style.borderRadius) || 0,
+                    imageFit: imageFit,
+                    imagePosX: posX, imagePosY: posY,
+                    imageZoom: imageZoom
                 });
-            });
+            } else {
+                const p = el.querySelector('p');
+                state.elements.push({
+                    ...common, type: 'text', height: 'auto',
+                    content: p.textContent, fontSize: parseInt(p.style.fontSize),
+                    color: p.style.color, fontFamily: p.style.fontFamily,
+                    fontWeight: p.style.fontWeight, textAlign: p.style.textAlign
+                });
+            }
         });
+        return state;
+    }
 
-        function setupAdminMode() {
-            console.log("Running in Admin Mode.");
-            document.getElementById('no-selection-message').textContent = 'Click an element on the poster to edit it.';
-            
-            poster.addEventListener('mousedown', (e) => {
-                if (e.target === poster) selectElement(null);
-            });
-            
-            controls.panel.addEventListener('input', (e) => {
-                if (!selectedElement) return;
-                const p = selectedElement.querySelector('p');
-                const img = selectedElement.querySelector('img');
+    function autoSaveToLocal() {
+        if (!currentEditingExamId || user !== 'admin') return;
+        const state = getPosterState();
+        localStorage.setItem(`posterDraft_${currentEditingExamId}`, JSON.stringify(state));
+        console.log("Draft saved locally.");
+    }
 
+    // --- Event Listeners and Initialization ---
+
+    function setupControls() {
+        controls.panel.addEventListener('input', (e) => {
+            if (!selectedElement) return;
+            const p = selectedElement.querySelector('p');
+            
+            if(p && user === 'admin') {
                 switch(e.target.id) {
                     case 'text-content': p.textContent = e.target.value; break;
                     case 'font-size': p.style.fontSize = `${e.target.value}px`; break;
                     case 'font-color': p.style.color = e.target.value; break;
                     case 'font-family': p.style.fontFamily = e.target.value; break;
                     case 'font-weight': p.style.fontWeight = e.target.value; break;
-                    case 'image-width': selectedElement.style.width = `${e.target.value}px`; break;
-                    case 'image-height': selectedElement.style.height = `${e.target.value}px`; break;
-                    case 'border-radius': selectedElement.style.borderRadius = `${e.target.value}%`; break;
-                    case 'border-width': selectedElement.style.borderWidth = `${e.target.value}px`; break;
-                    case 'border-color': selectedElement.style.borderColor = e.target.value; break;
+                }
+            }
+            
+            if(selectedElement.classList.contains('photo-container')) {
+                switch(e.target.id) {
+                    case 'image-width': if(user === 'admin') selectedElement.style.width = `${e.target.value}px`; break;
+                    case 'image-height': if(user === 'admin') selectedElement.style.height = `${e.target.value}px`; break;
+                    case 'border-radius': if(user === 'admin') selectedElement.style.borderRadius = `${e.target.value}%`; break;
+                    case 'border-width': if(user === 'admin') selectedElement.style.borderWidth = `${e.target.value}px`; break;
+                    case 'border-color': if(user === 'admin') selectedElement.style.borderColor = e.target.value; break;
+                    
+                    // --- ZOOM FIX: Logic for Fit and Zoom sliders ---
                     case 'image-fit': 
-                        img.classList.toggle('cover', e.target.value === 'cover');
-                        img.classList.toggle('contain', e.target.value === 'contain');
+                        selectedElement.style.backgroundSize = e.target.value;
+                        document.getElementById('image-zoom').value = 100; // Reset zoom slider when choosing 'cover'/'contain'
                         break;
+                    case 'image-zoom':
+                        selectedElement.style.backgroundSize = `${e.target.value}%`;
+                        document.getElementById('image-fit').value = 'cover'; // Set fit dropdown to 'cover' when using zoom
+                        break;
+                    // --- END ZOOM FIX ---
+
                     case 'image-pos-x':
                     case 'image-pos-y':
                         const x = document.getElementById('image-pos-x').value;
                         const y = document.getElementById('image-pos-y').value;
-                        img.style.objectPosition = `${x}% ${y}%`;
+                        selectedElement.style.backgroundPosition = `${x}% ${y}%`;
                         break;
                 }
-                autoSaveToLocal();
-            });
-
-            document.getElementById('image-upload-btn').addEventListener('click', () => document.getElementById('image-upload').click());
-            document.getElementById('image-upload').addEventListener('change', (e) => {
-                if (e.target.files && e.target.files[0] && selectedElement) {
-                    const reader = new FileReader();
-                    reader.onload = (event) => {
-                        selectedElement.querySelector('img').src = event.target.result;
-                        autoSaveToLocal();
-                    }
-                    reader.readAsDataURL(e.target.files[0]);
-                }
-            });
-
-            document.getElementById('bring-forward-btn').addEventListener('click', () => {
-                if(selectedElement) selectedElement.style.zIndex = parseInt(selectedElement.style.zIndex || 0) + 1;
-                autoSaveToLocal();
-            });
-            document.getElementById('send-backward-btn').addEventListener('click', () => {
-                if(selectedElement) selectedElement.style.zIndex = Math.max(0, parseInt(selectedElement.style.zIndex || 0) - 1);
-                autoSaveToLocal();
-            });
-            
-            document.getElementById('save-btn').addEventListener('click', () => {
-                autoSaveToLocal();
-                alert('Layout Saved to Browser!');
-            });
-            document.getElementById('load-btn').addEventListener('click', () => loadForAdmin());
-            document.getElementById('reset-btn').addEventListener('click', () => {
-                if (confirm('Are you sure you want to reset to the default layout? This will clear the saved draft.')) {
-                    localStorage.removeItem(`posterDraft_${currentEditingExamId}`);
-                    loadState(defaultState);
-                }
-            });
-
-            loadForAdmin();
-        }
-        
-        function loadForAdmin() {
-            const localDraft = localStorage.getItem(`posterDraft_${currentEditingExamId}`);
-            if (localDraft) {
-                console.log("Admin loading draft from Local Storage.");
-                loadState(JSON.parse(localDraft));
-            } else {
-                console.log("Admin loading from default state.");
-                loadState(defaultState);
             }
-        }
+            if(user === 'admin') autoSaveToLocal();
+        });
 
-        function setupUserMode() {
-            console.log("Running in User/Limited Edit Mode.");
-            document.body.classList.add('non-admin-mode');
-
-            document.getElementById('save-btn').classList.add('hidden');
-            document.getElementById('load-btn').classList.add('hidden');
-            document.getElementById('reset-btn').classList.add('hidden');
-            document.getElementById('user-reset-btn').classList.remove('hidden');
-            document.getElementById('no-selection-message').textContent = 'Click the student photo to change it or adjust its position.';
-            
-            poster.addEventListener('mousedown', (e) => {
-                if (e.target === poster) selectElement(null);
-            });
-
-            document.getElementById('user-reset-btn').addEventListener('click', () => {
-                if(confirm('Are you sure you want to reset your changes?')) {
-                    loadForUser();
-                }
-            });
-
-            document.getElementById('image-upload-btn').addEventListener('click', () => {
-                 if (selectedElement && selectedElement.id === 'photo-1') {
-                    document.getElementById('image-upload').click();
-                } else {
-                     alert('Please select the student photo first to upload a new image.');
-                }
-            });
-
-            document.getElementById('image-upload').addEventListener('change', (e) => {
-                if (e.target.files && e.target.files[0] && selectedElement && selectedElement.id === 'photo-1') {
-                    const reader = new FileReader();
-                    reader.onload = (event) => {
+        const imageUploadInput = document.getElementById('image-upload');
+        document.getElementById('image-upload-btn').addEventListener('click', () => {
+            if (selectedElement && (user === 'admin' || selectedElement.id === 'photo-1')) {
+                imageUploadInput.click();
+            } else {
+                alert('Please select the element you want to replace the image in.');
+            }
+        });
+        imageUploadInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files[0] && selectedElement) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    if (selectedElement.classList.contains('photo-container')) {
+                        selectedElement.style.backgroundImage = `url('${event.target.result}')`;
+                        // Ensure it resets to cover/default zoom on new upload
+                        selectedElement.style.backgroundSize = 'cover'; 
+                        document.getElementById('image-zoom').value = 100; 
+                    } else if (selectedElement.classList.contains('background-image')) {
                         selectedElement.querySelector('img').src = event.target.result;
                     }
-                    reader.readAsDataURL(e.target.files[0]);
+                    if(user === 'admin') autoSaveToLocal();
                 }
-            });
+                reader.readAsDataURL(e.target.files[0]);
+            }
+        });
 
-            controls.panel.addEventListener('input', (e) => {
-                if (!selectedElement || selectedElement.id !== 'photo-1') return;
-                const img = selectedElement.querySelector('img');
-                 switch(e.target.id) {
-                    case 'image-fit': 
-                        img.classList.toggle('cover', e.target.value === 'cover');
-                        img.classList.toggle('contain', e.target.value === 'contain');
-                        break;
-                    case 'image-pos-x':
-                    case 'image-pos-y':
-                        const x = document.getElementById('image-pos-x').value;
-                        const y = document.getElementById('image-pos-y').value;
-                        img.style.objectPosition = `${x}% ${y}%`;
-                        break;
-                }
-                // NO autoSaveToLocal() for users
-            });
+        document.getElementById('bring-forward-btn').addEventListener('click', () => {
+            if(selectedElement && user === 'admin') selectedElement.style.zIndex = parseInt(selectedElement.style.zIndex || 0) + 1;
+            autoSaveToLocal();
+        });
+        document.getElementById('send-backward-btn').addEventListener('click', () => {
+            if(selectedElement && user === 'admin') selectedElement.style.zIndex = Math.max(0, parseInt(selectedElement.style.zIndex || 0) - 1);
+            autoSaveToLocal();
+        });
 
-            loadForUser();
-        }
-        
-        function loadForUser() {
-            const localDraft = localStorage.getItem(`posterDraft_${currentEditingExamId}`);
-            if (localDraft) {
-                console.log("User loading from Admin's Saved Draft.");
-                loadState(JSON.parse(localDraft));
-            } else {
-                console.log("No saved draft found, showing default state for user.");
+        poster.addEventListener('mousedown', (e) => {
+            if (e.target === poster) selectElement(null);
+        });
+    }
+    
+    function setupAdminView() {
+        document.getElementById('save-btn').addEventListener('click', () => {
+            autoSaveToLocal();
+            alert('Layout Saved to Browser!');
+        });
+        document.getElementById('load-btn').addEventListener('click', () => loadLayout());
+        document.getElementById('reset-btn').addEventListener('click', () => {
+            if (confirm('Are you sure you want to reset to the default layout?')) {
                 loadState(defaultState);
+                autoSaveToLocal();
             }
+        });
+    }
+
+    function setupUserView() {
+        document.getElementById('save-btn').style.display = 'none';
+        document.getElementById('load-btn').style.display = 'none';
+        document.getElementById('reset-btn').style.display = 'none';
+
+        document.body.classList.add('non-admin-mode');
+    }
+
+    async function loadLayout() {
+        backgroundImage = data.rank === '1' ? 'tr-1t1.png' :
+                          data.rank === '2' ? 'tr-1t2.png' : 
+                          data.rank === '3' ? 'tr-1t3.png' :
+                          'tr-1t1.png';
+
+        if (data.photoDriveId) {
+            await getSafeImageFromDrive(data.photoDriveId);
         }
-        // --- NEW FUNCTION TO ATTACH RESIZING LOGIC (NOW SUPPORTS TOUCH) ---
-        function attachResizeLogic(handle, el) {
-            
-            // Helper to get X/Y from mouse or touch event
-            function getCoords(e) {
-                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-                return { clientX, clientY };
-            }
 
-            function resizeMouseDown(e) {
-                e.stopPropagation(); // Prevent drag operation from starting
-                const { clientX: startX, clientY: startY } = getCoords(e);
-                
-                let startWidth = parseInt(document.defaultView.getComputedStyle(el).width, 10);
-                let startHeight = parseInt(document.defaultView.getComputedStyle(el).height, 10);
-
-                function doResize(e) {
-                    const { clientX, clientY } = getCoords(e);
-                    el.style.width = (startWidth + clientX - startX) + 'px';
-                    
-                    // Only resize height for containers (photos/backgrounds), not auto-height text
-                    if (!el.querySelector('p')) { 
-                        el.style.height = (startHeight + clientY - startY) + 'px';
-                    }
-                    updateControlsPanel();
-                }
-                
-                function stopResize() {
-                    document.removeEventListener('mousemove', doResize);
-                    document.removeEventListener('mouseup', stopResize);
-                    document.removeEventListener('touchmove', doResize);
-                    document.removeEventListener('touchend', stopResize);
-                    
-                    if (user === 'admin') autoSaveToLocal();
-                }
-                
-                // Attach both mouse and touch listeners
-                document.addEventListener('mousemove', doResize);
-                document.addEventListener('mouseup', stopResize);
-                document.addEventListener('touchmove', doResize, { passive: false });
-                document.addEventListener('touchend', stopResize);
-            }
-
-            // Attach listeners to the handle
-            handle.addEventListener('mousedown', resizeMouseDown);
-            handle.addEventListener('touchstart', resizeMouseDown, { passive: false });
+        const localDraft = localStorage.getItem(`posterDraft_${currentEditingExamId}`);
+        if (localDraft) {
+            loadState(JSON.parse(localDraft));
+        } else {
+            loadState(defaultState);
         }
-    </script>
+    }
+    
+    document.addEventListener('DOMContentLoaded', () => {
+        getExamIdAndUserFromUrl();
+        setupControls();
+        
+        if (user === 'admin') {
+            setupAdminView();
+        } else {
+            setupUserView();
+        }
+
+        loadLayout();
+        
+        document.getElementById('download-btn').addEventListener('click', () => {
+            selectElement(null); 
+            html2canvas(poster, { allowTaint: true, useCORS: true }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = `${data.name.replace(/\s/g, '_')}_poster.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            });
+        });
+    });
+</script>
 </body>
 </html>
