@@ -461,9 +461,9 @@
             let newContent = state.content; 
 
             if (state.id === 'text-class' && data.className) {
-                newContent = `Class: ${data.className}`;
-            } else if (state.id === 'text-name' && data.name) {
-                newContent = `${data.name}`;
+                newContent = `Class: ${data.name}`;
+            } else if (state.id === 'text-name' && data.className) {
+                newContent = `${data.className}`;
             }
             
             p.textContent = newContent;
@@ -796,3 +796,4 @@
 </script>
 </body>
 </html>
+
