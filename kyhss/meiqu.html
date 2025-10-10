@@ -1396,6 +1396,7 @@ const viewDependencies = {
     'subject-allocation': ['classes', 'subjects', 'teachers', 'classroomSubjects'],
     'exam-mgt': ['marks','exams', 'classes', 'subjects', 'teachers', 'examSchedules','classroomSubjects'],
     'exam-control': ['exams', 'classes', 'subjects', 'teachers', 'examSchedules','classroomSubjects','examRooms', 'examDuties', 'examAbsentees', 'examRegistrationSettings','examRoomAllocationRules'],
+    'exam-reports':['students','exams','classes','examSchedules','classroomSubjects','subjects','teachers', ],
     'attendance-mgt': ['students', 'classes', 'holidays', 'attendance'],
     'holiday-mgt': ['holidays'],
     'syllabus-tracker': ['classes', 'subjects', 'teachers', 'classroomSubjects', 'chapters', 'syllabuses', 'syllabusCompletion'],
@@ -6157,7 +6158,7 @@ window.renderExamManagement = () => {
     }
     apptitle.textContent = 'Exam Management';
     mainContent.innerHTML = `
-    <div class="tabs-container overflow-auto">
+    <div class="tabs-container">
         <ul class="nav nav-tabs d-flex flex-nowrap overflow-x-auto" id="examTab" role="tablist">
             ${isAdmin ? `<li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#schedule" type="button">Schedule</button></li>` : '<li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#schedule" type="button">Schedule</button></li>'}
             <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#timetable-view" type="button">Timetable</button></li>
@@ -7979,7 +7980,8 @@ function renderExamAddTab() {
                 id: examId,
                 name: examName,
                 sector: sector,
-                isActive: true // New exams are active by default
+                isActive: true, // New exams are active by default
+                isPublished:false
             });
             e.target.reset(); 
             showAlert('Exam Added', 'success');
@@ -8010,7 +8012,13 @@ function renderExamsList() {
                                onchange="window.toggleExamStatus('${e.id}', this.checked)">
                         <label class="form-check-label" for="exam-toggle-${e.id}">${e.isActive ? 'Active' : 'Inactive'}</label>
                     </div>
-                    <button class="btn btn-sm btn-outline-danger" onclick="window.handleDelete('exams', '${e.id}')">
+                    <div class="form-check form-switch me-3">
+                        <input class="form-check-input" type="checkbox" role="switch" 
+                               id="exam-toggle-${e.id}" ${e.isPublished ? 'checked' : ''} 
+                               onchange="window.toggleExamStatusPublish('${e.id}', this.checked)">
+                        <label class="form-check-label" for="exam-toggle-${e.id}">${e.isActive ? 'Published' : 'Unpublish'}</label>
+                    </div>
+                    <button class="btn btn-sm btn-outline-danger" onclick="window.handleDeleter('exams', '${e.id}')">
                         <i class="fas fa-trash-alt"></i>
                     </button>
                 </div>
@@ -8024,6 +8032,17 @@ function renderExamsList() {
  * @param {string} examId The ID of the exam to update.
  * @param {boolean} newStatus The new status (true for active, false for inactive).
  */
+window.toggleExamStatusPublish = async function(examId, newStatus) {
+    try {
+        const examRef = getDocRef('exams', examId);
+        await updateDoc(examRef, { isPublished: newStatus });
+        showAlert(`Exam status updated to ${newStatus ? 'Active' : 'Inactive'}.`, 'success');
+        // The real-time listener will automatically call renderExamsList() to refresh the UI.
+    } catch (error) {
+        console.error("Error updating exam status:", error);
+        showAlert('Failed to update exam status.', 'danger');
+    }
+};
 window.toggleExamStatus = async function(examId, newStatus) {
     try {
         const examRef = getDocRef('exams', examId);
@@ -32975,7 +32994,7 @@ function renderSubjectToppersTab() {
  * Calculates and displays the top 3 students for each subject in an exam.
  * @param {string} examId
  */
-function displaySubjectWiseToppers(examId) {
+async function displaySubjectWiseToppers(examId) {
     const container = document.getElementById('subject-toppers-display-container');
     if (!container) return;
     if (!examId) {
@@ -32984,7 +33003,7 @@ function displaySubjectWiseToppers(examId) {
     }
 
     container.innerHTML = `<div class="text-center p-4"><div class="spinner-border"></div><p>Calculating subject toppers...</p></div>`;
-
+    await attachMarksListener(teacherAssignedClasses);
     const schedulesForExam = examSchedules.filter(s => s.examId === examId);
     const uniqueSubjectIds = [...new Set(schedulesForExam.map(s => s.subjectId))];
 
@@ -33066,10 +33085,9 @@ function displaySubjectWiseToppers(examId) {
 /**
  * Renders the Exam Toppers tab content.
  */
-function renderExamReportsToppersTab() { // Renamed from renderExamControlToppersTab
+async function renderExamReportsToppersTab() { // Renamed from renderExamControlToppersTab
     const container = document.getElementById('exam-reports-toppers'); // Updated ID
     if (!container) return;
-
 
     container.innerHTML = `
         <div class="ui-card mb-4">
@@ -33077,12 +33095,22 @@ function renderExamReportsToppersTab() { // Renamed from renderExamControlTopper
             <div class="row g-3 align-items-end">
                 <div class="col-md-6">
                     <label class="form-label">Select Exam</label>
-                    <select id="toppers-exam-select" class="form-select">
-                        <option value="">-- Select Exam --</option>
-                        ${exams.map(e => `<option value="${e.id}">${e.name}</option>`).join('')}
-                    </select>
+                    <div class="input-group">
+                        <select id="toppers-exam-select" class="form-select">
+                            <option value="">-- Select Exam --</option>
+                            ${exams.map(e => `<option value="${e.id}">${e.name}</option>`).join('')}
+                        </select>
+                        ${selectedUser && selectedUser.role === 'admin' ? `
+                            <button id="edit-poster-template-btn" class="btn btn-outline-secondary" type="button" title="Create or Edit Poster Template">
+                                <i class="bi bi-palette-fill"></i> Edit Template
+                            </button>
+                            <button id="save-btn-template" class="btn btn-outline-primary" type="button" title="Save Poster Template to Database">
+                                <i class="bi bi-cloud-arrow-up-fill"></i> Save Template
+                            </button>
+                        ` : ''}
+                    </div>
                 </div>
-                 <div class="col-md-6">
+                <div class="col-md-6">
                     <label class="form-label">Grading System (for percentages)</label>
                     <select id="toppers-grading-system" class="form-select">
                         <option value="type1">A+, A, B+, B...</option>
@@ -33098,12 +33126,38 @@ function renderExamReportsToppersTab() { // Renamed from renderExamControlTopper
 
     const examSelect = document.getElementById('toppers-exam-select');
     const gradingSystemSelect = document.getElementById('toppers-grading-system');
-
-    const generateToppers = () => {
+     
+    // --- MODIFIED: This function is now async ---
+    const generateToppers = async () => {
+        await attachMarksListener(teacherAssignedClasses);
         const examId = examSelect.value;
         const gradingSystem = gradingSystemSelect.value;
+        
         if (examId) {
-            displayClassWiseToppers(examId, gradingSystem);
+            // --- NEW LOGIC START ---
+            // Pre-load the poster template from the database into localStorage for the editor.
+            try {
+                const examDocRef = getDocRef('exams', examId);
+                const examDocSnap = await getDoc(examDocRef);
+
+                if (examDocSnap.exists()) {
+                    const examData = examDocSnap.data();
+                    if (examData && examData.posterSettings) {
+                        // If a template exists in the DB, save it to localStorage.
+                        localStorage.setItem(`posterDraft_${examId}`, JSON.stringify(examData.posterSettings));
+                        console.log(`Template for exam '${examId}' loaded from DB into localStorage.`);
+                    } else {
+                        // If no template exists, remove any old draft from localStorage.
+                        //localStorage.removeItem(`posterDraft_${examId}`);
+                        console.log(`No template in DB for exam '${examId}'. Cleared local draft.`);
+                    }
+                }
+            } catch (error) {
+                console.error("Error loading poster template for editor:", error);
+            }
+            // --- NEW LOGIC END ---
+            
+            displayClassWiseToppers(examId, students, gradingSystem);
         } else {
             document.getElementById('toppers-display-container').innerHTML = `<p class="text-muted text-center p-4">Select an exam to view toppers.</p>`;
         }
@@ -33112,7 +33166,43 @@ function renderExamReportsToppersTab() { // Renamed from renderExamControlTopper
     examSelect.addEventListener('change', generateToppers);
     gradingSystemSelect.addEventListener('change', generateToppers);
 
-    // Initial load
+    if (selectedUser && selectedUser.role === 'admin') {
+        const editTemplateBtn = document.getElementById('edit-poster-template-btn');
+        editTemplateBtn.addEventListener('click', () => {
+            const selectedExamId = examSelect.value;
+            if (selectedExamId) {
+                // Pass the admin user role to the editor
+                const editorUrl = `poster-editor.html?examId=${selectedExamId},admin`;
+                window.open(editorUrl, '_blank');
+            } else {
+                alert('Please select an exam before creating a template.');
+            }
+        });
+
+        document.getElementById('save-btn-template').addEventListener('click', async () => {
+            const currentEditingExamId = examSelect.value;
+            if (!currentEditingExamId) {
+                alert("Please select an exam first.");
+                return;
+            }
+
+            const posterSettingsJSON = localStorage.getItem(`posterDraft_${currentEditingExamId}`);
+            if (!posterSettingsJSON) {
+                alert("No template draft found in browser storage to save.");
+                return;
+            }
+
+            try {
+                const examDocRef = getDocRef('exams', currentEditingExamId);
+                await setDoc(examDocRef, { posterSettings: JSON.parse(posterSettingsJSON) }, { merge: true });
+                alert(`Template for exam '${currentEditingExamId}' was saved to the database!`);
+            } catch (error) {
+                console.error("Error saving template to Firestore: ", error);
+                alert("Error saving template. Check the console for details.");
+            }
+        });
+    }
+
     if (exams.length > 0) {
         examSelect.value = exams[0].id;
         generateToppers();
@@ -35202,7 +35292,7 @@ async function startMigration() {
 
 const appDb = new Dexie("SchoolAppDB");
 // IMPORTANT: Version number is incremented to apply the new indexes
-appDb.version(4.7).stores({
+appDb.version(4.9).stores({
     classes: "&id, name, lastUpdated",
     subjects: "&id, name, lastUpdated",
     students: "&id, classId, division, admissionNumber, name, lastUpdated",
@@ -35429,12 +35519,43 @@ window.generateTopperPoster = async (studentId, examId, rank)=> {
         showAlert('Could not find student or exam data.', 'danger');
         return;
     }
+    const className = classes.find(c => c.id === student.classId)?.name || '';
+    const classDiv = `${className}-${student.division}`;
+    const data = {
+    name: student.name,
+    class: `${className}-${student.division}`,
+    rank,
+    photoDriveId: student.photoDriveId
+};
+
+const queryString = new URLSearchParams({
+    examId: examId,
+    user: 'admin',
+    name: data.name,
+    className: data.class,
+    rank: data.rank,
+    photoDriveId: data.photoDriveId
+}).toString();
+
+const editorUrl = `poster-editor.html?${queryString}`;
+window.open(editorUrl, '_blank');
+
+
+}
+
+window.generateTopperPosterold = async (studentId, examId, rank)=> {
+    const student = students.find(s => s.id === studentId);
+    const exam = exams.find(e => e.id === examId);
+    if (!student || !exam) {
+        showAlert('Could not find student or exam data.', 'danger');
+        return;
+    }
 
     showAlert('Generating poster... please wait.', 'info');
 
     try {
         // 1. --- Load Images (This part is the same) ---
-        const backgroundUrl = 'KYHSSLOGO.jpg'; // Example background
+        const backgroundUrl = 'tr1-t1.png'; // Example background
         const studentPhotoUrl = student.photoDriveId ? await getSafeImageFromDrive(student.photoDriveId) : 'https://placehold.co/200x250?text=No+Photo';
 
         const [bgImage, studentImage] = await Promise.all([
@@ -35445,7 +35566,7 @@ window.generateTopperPoster = async (studentId, examId, rank)=> {
         // 2. --- Setup Canvas (This part is the same) ---
         const canvas = document.createElement('canvas');
         canvas.width = 1080;
-        canvas.height = 1920;
+        canvas.height = 1350;
         const ctx = canvas.getContext('2d');
 
         // 3. --- Draw on Canvas (This part is the same) ---
@@ -35510,6 +35631,88 @@ window.generateTopperPoster = async (studentId, examId, rank)=> {
     }
 }
 
+window.generateTopperPosterDEMO = async ()=> {
+    
+    showAlert('Generating poster... please wait.', 'info');
+
+    try {
+        // 1. --- Load Images (This part is the same) ---
+        const backgroundUrl = 'tr1-t1.png'; // Example background
+        const studentPhotoUrl = 'KYHSSLOGO.jpg';//student.photoDriveId ? await getSafeImageFromDrive(student.photoDriveId) : 'https://placehold.co/200x250?text=No+Photo';
+
+        const [bgImage, studentImage] = await Promise.all([
+            loadImage(backgroundUrl),
+            loadImage(studentPhotoUrl)
+        ]);
+
+        // 2. --- Setup Canvas (This part is the same) ---
+        const canvas = document.createElement('canvas');
+        canvas.width = 1080;
+        canvas.height = 1350;
+        const ctx = canvas.getContext('2d');
+
+        // 3. --- Draw on Canvas (This part is the same) ---
+        ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(540, 550, 200, 0, Math.PI * 2, true);
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(studentImage, 340, 350, 400, 500);
+        ctx.restore();
+
+        const rankText = 'first';//`${rank}${rank === 1 ? 'st' : rank === 2 ? 'nd' : rank === 3 ? 'rd' : 'th'}`;
+        ctx.font = 'bold 120px Inter';
+        ctx.fillStyle = '#FFD700';
+        ctx.textAlign = 'center';
+        ctx.strokeStyle = '#8B4513';
+        ctx.lineWidth = 5;
+        ctx.strokeText(rankText, 540, 950);
+        ctx.fillText(rankText, 540, 950);
+        
+        ctx.font = 'bold 72px Inter';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillText('KYHSSSATHAVANAD', 540, 1100);
+
+        const className = 'VII-A';// classes.find(c => c.id === student.classId)?.name || '';
+        ctx.font = '50px Inter';
+        ctx.fillStyle = '#E0E0E0';
+        ctx.fillText(`${className}`, 540, 1180);
+        
+        ctx.font = 'italic 40px Inter';
+        ctx.fillText(TERM1, 540, 1250);
+
+        // 4. --- 👇 NEW: Display Poster in Modal (Replaces old download logic) 👇 ---
+        const dataUrl = canvas.toDataURL('image/png');
+
+        // Get the modal elements we created in the HTML
+        const posterImageEl = document.getElementById('poster-image-display');
+        const saveBtnEl = document.getElementById('save-poster-btn');
+        const posterModalEl = document.getElementById('poster-modal');
+
+        if (posterImageEl && saveBtnEl && posterModalEl) {
+            // Set the image source in the modal
+            posterImageEl.src = dataUrl;
+
+            // Set the download attributes on the save button
+            saveBtnEl.href = dataUrl;
+            saveBtnEl.download = `${student.name}_Topper_Poster.png`;
+
+            // Use Bootstrap's JS to show the modal
+            const modal = new bootstrap.Modal(posterModalEl);
+            modal.show();
+        } else {
+            // Fallback in case modal elements are not found
+            console.error('Poster modal elements not found!');
+            showAlert('Could not display poster preview.', 'danger');
+        }
+
+    } catch (error) {
+        console.error('Error generating poster:', error);
+        showAlert(`Failed to generate poster. Error: ${error.message}`, 'danger');
+    }
+}
+generateTopperPosterDEMO();
 /**
  * Helper function to fetch a Google Drive image safely using our Apps Script proxy.
  * @param {string} fileId - The Google Drive file ID.
