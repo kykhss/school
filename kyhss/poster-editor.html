@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced DIV-Based Poster Editor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Allen&family=Inter:wght@400;700;900&family=Lato:wght@400;700&family=Montserrat:wght@400;700;900&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #f0f2f5;
+            --panel-bg: #ffffff;
+            --primary-text: #1c1e21;
+            --secondary-text: #606770;
+            --border-color: #dcdfe3;
+            --accent-color: #0c66ff;
+            --danger-color: #fa383e;
+            --shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            --poster-width: 540px;
+            --poster-height: 675px;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: var(--primary-text);
+            overflow-x: hidden;
+        }
+        .main-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2rem;
+            width: 100%;
+            max-width: 1600px;
+            justify-content: center;
+        }
+        #poster-container {
+            width: var(--poster-width);
+            height: var(--poster-height);
+            position: relative;
+            overflow: hidden;
+            background-color: #ccc; /* Fallback color */
+            box-shadow: var(--shadow);
+            flex-shrink: 0;
+        }
+        .poster-element {
+            position: absolute;
+            user-select: none;
+        }
+        .editable {
+            cursor: move;
+        }
+        /* MODIFICATION: Added non-admin mode style to disable move cursor */
+        .non-admin-mode .editable {
+            cursor: default;
+        }
+        .editable p {
+            margin: 0;
+            padding: 0;
+            pointer-events: none; /* Allows click-through to the parent div */
+        }
+        .selected {
+            outline: 2px dashed var(--accent-color);
+            z-index: 1000 !important;
+        }
+        .resize-handle {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: var(--accent-color);
+            border: 1px solid white;
+            border-radius: 50%;
+            bottom: -5px;
+            right: -5px;
+            cursor: se-resize;
+        }
+        .photo-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+        /* Add this to your existing <style> section */
+
+.photo-container {
+    /* This is crucial for positioning the loader inside */
+    position: relative; 
+}
+
+.loading-spinner {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255, 255, 255, 0.7); /* Semi-transparent overlay */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10; /* Make sure it's on top */
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #f3f3f3; /* Light grey circle */
+    border-top: 4px solid #0c66ff; /* Blue for the spinning part */
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+        .photo-container img, .background-image img {
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        .photo-container img.cover { object-fit: cover; }
+        .photo-container img.contain { object-fit: contain; }
+        .background-image img { object-fit: cover; }
+
+        #controls-panel {
+            background-color: var(--panel-bg);
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            width: 350px;
+            min-width: 300px;
+            height: fit-content;
+        }
+        .control-group { margin-bottom: 1.5rem; }
+        .control-group h3 { margin: 0 0 1rem 0; font-size: 1.2rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; }
+        .control-group label { display: block; margin-bottom: 0.5rem; font-weight: 600; color: var(--secondary-text); }
+        .control-group input, .control-group select { width: 100%; padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); box-sizing: border-box; font-family: inherit; }
+        .control-group input[type="color"] { width: 100%; height: 40px; border: 1px solid var(--border-color); padding: 0; cursor: pointer; }
+        .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+        button, .btn { padding: 0.75rem 1rem; border-radius: 6px; border: none; cursor: pointer; font-weight: 700; transition: background-color 0.2s; text-align: center; text-decoration: none; }
+        .btn-primary { background-color: var(--accent-color); color: white; } .btn-primary:hover { background-color: #0a54d1; }
+        .btn-secondary { background-color: #e4e6eb; color: var(--primary-text); } .btn-secondary:hover { background-color: #d8dbdf; }
+        .btn-danger { background-color: var(--danger-color); color: white; } .btn-danger:hover { background-color: #e02a30; }
+        .hidden { display: none !important; }
+        header { width: 100%; max-width: 1600px; text-align: center; margin-bottom: 1rem; }
+        .header-controls { display: flex; justify-content: center; gap: 1rem; margin-top: 1rem; flex-wrap: wrap; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Advanced DIV-Based Poster Editor</h1>
+        <div class="header-controls">
+            <button id="save-btn" class="btn btn-primary">Save to Browser</button>
+            <button id="load-btn" class="btn btn-secondary">Load from Browser</button>
+            <button id="reset-btn" class="btn btn-danger">Reset to Default</button>
+            <label for="image-upload-btn">Replace Image</label>
+                    <input type="file" id="image-upload" accept="image/*" class="hidden">
+                    <button id="image-upload-btn" class="btn btn-secondary" style="width: 100%;">Upload Image</button>
+                
+            <a id="download-btn" href="#" class="btn btn-primary">Download as PNG</a>
+        </div>
+    </header>
+<div id="loading" style="display:none;"></div>
+    <div class="main-container">
+        <div id="poster-container"></div>
+        <div id="controls-panel">
+            <div id="no-selection-message">
+                <p>Click an element on the poster to edit it.</p>
+            </div>
+            <div id="selected-item-controls" class="hidden">
+                <div id="text-controls" class="control-group">
+                    <h3>Text Properties</h3>
+                    <label for="text-content">Content</label>
+                    <input type="text" id="text-content">
+                    <br><br>
+                    <label for="font-size">Font Size (px)</label>
+                    <input type="number" id="font-size" min="8">
+                    <br><br>
+                    <label for="font-color">Font Color</label>
+                    <input type="color" id="font-color">
+                    <br><br>
+                    <label for="font-family">Font Family</label>
+                    <select id="font-family">
+                        <option value="Inter">Inter</option>
+                        <option value="Roboto">Roboto</option>
+                        <option value="Lato">Lato</option>
+                        <option value="Montserrat">Montserrat</option>
+                        <option value="Allen">Allen</option>
+                        <option value="Verdana">Verdana</option>
+                        <option value="Georgia">Georgia</option>
+                    </select>
+                    <br><br>
+                    <label for="font-weight">Font Weight</label>
+                    <select id="font-weight">
+                        <option value="normal">Normal</option>
+                        <option value="bold">Bold</option>
+                    </select>
+                </div>
+                <div id="image-controls" class="control-group">
+                    <h3>Container Properties</h3>
+                    <div class="btn-group">
+                        <div>
+                            <label for="image-width">Width (px)</label>
+                            <input type="number" id="image-width" min="10">
+                        </div>
+                        <div>
+                            <label for="image-height">Height (px)</label>
+                            <input type="number" id="image-height" min="10">
+                        </div>
+                    </div>
+                    <br>
+                    <label for="border-radius">Shape / Corner Radius (%)</label>
+                    <input type="range" id="border-radius" min="0" max="50" value="0">
+                    <br><br>
+                    <label for="border-width">Border Width (px)</label>
+                    <input type="number" id="border-width" min="0">
+                    <br><br>
+                    <label for="border-color">Border Color</label>
+                    <input type="color" id="border-color">
+                    <br><br>
+                    <h3>Image Properties</h3>
+                    <label for="image-fit">Image Fit</label>
+                    <select id="image-fit">
+                        <option value="cover">Cover</option>
+                        <option value="contain">Contain</option>
+                    </select>
+                    <br><br>
+                    <label for="image-pos-x">Image Position X (%)</label>
+                    <input type="range" id="image-pos-x" min="0" max="100" value="50">
+                    <br><br>
+                    <label for="image-pos-y">Image Position Y (%)</label>
+                    <input type="range" id="image-pos-y" min="0" max="100" value="50">
+                    <br><br>
+                    <label for="image-upload-btn">Replace Image</label>
+                    <input type="file" id="image-upload" accept="image/*" class="hidden">
+                    <button id="image-upload-btn" class="btn btn-secondary" style="width: 100%;">Upload Image</button>
+                </div>
+                 <div id="layer-controls" class="control-group">
+                    <h3>Layering</h3>
+                    <div class="btn-group">
+                        <button id="bring-forward-btn">Bring Forward</button>
+                        <button id="send-backward-btn">Send Backward</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script>
+        const poster = document.getElementById('poster-container');
+        let selectedElement = null;
+let currentEditingExamId = null;
+        let user = null;
+        let data = {};
+
+        function getExamIdAndUserFromUrl() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const paramValue = urlParams.get('examId');
+            if(urlParams.get('name')){
+            data = {name:urlParams.get('name'),className: urlParams.get('className')
+                    ,photoDriveId: urlParams.get('photoDriveId'),rank: urlParams.get('rank')};
+            }
+            if (paramValue) {
+                [currentEditingExamId, user] = paramValue.split(',');
+            }
+            console.log(`Exam ID: ${currentEditingExamId}, User: ${user}`);
+        }
+
+        let studentphoto = null;
+        let backgroundImage = null;
+
+
+        async function getSafeImageFromDrive(fileId) {
+    // 👇 PASTE THE GOOGLE APPS SCRIPT URL YOU COPIED IN STEP 1 HERE 👇
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyBkmSNI8H6eotJjuQabNL5EpMaQbVNTru3w_06onbOSXbGboJ3WvwBWbwwfaGnK6ktjg/exec';
+    
+    const response = await fetch(`${SCRIPT_URL}?fileId=${fileId}`);
+    if (!response.ok) {
+        throw new Error('Network response from Apps Script was not ok.');
+    }
+    const result = await response.json();
+    if (result.success) {
+        studentphoto = result.imageData;
+        return result.imageData;
+    } else {
+        throw new Error(`Apps Script Error: ${result.error}`);
+        studentphoto = null;
+        return null
+    }
+}
+
+ 
+async function initializePoster() {
+getExamIdAndUserFromUrl();
+
+ try {
+     await getSafeImageFromDrive(data.photoDriveId);
+ } catch (error) {
+ console.error("Error fetching photo:", error);
+ }
+}
+
+ 
+            const defaultState = {
+            elements: [
+                { id: 'background-1', type: 'background', top: 0, left: 0, width: 540, height: 675, zIndex: 0, imgSrc:backgroundImage, isEditable: false },
+                { id: 'photo-1', type: 'photo', top: 150, left: 180, width: 180, height: 240, zIndex: 1, borderWidth: 5, borderColor: '#FFFFFF', borderRadius: 0, imgSrc: 'https://placehold.co/1080x1350/003366/FFFFFF?text=', imageFit: 'cover', imagePosX: 50, imagePosY: 50, isEditable: true },
+                { id: 'text-name', type: 'text', top: 460, left: 135, width: 270, height: 'auto', zIndex: 2, content: data?`Class ${data.class}`:'XVI-A', fontSize: 60, color: '#FFD700', fontFamily: 'Inter', fontWeight: 'bold', textAlign: 'left', isEditable: true },
+                { id: 'text-class', type: 'text', top: 530, left: 67, width: 'auto', height: 'auto', zIndex: 2, content: data?`Class ${data.name}`:'MY NAME IS ', fontSize: 36, color: '#FFFFFF', fontFamily: 'Inter', fontWeight: 'bold', textAlign: 'left', isEditable: true },
+                //{ id: 'text-3', type: 'text', top: 580, left: 202, width: 135, height: 'auto', zIndex: 2, content: 'VII-A', fontSize: 25, color: '#E0E0E0', fontFamily: 'Inter', fontWeight: 'normal', textAlign: 'center', isEditable: true },
+                //{ id: 'text-4', type: 'text', top: 615, left: 67, width: 405, height: 'auto', zIndex: 2, content: 'First Term Examination 2025-26', fontSize: 20, color: '#FFFFFF', fontFamily: 'Inter', fontWeight: 'normal', textAlign: 'center', isEditable: true },
+            ]
+        };
+        
+
+        async function generateElementDOM(state) {
+            const el = document.createElement('div');
+            el.id = state.id;
+            el.classList.add('poster-element');
+            el.style.top = `${state.top}px`;
+            el.style.left = `${state.left}px`;
+            el.style.width = `${state.width}px`;
+            el.style.height = state.height === 'auto' ? 'auto' : `${state.height}px`;
+            el.style.zIndex = state.zIndex;
+            
+            if (state.isEditable) {
+                el.classList.add('editable');
+            }
+
+            if (state.type === 'photo' || state.type === 'background') {
+        //         const [bgImage, studentImage] = await Promise.all([
+        if(data && data.photoDriveId){await getSafeImageFromDrive(data.photoDriveId)}else{studentphoto=null;}
+        
+        //     loadImage(backgroundUrl),
+        //     loadImage(studentPhotoUrl)
+        // ]);
+    
+                el.classList.add(state.type === 'photo' ? 'photo-container' : 'background-image');
+                el.style.border = `${state.borderWidth || 0}px solid ${state.borderColor || '#000000'}`;
+                el.style.borderRadius = `${state.borderRadius || 0}%`;
+                const img = document.createElement('img');
+                // --- MODIFICATION START ---
+        
+
+                img.src = (state.type === 'photo') ? studentphoto?studentphoto:state.imgSrc:backgroundImage; 
+                img.crossOrigin = "anonymous";
+                if (state.type === 'photo') {
+                    img.classList.add(state.imageFit);
+                    img.style.objectPosition = `${state.imagePosX}% ${state.imagePosY}%`;
+                    let el =document.getElementById('loading');
+            el.style.display = 'block';
+            el.innerHTML = ` `;
+       
+                }
+                el.appendChild(img);
+
+            } else if (state.type === 'text') {
+
+                const p = document.createElement('p');
+                
+                let newContent = state.content; 
+
+                // Check the state type and update the content only if needed.
+                switch (state.id) {
+                case 'text-class':
+                    // If data and data.name exist, use data.name.
+                    if (data && data.name) {
+                    newContent = `${data.name}`;
+                    }
+                    break;
+                    
+                case 'text-name':
+                    // If data and data.className exist, use data.className.
+                    if (data && data.className) {
+                    newContent = `Class: ${data.className}`;
+                    }
+                    break;
+                }
+
+                // Finally, assign the determined content to the element.
+                p.textContent = newContent;
+
+                p.style.fontSize = `${state.fontSize}px`;
+                p.style.color = state.color;
+                p.style.fontFamily = state.fontFamily;
+                p.style.fontWeight = state.fontWeight;
+                p.style.textAlign = state.textAlign;
+                el.appendChild(p);
+            }
+            poster.appendChild(el);
+            
+            // --- MODIFICATION START ---
+            // Only make elements interactive for admins
+            if (user === 'admin' && state.isEditable) {
+                makeDraggableAndResizable(el);
+            }
+            // --- MODIFICATION END ---
+        }
+        
+        function loadState(state) {
+            let el =document.getElementById('loading');
+            el.style.display = 'block';
+            el.innerHTML = `
+                <div class="loading-spinner">
+                    <div class="spinner"></div>
+                </div>
+            `;
+            poster.innerHTML = '';
+            state.elements.forEach(generateElementDOM);
+            
+        }
+
+        function selectElement(el) {
+            if (selectedElement) {
+                selectedElement.classList.remove('selected');
+                const handle = selectedElement.querySelector('.resize-handle');
+                if (handle) handle.remove();
+            }
+            if (el && el.classList.contains('editable')) {
+                selectedElement = el;
+                selectedElement.classList.add('selected');
+                const handle = document.createElement('div');
+                handle.className = 'resize-handle';
+                selectedElement.appendChild(handle);
+            } else {
+                selectedElement = null;
+            }
+            updateControlsPanel();
+        }
+
+        function makeDraggableAndResizable(el) {
+            let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+            
+            function dragMouseDown(e) {
+                e.preventDefault();
+                pos3 = e.clientX;
+                pos4 = e.clientY;
+                document.onmouseup = closeDragElement;
+                document.onmousemove = elementDrag;
+                selectElement(el);
+            }
+            
+            function elementDrag(e) {
+                e.preventDefault();
+                pos1 = pos3 - e.clientX;
+                pos2 = pos4 - e.clientY;
+                pos3 = e.clientX;
+                pos4 = e.clientY;
+                el.style.top = (el.offsetTop - pos2) + "px";
+                el.style.left = (el.offsetLeft - pos1) + "px";
+                autoSaveToLocal(); // Auto-save on drag
+            }
+
+            function closeDragElement() {
+                document.onmouseup = null;
+                document.onmousemove = null;
+            }
+            
+            el.onmousedown = dragMouseDown;
+
+            const handle = el.querySelector('.resize-handle');
+            if (handle) {
+                handle.onmousedown = function(e) {
+                    e.stopPropagation();
+                    let startX = e.clientX, startY = e.clientY;
+                    let startWidth = parseInt(document.defaultView.getComputedStyle(el).width, 10);
+                    let startHeight = parseInt(document.defaultView.getComputedStyle(el).height, 10);
+
+                    function doResize(e) {
+                        el.style.width = (startWidth + e.clientX - startX) + 'px';
+                        el.style.height = (startHeight + e.clientY - startY) + 'px';
+                        updateControlsPanel();
+                    }
+                    function stopResize() {
+                        document.removeEventListener('mousemove', doResize);
+                        document.removeEventListener('mouseup', stopResize);
+                        autoSaveToLocal(); // Auto-save on resize end
+                    }
+                    document.addEventListener('mousemove', doResize);
+                    document.addEventListener('mouseup', stopResize);
+                };
+            }
+        }
+        
+        const controls = {
+            text: document.getElementById('text-controls'),
+            image: document.getElementById('image-controls'),
+            layer: document.getElementById('layer-controls'),
+            noSelection: document.getElementById('no-selection-message'),
+            panel: document.getElementById('selected-item-controls'),
+        };
+
+        function updateControlsPanel() {
+            if (!selectedElement) {
+                controls.noSelection.classList.remove('hidden');
+                controls.panel.classList.add('hidden');
+                return;
+            }
+            controls.noSelection.classList.add('hidden');
+            controls.panel.classList.remove('hidden');
+
+            const isText = selectedElement.querySelector('p');
+            controls.text.classList.toggle('hidden', !isText);
+            controls.image.classList.toggle('hidden', isText);
+
+            if (isText) {
+                const p = selectedElement.querySelector('p');
+                document.getElementById('text-content').value = p.textContent;
+                document.getElementById('font-size').value = parseInt(p.style.fontSize);
+                document.getElementById('font-color').value = rgbToHex(p.style.color);
+                document.getElementById('font-family').value = p.style.fontFamily;
+                document.getElementById('font-weight').value = p.style.fontWeight;
+            } else {
+                const img = selectedElement.querySelector('img');
+                document.getElementById('image-width').value = selectedElement.offsetWidth;
+                document.getElementById('image-height').value = selectedElement.offsetHeight;
+                document.getElementById('border-radius').value = parseInt(selectedElement.style.borderRadius) || 0;
+                document.getElementById('border-width').value = parseInt(selectedElement.style.borderWidth) || 0;
+                document.getElementById('border-color').value = rgbToHex(selectedElement.style.borderColor);
+                document.getElementById('image-fit').value = img.classList.contains('cover') ? 'cover' : 'contain';
+                const [posX, posY] = img.style.objectPosition.split(' ').map(p => parseInt(p) || 50);
+                document.getElementById('image-pos-x').value = posX;
+                document.getElementById('image-pos-y').value = posY;
+            }
+        }
+        
+        function getPosterState() {
+            const state = { elements: [] };
+            poster.querySelectorAll('.poster-element').forEach(el => {
+                const common = {
+                    id: el.id,
+                    top: el.offsetTop, left: el.offsetLeft,
+                    width: el.offsetWidth, height: el.offsetHeight,
+                    zIndex: el.style.zIndex || 0,
+                    isEditable: el.classList.contains('editable')
+                };
+                if (el.classList.contains('photo-container') || el.classList.contains('background-image')) {
+                    const img = el.querySelector('img');
+                    const [posX, posY] = (img.style.objectPosition || '50% 50%').split(' ').map(p => parseInt(p) || 50);
+                    state.elements.push({
+                        ...common, 
+                        type: el.classList.contains('photo-container') ? 'photo' : 'background',
+                        borderWidth: parseInt(el.style.borderWidth) || 0,
+                        borderColor: el.style.borderColor,
+                        borderRadius: parseInt(el.style.borderRadius) || 0,
+                        //imgSrc: img.src,
+                        imageFit: img.classList.contains('cover') ? 'cover' : 'contain',
+                        imagePosX: posX, imagePosY: posY
+                    });
+                } else {
+                    const p = el.querySelector('p');
+                    state.elements.push({
+                        ...common, type: 'text', height: 'auto',
+                        content: p.textContent, fontSize: parseInt(p.style.fontSize),
+                        color: p.style.color, fontFamily: p.style.fontFamily,
+                        fontWeight: p.style.fontWeight, textAlign: p.style.textAlign
+                    });
+                }
+            });
+            return state;
+        }
+
+        function autoSaveToLocal() {
+            if (!currentEditingExamId || user !== 'admin') return;
+            const state = getPosterState();
+            localStorage.setItem(`posterDraft_${currentEditingExamId}`, JSON.stringify(state));
+            console.log("Draft saved locally for admin.");
+        }
+
+        function rgbToHex(rgb) {
+            if (!rgb || !rgb.startsWith('rgb')) return '#000000';
+            let [r, g, b] = rgb.match(/\d+/g).map(Number);
+            return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
+        }
+
+        // --- MODIFICATION START: NEW INITIALIZATION LOGIC ---
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            getExamIdAndUserFromUrl(); // First, find out who the user is
+           // initializePoster(); // Then, initialize the poster
+        backgroundImage = data.rank === '1' ? 'tr-1t1.png' :
+data.rank === '2' ? 'tr-1t2.png' : data.rank === '3' ? 'tr-1t3.png' :
+                            'tr-1t1.png';
+
+
+        
+            if (user === 'admin') {
+                // --- ADMIN MODE ---
+                console.log("Running in Admin Mode.");
+                setupAdminControls();
+                loadForAdmin();
+            } else {
+                // --- USER (NON-ADMIN) MODE ---
+                console.log("Running in User/View-Only Mode.");
+                setupUserView();
+                loadForUser();
+            }
+            
+            // Download button is for everyone
+            document.getElementById('download-btn').addEventListener('click', () => {
+                selectElement(null);
+                html2canvas(poster, { allowTaint: true, useCORS: true }).then(canvas => {
+                    const link = document.createElement('a');
+                    link.download = 'poster.png';
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+                });
+            });
+        });
+
+        function setupAdminControls() {
+            // All buttons and controls are visible by default, so we just add listeners
+            poster.addEventListener('mousedown', (e) => {
+                if (e.target === poster) selectElement(null);
+            });
+            
+            controls.panel.addEventListener('input', (e) => {
+                if (!selectedElement) return;
+                const p = selectedElement.querySelector('p');
+                const img = selectedElement.querySelector('img');
+
+                switch(e.target.id) {
+                    case 'text-content': p.textContent = e.target.value; break;
+                    case 'font-size': p.style.fontSize = `${e.target.value}px`; break;
+                    case 'font-color': p.style.color = e.target.value; break;
+                    case 'font-family': p.style.fontFamily = e.target.value; break;
+                    case 'font-weight': p.style.fontWeight = e.target.value; break;
+                    case 'image-width': selectedElement.style.width = `${e.target.value}px`; break;
+                    case 'image-height': selectedElement.style.height = `${e.target.value}px`; break;
+                    case 'border-radius': selectedElement.style.borderRadius = `${e.target.value}%`; break;
+                    case 'border-width': selectedElement.style.borderWidth = `${e.target.value}px`; break;
+                    case 'border-color': selectedElement.style.borderColor = e.target.value; break;
+                    case 'image-fit': 
+                        img.classList.toggle('cover', e.target.value === 'cover');
+                        img.classList.toggle('contain', e.target.value === 'contain');
+                        break;
+                    case 'image-pos-x':
+                    case 'image-pos-y':
+                        const x = document.getElementById('image-pos-x').value;
+                        const y = document.getElementById('image-pos-y').value;
+                        img.style.objectPosition = `${x}% ${y}%`;
+                        break;
+                }
+                autoSaveToLocal(); // Auto-save on any input change
+            });
+
+            document.getElementById('image-upload-btn').addEventListener('click', () => document.getElementById('image-upload').click());
+            document.getElementById('image-upload').addEventListener('change', (e) => {
+                if (e.target.files && e.target.files[0] && selectedElement) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        selectedElement.querySelector('img').src = event.target.result;
+                        autoSaveToLocal();
+                    }
+                    reader.readAsDataURL(e.target.files[0]);
+                }
+            });
+
+            document.getElementById('bring-forward-btn').addEventListener('click', () => {
+                if(selectedElement) selectedElement.style.zIndex = parseInt(selectedElement.style.zIndex || 0) + 1;
+                autoSaveToLocal();
+            });
+            document.getElementById('send-backward-btn').addEventListener('click', () => {
+                if(selectedElement) selectedElement.style.zIndex = Math.max(0, parseInt(selectedElement.style.zIndex || 0) - 1);
+                autoSaveToLocal();
+            });
+            
+            document.getElementById('save-btn').addEventListener('click', () => {
+                autoSaveToLocal();
+                alert('Layout Saved to Browser!');
+            });
+            document.getElementById('load-btn').addEventListener('click', () => loadForAdmin());
+            document.getElementById('reset-btn').addEventListener('click', () => {
+                if (confirm('Are you sure you want to reset to the default layout?')) {
+                    loadState(defaultState);
+                    autoSaveToLocal();
+                }
+            });
+        }
+        
+        function loadForAdmin() {
+            const localDraft = localStorage.getItem(`posterDraft_${currentEditingExamId}`);
+            if (localDraft) {
+                console.log("Admin loading draft from Local Storage.");
+                loadState(JSON.parse(localDraft));
+            } else {
+                console.log("Admin loading from default state.");
+                loadState(defaultState);
+            }
+        }
+
+        function setupUserView() {
+            console.log("Running in User (Limited Edit) Mode.");
+            document.body.classList.add('limited-view');
+
+            // 1. Hide global controls except Download
+            document.getElementById('save-btn').style.display = 'none';
+            document.getElementById('load-btn').style.display = 'none';
+            document.getElementById('reset-btn').style.display = 'none';
+
+            // 2. Make ONLY the photo element interactive
+            const photoEl = document.getElementById('photo-1');
+            if (photoEl) {
+                photoEl.classList.add('editable');
+                makeDraggableOnly(photoEl);
+            }
+            
+            // 3. Allow clicking the poster to deselect the photo
+             poster.addEventListener('mousedown', (e) => {
+                if (e.target === poster) selectElement(null);
+            });
+
+            // 4. Set up the upload functionality
+            document.getElementById('image-upload-btn').addEventListener('click', () => {
+                if (selectedElement && selectedElement.id === 'photo-1') {
+                    document.getElementById('image-upload').click();
+                } else {
+                    alert('Please select the student photo first to upload a new image.');
+                }
+            });
+            document.getElementById('image-upload').addEventListener('change', (e) => {
+                if (e.target.files && e.target.files[0] && selectedElement && selectedElement.id === 'photo-1') {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        selectedElement.querySelector('img').src = event.target.result;
+                    }
+                    reader.readAsDataURL(e.target.files[0]);
+                }
+            });
+        }
+
+        
+        function loadForUser() {
+            // Non-admins can ONLY load from localStorage.
+            const localDraft = localStorage.getItem(`posterDraft_${currentEditingExamId}`);
+            if (localDraft) {
+                console.log("User loading from Local Storage.");
+                loadState(JSON.parse(localDraft));
+            } else {
+                // If there's nothing in localStorage, show the default.
+                console.log("No local draft found for user, showing default state.");
+                loadState(defaultState);
+            }
+        }
+        // --- MODIFICATION END ---
+    </script>
+</body>
+
+</html>
