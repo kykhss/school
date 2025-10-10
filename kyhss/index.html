@@ -33435,10 +33435,9 @@ function displaySubjectWiseToppers(examId) {
 /**
  * Renders the Exam Toppers tab content.
  */
-function renderExamReportsToppersTab() { // Renamed from renderExamControlToppersTab
+async function renderExamReportsToppersTab() { // Renamed from renderExamControlToppersTab
     const container = document.getElementById('exam-reports-toppers'); // Updated ID
     if (!container) return;
-
 
     container.innerHTML = `
         <div class="ui-card mb-4">
@@ -33446,12 +33445,22 @@ function renderExamReportsToppersTab() { // Renamed from renderExamControlTopper
             <div class="row g-3 align-items-end">
                 <div class="col-md-6">
                     <label class="form-label">Select Exam</label>
-                    <select id="toppers-exam-select" class="form-select">
-                        <option value="">-- Select Exam --</option>
-                        ${exams.map(e => `<option value="${e.id}">${e.name}</option>`).join('')}
-                    </select>
+                    <div class="input-group">
+                        <select id="toppers-exam-select" class="form-select">
+                            <option value="">-- Select Exam --</option>
+                            ${exams.map(e => `<option value="${e.id}">${e.name}</option>`).join('')}
+                        </select>
+                        ${selectedUser && selectedUser.role === 'admin' ? `
+                            <button id="edit-poster-template-btn" class="btn btn-outline-secondary" type="button" title="Create or Edit Poster Template">
+                                <i class="bi bi-palette-fill"></i> Edit Template
+                            </button>
+                            <button id="save-btn-template" class="btn btn-outline-primary" type="button" title="Save Poster Template to Database">
+                                <i class="bi bi-cloud-arrow-up-fill"></i> Save Template
+                            </button>
+                        ` : ''}
+                    </div>
                 </div>
-                 <div class="col-md-6">
+                <div class="col-md-6">
                     <label class="form-label">Grading System (for percentages)</label>
                     <select id="toppers-grading-system" class="form-select">
                         <option value="type1">A+, A, B+, B...</option>
@@ -33467,12 +33476,38 @@ function renderExamReportsToppersTab() { // Renamed from renderExamControlTopper
 
     const examSelect = document.getElementById('toppers-exam-select');
     const gradingSystemSelect = document.getElementById('toppers-grading-system');
-
-    const generateToppers = () => {
+     
+    // --- MODIFIED: This function is now async ---
+    const generateToppers = async () => {
+        await attachMarksListener(teacherAssignedClasses);
         const examId = examSelect.value;
         const gradingSystem = gradingSystemSelect.value;
+        
         if (examId) {
-            displayClassWiseToppers(examId, gradingSystem);
+            // --- NEW LOGIC START ---
+            // Pre-load the poster template from the database into localStorage for the editor.
+            try {
+                const examDocRef = getDocRef('exams', examId);
+                const examDocSnap = await getDoc(examDocRef);
+
+                if (examDocSnap.exists()) {
+                    const examData = examDocSnap.data();
+                    if (examData && examData.posterSettings) {
+                        // If a template exists in the DB, save it to localStorage.
+                        localStorage.setItem(`posterDraft_${examId}`, JSON.stringify(examData.posterSettings));
+                        console.log(`Template for exam '${examId}' loaded from DB into localStorage.`);
+                    } else {
+                        // If no template exists, remove any old draft from localStorage.
+                        //localStorage.removeItem(`posterDraft_${examId}`);
+                        console.log(`No template in DB for exam '${examId}'. Cleared local draft.`);
+                    }
+                }
+            } catch (error) {
+                console.error("Error loading poster template for editor:", error);
+            }
+            // --- NEW LOGIC END ---
+            
+            displayClassWiseToppers(examId, students, gradingSystem);
         } else {
             document.getElementById('toppers-display-container').innerHTML = `<p class="text-muted text-center p-4">Select an exam to view toppers.</p>`;
         }
@@ -33481,12 +33516,49 @@ function renderExamReportsToppersTab() { // Renamed from renderExamControlTopper
     examSelect.addEventListener('change', generateToppers);
     gradingSystemSelect.addEventListener('change', generateToppers);
 
-    // Initial load
+    if (selectedUser && selectedUser.role === 'admin') {
+        const editTemplateBtn = document.getElementById('edit-poster-template-btn');
+        editTemplateBtn.addEventListener('click', () => {
+            const selectedExamId = examSelect.value;
+            if (selectedExamId) {
+                // Pass the admin user role to the editor
+                const editorUrl = `poster-editor.html?examId=${selectedExamId},admin`;
+                window.open(editorUrl, '_blank');
+            } else {
+                alert('Please select an exam before creating a template.');
+            }
+        });
+
+        document.getElementById('save-btn-template').addEventListener('click', async () => {
+            const currentEditingExamId = examSelect.value;
+            if (!currentEditingExamId) {
+                alert("Please select an exam first.");
+                return;
+            }
+
+            const posterSettingsJSON = localStorage.getItem(`posterDraft_${currentEditingExamId}`);
+            if (!posterSettingsJSON) {
+                alert("No template draft found in browser storage to save.");
+                return;
+            }
+
+            try {
+                const examDocRef = getDocRef('exams', currentEditingExamId);
+                await setDoc(examDocRef, { posterSettings: JSON.parse(posterSettingsJSON) }, { merge: true });
+                alert(`Template for exam '${currentEditingExamId}' was saved to the database!`);
+            } catch (error) {
+                console.error("Error saving template to Firestore: ", error);
+                alert("Error saving template. Check the console for details.");
+            }
+        });
+    }
+
     if (exams.length > 0) {
         examSelect.value = exams[0].id;
         generateToppers();
     }
 }
+
 
 
 /**
@@ -35700,8 +35772,35 @@ window.addEventListener('beforeunload', (event) => {
  * @param {string} examId - The ID of the exam.
  * @param {number} rank - The rank/position of the student.
  */
-
 window.generateTopperPoster = async (studentId, examId, rank)=> {
+    const student = students.find(s => s.id === studentId);
+    const exam = exams.find(e => e.id === examId);
+    if (!student || !exam) {
+        showAlert('Could not find student or exam data.', 'danger');
+        return;
+    }
+    const className = classes.find(c => c.id === student.classId)?.name || '';
+    const classDiv = `${className}-${student.division}`;
+    const data = {
+    name: student.name,
+    class: `${className}-${student.division}`,
+    rank,
+    photoDriveId: student.photoDriveId
+};
+
+const queryString = new URLSearchParams({
+    examId: examId,
+    user: 'admin',
+    name: data.name,
+    className: data.class,
+    rank: data.rank,
+    photoDriveId: data.photoDriveId
+}).toString();
+
+const editorUrl = `poster-editor.html?${queryString}`;
+window.open(editorUrl, '_blank');
+}
+window.generateTopperPosterold = async (studentId, examId, rank)=> {
     const student = students.find(s => s.id === studentId);
     const exam = exams.find(e => e.id === examId);
     if (!student || !exam) {
