@@ -292,6 +292,41 @@
                 page-break-after: always;
             }
         }
+
+        .substitute-card.suggested-sub strong {
+            color: #047857; /* Darker green text */
+        }
+        
+        /* --- ADD THIS NEW CSS --- */
+        .daily-schedule-indicator {
+            display: flex;
+            justify-content: center;
+            gap: 4px;
+            margin-top: 5px;
+            padding: 2px;
+        }
+        .period-dot {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 1px solid #9ca3af; /* Default gray border */
+            flex-shrink: 0;
+        }
+        .period-dot.dot-free {
+            background-color: #d1fae5; /* Light Green */
+            border-color: #047857; /* Dark Green border */
+        }
+        .period-dot.dot-busy {
+            background-color: #fde2e2; /* Light Red */
+            border-color: #dc2626; /* Dark Red border */
+        }
+        .period-dot.dot-current {
+            background-color: #dbeafe; /* Light Blue */
+            border-color: #2563eb; /* Dark Blue border */
+            transform: scale(1.1);
+            box-shadow: 0 0 4px rgba(59, 130, 246, 0.7);
+        }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -1036,6 +1071,135 @@
         }
         window.showSubstitutionPlan = showSubstitutionPlan; 
 
+
+        /**
+         * Calculates a teacher's busyness and continuity score for a given day,
+         * considering a potential new assignment.
+         * @param {string} teacherId - The ID of the teacher.
+         * @param {string} day - The day key (e.g., 'Mo').
+         * @param {string} slotKeyToAssign - The slot being considered (e.g., 'Mo3').
+         * @returns {object} { periodsToday: number, continuityScore: number }
+         */
+        function getTeacherBusyness(teacherId, day, slotKeyToAssign) {
+            const teacher = allTeachers[teacherId];
+            if (!teacher) return { periodsToday: 99, continuityScore: 99 };
+
+            let periodsToday = 0;
+            const potentialPeriod = parseInt(slotKeyToAssign.replace(day, '')); // e.g., 3
+            let isBusyBefore = false;
+            let isBusyAfter = false;
+
+            for (let p = 1; p <= NUM_PERIODS_PER_DAY; p++) {
+                const slotKey = `${day}${p}`;
+                
+                // Don't count the slot we are trying to assign
+                if (slotKey === slotKeyToAssign) continue;
+
+                let isBusy = false;
+                const hasOwnClass = (currentTimetable[slotKey] || []).some(a => a.teacher_id === teacherId);
+                const isUnavailable = teacher.unavailable_slots?.has(slotKey);
+                
+                // Check if they are already subbing in *another* slot
+                let isAlreadySubbing = false;
+                for (const key in substitutionAssignments) {
+                    if (key.endsWith(`_${slotKey}`) && substitutionAssignments[key] === teacherId) {
+                        isAlreadySubbing = true;
+                        break;
+                    }
+                }
+
+                if (hasOwnClass || isUnavailable || isAlreadySubbing) {
+                    isBusy = true;
+                    periodsToday++;
+                }
+
+                // Check for continuity
+                if (p === potentialPeriod - 1 && isBusy) {
+                    isBusyBefore = true;
+                }
+                if (p === potentialPeriod + 1 && isBusy) {
+                    isBusyAfter = true;
+                }
+            }
+
+            let continuityScore = 0;
+            if (isBusyBefore && isBusyAfter) continuityScore = 2; // Busy on both sides
+            else if (isBusyBefore || isBusyAfter) continuityScore = 1; // Busy on one side
+
+            return { periodsToday, continuityScore };
+        }
+        /**
+         * Handles single clicks on cells in the main substitution table to auto-assign or show substitutes.
+         */
+        function handleSubstitutionCellClickold(event) {
+            currentTargetCellForManualAssignment = event.currentTarget; 
+            const absentTeacherId = currentTargetCellForManualAssignment.dataset.teacherId; 
+            const slotKey = currentTargetCellForManualAssignment.dataset.slotKey;
+            const originalClass = currentTargetCellForManualAssignment.dataset.originalClass || ''; // Get the original class
+            const day = currentTargetCellForManualAssignment.dataset.day;
+            const period = currentTargetCellForManualAssignment.dataset.period;
+            const isOccupied = currentTargetCellForManualAssignment.dataset.isOccupied === 'true'; 
+
+            substituteList.innerHTML = ''; 
+            noSubstituteMessage.classList.add('hidden'); 
+
+            if (isOccupied) {
+                const assignmentByAbsentTeacher = (currentTimetable[slotKey] || []).find(a => a.teacher_id === absentTeacherId);
+                if (!assignmentByAbsentTeacher) {
+                    substituteList.innerHTML = `<p class="text-gray-500">Error: Original assignment for absent teacher not found.</p>`;
+                    return;
+                }
+
+                const absentTeacherName = allTeachers[absentTeacherId]?.teacherName || 'Unknown';
+                const headerText = `Assign Substitute for ${absentTeacherName}'s ${assignmentByAbsentTeacher.subject} (${assignmentByAbsentTeacher.class}) at ${day}${period}:`;
+                
+                // Pass originalClass to findPossibleSubstitutes for class-based prioritization
+                const possibleSubstitutes = findPossibleSubstitutes(slotKey, absentTeacherId, originalClass);
+                
+                // --- Auto-assign the best substitute on first click if not already substituted ---
+                const assignmentKey = `${absentTeacherId}_${slotKey}`;
+                if (!substitutionAssignments[assignmentKey] && possibleSubstitutes.length > 0) {
+                    const bestSubstitute = possibleSubstitutes[0];
+                    assignSubstitute(absentTeacherId, slotKey, bestSubstitute.teacher_id, currentTargetCellForManualAssignment);
+                    showMessage(`Auto-assigned ${bestSubstitute.teacherName} for ${absentTeacherName} at ${slotKey}.`, 'success');
+                    recordSubstitutionState(); // Record state after auto-assignment
+                }
+                // --- End Auto-assign ---
+
+                substituteList.innerHTML = `<h4 class="font-semibold text-gray-700 text-lg mb-2 col-span-full">${headerText}</h4>`;
+
+                if (possibleSubstitutes.length > 0) {
+                    const currentAssignedSubId = substitutionAssignments[assignmentKey];
+                    const bestSubstituteAuto = possibleSubstitutes[0]; 
+
+                    possibleSubstitutes.forEach(sub => {
+                        const subCard = Object.assign(document.createElement('div'), { className: 'substitute-card' });
+                        if (sub.teacher_id === currentAssignedSubId || (sub.teacher_id === bestSubstituteAuto.teacher_id && !currentAssignedSubId)) {
+                             // Highlight current assigned substitute or auto-suggestion if no current assignment
+                         subCard.classList.add('suggested-sub'); 
+                        }
+                        subCard.innerHTML = `<strong>${sub.teacherName}</strong><br>(Count: ${teacherSubstitutionCountsData[sub.teacher_id]?.substitutionCount || 0})`;
+                        
+                        subCard.addEventListener('click', () => {
+                            assignSubstitute(absentTeacherId, slotKey, sub.teacher_id, currentTargetCellForManualAssignment);
+                            substituteList.innerHTML = ''; 
+                            noSubstituteMessage.classList.remove('hidden');
+                            noSubstituteMessage.textContent = "Click an 'Occupied' slot in the table above to see available substitutes.";
+                            substituteList.appendChild(noSubstituteMessage);
+                            recordSubstitutionState(); 
+                        });
+                        substituteList.appendChild(subCard);
+                    });
+                } else {
+                    substituteList.innerHTML += `<p class="text-gray-500 col-span-full">No available substitutes found for this slot.</p>`;
+                }
+            } else { 
+                const absentTeacherName = allTeachers[absentTeacherId]?.teacherName || 'Unknown';
+                const statusText = currentTargetCellForManualAssignment.classList.contains('free-slot') ? 'FREE' : 'UNAVAILABLE (not a class)';
+                substituteList.innerHTML = `<h4 class="font-semibold text-gray-700 text-lg mb-2 col-span-full">Teacher ${absentTeacherName} is ${statusText} at ${day}${period}.</h4>`;
+            }
+        }
+
         /**
          * Handles single clicks on cells in the main substitution table to auto-assign or show substitutes.
          */
@@ -1086,7 +1250,12 @@
                              // Highlight current assigned substitute or auto-suggestion if no current assignment
                             subCard.classList.add('suggested-sub'); 
                         }
-                        subCard.innerHTML = `<strong>${sub.teacherName}</strong><br>(Count: ${teacherSubstitutionCountsData[sub.teacher_id]?.substitutionCount || 0})`;
+                        
+                        // --- THIS IS THE MODIFIED LINE ---
+                        // Get the mini-schedule HTML
+                        const scheduleIndicatorHtml = getTeacherDailyAvailabilityHtml(sub.teacher_id, day, slotKey);
+                        subCard.innerHTML = `<strong>${sub.teacherName}</strong> (Count: ${teacherSubstitutionCountsData[sub.teacher_id]?.substitutionCount || 0})<br>${scheduleIndicatorHtml}`;
+                        // --- END OF MODIFICATION ---
                         
                         subCard.addEventListener('click', () => {
                             assignSubstitute(absentTeacherId, slotKey, sub.teacher_id, currentTargetCellForManualAssignment);
@@ -1107,7 +1276,55 @@
                 substituteList.innerHTML = `<h4 class="font-semibold text-gray-700 text-lg mb-2 col-span-full">Teacher ${absentTeacherName} is ${statusText} at ${day}${period}.</h4>`;
             }
         }
+/**
+         * Generates a string of HTML for a 7-period-dot mini-schedule.
+         * @param {string} teacherId - The ID of the substitute teacher.
+         * @param {string} day - The day key (e.g., 'Mo').
+         * @param {string} currentSlotKeyToAssign - The slot being assigned (e.g., 'Mo3').
+         * @returns {string} HTML string for the daily schedule indicator.
+         */
+        function getTeacherDailyAvailabilityHtml(teacherId, day, currentSlotKeyToAssign) {
+            const teacher = allTeachers[teacherId];
+            // console.log(teacher);
+            // console.log(day);
+            if (!teacher) return '';
 
+            let html = '<div class="daily-schedule-indicator">';
+            
+            for (let p = 1; p <= NUM_PERIODS_PER_DAY; p++) {
+                const slotKey = `${day}${p}`;
+                let dotClass = 'dot-free'; // Default to free (green)
+                let dotTitle = `P${p}: FREE`;
+
+                // Check all reasons a teacher might be busy
+                const hasOwnClass = (currentTimetable[slotKey] || []).some(a => a.teacher_id === teacherId);
+                const isUnavailable = teacher.unavailable_slots?.has(slotKey);
+                
+                // Check if they are already subbing in another slot
+                let isAlreadySubbing = false;
+                for (const key in substitutionAssignments) {
+                    if (key.endsWith(`_${slotKey}`) && substitutionAssignments[key] === teacherId) {
+                        isAlreadySubbing = true;
+                        break;
+                    }
+                }
+
+                if (slotKey === currentSlotKeyToAssign) {
+                    dotClass = 'dot-current'; // This is the slot in question (blue)
+                    dotTitle = `P${p}: This Assignment`;
+                } else if (hasOwnClass || isUnavailable || isAlreadySubbing) {
+                    dotClass = 'dot-busy'; // Busy (red)
+                    if (hasOwnClass) dotTitle = `P${p}: Own Class`;
+                    else if (isUnavailable) dotTitle = `P${p}: Unavailable`;
+                    else if (isAlreadySubbing) dotTitle = `P${p}: Already Subbing`;
+                }
+                
+                html += `<span class="period-dot ${dotClass}" title="${dotTitle}"></span>`;
+            }
+            
+            html += '</div>';
+            return html;
+        }
         /**
          * Handles double clicks on cells in the main substitution table to cancel a substitution.
          */
@@ -1164,7 +1381,7 @@
          * @param {string} originalClassForSlot - The class name of the original class needing a substitute.
          * @returns {Array<Object>} Sorted list of possible substitute teacher objects.
          */
-        function findPossibleSubstitutes(slotKey, absentTeacherIdToExclude, originalClassForSlot) {
+        function findPossibleSubstitutesold(slotKey, absentTeacherIdToExclude, originalClassForSlot) {
             const potentialSubstitutes = [];
             const assignmentsInThisPeriod = currentTimetable[slotKey] || [];
             const allSelectedAbsentTeacherIdsToday = Array.from(absentTeacherCheckboxesDiv.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
@@ -1214,7 +1431,79 @@
             // Combine preferred substitutes first, then general substitutes
             return [...preferredSubstitutes, ...generalSubstitutes];
         }
-        
+        function findPossibleSubstitutes(slotKey, absentTeacherIdToExclude, originalClassForSlot) {
+            const potentialSubstitutes = [];
+            const assignmentsInThisPeriod = currentTimetable[slotKey] || [];
+            const allSelectedAbsentTeacherIdsToday = Array.from(absentTeacherCheckboxesDiv.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+            const teachersAlreadySubbingThisSlot = Object.keys(substitutionAssignments)
+                .filter(key => key.endsWith(`_${slotKey}`))
+                .map(key => substitutionAssignments[key]);
+            
+            const day = slotKey.substring(0, 2); // Get day from slotKey (e.g., 'Mo')
+
+            for (const teacherId in allTeachers) {
+                const teacher = allTeachers[teacherId];
+                 if (!teacher || !teacher.teacher_id) continue;
+
+                // Filter out teachers who are absent or already busy in this specific slot
+                if (allSelectedAbsentTeacherIdsToday.includes(teacher.teacher_id) || 
+                    (teacher.unavailable_slots?.has(slotKey)) || 
+                    assignmentsInThisPeriod.some(a => a.teacher_id === teacher.teacher_id) ||
+                    (teachersAlreadySubbingThisSlot.includes(teacher.teacher_id) && teacher.teacher_id !== substitutionAssignments[`${absentTeacherIdToExclude}_${slotKey}`] ) // Allow current sub for the slot to be listed if it's already them
+                    ) {
+                    continue; 
+                }
+                
+                potentialSubstitutes.push(teacher);
+            }
+
+            // Separate into preferred (teach the original class) and general substitutes
+            const preferredSubstitutes = [];
+            const generalSubstitutes = [];
+
+            potentialSubstitutes.forEach(sub => {
+                // Check if the substitute teacher teaches the original class for the absent slot
+                if (originalClassForSlot && sub.classes_taught && sub.classes_taught.has(originalClassForSlot)) {
+                    preferredSubstitutes.push(sub);
+                } else {
+                    generalSubstitutes.push(sub);
+                }
+            });
+
+            // --- NEW Sorting Function ---
+            const sortByPreference = (a, b) => {
+                // 1. Get busyness scores
+                const busynessA = getTeacherBusyness(a.teacher_id, day, slotKey);
+                const busynessB = getTeacherBusyness(b.teacher_id, day, slotKey);
+
+                // 2. Compare continuity
+                if (busynessA.continuityScore !== busynessB.continuityScore) {
+                    return busynessA.continuityScore - busynessB.continuityScore;
+                }
+
+                // 3. Compare periods already assigned today
+                if (busynessA.periodsToday !== busynessB.periodsToday) {
+                    return busynessA.periodsToday - busynessB.periodsToday;
+                }
+
+                // 4. Compare historical substitution count
+                const countA = teacherSubstitutionCountsData[a.teacher_id]?.substitutionCount || 0;
+                const countB = teacherSubstitutionCountsData[b.teacher_id]?.substitutionCount || 0;
+                if (countA !== countB) {
+                    return countA - countB;
+                }
+                
+                // 5. Compare by name
+                return (a.teacherName || '').localeCompare(b.teacherName || '');
+            };
+            // --- End NEW Sorting Function ---
+
+            preferredSubstitutes.sort(sortByPreference);
+            generalSubstitutes.sort(sortByPreference);
+
+            // Combine preferred substitutes first, then general substitutes
+            return [...preferredSubstitutes, ...generalSubstitutes];
+        }
         /**
          * Automatically populates all empty substitution slots.
          */
