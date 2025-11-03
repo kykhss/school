@@ -58,8 +58,15 @@
     color: #0d6efd; /* Blue text on hover */
 }
         body { font-family: 'Inter', sans-serif; }
-        .view { display: none; opacity: 0; transition: opacity 0.5s ease-in-out; }
-        .view.active { display: flex; opacity: 1; }
+        .view { 
+    display: none; 
+    opacity: 0; 
+    transition: opacity 0.5s ease-in-out; 
+}
+.view.active { 
+    display: flex; 
+    opacity: 1; 
+}
         #main-app {
             display: flex;
             height: 100vh;
@@ -178,6 +185,41 @@
             border-bottom: 2px solid #0d6efd;
             color: #0d6efd;
         }
+
+
+
+    /* Optional: Hide the scrollbar for a cleaner look */
+    .tabs-container::-webkit-scrollbar {
+        display: none; /* For Chrome, Safari, and Opera */
+    }
+    .tabs-container {
+    width: 90%;
+    
+    overflow:auto; /* Adds a horizontal scrollbar when needed */
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+}
+.tabs-container {
+        -ms-overflow-style: none;  /* For IE and Edge */
+        scrollbar-width: none;  /* For Firefox */
+    }
+
+.nav-tabs {
+    flex-wrap: nowrap !important; /* Prevents tabs from stacking vertically */
+    white-space: nowrap; /* Ensures all tabs stay in a single line */
+}
+
+/* Optional: Keep this if you want to hide the scrollbar visually */
+@media (max-width: 768px) {
+    .tabs-container::-webkit-scrollbar {
+        display: none; /* For Chrome, Safari, and Opera */
+    }
+    .tabs-container {
+        -ms-overflow-style: none;  /* For IE and Edge */
+        scrollbar-width: none;  /* For Firefox */
+    }
+}
+
 
         @media print {
     .no-print {
@@ -364,39 +406,133 @@
         box-shadow: 5px 0 5px -5px rgba(0,0,0,0.1);
     }
 }
+
+/* ========================================================================= */
+/* 🌐 UNIVERSAL MOBILE OPTIMIZATION LAYER */
+/* ========================================================================= */
+
+@media (max-width: 768px) {
+
+  /* ===== Global Typography ===== */
+  body, .table, .card, .modal, input, select, button, textarea {
+    font-size: 0.85rem !important; /* Smaller overall font */
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-size: 90% !important;
+  }
+
+  .fw-bold { font-weight: 600 !important; }
+
+  /* ===== Layout & Padding ===== */
+  .p-5, .p-4, .p-3, .p-2 {
+    padding: 0.5rem !important;
+  }
+
+  .m-5, .m-4, .m-3, .m-2 {
+    margin: 0.5rem !important;
+  }
+
+  /* ===== Buttons ===== */
+  .btn {
+    font-size: 0.8rem !important;
+    padding: 0.3rem 0.6rem !important;
+    border-radius: 0.3rem !important;
+  }
+
+  .btn-lg {
+    font-size: 0.9rem !important;
+    padding: 0.4rem 0.7rem !important;
+  }
+
+  /* ===== Navbar & Sidebar ===== */
+  #sidebar {
+    width: 220px !important;
+    min-width: 220px !important;
+  }
+
+  #sidebar .nav-link {
+    padding: 0.4rem 0.6rem !important;
+    font-size: 0.85rem !important;
+  }
+
+  #sidebar i {
+    font-size: 0.9rem !important;
+    margin-right: 0.4rem;
+  }
+
+  /* ===== Tables ===== */
+  .table {
+    font-size: 0.8rem !important;
+  }
+
+  .table th, .table td {
+    padding: 0.3rem !important;
+  }
+
+  .table thead th {
+    background-color: #f9fafb;
+    font-weight: 600;
+  }
+
+  /* Combine two columns into one on narrow screens */
+  .table td[data-merge-next]:after {
+    content: " " attr(data-merge-next);
+    display: block;
+    font-size: 0.8rem;
+    color: #6c757d;
+  }
+
+  /* ===== Cards ===== */
+  .card, .ui-card {
+    padding: 0.75rem !important;
+    border-radius: 0.5rem !important;
+  }
+
+  /* ===== Icons ===== */
+  i.fas, i.fa {
+    font-size: 0.9rem !important;
+  }
+
+  /* ===== Modals ===== */
+  .modal-content {
+    padding: 0.75rem !important;
+  }
+
+  .modal-title {
+    font-size: 1rem !important;
+  }
+
+  /* ===== Tabs ===== */
+  .nav-tabs .nav-link {
+    font-size: 0.8rem !important;
+    padding: 0.4rem 0.6rem !important;
+  }
+
+  /* ===== Headings inside Sections ===== */
+  .section-header {
+    font-size: 0.9rem !important;
+    margin-bottom: 0.5rem !important;
+  }
+
+  /* ===== Dashboard Stats / Cards ===== */
+  .stat-card {
+    padding: 0.5rem !important;
+  }
+}
+
     </style>
 </head>
 <body class="bg-light">
     <!-- Notification Bell Dropdown -->
 <!-- Notification Bell Dropdown -->
- <div id="offline-indicator" class="bg-danger text-white text-center p-2" style="display: none; position: fixed; width: 100%; z-index: 2000;">
+ <div id="offline-indicator" class="bg-danger text-white text-center p-2" style="display: none; position: fixed; width: 100%;">
   <i class="fas fa-exclamation-triangle me-2"></i> You are currently offline. Some features may be unavailable.
   </div>
-<div class="position-fixed top-0 end-0 p-3" style="z-index: 1030;">
-    <div class="dropdown">
-        <button class="btn btn-light btn-lg rounded-circle position-relative" type="button" id="notificationBell" onclick="toggleNotificationDropdown(event)">
-            <i class="fas fa-bell text-secondary"></i>
-            <span id="notification-badge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none">
-                0
-            </span>
-        </button>
-        <ul id="notification-list" class="dropdown-menu dropdown-menu-end" aria-labelledby="notificationBell" style="width: 350px;">
-            <!-- Notifications will be rendered here -->
-        </ul>
-    </div>
-</div>
 
- <!-- Global Alert Toast -->
-    <div class="position-fixed top-0 start-0 end-0 d-flex justify-content-center justify-content-md-end p-1" style="z-index: 1055;">
-    <div id="alert-toast" class="toast hide" role="alert" aria-live="assertive" aria-atomic="true">
-        <div class="toast-header">
-            <i class="fas fa-circle me-2"></i>
-            <strong class="me-auto" id="alert-title">Notification</strong>
-            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
-        </div>
-        <div class="toast-body" id="alert-body"></div>
+ <div id="toast-container" class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1100;">
     </div>
-</div>
+
     
     <div id="custom-alert" class="position-fixed top-0 start-50 translate-middle-x p-3" style="z-index: 1050; display: none;">
         <div id="custom-alert-content" class="alert d-flex align-items-center" role="alert">
@@ -405,50 +541,115 @@
         </div>
     </div>
 
-    <div id="app-container">
-        <div id="login-screen" class=" view vh-100 align-items-center justify-content-center bg-light">
-            <div class="card shadow-lg" style="width: 100%; max-width: 420px;">
-                <div class="card-body p-5">
-                    <div class="text-center mb-4">
-                        <i class="fas fa-school fa-3x text-primary"></i>
-                        <h1 class="mt-3 h3 fw-bold">School Management Pro</h1>
-                        <p class="text-muted">Select your role to sign in</p>
-                    </div>
-
-                    <ul class="nav nav-tabs nav-fill mb-4" id="loginTab" role="tablist">
-                        <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#admin-login-view" type="button" role="tab">Admin</button></li>
-                        <li class="nav-item" role="presentation"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#teacher-login-view" type="button" role="tab">Teacher</button></li>
-                        <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#student-login-view" type="button" role="tab">Student</button></li>
-                    </ul>
-
-                    <form id="login-form">
-                        <div class="tab-content">
-                            <div class="tab-pane fade" id="admin-login-view" role="tabpanel">
-                                <div class="mb-3"><label class="form-label">Username</label><input type="text" id="admin-user" value="" class="form-control"></div>
-                                <div class="mb-3"><label class="form-label">Password</label><input type="password" id="admin-pass" value="" class="form-control"></div>
-                            </div>
-                            <div class="tab-pane fade active show" id="teacher-login-view" role="tabpanel">
-                                <div class="mb-3"><label class="form-label">Email</label><input type="email" id="teacher-useremail" placeholder="Enter your email" class="form-control" style="text-transform: lowercase;"></div>
-                                <div class="mb-3"><label class="form-label">Password</label><input type="password" id="teacher-password" placeholder="Last 5 digits of your mobile" class="form-control"></div>
-                            </div>
-                            <div class="tab-pane fade" id="student-login-view" role="tabpanel">
-                                <div class="mb-3"><label class="form-label">Admission Number</label><input type="text" id="student-admn" placeholder="Last 4 digits of Admission No." class="form-control" style="text-transform: uppercase;"></div>
-                                <div class="mb-3"><label class="form-label">Password</label><input type="password" id="student-dob" placeholder="Your year of birth (YYYY)" class="form-control"></div>
-                            </div>
-                        </div>
-                        <div class="d-grid mt-4"><button type="submit" class="btn btn-primary btn-lg">Sign In</button></div>
-                    </form>
-                </div>
-            </div>
+    <!-- =========================== -->
+<!-- 📱 Responsive Login Screen  -->
+<!-- =========================== -->
+ <div id="app-container">
+    <div id="login-screen" class=" view vh-100 align-items-center justify-content-center bg-light">  <div class="card shadow-lg w-100" style="max-width: 400px; border-radius: 1rem;">
+        <div class="card-body p-4">
+        <div class="text-center mb-3">
+            <i class="fas fa-school text-primary" style="font-size: 2.5rem;"></i>
+            <h2 class="mt-2 h5 fw-bold">School Management Pro</h2>
+            <p class="text-muted small mb-0">Sign in to continue</p>
         </div>
+
+        <!-- Role Dropdown -->
+        <div class="mb-3">
+            <label for="role-select" class="form-label fw-semibold small text-secondary">Select Role</label>
+            <select id="role-select" class="form-select form-select-sm">
+            <option value="teacher-login-view" selected>Teacher</option>
+            <option value="admin-login-view">Admin</option>
+            <option value="student-login-view">Student</option>
+            </select>
+        </div>
+
+        <!-- Login Forms -->
+        <form id="login-form" class="mt-3">
+            <div id="admin-login-view" class="role-form d-none">
+            <div class="mb-3">
+                <label class="form-label small">Username</label>
+                <input type="text" id="admin-user" class="form-control form-control-sm" placeholder="Admin username">
+            </div>
+            <div class="mb-3">
+                <label class="form-label small">Password</label>
+                <input type="password" id="admin-pass" class="form-control form-control-sm" placeholder="Password">
+            </div>
+            </div>
+
+            <div id="teacher-login-view" class="role-form">
+            <div class="mb-3">
+                <label class="form-label small">Email</label>
+                <input type="email" id="teacher-useremail" class="form-control form-control-sm" placeholder="Enter your email" style="text-transform: lowercase;">
+            </div>
+            <div class="mb-3">
+                <label class="form-label small">Password</label>
+                <input type="password" id="teacher-password" class="form-control form-control-sm" placeholder="Last 5 digits of your mobile">
+            </div>
+            </div>
+
+            <div id="student-login-view" class="role-form d-none">
+            <div class="mb-3">
+                <label class="form-label small">Admission Number</label>
+                <input type="text" id="student-admn" class="form-control form-control-sm" placeholder="Last 4 digits" style="text-transform: uppercase;">
+            </div>
+            <div class="mb-3">
+                <label class="form-label small">Password</label>
+                <input type="password" id="student-dob" class="form-control form-control-sm" placeholder="Your year of birth (YYYY)">
+            </div>
+            </div>
+
+            <div class="d-grid mt-4">
+            <button type="submit" class="btn btn-primary btn-sm py-2 fw-semibold">
+                <i class="fas fa-sign-in-alt me-1"></i> Sign In
+            </button>
+            </div>
+        </form>
+        </div>
+    </div>
+    </div>  
+
+<!-- =========================== -->
+<!-- 💾 JS Logic -->
+<!-- =========================== -->
+<script>
+  const ROLE_STORAGE_KEY = 'lastSelectedRole';
+  const TAB_PANES = ['admin-login-view', 'teacher-login-view', 'student-login-view'];
+  const roleSelect = document.getElementById('role-select');
+
+  // Restore last selected role
+  function initializeLoginView() {
+    const savedRole = localStorage.getItem(ROLE_STORAGE_KEY) || 'teacher-login-view';
+    roleSelect.value = savedRole;
+    showRoleForm(savedRole);
+  }
+
+  // Save selected role
+  function saveSelectedRole(roleId) {
+    localStorage.setItem(ROLE_STORAGE_KEY, roleId);
+  }
+
+  // Show/Hide role-specific fields
+  function showRoleForm(roleId) {
+    document.querySelectorAll('.role-form').forEach(form => {
+      form.classList.add('d-none');
+    });
+    const activeForm = document.getElementById(roleId);
+    if (activeForm) activeForm.classList.remove('d-none');
+  }
+
+  // Event listeners
+  document.addEventListener('DOMContentLoaded', initializeLoginView);
+  roleSelect.addEventListener('change', (e) => {
+    const selectedRole = e.target.value;
+    saveSelectedRole(selectedRole);
+    showRoleForm(selectedRole);
+  });
+</script>
+
+</style>
 
         <div id="main-app" class="view">
         <div id="sidebar-overlay" class="d-none"></div>
-
-        <button id="sidebar-toggle-btn" class="btn btn-primary d-lg-none position-fixed top-0 start-0 m-3 z-3" style="z-index: 1000;">
-        <i class="fas fa-bars"></i>
-        </button>
-
         <aside id="sidebar" class="d-flex flex-column p-3 bg-white border-end">
         <div class="d-flex align-items-center mb-3 mb-md-0 me-md-auto text-dark text-decoration-none">
             <i class="fas fa-school fa-2x text-primary"></i><span id="panel-title" class="fs-4 ms-3 fw-bold"></span>
@@ -466,9 +667,44 @@
         <hr>
         
         </aside>
-
-        <main id="main-content" class="flex-grow-1 p-4 overflow-auto bg-light"></main>
+        <div id="app-layout" class="d-flex flex-column w-100">
+  <!-- Top App Bar -->
+   <div id="appbar" class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3 flex-wrap">
+        <div class="d-flex align-items-center">
+            <button id="sidebar-toggle-btn" class="btn btn-primary d-lg-none">
+        <i class="fas fa-bars"></i>
+        </button>
+            <button class="btn btn-sm btn-outline-secondary me-1" onclick="history.back()">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="history.forward()">
+                <i class="fas fa-arrow-right"></i>
+            </button>
         </div>
+
+        <h1 id="app-bar-title" class="h5 h4-sm mb-2 text-primary fw-bold text-center flex-grow-1">
+            ${viewTitle}
+        </h1>
+
+        <div class="d-flex align-items-center gap-2">
+            <div class="dropdown">
+                <button class="btn btn-light btn-sm rounded-circle position-relative" type="button" id="notificationBell" onclick="toggleNotificationDropdown(event)">
+                    <i class="fas fa-bell text-secondary fs-6"></i>
+                    <span id="notification-badge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none">0</span>
+                </button>
+                <ul id="notification-list" class="dropdown-menu dropdown-menu-end" aria-labelledby="notificationBell" style="width: 350px;"></ul>
+            </div>
+            <button class="btn btn-sm btn-outline-secondary" onclick="navigateTo('dashboard')">
+                <i class="fas fa-home fs-6"></i>
+            </button>
+        </div>
+    </div>
+
+  <!-- Dynamic Main Content Area -->
+   <div class="tabs-container">
+<main id="main-content" class="flex-grow-1 p-4 overflow-auto bg-light w-100"></main>
+   </div>
+  </div>
     </div>
 <div class="modal fade" id="studentDetailModal" tabindex="-1" aria-labelledby="studentDetailModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-centered">
@@ -790,9 +1026,8 @@
         
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, addDoc, setDoc, getDoc, getDocs, updateDoc, collection, onSnapshot, deleteDoc, writeBatch, query, where, serverTimestamp, limit, getCountFromServer } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";        //import { getFirestore, doc, addDoc, setDoc, getDoc, getDocs,updateDoc, collection, onSnapshot, deleteDoc, writeBatch, query, where, serverTimestamp ,limit} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-       //import {getData, getStudentsData, showSidebar, hideSidebar, printExamTimetable,generateTopperPoster } from "./finalgs.js";
-      // import {generateTopperPoster } from "./finalgs.js";
+        import { getFirestore, doc, addDoc, setDoc, getDoc, getDocs, updateDoc, collection, onSnapshot, deleteDoc, writeBatch, query, where, serverTimestamp, limit, getCountFromServer ,increment } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";        
+       
         const mainContent = document.getElementById('main-content');
         const sidebarNav = document.getElementById('sidebar-nav');
          const appId = 'school-management-app';
@@ -809,7 +1044,7 @@
        
         
         let classes = [], teachers = [], subjects = [],  exams = [], classroomSubjects = [], examSchedules = [], 
-        // marks = [], 
+         
         // Add this near your other global variables
         
         
@@ -821,8 +1056,7 @@
         
         let currentUserRole = null;
         let selectedUser = null; 
-        // currentUserRole = 'admin'; // Or 'teacher'
-        // selectedUser = { id: 'teacher123', name: 'John Doe',role:'admin', roles: ['teacher', 'exam_controller'] }; // Or the logged-in user
+        
         
         let classToEdit = null, teacherToEdit = null, studentToEdit = null;let subjectToEdit = null; 
         let allocationToEdit = null; 
@@ -840,7 +1074,7 @@
         let croppedPhotoBlob = null; // Stores the final cropped image as a Blob for upload
         let currentPhotoURL = ''; // Stores the URL of the student's existing photo (if editing)
         let reports = [], schoolDetails = {},vehicles = [];
-       // let unsubscribeMarksListener = null; // To manage the dynamic marks listener
+       
         // Add this near your other global variables
 
         let activeMarksListeners = {}; // NEW: To store multiple listeners
@@ -858,6 +1092,11 @@ let festParticipantFilters = {
     festId: '', // Stores the last selected Fest ID
     classId: '' // Stores the last selected Class ID
 };
+
+
+// --- New variables for Dashboard Caching ---
+let isDashboardDataLoaded = false;
+let dashboardStats = {};
 
 let students =[];
 // Add these to your list of global variables
@@ -878,7 +1117,7 @@ let examDuties = [];
 let examAbsentees = [];
 let examRegistrationSettings = {}; // Single document,
 let timetables = [];
-
+let apptitle = document.getElementById('app-bar-title');
 let roomToEdit = null; // Local state for editing a room (can be global if preferred)
 
 schoolDetails = {
@@ -900,7 +1139,11 @@ async function getData(storeName, idOrQueryObj = null) {
         }
 
         const isById = typeof idOrQueryObj === 'string';
-        attachDataListeners([storeName]);
+        if (!navigator.onLine) showAlert('You are offline. Data may be outdated.', 'warning');
+        if (navigator.onLine){
+            attachDataListeners([storeName]);
+        }
+        
         // --- PATH 1: Fetch by ID ---
         if (isById) {
             const docId = idOrQueryObj;
@@ -945,104 +1188,7 @@ async function getData(storeName, idOrQueryObj = null) {
     }
 }
 
-        // exams = [
-        //     { id: 'EXAM001', name: 'Term Exam 2025' },
-        //     { id: 'EXAM002', name: 'Annual Exam 2025' }
-        // ];
-
-        // examSchedules = [
-        //     { examId: 'EXAM001', date: '2025-08-10', session: 'FN', classId: 'CLASS10', division: 'A', subjectId: 'SUBMATH', maxTE: 70, maxCE: 30 },
-        //     { examId: 'EXAM001', date: '2025-08-10', session: 'FN', classId: 'CLASS10', division: 'B', subjectId: 'SUBMATH', maxTE: 70, maxCE: 30 },
-        //     { examId: 'EXAM001', date: '2025-08-10', session: 'AN', classId: 'CLASS10', division: 'A', subjectId: 'SUBSCI', maxTE: 70, maxCE: 30 },
-        //     { examId: 'EXAM001', date: '2025-08-11', session: 'FN', classId: 'CLASS10', division: 'A', subjectId: 'SUBLANG', maxTE: 70, maxCE: 30 },
-        //     { examId: 'EXAM002', date: '2025-11-20', session: 'FN', classId: 'CLASS10', division: 'A', subjectId: 'SUBPHY', maxTE: 70, maxCE: 30 }
-        // ];
-
-        // examRooms = [
-        //     { id: 'HALL-A', name: 'Main Exam Hall A', capacity: 50, isLab: false, description: 'Ground floor hall' },
-        //     { id: 'ROOM-101', name: 'Classroom 101', capacity: 25, isLab: false, description: 'First floor' },
-        //     { id: 'LAB-CHEM', name: 'Chemistry Lab', capacity: 20, isLab: true, description: 'Science lab' }
-        // ];
-
-        // examDuties = [
-        //     { id: 'EXAM001_20250810_FN_HALL-A', examId: 'EXAM001', date: '2025-08-10', session: 'FN', roomId: 'HALL-A', dutyTeacherId: 'teacher123', dutyTeacherName: 'John Doe' }
-        // ];
-
-        // examAbsentees = []; // Populated dynamically
         
-        // // Example for testing absentee notifications. Add an absentee if none exists.
-        // setTimeout(() => {
-        //     if (examAbsentees.length === 0) {
-        //         examAbsentees.push(
-        //             { id: 'EXAM001_studentA_20250721_FN_SUBMATH', examId: 'EXAM001', classId: 'CLASS10', division: 'A', subjectId: 'SUBMATH', date: '2025-07-21', session: 'FN', studentId: 'studentA', studentName: 'Alice Smith', admissionNumber: 'ADMN001', reportedByTeacherId: 'teacher123', notifiedToClassCharge: false },
-        //             { id: 'EXAM001_studentB_20250721_FN_SUBMATH', examId: 'EXAM001', classId: 'CLASS10', division: 'B', subjectId: 'SUBMATH', date: '2025-07-21', session: 'FN', studentId: 'studentB', studentName: 'Bob Johnson', admissionNumber: 'ADMN002', reportedByTeacherId: 'teacher123', notifiedToClassCharge: false }
-        //         );
-        //         // Trigger notification check if tab is active, or user navigates to it
-        //         if (document.getElementById('exam-control-notifications')?.classList.contains('active')) {
-        //              checkAbsenteeNotifications();
-        //         }
-        //     }
-        // }, 1000); // Simulate data arriving
-
-        // examRegistrationSettings = {
-        //     'CLASS10_M': 101,
-        //     'CLASS10_F': 101
-        // };
-
-        // examRoomAllocationRules = []; // Stores the rules used for allocation
-
-        // classes = [
-        //     { id: 'CLASS10', name: 'Class 10', divisions: ['A', 'B', 'C'] },
-        //     { id: 'CLASS9', name: 'Class 9', divisions: ['A', 'B'] }
-        // ];
-        // subjects = [
-        //     { id: 'SUBMATH', name: 'Mathematics' },
-        //     { id: 'SUBSCI', name: 'Science' },
-        //     { id: 'SUBLANG', name: 'English' },
-        //     { id: 'SUBPHY', name: 'Physics' }
-        // ];
-        // students = [
-        //     { id: 'studentA', name: 'Alice Smith', admissionNumber: 'ADMN001', classId: 'CLASS10', division: 'A', gender: 'F', examRegNumbers: { 'EXAM001': 'FCLASS10_101', 'EXAM002': 'FCLASS10_001' }, examRoomAllocations: {} },
-        //     { id: 'studentB', name: 'Bob Johnson', admissionNumber: 'ADMN002', classId: 'CLASS10', division: 'B', gender: 'M', examRegNumbers: { 'EXAM001': 'MCLASS10_101' }, examRoomAllocations: {} },
-        //     { id: 'studentC', name: 'Charlie Brown', admissionNumber: 'ADMN003', classId: 'CLASS10', division: 'A', gender: 'M', examRegNumbers: { 'EXAM001': 'MCLASS10_102' }, examRoomAllocations: {} },
-        //     { id: 'studentD', name: 'Diana Prince', admissionNumber: 'ADMN004', classId: 'CLASS10', division: 'B', gender: 'F', examRegNumbers: { 'EXAM001': 'FCLASS10_102' }, examRoomAllocations: {} },
-        //     { id: 'studentE', name: 'Eve Adams', admissionNumber: 'ADMN005', classId: 'CLASS9', division: 'A', gender: 'F', examRegNumbers: { 'EXAM001': 'FCLASS9_101' }, examRoomAllocations: {} },
-        //     { id: 'studentF', name: 'Frank White', admissionNumber: 'ADMN006', classId: 'CLASS9', division: 'A', gender: 'M', examRegNumbers: { 'EXAM001': 'MCLASS9_101' }, examRoomAllocations: {} }
-        // ];
-        // // Simulate some room allocations for testing Hall Tickets/Reports
-        // students.forEach(s => {
-        //     if (s.id === 'studentA') { s.examRoomAllocations['EXAM001_20250810_FN'] = 'HALL-A'; s.examRoomAllocations['EXAM001_20250810_AN'] = 'ROOM-101'; }
-        //     if (s.id === 'studentB') { s.examRoomAllocations['EXAM001_20250810_FN'] = 'HALL-A'; }
-        //     if (s.id === 'studentC') { s.examRoomAllocations['EXAM001_20250810_FN'] = 'HALL-A'; }
-        //     if (s.id === 'studentD') { s.examRoomAllocations['EXAM001_20250810_FN'] = 'ROOM-101'; }
-        //     if (s.id === 'studentE') { s.examRoomAllocations['EXAM001_20250810_FN'] = 'LAB-CHEM'; }
-        //     if (s.id === 'studentF') { s.examRoomAllocations['EXAM001_20250810_FN'] = 'LAB-CHEM'; }
-        // });
-
-        // // Simulate some allocation rules for testing
-        // examRoomAllocationRules.push({
-        //     id: 'EXAM001_20250810_FN_HALL-A',
-        //     examId: 'EXAM001', date: '2025-08-10', session: 'FN', roomId: 'HALL-A',
-        //     regNoRangeText: 'FCLASS10_101, MCLASS10_101-MCLASS10_102',
-        //     allocatedBy: 'admin', allocatedAt: new Date()
-        // });
-        // examRoomAllocationRules.push({
-        //     id: 'EXAM001_20250810_FN_ROOM-101',
-        //     examId: 'EXAM001', date: '2025-08-10', session: 'FN', roomId: 'ROOM-101',
-        //     regNoRangeText: 'FCLASS10_102',
-        //     allocatedBy: 'admin', allocatedAt: new Date()
-        // });
-        // examRoomAllocationRules.push({
-        //     id: 'EXAM001_20250810_FN_LAB-CHEM',
-        //     examId: 'EXAM001', date: '2025-08-10', session: 'FN', roomId: 'LAB-CHEM',
-        //     regNoRangeText: 'FCLASS9_101, MCLASS9_101',
-        //     allocatedBy: 'admin', allocatedAt: new Date()
-        // });
-
-        // teachers = [
-        //     { id: 'teacher123', name: 'John Doe', mobile: '9876543210', classCharge: { classId: 'CLASS10', division: 'A' } },
-        //     { id: 'teacher456', name: 'Jane Smith', mobile: '9988776655', classCharge: { classId: 'CLASS10', division: 'B' } }
-        // ];
         
 
 function waitForCollectionLoad(collectionName) {
@@ -1161,30 +1307,60 @@ const studentNav = [
             alertEl.style.display = 'block';
             setTimeout(() => { alertEl.style.display = 'none'; }, 3000);
         }
-        function showAlert(message, type = 'info') {
-            const toastEl = document.getElementById('alert-toast');
-            const titleEl = document.getElementById('alert-title');
-            const bodyEl = document.getElementById('alert-body');
-            const headerIcon = toastEl.querySelector('.toast-header i');
+        /**
+ * Displays a non-blocking, mobile-friendly alert toast in the top-right corner.
+ * This function dynamically creates and destroys the toast element to prevent errors.
+ * @param {string} message - The message to display.
+ * @param {string} type - 'success', 'danger', 'warning', or 'info'.
+ * @param {number} delay - How long the toast should be visible in milliseconds.
+ */
+function showAlert(message, type = 'info', delay = 5000) {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
 
-            titleEl.textContent = type.charAt(0).toUpperCase() + type.slice(1);
-            bodyEl.textContent = message;
-            
-            toastEl.className = 'toast'; // Reset classes
-            headerIcon.className = 'fas fa-circle me-2';
+    // 1. Determine color and icon based on the type
+    let bgClass = 'bg-primary';
+    let iconClass = 'fas fa-info-circle';
+    if (type === 'success') {
+        bgClass = 'bg-success';
+        iconClass = 'fas fa-check-circle';
+    } else if (type === 'danger') {
+        bgClass = 'bg-danger';
+        iconClass = 'fas fa-exclamation-triangle';
+    } else if (type === 'warning') {
+        bgClass = 'bg-warning text-dark';
+        iconClass = 'fas fa-exclamation-triangle';
+    }
 
-            let toastClass = 'bg-info';
-            if (type === 'success') toastClass = 'bg-success';
-            if (type === 'danger') toastClass = 'bg-danger';
-            
-            toastEl.classList.add(toastClass, 'text-white');
-            headerIcon.classList.add('text-white');
-            
-            const toast = new bootstrap.Toast(toastEl);
-            toast.show();
-        }
+    const toastId = `toast-${Date.now()}`;
 
-    
+    // 2. Create the toast HTML from scratch
+    const toastHtml = `
+        <div id="${toastId}" class="toast ${bgClass} text-white" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="${delay}">
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="${iconClass} me-2"></i>
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    `;
+
+    // 3. Add the new toast to the page
+    container.insertAdjacentHTML('beforeend', toastHtml);
+
+    const toastElement = document.getElementById(toastId);
+    const toast = new bootstrap.Toast(toastElement);
+
+    // 4. IMPORTANT: Add an event listener to remove the element from the DOM after it's hidden
+    toastElement.addEventListener('hidden.bs.toast', () => {
+        toastElement.remove();
+    });
+
+    // 5. Show the toast
+    toast.show();
+}
 // This function processes existing data, it does not fetch new data.
 // It should be called after `classroomSubjects` and `teachers` are loaded.
 async function updateTeacherAssignedClasses() {
@@ -1236,130 +1412,19 @@ async function updateTeacherAssignedClasses() {
 // --- In your <script type="module"> block ---
 // REPLACE your entire onLoginSuccess function with this one
 
-async function onLoginSuccess(role, user) {
-    //console.log('mythreestudents',await getData('students')); 
+        async function onLoginSuccess(role, user) { 
     currentUserRole = role;
     selectedUser = user;
     unsubscribeAllListeners();
 
     showMainApp(); // Render the main app layout
 
-    if (navigator.onLine) {
-        // --- ONLINE: Fetch all data and populate the cache ---
-        showAlert('Syncing latest data from server...', 'info');
-        try {
-           // await getData('classroomSubjects');
-            
-    
-
-            const collectionsToCache = [
-  'classes', 'subjects', 'classroomSubjects', 'teachers', 'exams', 'examSchedules', 'holidays', 
-  'books', 'bookIssuances', 'feeStructures', 
-  'studentFeeSetups', 'attendance'
-];
-
-// Fetch all collections in parallel, but also assign resolved results to window
-const dataPromises = collectionsToCache.map(async (name) => {
-  const data = await getData(name);
-  window[name] = data;
-  console.log(name,data);
-  return data;
-});
-
-// Wait for all collections to populate
-await Promise.all(dataPromises);
-
-// ✅ Now safe to run dependent logic
-updateTeacherAssignedClasses();
-
-            showAlert('Data sync complete!', 'success');
-
-            // CORRECT: Now that the cache is warm, attach real-time listeners for future updates
-         attachDataListeners(collectionsToCache);
-            // You can re-add your other specific listeners here if needed
-        attachFeeDataListeners(activeFinancialYear, role, user);
-            // syncDataForUser();
-            
-        } catch (error) {
-            console.error("Initial data sync failed:", error);
-            showAlert("Failed to sync initial data. App may not work correctly offline.", 'danger');
-        }
-    } else {
-        // --- OFFLINE: Load all data from the local cache ---
-        showAlert('You are offline. Loading data from local cache.', 'info');
-        try {
-            // Get all table names directly from Dexie's schema
-            const allTables = appDb.tables.map(table => table.name);
-            for (const name of allTables) {
-                 window[name] = await appDb[name].toArray();
-            }
-        } catch (dbError) {
-            console.error("Error loading data from IndexedDB:", dbError);
-            showAlert("Could not load local data.", "danger");
-        }
-    }
-
-    // After data is loaded (either from network or cache), navigate to dashboard
-    await navigateTo('dashboard');
 }
 
 
-async function onLoginSuccessold (role, user) {
-    currentUserRole = role;
-    selectedUser = user;
-    unsubscribeAllListeners(); // Clean up any previous session listeners
-    
-    // IMPORTANT: Call this AFTER 'classroomSubjects' (and teachers/students) are loaded
-        updateTeacherAssignedClasses(); // Populate the teacherAssignedClasses array
 
-    showMainApp(); // Render the main app layout (sidebar, main-content divs)
 
-    // Define core essential collections that *must* be loaded before any view is rendered.
-    // Ensure 'classroomSubjects' is in this list as 'updateTeacherAssignedClasses' depends on it.
-    const coreCollections = ['classes','subjects', 'exams', 'holidays', 'schoolDetails', 'festSettings','classroomSubjects', 'teachers', 'examDuties', 'examAbsentees', 'examRegistrationSettings'];
 
-    try {
-        showAlert(`Loading essential school data...`, 'info');
-        // Initiate listeners for all core collections
-        await attachDataListeners(coreCollections);
-        setupInitialMarksListeners();
-        // Wait for ALL core collections to deliver their initial snapshot
-        const coreCollectionPromises = coreCollections.map(name => waitForCollectionLoad(name));
-        await Promise.all(coreCollectionPromises);
-        showAlert(`Core data loaded.`, 'success');
-
-        // IMPORTANT: Call this AFTER 'classroomSubjects' (and teachers/students) are loaded
-        updateTeacherAssignedClasses(); // Populate the teacherAssignedClasses array
-
-        // Attach other background listeners (e.g., marks, fees)
-        // These don't necessarily block initial UI, but ensure data is streamed.
-        attachFeeDataListeners(activeFinancialYear, role, user);
-        syncDataForUser(); // This will leverage teacherAssignedClasses for marks
-
-        // Determine the initial view as before
-        let initialViewId = 'dashboard';
-        const savedSessionJSON = localStorage.getItem('schoolAppLastSession');
-        if (savedSessionJSON) {
-            const savedSession = JSON.parse(savedSessionJSON);
-            const fifteenMinutes = 15 * 60 * 1000;
-            if (savedSession.userId === user.id && (Date.now() - savedSession.timestamp < fifteenMinutes)) {
-                showAlert(`Restoring your previous session...`, 'info');
-                initialViewId = savedSession.viewId;
-            }
-            localStorage.removeItem('schoolAppLastSession');
-        }
-
-        // Navigate to the initial view, which will internally wait for *its* specific data.
-        await navigateTo(initialViewId, false);
-
-    } catch (error) {
-        console.error("Initial data load failed:", error);
-        showAlert("Failed to load essential school data. Please try again.", 'danger');
-        // Optionally, force logout or show a retry button
-    }
-}
-
-//onLoginSuccess('admin',selectedUser);
  
 // Add this new object to your script
 const viewDependencies = {
@@ -1373,6 +1438,7 @@ const viewDependencies = {
     'subject-allocation': ['classes', 'subjects', 'teachers', 'classroomSubjects'],
     'exam-mgt': ['marks','exams', 'classes', 'subjects', 'teachers', 'examSchedules','classroomSubjects'],
     'exam-control': ['exams', 'classes', 'subjects', 'teachers', 'examSchedules','classroomSubjects','examRooms', 'examDuties', 'examAbsentees', 'examRegistrationSettings','examRoomAllocationRules'],
+    'exam-reports':['students','exams','classes','examSchedules','classroomSubjects','subjects','teachers', ],
     'attendance-mgt': ['students', 'classes', 'holidays', 'attendance'],
     'holiday-mgt': ['holidays'],
     'syllabus-tracker': ['classes', 'subjects', 'teachers', 'classroomSubjects', 'chapters', 'syllabuses', 'syllabusCompletion'],
@@ -1477,8 +1543,6 @@ const collectionMap = {
  */
 async function attachDataListeners(collectionsToWatch) {
     if (!collectionsToWatch || collectionsToWatch.length === 0) return;
-    if (!navigator.onLine) showAlert('You are offline. Data may be outdated.', 'warning');
-
     const smartSyncCollections = new Set();
     for (const tableName in collectionMap) {
         if (appDb[tableName] && appDb[tableName].schema.idxByName.lastUpdated) {
@@ -2111,103 +2175,57 @@ function attachFeeDataListeners(financialYear, role, user) {
 }
 
 
-
-        function renderSidebar(navItems) {
-    sidebarNav.innerHTML = navItems.map(item => `<a href="#${item.id}" id="nav-${item.id}" class="nav-link text-dark"><i class="fas ${item.icon} me-2"></i>${item.text}</a>`).join('');
-    navItems.forEach(item => {
-        document.getElementById(`nav-${item.id}`).addEventListener('click', e => { 
-            e.preventDefault(); 
-            if (item.id === 'add-student') studentToEdit = null;
-            navigateTo(item.id); 
-        });
-    });
-}
-
 // REPLACE your existing navigateTo function with this optimized version
+window.navigateTo = async (viewId, pushState = true) => {
+  currentViewId = viewId;
 
-async function navigateTo(viewId, pushState = true) {
-    currentViewId = viewId; // <-- ADD THIS LINE to track the active view
-    const mainContent = document.getElementById('main-content');
-    if (!mainContent) return;
+  const appbar = document.getElementById('appbar');
+  const mainContent = document.getElementById('main-content');
+  if (!appbar || !mainContent) return;
 
-    // 1. Show a loading spinner for better user experience
-    mainContent.innerHTML = `
-        <div class="d-flex justify-content-center align-items-center" style="height: 80vh;">
-            <div class="spinner-border text-primary" role="status"></div>
-        </div>
-    `;
+  // --- 1️⃣ Update the App Bar ---
+  const navLink = document.getElementById(`nav-${viewId}`);
+  const viewTitle = navLink ? navLink.textContent : 'Dashboard';
 
-    // Update sidebar active link and browser history
-    document.querySelectorAll('#sidebar-nav .nav-link').forEach(link => link.classList.remove('active'));
-    const navLink = document.getElementById(`nav-${viewId}`);
-    if (navLink) navLink.classList.add('active');
-    if (pushState) history.pushState({ viewId }, viewId, `#${viewId}`);
+  // --- 2️⃣ Show Loading Spinner in Content ---
+  mainContent.innerHTML = `
+    <div class="d-flex justify-content-center align-items-center" style="height: 70vh;">
+      <div class="spinner-border text-primary" role="status"></div>
+    </div>`;
 
-    const collectionsToCache = viewDependencies[viewId] || [];
+  // --- 3️⃣ Update Sidebar + History ---
+  document.querySelectorAll('#sidebar-nav .nav-link').forEach(l => l.classList.remove('active'));
+  if (navLink) navLink.classList.add('active');
+  if (pushState) history.pushState({ viewId }, viewId, `#${viewId}`);
 
-    try {
-        // This creates an array of promises, but does NOT wait for them.
-        const dataPromises = collectionsToCache.map(name => getData(name));
-    
-    // 1. Capture the results from all promises (this is correct)
-    const resolvedDataArray = await Promise.all(dataPromises);
+  // --- 4️⃣ Fetch + Render ---
+  try {
+    const deps = viewDependencies[viewId] || [];
+    const results = await Promise.all(deps.map(name => getData(name)));
 
-    // 2. Loop through the results and use your 'collectionMap' setter to update the correct variable
-    collectionsToCache.forEach((name, index) => {
-        const data = resolvedDataArray[index]; // Get the data for the current collection
-        const config = collectionMap[name];   // <-- Get the config for this collection
-        
-        if (data && config && config.setter) {
-            config.setter(data); // <-- Use the setter to update the correct variable directly!
-            console.log(`Successfully cached '${name}' with ${Array.isArray(data) ? data.length : 1} records.`);
-        }
+    deps.forEach((name, i) => {
+      const data = results[i];
+      const config = collectionMap[name];
+      if (data && config?.setter) config.setter(data);
     });
-    
-    // Now you can safely call functions that depend on this data
+
     updateTeacherAssignedClasses();
-    showAlert('Data sync complete!', 'success');
 
-        // This code will ONLY run after all data is fetched and assigned.
-        console.log("All data loaded. Ready to render.");
-        console.log("Students array now contains:",students); // Now it will have data
-
-        // Now, it is safe to render the view.
-        const renderFunc = window.viewRenderers[viewId];
-        if (renderFunc) {
-            renderFunc();
-        } else {
-            mainContent.innerHTML = `<p>UI under construction or renderer not found.</p>`;
-        }
-
-    } catch (error) {
-        console.error(`Failed to load data for view ${viewId}:`, error);
-        mainContent.innerHTML = `<div class="alert alert-danger">Failed to load data.</div>`;
+    const renderFunc = window.viewRenderers[viewId];
+    if (renderFunc) {
+      // renderFunc now fills only main-content
+      await renderFunc(mainContent);
+      document.getElementById('app-bar-title').textContent = viewTitle;
+    } else {
+      mainContent.innerHTML = `<div class="alert alert-info">View "${viewId}" is under construction.</div>`;
     }
-
-
-    // Hide mobile sidebar if it's open
-    const sidebar = document.getElementById('sidebar');
-    const sidebarOverlay = document.getElementById('sidebar-overlay');
-    if (sidebar && sidebar.classList.contains('show')) {
-        sidebar.classList.remove('show');
-        sidebarOverlay.classList.remove('show');
-        document.body.style.overflow = '';
-    }
-}
-    function attachAdminDataListeners(collectionsToWatch) {
-    collectionsToWatch.forEach(name => {
-        if (!activeListeners[name]) {
-            const unsub = onSnapshot(getCollectionRef(name), (snapshot) => {
-                const dataObject = {};
-                snapshot.docs.forEach(doc => {
-                    dataObject[doc.id] = { id: doc.id, ...doc.data() };
-                });
-                window[name] = dataObject;
-            });
-            activeListeners[name] = unsub;
-        }
-    });
-}
+  } catch (error) {
+    console.error(`Failed to render '${viewId}':`, error);
+    mainContent.innerHTML = `<div class="alert alert-danger">Error loading view.</div>`;
+  } finally {
+    if (document.getElementById('sidebar')?.classList.contains('show')) hideSidebar();
+  }
+};
 
 
         
@@ -2253,11 +2271,10 @@ function showMainApp() {
     }
 
     renderSidebar(navItems);
-
     // REMOVED the navigation logic from here.
-    // const initialViewId = 'dashboard';
-    // history.replaceState({ viewId: initialViewId }, initialViewId, `#${initialViewId}`);
-    // navigateTo(initialViewId, false);
+     const initialViewId = 'dashboard';
+     history.replaceState({ viewId: initialViewId }, initialViewId, `#${initialViewId}`);
+    navigateTo(initialViewId, false);
 }
 // Add all of these new functions to your main <script> block
 /**
@@ -2520,279 +2537,92 @@ window.saveJudgeResults = async (festData, eventData, participants, groups) => {
             }
         }
         
-        document.getElementById('login-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
+        document.getElementById('login-form').addEventListener('submit',async(e)=>{
+  e.preventDefault();
+  const submitButton=e.target.querySelector('button[type="submit"]');
+  if(!submitButton)return;
+  const originalButtonHtml=submitButton.innerHTML;
+  submitButton.disabled=true;
+  submitButton.innerHTML=`<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Signing In...`;
 
-    // Get the submit button from the form that triggered the event
-    const submitButton = e.target.querySelector('button[type="submit"]');
-    if (!submitButton) return; // Exit if the button isn't found
+  try{
+    const activeRole=roleSelect.value.replace('-login-view','');
 
-    // Store the button's original content and disable it
-    const originalButtonHtml = submitButton.innerHTML;
-    submitButton.disabled = true;
-    submitButton.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Signing In...`;
-
-    try {
-        const activeRole = document.querySelector('#loginTab .nav-link.active').getAttribute('data-bs-target').replace('#', '').replace('-login-view', '');
-
-        if (!navigator.onLine) {
-            showAlert('You are offline. Please connect to the internet to log in.', 'danger');
-            return; // Early exit, 'finally' will still run
-        }
-
-        if (activeRole === 'admin') {
-            const email = document.getElementById('admin-user').value.toLowerCase();
-            const password = document.getElementById('admin-pass').value;
-
-            if (!email || !password) {
-                showAlert('Please enter admin email and password.', 'danger');
-                return;
-            }
-
-            const q = query(getCollectionRef('teachers'), where('email', '==', email));
-            const querySnapshot = await getDocs(q);
-
-            if (querySnapshot.empty) {
-                showAlert('Admin user not found in the database.', 'danger');
-            } else {
-                const adminDoc = querySnapshot.docs[0];
-                const adminData = { id: adminDoc.id, ...adminDoc.data() };
-
-                if (adminData.role === 'admin') {
-                    if (password === (adminData.mobile || '').slice(-5)) {
-                        onLoginSuccess('admin', adminData);
-                    } else {
-                        showAlert('Incorrect password for admin.', 'danger');
-                    }
-                } else {
-                    showAlert('This user does not have admin privileges.', 'danger');
-                }
-            }
-            //onLoginSuccess('admin', selectedUser);
-        } else if (activeRole === 'teacher') {
-            const email = document.getElementById('teacher-useremail').value.toLowerCase();
-            const password = document.getElementById('teacher-password').value;
-            if (!email || !password) {
-                showAlert('Please enter email and password.', 'danger');
-                return;
-            }
-            
-            const q = query(getCollectionRef('teachers'), where('email', '==', email));
-            const querySnapshot = await getDocs(q);
-
-            if (querySnapshot.empty) {
-                showAlert('Teacher email not found.', 'danger');
-            } else {
-                const teacherDoc = querySnapshot.docs[0];
-                const teacherData = { id: teacherDoc.id, ...teacherDoc.data() };
-                if (password === (teacherData.mobile || '').slice(-5)) {
-                    onLoginSuccess('teacher', teacherData);
-                } else {
-                    showAlert('Incorrect password for teacher.', 'danger');
-                }
-            }
-        } else if (activeRole === 'student') {
-            const admnNoSuffix = document.getElementById('student-admn').value.toUpperCase();
-            const dobYear = document.getElementById('student-dob').value;
-            if (!admnNoSuffix || !dobYear) {
-                showAlert('Please enter Admission No. and Year of Birth.', 'danger');
-                return;
-            }
-
-            const studentsSnapshot = await getDocs(getCollectionRef('students'));
-            let foundStudent = null;
-            studentsSnapshot.forEach(doc => {
-                const studentData = doc.data();
-                if (studentData.admissionNumber && studentData.admissionNumber.toUpperCase().endsWith(admnNoSuffix)) {
-                    foundStudent = { id: doc.id, ...studentData };
-                }
-            });
-
-            if (foundStudent) {
-                const studentDobYear = (foundStudent.dob || '').split('-')[0];
-                if (dobYear === studentDobYear) {
-                    onLoginSuccess('student', foundStudent);
-                } else {
-                    showAlert('Incorrect year of birth.', 'danger');
-                }
-            } else {
-                showAlert('Student admission number not found.', 'danger');
-            }
-        }
-    } finally {
-        // This block runs whether the login succeeds or fails,
-        // ensuring the button is always restored to its original state.
-        submitButton.disabled = false;
-        submitButton.innerHTML = originalButtonHtml;
-    }
-});
-document.getElementById('login-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-
-    const submitButton = e.target.querySelector('button[type="submit"]');
-    if (!submitButton) return;
-
-    const originalButtonHtml = submitButton.innerHTML;
-    submitButton.disabled = true;
-    submitButton.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Signing In...`;
-
-    try {
-        const activeRole = document.querySelector('#loginTab .nav-link.active').getAttribute('data-bs-target').replace('#', '').replace('-login-view', '');
-
-        if (activeRole === 'teacher') {
-            const email = document.getElementById('teacher-useremail').value.toLowerCase();
-            const password = document.getElementById('teacher-password').value;
-            if (!email || !password) {
-                showAlert('Please enter email and password.', 'danger');
-                return; // Early exit
-            }
-
-            // 1. --- ALWAYS TRY LOCAL DB FIRST ---
-            const localTeacher = await appDb.teachers.where('email').equalsIgnoreCase(email).first();
-
-            if (localTeacher && password === (localTeacher.mobile || '').slice(-5)) {
-                // 2. --- LOCAL LOGIN SUCCESS ---
-                showAlert('Logged in successfully from local cache.', 'success');
-                onLoginSuccess('teacher', localTeacher);
-                return; // Login successful, stop here.
-            }
-
-            // 3. --- LOCAL LOGIN FAILED, CHECK IF ONLINE TO TRY SERVER ---
-            if (!navigator.onLine) {
-                showAlert('Offline login failed. Credentials do not match cached data.', 'danger');
-                return; // Definitive failure if offline.
-            }
-
-            // 4. --- TRY SERVER (FIREBASE) AS FALLBACK ---
-            const q = query(getCollectionRef('teachers'), where('email', '==', email));
-            const querySnapshot = await getDocs(q);
-
-            if (querySnapshot.empty) {
-                showAlert('Teacher email not found on the server.', 'danger');
-            } else {
-                const teacherDoc = querySnapshot.docs[0];
-                const teacherData = { id: teacherDoc.id, ...teacherDoc.data() };
-                if (password === (teacherData.mobile || '').slice(-5)) {
-                    // 5. --- SERVER LOGIN SUCCESS & CACHE UPDATE ---
-                    await appDb.teachers.put(teacherData); // Update local DB for next time
-                    showAlert('Logged in successfully from server.', 'success');
-                    onLoginSuccess('teacher', teacherData);
-                } else {
-                    showAlert('Incorrect password.', 'danger');
-                }
-            }
-        } else if (activeRole === 'student') {
-            const admnNoSuffix = document.getElementById('student-admn').value.toUpperCase();
-            const dobYear = document.getElementById('student-dob').value;
-            if (!admnNoSuffix || !dobYear) {
-                showAlert('Please enter Admission No. and Year of Birth.', 'danger');
-                return;
-            }
-            
-            // 1. --- ALWAYS TRY LOCAL DB FIRST ---
-            const localStudent = await appDb.students.where('admissionNumber').endsWithIgnoreCase(admnNoSuffix).first();
-
-            if (localStudent && dobYear === (localStudent.dob || '').split('-')[0]) {
-                // 2. --- LOCAL LOGIN SUCCESS ---
-                showAlert('Logged in successfully from local cache.', 'success');
-                onLoginSuccess('student', localStudent);
-                return; // Login successful, stop here.
-            }
-
-            // 3. --- LOCAL LOGIN FAILED, CHECK IF ONLINE TO TRY SERVER ---
-            if (!navigator.onLine) {
-                showAlert('Offline login failed. Credentials do not match cached data.', 'danger');
-                return; // Definitive failure if offline.
-            }
-
-            // 4. --- TRY SERVER (FIREBASE) AS FALLBACK ---
-            const studentsSnapshot = await getDocs(getCollectionRef('students'));
-            let foundStudent = null;
-            studentsSnapshot.forEach(doc => {
-                const studentData = doc.data();
-                if (studentData.admissionNumber && studentData.admissionNumber.toUpperCase().endsWith(admnNoSuffix)) {
-                    foundStudent = { id: doc.id, ...studentData };
-                }
-            });
-            
-            if (foundStudent) {
-                if (dobYear === (foundStudent.dob || '').split('-')[0]) {
-                    // 5. --- SERVER LOGIN SUCCESS & CACHE UPDATE ---
-                    await appDb.students.put(foundStudent); // Update local DB for next time
-                    showAlert('Logged in successfully from server.', 'success');
-                    onLoginSuccess('student', foundStudent);
-                } else {
-                    showAlert('Incorrect year of birth.', 'danger');
-                }
-            } else {
-                showAlert('Student admission number not found on the server.', 'danger');
-            }
-        } // Find the admin login block in your script and REPLACE it with this
-
-else if (activeRole === 'admin') {
-    const email = document.getElementById('admin-user').value.toLowerCase();
-    const password = document.getElementById('admin-pass').value;
-    if (!email || !password) {
-        showAlert('Please enter admin email and password.', 'danger');
-        return; // Early exit
+    if(activeRole==='teacher'){
+      const email=document.getElementById('teacher-useremail').value.toLowerCase();
+      const password=document.getElementById('teacher-password').value;
+      if(!email||!password){showAlert('Please enter email and password.','danger');return;}
+      const localTeacher=await appDb.teachers.where('email').equalsIgnoreCase(email).first();
+      if(localTeacher&&password===(localTeacher.mobile||'').slice(-5)){
+        showAlert('Logged in from local cache.','success');
+        onLoginSuccess('teacher',localTeacher);return;
+      }
+      if(!navigator.onLine){showAlert('Offline login failed.','danger');return;}
+      const q=query(getCollectionRef('teachers'),where('email','==',email));
+      const qs=await getDocs(q);
+      if(qs.empty){showAlert('Teacher email not found.','danger');}
+      else{
+        const docSnap=qs.docs[0];const t={id:docSnap.id,...docSnap.data()};
+        if(password===(t.mobile||'').slice(-5)){
+          await appDb.teachers.put(t);
+          showAlert('Logged in from server.','success');
+          onLoginSuccess('teacher',t);
+        }else showAlert('Incorrect password.','danger');
+      }
     }
 
-    // 1. --- ALWAYS TRY LOCAL DB FIRST ---
-    const localAdmin = await appDb.teachers.where('email').equalsIgnoreCase(email).first();
-
-    if (localAdmin && localAdmin.role === 'admin' && password === (localAdmin.mobile || '').slice(-5)) {
-        // 2. --- LOCAL LOGIN SUCCESS ---
-        // The user was found in the local cache, is an admin, and the password matches.
-        showAlert('Logged in as Admin from local cache.', 'success');
-        onLoginSuccess('admin', localAdmin);
-        return; // Login successful, stop here.
+    else if(activeRole==='student'){
+      const admn=document.getElementById('student-admn').value.toUpperCase();
+      const dob=document.getElementById('student-dob').value;
+      if(!admn||!dob){showAlert('Please enter Admission No. and Year.','danger');return;}
+      const local=await appDb.students.where('admissionNumber').endsWithIgnoreCase(admn).first();
+      if(local&&dob===(local.dob||'').split('-')[0]){
+        showAlert('Logged in from local cache.','success');
+        onLoginSuccess('student',local);return;
+      }
+      if(!navigator.onLine){showAlert('Offline login failed.','danger');return;}
+      const all=await getDocs(getCollectionRef('students'));
+      let found=null;
+      all.forEach(doc=>{
+        const s=doc.data();
+        if(s.admissionNumber&&s.admissionNumber.toUpperCase().endsWith(admn))
+          found={id:doc.id,...s};
+      });
+      if(found){
+        if(dob===(found.dob||'').split('-')[0]){
+          await appDb.students.put(found);
+          showAlert('Logged in from server.','success');
+          onLoginSuccess('student',found);
+        }else showAlert('Incorrect year of birth.','danger');
+      }else showAlert('Student not found.','danger');
     }
 
-    // 3. --- LOCAL LOGIN FAILED, CHECK IF ONLINE TO TRY SERVER ---
-    if (!navigator.onLine) {
-        showAlert('Offline admin login failed. Credentials do not match cached data.', 'danger');
-        return; // Definitive failure if offline.
+    else if(activeRole==='admin'){
+      const email=document.getElementById('admin-user').value.toLowerCase();
+      const pass=document.getElementById('admin-pass').value;
+      if(!email||!pass){showAlert('Please enter admin email and password.','danger');return;}
+      const localAdmin=await appDb.teachers.where('email').equalsIgnoreCase(email).first();
+      if(localAdmin&&localAdmin.role==='admin'&&pass===(localAdmin.mobile||'').slice(-5)){
+        showAlert('Logged in as Admin (cache).','success');
+        onLoginSuccess('admin',localAdmin);return;
+      }
+      if(!navigator.onLine){showAlert('Offline admin login failed.','danger');return;}
+      showAlert('Checking server...','info');
+      const q=query(getCollectionRef('teachers'),where('email','==',email));
+      const qs=await getDocs(q);
+      if(qs.empty){showAlert('Admin not found.','danger');}
+      else{
+        const d=qs.docs[0];const a={id:d.id,...d.data()};
+        if(a.role==='admin'){
+          if(pass===(a.mobile||'').slice(-5))onLoginSuccess('admin',a);
+          else showAlert('Incorrect admin password.','danger');
+        }else showAlert('No admin privilege.','danger');
+      }
     }
-
-    // 4. --- TRY SERVER (FIREBASE) AS FALLBACK ---
-    showAlert('Checking server for admin credentials...', 'info');
-    const q = query(getCollectionRef('teachers'), where('email', '==', email));
-    const querySnapshot = await getDocs(q);
-
-    if (querySnapshot.empty) {
-        showAlert('Admin user not found in the database.', 'danger');
-    } else {
-        const adminDoc = querySnapshot.docs[0];
-        const adminData = { id: adminDoc.id, ...adminDoc.data() };
-
-        if (adminData.role === 'admin') {
-            if (password === (adminData.mobile || '').slice(-5)) {
-                // 1. Unsubscribe from all active Firestore listeners to stop data syncing
-    unsubscribeAllListeners();
-
-    // 2. Clear all data from every table in your IndexedDB database
-    try {
-        const clearPromises = appDb.tables.map(table => table.clear());
-        await Promise.all(clearPromises);
-        console.log('IndexedDB has been cleared successfully.');
-    } catch (error) {
-        console.error('Failed to clear IndexedDB:', error);
-        showAlert('Could not clear local data.', 'danger');
-    }
-                onLoginSuccess('admin', adminData);
-            } else {
-                showAlert('Incorrect password for admin.', 'danger');
-            }
-        } else {
-            showAlert('This user does not have admin privileges.', 'danger');
-        }
-    }
-}
-    } finally {
-        // This block always runs, ensuring the button is restored
-        submitButton.disabled = false;
-        submitButton.innerHTML = originalButtonHtml;
-    }
+  }finally{
+    submitButton.disabled=false;
+    submitButton.innerHTML=originalButtonHtml;
+  }
 });
 
 
@@ -2832,150 +2662,121 @@ else if (activeRole === 'admin') {
         document.getElementById('login-screen').classList.add('active');
     }
 });
-
-        // --- DASHBOARD ---
-        window.renderDashboard = async () => {
-            if (attendanceChart) {
-                attendanceChart.destroy();
-                attendanceChart = null;
-            }
-            let content = '';
-            if (currentUserRole === 'admin') {
-                console.log(window.students);
-                content = `<h1 class="h2 mb-4">Admin Dashboard</h1>
-                <div class="row">
-                    <div class="col-xl-3 col-md-6 mb-4"><div class="card border-start-primary shadow h-100 py-2"><div class="card-body"><div class="row no-gutters align-items-center"><div class="col me-2"><div class="text-xs fw-bold text-primary text-uppercase mb-1">Students</div><div class="h5 mb-0 fw-bold text-gray-800">${students.length}</div></div><div class="col-auto"><i class="fas fa-users fa-2x text-body-tertiary"></i></div></div></div></div></div>
-                    <div class="col-xl-3 col-md-6 mb-4"><div class="card border-start-success shadow h-100 py-2"><div class="card-body"><div class="row no-gutters align-items-center"><div class="col me-2"><div class="text-xs fw-bold text-success text-uppercase mb-1">Teachers</div><div class="h5 mb-0 fw-bold text-gray-800">${teachers.length}</div></div><div class="col-auto"><i class="fas fa-chalkboard-teacher fa-2x text-body-tertiary"></i></div></div></div></div></div>
-                    <div class="col-xl-3 col-md-6 mb-4"><div class="card border-start-info shadow h-100 py-2"><div class="card-body"><div class="row no-gutters align-items-center"><div class="col me-2"><div class="text-xs fw-bold text-info text-uppercase mb-1">Classes</div><div class="h5 mb-0 fw-bold text-gray-800">${classes.length}</div></div><div class="col-auto"><i class="fas fa-school fa-2x text-body-tertiary"></i></div></div></div></div></div>
-                    <div class="col-xl-3 col-md-6 mb-4"><div class="card border-start-warning shadow h-100 py-2"><div class="card-body"><div class="row no-gutters align-items-center"><div class="col me-2"><div class="text-xs fw-bold text-warning text-uppercase mb-1">Subjects</div><div class="h5 mb-0 fw-bold text-gray-800">${subjects.length}</div></div><div class="col-auto"><i class="fas fa-book fa-2x text-body-tertiary"></i></div></div></div></div></div>
-                </div>
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card shadow">
-                            <div class="card-header fw-bold text-primary">This Month's School-wide Absentees</div>
-                            <div class="card-body">
-                                <canvas id="admin-attendance-chart"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                </div>`;
-                mainContent.innerHTML = content;
-                updateAllNotifications();
-                renderAdminAttendanceChart();
-            } else if (currentUserRole === 'teacher') {
-    const chargeText = selectedUser.classCharge?.classId ? `${classes.find(c => c.id === selectedUser.classCharge.classId)?.name || ''} - ${selectedUser.classCharge.division}` : 'None';
-    const subjectsTaught = classroomSubjects
-        .filter(cs => cs.teacherId === selectedUser.id)
-        .map(cs => {
-            const subject = subjects.find(s => s.id === cs.subjectId);
-            const aClass = classes.find(c => c.id === cs.classId); // Use 'aClass' to avoid conflict with 'class' keyword
-            if (subject && aClass) {
-                return `${subject.name} (${aClass.name} - ${cs.division})`;
-            }
-            return null; // Return null if subject or class isn't found
-        })
-        .filter(Boolean) // This will remove any null entries
-        .join(', ');
-
-    // --- NEW LOGIC START ---
-    // Check for additional roles and create HTML to display them as badges
-    let additionalRolesHtml = '';
-    if (selectedUser.roles && selectedUser.roles.length > 0) {
-        
-        additionalRolesHtml = `<hr class="my-3"><p class="mb-2"><strong>Additional Roles:</strong></p>`;
-        
-        additionalRolesHtml += selectedUser.roles.map(role => {
-            // Format the role name for display (e.g., 'exam_controller' -> 'Exam Controller')
-            const prettyName = role.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
-            
-            // Assign a color based on the role for better visuals
-            let badgeColor = 'bg-secondary';
-            if (role.includes('exam_controller')) badgeColor = 'bg-info text-dark';
-            if (role.includes('librarian')) badgeColor = 'bg-success';
-            if (role.includes('fest')) badgeColor = 'bg-warning text-dark';
-            
-            return `<span class="badge ${badgeColor} me-1 fs-6">${prettyName}</span>`;
-        }).join('');
+/**
+ * Renders the admin dashboard. It fetches data only on the first load and uses
+ * a cached version for subsequent views for instant rendering.
+ */
+window.renderDashboard = async () => {
+    const mainContent = document.getElementById('main-content');
+    // If the dashboard data is already loaded, render it from the cache and exit.
+    if (isDashboardDataLoaded) {
+        console.log("Rendering dashboard from cached stats.");
+        renderDashboardHTML(dashboardStats);
+        return;
     }
-    // --- NEW LOGIC END ---
-
-    content = `<h1 class="h2 mb-4">Welcome, ${selectedUser.name}!</h1>
-    <div class="row">
-        <div class="col-lg-7">
-            <div class="card shadow mb-4">
-                 <div class="card-header fw-bold text-primary">This Month's Class Absentee Trend</div>
-                 <div class="card-body"><canvas id="teacher-attendance-chart"></canvas></div>
-            </div>
-        </div>
-        <div class="col-lg-5">
-             <div class="card shadow mb-4">
-    <div class="card-header fw-bold text-danger">Absentees List</div>
-    <div class="card-body">
-        <label for="absentee-list-date-selector" class="form-label small">Select Date</label>
-        <input type="date" id="absentee-list-date-selector" class="form-control mb-3">
+    
+    mainContent.innerHTML = `<div class="text-center p-5"><div class="spinner-border text-primary" style="width: 3rem; height: 3rem;"></div><p class="mt-3">Loading Dashboard Statistics...</p></div>`;
+if(navigator.onLine){
+    try {
+        const activeStudentsQuery = query(getCollectionRef('students'), where('status', 'not-in', ['TC Issued', 'Graduated']));
+        const activeTeachersQuery = query(getCollectionRef('teachers'), where('status', '==', 'Active'));
+        const [studentCountSnap, teacherCountSnap, classCountSnap, festCountSnap] = await Promise.all([
+            getCountFromServer(activeStudentsQuery),
+            getCountFromServer(activeTeachersQuery),
+            getCountFromServer(getCollectionRef('classes')),
+            getCountFromServer(query(getCollectionRef('fests'), where('registrationOpen', '==', true)))
+        ]);
         
-        <div id="absentee-list-display"></div>
-    </div>
-</div>
+        const totalPayable = studentFeeSetups.reduce((sum, sfs) => sum + (sfs.totalPayable || 0), 0);
+        const totalPaid = receipts.filter(r => !r.isCancelled).reduce((sum, r) => sum + r.totalAmount, 0);
+        
+        // Store the fetched stats in our global cache object
+        dashboardStats = {
+            studentCount: studentCountSnap.data().count,
+            teacherCount: teacherCountSnap.data().count,
+            classCount: classCountSnap.data().count,
+            festCount: festCountSnap.data().count,
+            totalBalance: totalPayable - totalPaid
+        };
+        
+        isDashboardDataLoaded = true; // Set the flag so we don't fetch again
+        renderDashboardHTML(dashboardStats); // Render the HTML
+        
+    } catch (error) {
+        console.error("Error loading dashboard stats:", error);
+        mainContent.innerHTML = `<div class="alert alert-danger">Could not load dashboard statistics.</div>`;
+    }
+}else{
+    renderDashboardHTML(null); // Render the HTML
+}
 
-             <div class="card shadow mb-4">
-                 <div class="card-header fw-bold text-primary">My Responsibilities</div>
-                 <div class="card-body">
-                     <p><strong>Class Charge:</strong> ${chargeText}</p>
-                     <p><strong>Subjects Taught:</strong> ${subjectsTaught || 'None'}</p>
-                     
-                     ${additionalRolesHtml}
+};
 
-                 </div>
+/**
+ * A helper function that takes the stats object and renders the dashboard HTML.
+ */
+/**
+ * Renders the dashboard HTML. The links for modules are now given unique IDs
+ * so that event listeners can be attached cleanly using JavaScript.
+ * @param {object} stats - The object containing dashboard counts.
+ */
+function renderDashboardHTML(stats) {
+    const mainContent = document.getElementById('main-content');
+    if (!mainContent) return;
+
+    const content = `
+        <div class="row g-4">
+            <div class="col-md-6 col-xl-3"><div class="ui-card-stat h-100"><div class="stat-icon bg-primary"><i class="fas fa-users"></i></div><div class="stat-info"><div class="stat-number">${stats?.studentCount||""}</div><div class="stat-label">Active Students</div></div></div></div>
+            <div class="col-md-6 col-xl-3"><div class="ui-card-stat h-100"><div class="stat-icon bg-success"><i class="fas fa-chalkboard-teacher"></i></div><div class="stat-info"><div class="stat-number">${stats?.teacherCount||""}</div><div class="stat-label">Active Teachers</div></div></div></div>
+            <div class="col-md-6 col-xl-3"><div class="ui-card-stat h-100"><div class="stat-icon bg-danger"><i class="fas fa-rupee-sign"></i></div><div class="stat-info"><div class="stat-number">₹ ${stats?.totalBalance.toLocaleString('en-IN')||""}</div><div class="stat-label">Fee Balance Due</div></div></div></div>
+            <div class="col-md-6 col-xl-3"><div class="ui-card-stat h-100"><div class="stat-icon bg-warning"><i class="fas fa-trophy"></i></div><div class="stat-info"><div class="stat-number">${stats?.festCount}||""</div><div class="stat-label">Active Fests</div></div></div></div>
+        </div>
+
+        <div class="ui-card mt-4">
+             <h5 class="section-header">System Modules</h5>
+             <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-3">
+                ${adminNav.filter(item => item.id !== 'dashboard').map(item => `
+                    <div class="col">
+                        <a href="#" id="dashboard-link-${item.id}" class="text-decoration-none">
+                            <div class="card h-100 text-center card-hover-shadow">
+                                <div class="card-body d-flex flex-column justify-content-center">
+                                    <i class="fas ${item.icon} fa-2x text-primary mb-2"></i>
+                                    <p class="card-text small mb-0">${item.text}-${item.id}</p>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                `).join('')}
              </div>
         </div>
-    </div>`;
+    `;
     mainContent.innerHTML = content;
-    renderTeacherDashboardData();
 
-            } else if (currentUserRole === 'student') {
-                const className = classes.find(c => c.id === selectedUser.classId) ? `${classes.find(c => c.id === selectedUser.classId).name} - ${selectedUser.division}` : 'N/A';
-                 const setup = studentFeeSetups.find(sfs => sfs.id === selectedUser.id);
-const payments = receipts.filter(r => r.studentId === selectedUser.id && !r.isCancelled);
-let totalPaid = payments.reduce((sum, p) => sum + p.totalAmount, 0);
-const balance = setup ? (setup.totalPayable - totalPaid) : 0;
+    // After rendering the HTML, call the new function to attach all the click listeners.
+    attachDashboardListeners();
 
-content = `<h1 class="h2 mb-4">Welcome, ${selectedUser.name}!</h1>
- <div class="row">
-    <div class="col-lg-8">
-        <div class="card shadow mb-4">
-            <div class="card-header py-3"><h6 class="m-0 fw-bold text-primary">My Details</h6></div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6"><p><strong>Admission No:</strong> ${selectedUser.admissionNumber}</p><p><strong>Class:</strong> ${className}</p></div>
-                    <div class="col-md-6"><p><strong>Date of Birth:</strong> ${new Date(selectedUser.dob).toLocaleDateString()}</p><p><strong>Father's Name:</strong> ${selectedUser.fatherName || 'N/A'}</p></div>
-                </div>
-            </div>
-        </div>
-        <div class="card shadow mb-4">
-            <div class="card-header py-3"><h6 class="m-0 fw-bold text-primary">Fee Summary</h6></div>
-            <div class="card-body">
-                <p><strong>Total Payable:</strong> ₹ ${setup?.totalPayable.toFixed(2) || '0.00'}</p>
-                <p><strong>Total Paid:</strong> ₹ ${totalPaid.toFixed(2)}</p>
-                <p class="fw-bold"><strong>Balance Due:</strong> ₹ ${balance.toFixed(2)}</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-lg-4">
-         <div class="card shadow mb-4">
-             <div class="card-header fw-bold text-primary">This Month's Attendance</div>
-             <div class="card-body" id="student-dashboard-calendar"></div>
-        </div>
-    </div>
- </div>`;
-mainContent.innerHTML = content;
+}
 
-                 const today = new Date();
-                 const monthYear = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
-                 generateStudentCalendar(selectedUser.id, monthYear, 'student-dashboard-calendar', true);
-                 updateAllNotifications();
-            }
-        };
+/**
+ * Attaches click event listeners to the dashboard module links.
+ * This is a more robust method than using inline onclick attributes.
+ */
+function attachDashboardListeners() {
+  adminNav.forEach(item => {
+    if (item.id === 'dashboard') return;
+
+    const link = document.getElementById(`dashboard-link-${item.id}`);
+    if (link) {
+      link.replaceWith(link.cloneNode(true)); // removes old listeners
+      const newLink = document.getElementById(`dashboard-link-${item.id}`);
+      newLink.addEventListener('click', (event) => {
+        event.preventDefault();
+        navigateTo(item.id);
+      });
+    }
+  });
+}
+
 
         async function renderTeacherDashboardData() {
             //console.log('mythreestudents',await getData('students')); 
@@ -3386,42 +3187,7 @@ window.notifyParentOfAbsence = (studentId, dateString) => {
     window.open(whatsappUrl, '_blank');
 };
 
-//         async function renderTeacherDashboardData() {
-//     const charge = selectedUser.classCharge;
-//     if (!charge) return; // Nothing to render if teacher has no class charge
 
-//     // --- Logic for "Today's Absentees" list (remains the same) ---
-//     const todayStr = new Date().toISOString().slice(0, 10);
-//     const holiday = holidays.find(h => h.id === todayStr);
-//     const listContainer = document.getElementById('today-absent-list');
-
-//     if (listContainer) {
-//         if (holiday) {
-//             listContainer.innerHTML = `<p class="text-info">Today is a holiday: ${holiday.narration}</p>`;
-//         } else {
-//             const today = new Date();
-//             const monthYear = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
-//             const dayStr = today.getDate().toString();
-//             const classKey = `${charge.classId}-${charge.division}`;
-            
-//             const monthData = await getData('attendance', monthYear);
-//             const todaysExceptions = monthData?.[dayStr]?.[classKey]?.exceptions || {};
-//             const absenteeIds = Object.keys(todaysExceptions);
-            
-//             if (absenteeIds.length > 0) {
-//                 const absenteeNames = absenteeIds.map(id => students.find(s => s.id === id)?.name || 'Unknown Student');
-//                 listContainer.innerHTML = `<ul class="list-group list-group-flush">${absenteeNames.map(name => `<li class="list-group-item">${name}</li>`).join('')}</ul>`;
-//             } else {
-//                 listContainer.innerHTML = `<p class="text-success">No absentees reported today.</p>`;
-//             }
-//         }
-//     }
-
-//     // --- Call the new, separate function to render the chart ---
-//     await renderTeacherAttendanceChart(charge);
-    
-//     updateAllNotifications();
-// }
         
         // --- CLASS MANAGEMENT (WITH ORDER FIELD) ---
 window.renderClassManagement = () => {
@@ -3519,6 +3285,7 @@ function renderClassesList() {
         window.handleEditClass = (id) => { classToEdit = classes.find(c => c.id === id); if(classToEdit) renderClassManagement(); };
         window.handleDelete = async (coll, id) => { if (confirm("Are you sure? This cannot be undone.")) { await deleteDoc(getDocRef(coll, id)); showAlert('Item deleted.', 'success'); }};
 
+        
 // --- TEACHER MANAGEMENT (WITH RE-ASSIGNMENT WORKFLOW) ---
 
 // --- TEACHER MANAGEMENT (WITH RE-ASSIGNMENT WIZARD) ---
@@ -6423,52 +6190,81 @@ function generateTCHTML(studentId) {
 // This replaces the existing window.renderExamManagement function
 // --- EXAM MANAGEMENT (ENHANCED) ---
 
+/**
+ * Renders the Exam Management module, dynamically creating tabs and content
+ * based on the current user's role.
+ */
 window.renderExamManagement = () => {
+    // 1. Determine user roles for access control
     const isAdmin = currentUserRole === 'admin';
-    const isExamController = currentUserRole === 'teacher' || selectedUser.roles && selectedUser.roles.includes('exam_controller');
+    // Use optional chaining (?.) for safety in case selectedUser.roles is null/undefined
+    const isExamController = currentUserRole === 'teacher' || selectedUser.roles?.includes('exam_controller');
 
+    // 2. Check for permissions and render an access denied message if needed
     if (!isAdmin && !isExamController) {
-        mainContent.innerHTML = `<div class="alert alert-danger"><h4>Access Denied</h4><p>You do not have permission to access this module.</p></div>`;
-        return;
+        mainContent.innerHTML = `
+            <div class="alert alert-danger">
+                <h4>Access Denied</h4>
+                <p>You do not have permission to access this module.</p>
+            </div>`;
+        return; // Stop execution if user lacks permission
     }
 
-    mainContent.innerHTML = `<h1 class="h2 mb-4">Exam Management</h1>
-    <ul class="nav nav-tabs" id="examTab" role="tablist">
-        ${isAdmin ? `<li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#schedule" type="button">Schedule</button></li>` : '<li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#schedule" type="button">Schedule</button></li>'}
-        <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#timetable-view" type="button">Timetable</button></li>
-        <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#entry" type="button">Mark Entry</button></li>
-        
-        <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#entry-report" type="button">Entry Report</button></li>
+    // 3. Set the application title
+    apptitle.textContent = 'Exam Management';
 
-        <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#results" type="button">Results</button></li>
-    </ul>
-    <div class="tab-content card" id="examTabContent">
-        ${isAdmin ? `<div class="tab-pane fade p-4" id="add-exam" role="tabpanel"></div>` : ''}
-        ${isAdmin ? `<div class="tab-pane fade p-4" id="schedule" role="tabpanel"></div>` : '<div class="tab-pane fade p-4" id="schedule" role="tabpanel"></div>'}
-        <div class="tab-pane fade p-4" id="timetable-view" role="tabpanel"></div>
-        <div class="tab-pane fade p-4" id="consolidated-view" role="tabpanel"></div>
-    
-        <div class="tab-pane fade p-4" id="entry" role="tabpanel"></div>
-        
-        <div class="tab-pane fade p-4" id="entry-report" role="tabpanel"></div>
+    // 4. Define tab configuration in a single, easy-to-manage array
+    const tabsConfig = [
+        { id: 'add-exam',          title: 'Add Exam',          roles: ['admin'],               renderFunc: renderExamAddTab },
+        { id: 'schedule',          title: 'Schedule',          roles: ['admin', 'exam_controller'], renderFunc: renderExamScheduleTab },
+        { id: 'timetable-view',    title: 'Timetable',         roles: ['admin', 'exam_controller'], renderFunc: renderExamTimetableView },
+        { id: 'consolidated-view', title: 'Consolidated View', roles: ['admin', 'exam_controller'], renderFunc: renderConsolidatedTimetableView },
+        { id: 'entry',             title: 'Mark Entry',        roles: ['admin', 'exam_controller'], renderFunc: renderMarkEntryTab },
+        { id: 'entry-report',      title: 'Entry Report',      roles: ['admin', 'exam_controller'], renderFunc: renderEntryReportTab },
+        { id: 'results',           title: 'Results',           roles: ['admin', 'exam_controller'], renderFunc: renderResultsTab }
+    ];
 
-        <div class="tab-pane fade p-4" id="results" role="tabpanel"></div>
-    </div>`;
+    // 5. Filter the tabs to show only those the current user is allowed to see
+    const visibleTabs = tabsConfig.filter(tab => {
+        if (isAdmin && tab.roles.includes('admin')) return true;
+        if (isExamController && tab.roles.includes('exam_controller')) return true;
+        return false;
+    });
 
-    if (isAdmin) {
-        renderExamAddTab();
-        
-    }
-    renderExamScheduleTab();
-    renderExamTimetableView();
-    renderConsolidatedTimetableView(); 
-    renderMarkEntryTab();
-    renderEntryReportTab(); // <-- Call the new function
-    renderResultsTab();
-    
-    
+    // 6. Generate the HTML for tab buttons and content panes from the filtered list
+    const tabLinksHTML = visibleTabs.map(tab => `
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#${tab.id}" type="button">
+                ${tab.title}
+            </button>
+        </li>
+    `).join('');
+
+    const tabPanesHTML = visibleTabs.map(tab => `
+        <div class="tab-pane fade p-4 overflow-auto" id="${tab.id}" role="tabpanel"></div>
+    `).join('');
+
+    // 7. Render the main structure into the DOM
+    mainContent.innerHTML = `
+        <div class="tabs-container">
+            <ul class="nav nav-tabs d-flex flex-nowrap" id="examTab" role="tablist">
+                ${tabLinksHTML}
+            </ul>
+        </div>
+        <div class="tab-content card overflow-auto" id="examTabContent">
+            ${tabPanesHTML}
+        </div>`;
+
+    // 8. Call the corresponding render function for each visible tab
+    visibleTabs.forEach(tab => {
+        if (typeof tab.renderFunc === 'function') {
+            tab.renderFunc();
+        }
+    });
+
+    // 9. Activate the first visible tab for a better user experience
     const firstVisibleTab = mainContent.querySelector('#examTab .nav-link');
-    if(firstVisibleTab) {
+    if (firstVisibleTab) {
         new bootstrap.Tab(firstVisibleTab).show();
     }
 };
@@ -6505,7 +6301,8 @@ async function renderEntryReportTab() {
         </div>`;
 
     container.innerHTML = `
-        <div class="row g-3 align-items-end border-bottom pb-3 mb-3">
+    <div class="pb-3 border-bottom">
+        <div class="row g-3 align-items-end border-bottom pb-3 mb-3 w-100">
             <div class="col-md-6">
                 <label class="form-label fw-bold">Select Exam to Generate Report</label>
                 <select id="entry-report-exam" class="form-select">
@@ -6516,6 +6313,7 @@ async function renderEntryReportTab() {
         </div>
         ${tabNav}
         ${tabContent}
+        </div>
     `;
 
     document.getElementById('entry-report-exam').addEventListener('change', async (e) => {
@@ -8240,7 +8038,7 @@ function copySubjectWiseColumnData(columnType) {
  */
 function renderExamAddTab() {
     const container = document.getElementById('add-exam');
-    container.innerHTML = `<div class="row"><div class="col-lg-5"><div class="card"><div class="card-header fw-bold">Add Exam Title</div><div class="card-body"><form id="add-exam-form" class="d-flex gap-2"><input id="exam-sector" class="form-control" placeholder="SECTOR , SCHOOL/MADRASSA" required><input id="exam-name" class="form-control" placeholder="E.G., QUARTERLY EXAM" required><button type="submit" class="btn btn-primary">Add</button></form></div></div></div><div class="col-lg-7"><div class="card"><div class="card-header fw-bold">Existing Exams</div><div class="card-body" id="exams-list"></div></div></div></div>`;
+    container.innerHTML = `<div class="column"><div class="col-lg-4"><div class="card"><div class="card-header fw-bold">Add Exam Title</div><div class="card-body"><form id="add-exam-form" class="d-flex gap-2"><input id="exam-sector" class="form-control" placeholder="SECTOR , SCHOOL/MADRASSA" required><br><input id="exam-name" class="form-control" placeholder="E.G., QUARTERLY EXAM" required><button type="submit" class="btn btn-primary">Add</button></form></div></div></div><div class="col-lg-7"><div class="card"><div class="card-header fw-bold">Existing Exams</div><div class="card-body" id="exams-list"></div></div></div></div>`;
     
     document.getElementById('add-exam-form').addEventListener('submit', async e => { 
         e.preventDefault(); 
@@ -8254,7 +8052,8 @@ function renderExamAddTab() {
                 id: examId,
                 name: examName,
                 sector: sector,
-                isActive: true // New exams are active by default
+                isActive: true, // New exams are active by default
+                isPublished:false
             });
             e.target.reset(); 
             showAlert('Exam Added', 'success');
@@ -8285,7 +8084,13 @@ function renderExamsList() {
                                onchange="window.toggleExamStatus('${e.id}', this.checked)">
                         <label class="form-check-label" for="exam-toggle-${e.id}">${e.isActive ? 'Active' : 'Inactive'}</label>
                     </div>
-                    <button class="btn btn-sm btn-outline-danger" onclick="window.handleDelete('exams', '${e.id}')">
+                    <div class="form-check form-switch me-3">
+                        <input class="form-check-input" type="checkbox" role="switch" 
+                               id="exam-toggle-${e.id}" ${e.isPublished ? 'checked' : ''} 
+                               onchange="window.toggleExamStatusPublish('${e.id}', this.checked)">
+                        <label class="form-check-label" for="exam-toggle-${e.id}">${e.isActive ? 'Published' : 'Unpublish'}</label>
+                    </div>
+                    <button class="btn btn-sm btn-outline-danger" onclick="window.handleDeleter('exams', '${e.id}')">
                         <i class="fas fa-trash-alt"></i>
                     </button>
                 </div>
@@ -8299,6 +8104,17 @@ function renderExamsList() {
  * @param {string} examId The ID of the exam to update.
  * @param {boolean} newStatus The new status (true for active, false for inactive).
  */
+window.toggleExamStatusPublish = async function(examId, newStatus) {
+    try {
+        const examRef = getDocRef('exams', examId);
+        await updateDoc(examRef, { isPublished: newStatus });
+        showAlert(`Exam status updated to ${newStatus ? 'Active' : 'Inactive'}.`, 'success');
+        // The real-time listener will automatically call renderExamsList() to refresh the UI.
+    } catch (error) {
+        console.error("Error updating exam status:", error);
+        showAlert('Failed to update exam status.', 'danger');
+    }
+};
 window.toggleExamStatus = async function(examId, newStatus) {
     try {
         const examRef = getDocRef('exams', examId);
@@ -8330,12 +8146,12 @@ window.toggleExamStatus = async function(examId, newStatus) {
     }
 
     container.innerHTML = `
-        <div class="row g-3 align-items-end border-bottom pb-3 mb-3">
-            <div class="col-md-3"><label class="form-label">Exam</label><select id="mark-entry-exam" class="form-select">${exams.map(ex => `<option value="${ex.id}">${ex.name}</option>`).join('')}</select></div>
-            <div class="col-md-3"><label class="form-label">Class</label><select id="mark-entry-class" class="form-select"><option value="">-- Select Class --</option>${classOptions}</select></div>
-            <div class="col-md-3"><label class="form-label">Division</label><select id="mark-entry-division" class="form-select" disabled><option value="">-- Select Division --</option></select></div>
-            <div class="col-md-3"><label class="form-label">Subject</label><select id="mark-entry-subject" class="form-select" disabled><option value="">-- Select Subject --</option></select></div>
-        </div>
+        <div class="row g-1 align-items-end border-bottom pb-3 mb-3">
+    <div class="col-6 col-md-2"><label class="form-label">Exam</label><select id="mark-entry-exam" class="form-select">${exams.map(ex => `<option value="${ex.id}">${ex.name}</option>`).join('')}</select></div>
+    <div class="col-6 col-md-2"><label class="form-label">Class</label><select id="mark-entry-class" class="md form-select"><option value="">-- Select Class --</option>${classOptions}</select></div>
+    <div class="col-6 col-md-2"><label class="form-label">Division</label><select id="mark-entry-division" class="form-select" disabled><option value="">-- Select Division --</option></select></div>
+    <div class="col-6 col-md-2"><label class="form-label">Subject</label><select id="mark-entry-subject" class="form-select" disabled><option value="">-- Select Subject --</option></select></div>
+</div>
         <div id="mark-entry-sheet"></div>
         <div id="mark-entry-summary-container"></div>
     `;
@@ -8586,6 +8402,11 @@ async function saveMarks(examId, classId, division, subjectId) {
                 // If both inputs are now empty, it means we are clearing the mark.
                 // For now, we will treat this as a change to save.
                 // A more advanced version could handle deletion.
+                if (currentTE === '') {
+                    // Decide if clearing marks should delete the document.
+                    // For simplicity, we'll just skip saving if both are blank.
+                    return; 
+                }
                 if (currentTE === '' && currentCE === '') {
                     // Decide if clearing marks should delete the document.
                     // For simplicity, we'll just skip saving if both are blank.
@@ -15135,7 +14956,7 @@ window.viewFormResponses = (formId) => {
         }
 
         // --- NEW: Add "Sl. No." to the headers ---
-        const headers = ['Sl. No.', 'User Name', ...form.fields.map(f => f.label), 'Status'];
+        const headers = ['Sl No', 'User Name', ...form.fields.map(f => f.label), 'Status'];
         
         const bodyRows = filteredResponses.map((r, index) => {
             const user = students.find(s => s.id === r.userId) || teachers.find(t => t.id === r.userId);
@@ -15230,19 +15051,18 @@ function generateReportHeaderHTML(headerInfo) {
     return `
         <div class="report-header mb-4">
             <div class="row align-items-center">
-                <div class="col-2 text-start">
-                    ${schoolDetails.logoUrl ? `<img src="${schoolDetails.logoUrl}" style="max-height: 80px;">` : ''}
+                <div class="col-2 text-start z-1">
+                    ${schoolDetails.logoUrl ? `<img src="${schoolDetails.logoUrl}" style="max-height: 90px;">` : ''}
                 </div>
                 <div class="col-10 text-center">
                     <h3>${schoolDetails.name || 'School Report'}</h3>
                     <p class="mb-0">${schoolDetails.address || ''}</p>
+                    <h4>${title || 'Report'}</h4>
+                ${subTitle ? `<p class="text-muted">${""}</p>` : ''}
                 </div>
             </div>
             <hr>
-            <div class="text-center">
-                <h4>${title || 'Report'}</h4>
-                ${subTitle ? `<p class="text-muted">${subTitle}</p>` : ''}
-            </div>
+            
         </div>
     `;
 }
@@ -15558,7 +15378,7 @@ function renderClassFormSubmissionTable(form, classId, division) {
     const columnTotals = {}; 
 
     // --- CORRECTION: Removed 'ID' from the visible headers ---
-    const headers = ['Sl.No','Name', 'Admission No.', ...form.fields.map(f => f.label), 'Comment'];
+    const headers = ['Sl No','Name', 'Admission No.', ...form.fields.map(f => f.label), 'Comment'];
     var slno = 0;
     const rows = studentsInClass.map(stu => {
         slno++
@@ -15966,7 +15786,7 @@ window.downloadStudentSubmissionsPDF = (formId) => {
     // --- 3. Prepare Main Table Content (same as before) ---
     const amountFields = form.fields.filter(f => f.type === 'amount');
     const columnTotals = {};
-    const head = [['Sl. No.', 'Admn No.', 'Student Name', ...form.fields.map(f => f.label), 'Teacher Comment']];
+    const head = [['Sl No', 'Admn No.', 'Student Name', ...form.fields.map(f => f.label), 'Teacher Comment']];
     const body = formResponsesForClass.map((r, index) => {
         const student = students.find(s => s.id === r.userId);
         const values = form.fields.map(f => {
@@ -16033,7 +15853,7 @@ window.printStudentSubmissions = (formId) => {
     const columnTotals = {};
 
     // --- 1. Prepare Table Content ---
-    const headers = ['Sl. No.', 'Admn No.', 'Student Name', ...form.fields.map(f => f.label), 'Teacher Comment'];
+    const headers = ['Sl', 'Admn No.', 'Student Name', ...form.fields.map(f => f.label), 'Teacher Comment'];
     const bodyRows = formResponsesForClass.map((r, index) => {
         const student = students.find(s => s.id === r.userId);
         const values = form.fields.map(f => {
@@ -17000,10 +16820,6 @@ async function uploadPhotoToDrive(photoBlob, studentId, subfolderName = 'student
         reader.readAsDataURL(photoBlob);
     });
 }
-
-// =========================================================================
-// --- 📊 ADVANCED REPORT GENERATOR (COMPLETE REFACTORED MODULE) ---
-// =========================================================================
 // =========================================================================
 // --- 📊 ADVANCED REPORT GENERATOR (COMPLETE REFACTORED MODULE) ---
 // =========================================================================
@@ -17286,8 +17102,9 @@ function downloadDemoTemplate() {
     templateContent += '{#data}\n'; // Start of the loop for docxtemplater
     
     config.fields.forEach(field => {
-        if (field.name !== 'Sl. No.') { // No need for Sl. No. in a single-record template
-            templateContent += `<p><strong>${field.name}:</strong> {${field.name.replace(/\s+/g, '_')}}</p>\n`;
+        if (field.name !== 'Sl') { // No need for Sl. No. in a single-record template
+            // --- UPDATED: Use displayName for the label, and name (key) for the placeholder ---
+            templateContent += `<p><strong>${field.displayName}:</strong> {${field.name.replace(/\s+/g, '_')}}</p>\n`;
         }
     });
     
@@ -17352,6 +17169,7 @@ function attachAllModuleListeners() {
  * Attaches event listeners specifically for the saved reports list.
  */
 function attachSavedReportsListeners() {
+
     document.getElementById('saved-reports-list')?.addEventListener('click', handleSavedReportActions);
 }
 
@@ -17379,9 +17197,9 @@ function handleCollectionChange(e) {
  */
 function handleReportOutputActions(e) {
     const targetId = e.target.id;
-    if (targetId === 'save-report-config-btn') saveReportConfiguration(false);
+    if (targetId === 'save-report-config-btn') saveReportConfiguration(true);
     else if (targetId === 'update-report-config-btn') saveReportConfiguration(true);
-    else if (targetId === 'save-as-new-report-btn') saveReportConfiguration(false);
+    else if (targetId === 'save-as-new-report-btn') saveReportConfiguration(true);
     else if (targetId === 'print-report-btn') printGeneratedReport();
     else if (targetId === 'csv-export-btn') downloadReportCSV();
 }
@@ -17407,6 +17225,7 @@ function handleAvailableFieldClick(e) {
 function handleSelectedFieldActions(e) {
     const deleteBtn = e.target.closest('.delete-field-btn');
     const editBtn = e.target.closest('.edit-field-btn');
+    const editDisplayNameBtn = e.target.closest('.edit-display-name-btn'); // <-- NEW
 
     if (deleteBtn) {
         const item = deleteBtn.closest('.list-group-item');
@@ -17435,6 +17254,23 @@ function handleSelectedFieldActions(e) {
             showAddRelatedFieldModal(fieldInfo);
         } else if (fieldInfo.customInfo) {
             showAddCustomFieldModal(fieldInfo);
+        }
+    } else if (editDisplayNameBtn) { // <-- NEW HANDLER
+        const item = editDisplayNameBtn.closest('.list-group-item');
+        const currentDisplayName = item.dataset.displayName;
+        const newDisplayName = prompt("Enter the new column header (alias):", currentDisplayName);
+        
+        if (newDisplayName && newDisplayName.trim() !== '') {
+            const newName = newDisplayName.trim();
+            item.dataset.displayName = newName;
+            // Update the visual text in the list
+            const labelEl = item.querySelector('.field-label');
+            if(labelEl) {
+                // Keep badges if they exist
+                const badgeHtml = labelEl.querySelector('.badge')?.outerHTML || '';
+                labelEl.innerHTML = `${newName}${badgeHtml}`;
+            }
+            renderDemoTable(); // Update the preview table
         }
     }
 }
@@ -17591,9 +17427,6 @@ function renderReportFieldSelector(collectionName, savedFields = []) {
     availableFieldsContainer.innerHTML = '';
     selectedFieldsContainer.innerHTML = '';
 
-    // // Add the locked "Sl. No." field
-    // addReportFieldToList('Sl. No.', selectedFieldsContainer);
-
     let baseFields = [];
     if (collectionName === 'students' && students.length > 0) baseFields = Object.keys(students[0]);
     else if (collectionName === 'teachers' && teachers.length > 0) baseFields = Object.keys(teachers[0]);
@@ -17604,11 +17437,12 @@ function renderReportFieldSelector(collectionName, savedFields = []) {
     if (savedFields.length > 0) {
         const savedFieldNames = new Set(savedFields.map(f => f.name));
         savedFields.forEach(sf => {
-            if (sf.name !== 'Sl. No.') {
+            if (sf.name !== 'Sl') {
                 addReportFieldToList(sf.name, selectedFieldsContainer, {
                     isCustom: sf.isCustom,
                     customInfo: sf.customInfo,
-                    relatedInfo: sf.relatedInfo
+                    relatedInfo: sf.relatedInfo,
+                    displayName: sf.displayName || sf.name // Pass displayName
                 });
             }
         });
@@ -17631,15 +17465,23 @@ function renderReportFieldSelector(collectionName, savedFields = []) {
  * @param {object} [options.customInfo=null] - The formula info for a custom field.
  * @param {object} [options.relatedInfo=null] - The join info for a related field.
  * @param {boolean} [options.includeActions=true] - Should edit/delete/style controls be included?
+ * @param {string} [options.displayName] - The alias/display name for the field.
  */
 function addReportFieldToList(fieldName, container, options = {}) {
     if (!container) return;
-    const { isCustom = false, customInfo = null, relatedInfo = null, includeActions = true } = options;
+    const { 
+        isCustom = false, 
+        customInfo = null, 
+        relatedInfo = null, 
+        includeActions = true,
+        displayName = fieldName // Use fieldName as default display name
+    } = options;
 
     const item = document.createElement('div');
-    const isLocked = fieldName === 'Sl. No.';
+    const isLocked = fieldName === 'Sl';
     item.className = 'list-group-item';
-    item.dataset.fieldName = fieldName;
+    item.dataset.fieldName = fieldName; // The REAL data key (e.g., "fullClassName")
+    item.dataset.displayName = displayName; // The ALIAS for display (e.g., "Class")
     item.dataset.isCustom = isCustom;
     if (relatedInfo) item.dataset.relatedInfo = JSON.stringify(relatedInfo);
     if (customInfo) item.dataset.customInfo = JSON.stringify(customInfo);
@@ -17651,17 +17493,18 @@ function addReportFieldToList(fieldName, container, options = {}) {
         if (relatedInfo) badge = '<span class="badge bg-info ms-2">Related</span>';
 
         const fieldIdSafe = fieldName.replace(/[^a-zA-Z0-9]/g, '_');
-        const canEdit = customInfo || relatedInfo;
-        const editButtonHtml = canEdit ? `<button class="btn btn-sm btn-outline-primary py-0 px-1 me-1 edit-field-btn" title="Edit"><i class="fas fa-edit fa-xs"></i></button>` : '';
+        const canEditFieldLogic = customInfo || relatedInfo;
+        const logicEditButtonHtml = canEditFieldLogic ? `<button class="btn btn-sm btn-outline-primary py-0 px-1 me-1 edit-field-btn" title="Edit Logic/Join"><i class="fas fa-edit fa-xs"></i></button>` : '';
         
         item.innerHTML = `
             <div>
                 <div class="d-flex justify-content-between align-items-center">
-                    <span class="field-label">${fieldName}${badge}</span>
+                    <span class="field-label fw-bold">${displayName}${badge}</span>
                     <div class="field-actions">
-                        ${editButtonHtml}
+                        <button class="btn btn-sm btn-outline-secondary py-0 px-1 me-1 edit-display-name-btn" title="Edit Display Name"><i class="fas fa-i-cursor fa-xs"></i></button>
+                        ${logicEditButtonHtml}
                         ${!isLocked ? `<button class="btn btn-sm btn-outline-danger py-0 px-1 delete-field-btn" title="Remove"><i class="fas fa-times fa-xs"></i></button>` : ''}
-                        <i class="fas fa-grip-vertical text-muted ms-2"></i>
+                        <i class="fas fa-grip-vertical text-muted ms-2" style="cursor: grab;"></i>
                     </div>
                 </div>
                 <div class="row gx-2 gy-1 mt-2">
@@ -17699,7 +17542,8 @@ function renderDemoTable() {
                 <tr>
                     ${selectedFields.map(h => {
                         const style = h.styles || {};
-                        return `<th style="width: ${style.width};" data-field-name="${h.name}">${h.name}</th>`;
+                        // --- UPDATED: Use displayName for the header text ---
+                        return `<th style="width: ${style.width};" data-field-name="${h.name}">${h.displayName}</th>`;
                     }).join('')}
                 </tr>
             </thead>
@@ -17725,7 +17569,8 @@ function createReportTable(headers, data) {
     
     tableHTML += `<thead><tr>${headers.map(h => {
         const style = h.styles || {};
-        return `<th style="width: ${style.width}; text-align: ${style.textAlign || 'left'};">${h.name}</th>`;
+        // --- UPDATED: Use displayName for the header text ---
+        return `<th style="width: ${style.width}; text-align: ${style.textAlign || 'left'};">${h.displayName}</th>`;
     }).join('')}</tr></thead>`;
     
     tableHTML += '<tbody>';
@@ -17733,7 +17578,8 @@ function createReportTable(headers, data) {
         tableHTML += '<tr>';
         headers.forEach(header => {
             const style = header.styles || {};
-            const value = getNestedValue(row, header.name);
+            // --- UPDATED: Use the original 'name' as the key to get the value ---
+            const value = getNestedValue(row, header.name); 
             tableHTML += `<td style="text-align: ${style.textAlign || 'left'}; color: ${style.color || '#000'}; font-weight: ${style.fontWeight || 'normal'};">${value}</td>`;
         });
         tableHTML += '</tr>';
@@ -17763,8 +17609,10 @@ function renderReportOutput(data, config) {
         data.forEach(item => {
             cardsHtml += '<div class="col-md-6 col-lg-4 mb-3"><div class="card h-100"><div class="card-body">';
             selectedFields.forEach(field => {
+                // --- UPDATED: Use the original 'name' as the key to get the value ---
                 const value = getNestedValue(item, field.name);
-                cardsHtml += `<p class="mb-2"><strong>${field.name}:</strong> ${value}</p>`;
+                // --- UPDATED: Use 'displayName' for the label ---
+                cardsHtml += `<p class="mb-2"><strong>${field.displayName}:</strong> ${value}</p>`;
             });
             cardsHtml += '</div></div></div>';
         });
@@ -17962,12 +17810,11 @@ async function getReportData(collectionName, config) {
     });
 
     data.forEach((item, index) => {
-        item['Sl. No.'] = index + 1;
+        item['Sl'] = index + 1;
     });
 
     return data;
 }
-
 
 /**
  * Gathers the current report configuration from all UI elements.
@@ -17978,12 +17825,12 @@ function getReportConfiguration() {
     const collectionSelectEl = document.getElementById('report-collection-select');
     if (!reportNameEl || !collectionSelectEl) return null;
 
-    // Get all fields the user has selected from the UI.
     let userSelectedFields = Array.from(document.querySelectorAll('#selected-fields-list .list-group-item'))
         .map(item => {
             const fieldName = item.dataset.fieldName;
             return {
-                name: fieldName,
+                name: fieldName, // The REAL data key (e.g., "fullClassName")
+                displayName: item.dataset.displayName, // The ALIAS for display (e.g., "Class")
                 isCustom: item.dataset.isCustom === 'true',
                 customInfo: JSON.parse(item.dataset.customInfo || 'null'),
                 relatedInfo: JSON.parse(item.dataset.relatedInfo || 'null'),
@@ -17996,25 +17843,21 @@ function getReportConfiguration() {
             };
         });
 
-    // --- PERMANENT FIX FOR SERIAL NUMBER ---
-    // 1. Create a standard definition for our "Sl. No." column.
+    // Create the "Sl. No." field with both name and displayName
     const serialNumberField = { 
-        name: 'Sl. No.', 
+        name: 'Sl', 
+        displayName: 'Sl', 
         styles: { width: '50px', textAlign: 'center' } 
     };
     
-    // 2. Filter out any "Sl. No." the user might have in their list to avoid duplicates.
-    const otherFields = userSelectedFields.filter(f => f.name !== 'Sl. No.');
-
-    // 3. Rebuild the final fields array with "Sl. No." locked in the first position.
+    const otherFields = userSelectedFields.filter(f => f.name !== 'Sl');
     const finalFields = [serialNumberField, ...otherFields];
 
-    // --- CONSTRUCT THE FINAL CONFIGURATION OBJECT ---
     return {
         name: reportNameEl.value,
         collection: collectionSelectEl.value,
         textWrap: document.getElementById('report-text-wrap')?.checked ?? false,
-        fields: finalFields, // Use the new foolproof fields array
+        fields: finalFields, // Use the new fields array
         outputFormat: document.getElementById('report-output-format')?.value || 'table',
         customFields: finalFields.filter(f => f.customInfo).map(f => f.customInfo),
         relatedFields: finalFields.filter(f => f.relatedInfo).map(f => f.relatedInfo),
@@ -18024,12 +17867,8 @@ function getReportConfiguration() {
         }
     };
 }
-
-/**
- * Loads a saved report's configuration into the UI.
- */
 function loadReportSettings(report) {
-    currentLoadedReport = report;
+    currentLoadedReport = getReportConfiguration();
     
     document.getElementById('report-name').value = report.name;
     const collectionSelect = document.getElementById('report-collection-select');
@@ -18038,7 +17877,12 @@ function loadReportSettings(report) {
 
     // Use a short timeout to allow the DOM to update after the change event
     setTimeout(() => {
-        renderReportFieldSelector(report.collection, report.fields);
+        // --- UPDATED: Pass `displayName` to the render function ---
+        const savedFieldsWithDisplayNames = report.fields.map(sf => ({
+            ...sf,
+            displayName: sf.displayName || sf.name // Fallback for old reports
+        }));
+        renderReportFieldSelector(report.collection, savedFieldsWithDisplayNames);
         
         const textWrapCheck = document.getElementById('report-text-wrap');
         if (textWrapCheck) textWrapCheck.checked = report.textWrap;
@@ -18052,9 +17896,11 @@ function loadReportSettings(report) {
                     const divisionFilter = document.getElementById('report-filter-division');
                     if (divisionFilter) divisionFilter.value = report.filters.division || 'all';
                 }, 50);
-            }
+            } 
         }
         renderDemoTable();
+        currentLoadedReport = getReportConfiguration();
+        
         showAlert(`Loaded settings for report: ${report.name}`, 'info');
     }, 100);
 }
@@ -18071,7 +17917,7 @@ async function saveReportConfiguration(isUpdate = false) {
     if (isUpdate && currentLoadedReport) {
         config.id = currentLoadedReport.id;
     } else {
-        config.id = config.name.replace(/\s+/g, '_').toLowerCase() + `_${Date.now()}`;
+        config.id = config.name.replace(/\s+/g, '_').toLowerCase();
     }
 
     try {
@@ -18079,6 +17925,7 @@ async function saveReportConfiguration(isUpdate = false) {
         showAlert(`Report '${config.name}' was ${isUpdate ? 'updated' : 'saved'} successfully.`, 'success');
         
         currentLoadedReport = config; 
+        
         generateAndRenderReport(); // Re-render to show updated save buttons
     } catch (error) {
         console.error("Error saving report settings:", error);
@@ -18123,9 +17970,10 @@ function createCardsLayout(data, selectedFields) {
         
         // Inside the card, loop through your selected fields
         selectedFields.forEach(field => {
+            // --- UPDATED: Use the original 'name' as the key to get the value ---
             const value = getNestedValue(item, field.name);
-            // Display each field as a "Field Name: Value" pair
-            cardsHtml += `<p class="mb-2"><strong>${field.name}:</strong> ${value}</p>`;
+            // --- UPDATED: Use 'displayName' for the label ---
+            cardsHtml += `<p class="mb-2"><strong>${field.displayName}:</strong> ${value}</p>`;
         });
         
         cardsHtml += '</div></div></div>';
@@ -18217,10 +18065,12 @@ function downloadReportCSV() {
 
     const data = JSON.parse(dataContainer.dataset.reportData);
     const headers = config.fields;
-    const headerRow = headers.map(h => h.name).join(',');
+    // --- UPDATED: Use displayName for the header row ---
+    const headerRow = headers.map(h => h.displayName).join(',');
 
     const rows = data.map(row => {
         return headers.map(header => {
+            // --- UPDATED: Use the real 'name' (key) to get the value ---
             const value = getNestedValue(row, header.name);
             const stringValue = String(value ?? '').replace(/"/g, '""'); // Escape double quotes
             return `"${stringValue}"`;
@@ -18366,12 +18216,17 @@ function showAddCustomFieldModal(fieldInfo = null) {
 
         if (isEditMode) {
             // If editing, update the existing DOM element's data and display
-            fieldInfo.element.dataset.fieldName = customInfo.alias;
+            fieldInfo.element.dataset.fieldName = customInfo.alias; // The 'name' (key) is the alias
+            fieldInfo.element.dataset.displayName = customInfo.alias; // The 'displayName' is also the alias
             fieldInfo.element.dataset.customInfo = JSON.stringify(customInfo);
             fieldInfo.element.querySelector('.field-label').innerHTML = `${customInfo.alias}<span class="badge bg-warning text-dark ms-2">Custom</span>`;
         } else {
             // If adding, create a new field in the 'Selected Fields' list
-            addReportFieldToList(customInfo.alias, document.getElementById('selected-fields-list'), { isCustom: true, customInfo: customInfo });
+            addReportFieldToList(customInfo.alias, document.getElementById('selected-fields-list'), { 
+                isCustom: true, 
+                customInfo: customInfo,
+                displayName: customInfo.alias // Set displayName on creation
+            });
         }
 
         renderDemoTable(); // Refresh the live preview
@@ -18493,11 +18348,15 @@ function showAddRelatedFieldModal(fieldInfo = null) {
         if (!relatedInfo.alias) return showAlert('Please provide a name (alias) for the new field.', 'danger');
 
         if (isEditMode) {
-            fieldInfo.element.dataset.fieldName = relatedInfo.alias;
+            fieldInfo.element.dataset.fieldName = relatedInfo.alias; // The 'name' (key) is the alias
+            fieldInfo.element.dataset.displayName = relatedInfo.alias; // The 'displayName' is also the alias
             fieldInfo.element.dataset.relatedInfo = JSON.stringify(relatedInfo);
             fieldInfo.element.querySelector('.field-label').innerHTML = `${relatedInfo.alias}<span class="badge bg-info ms-2">Related</span>`;
         } else {
-            addReportFieldToList(relatedInfo.alias, document.getElementById('selected-fields-list'), { relatedInfo });
+            addReportFieldToList(relatedInfo.alias, document.getElementById('selected-fields-list'), { 
+                relatedInfo,
+                displayName: relatedInfo.alias // Set displayName on creation
+            });
         }
         modal.hide();
         renderDemoTable();
@@ -18563,7 +18422,16 @@ function getNestedValue(obj, path) {
     return '';
   }
 
-  // Split the path into keys and travel through the object.
+  // --- THIS IS THE FIX ---
+  // If the path doesn't have a dot, treat it as a direct key.
+  // This is crucial for keys like "Sl. No."
+  if (path.indexOf('.') === -1) {
+      const value = obj[path];
+      return value !== undefined && value !== null ? value : '';
+  }
+  // --- END OF FIX ---
+
+  // Continue with existing logic for nested paths like "contact.phone"
   const value = path.split('.').reduce((currentObject, key) => {
     // If the current object is valid, move to the next key; otherwise, return undefined.
     return currentObject ? currentObject[key] : undefined;
@@ -22481,68 +22349,9 @@ function renderFestSpecificSettings(settings) {
                 <div class="col-md-2 d-grid align-self-end"><button type="button" id="save-new-cat-btn" class="btn btn-sm btn-primary">Add to Table</button></div>
             </div>
         </div>
-        <div class="text-end mt-4"><button id="save-fest-settings" class="btn btn-success" onclick="saveAllFestSettings()">Save Settings for ${state.managingFest.name}</button></div>`;
+        <div class="text-end mt-4"><button id="save-fest-settings" class="btn btn-success">Save Settings for ${state.managingFest.name}</button></div>`;
 }
 
-/**
- * Saves all fest-specific settings from the form to Firestore.
- */
-async function saveAllFestSettings() {
-    if (!state.managingFest) return;
-
-    // ✅ MODIFIED: Read the new registration status and save it along with other settings.
-    const registrationOpen = document.getElementById('fest-registration-status').checked;
-
-    const newSettings = {
-        maxOnStageSoloEvents: parseInt(document.getElementById('max-onstage-solo').value) || 0,
-        maxOnStageGroupEvents: parseInt(document.getElementById('max-onstage-group').value) || 0,
-        maxOffStageSoloEvents: parseInt(document.getElementById('max-offstage-solo').value) || 0,
-        maxOffStageGroupEvents: parseInt(document.getElementById('max-offstage-group').value) || 0,
-        houseEventLimits: {
-            onStage: {
-                solo: parseInt(document.getElementById('limit-onstage-solo-house').value) || 0,
-                group: parseInt(document.getElementById('limit-onstage-group-house').value) || 0,
-            },
-            offStage: {
-                solo: parseInt(document.getElementById('limit-offstage-solo-house').value) || 0,
-                group: parseInt(document.getElementById('limit-offstage-group-house').value) || 0,
-            }
-        },
-        categories: Array.from(document.querySelectorAll('#category-table tbody tr')).map(row => ({
-            name: row.dataset.name,
-            type: row.dataset.type,
-            criteria: row.dataset.type === 'age' ? row.dataset.criteria : row.dataset.criteria.split(','),
-        })),
-    };
-
-    try {
-        const festRef = getDocRef('fests', state.managingFest.id);
-        // ✅ MODIFIED: Update both the 'settings' object and the 'registrationOpen' field.
-        await updateDoc(festRef, { 
-            settings: newSettings,
-            registrationOpen: registrationOpen 
-        });
-
-        showAlert(`Settings for '${state.managingFest.name}' saved successfully.`, 'success');
-        
-        // Update the local state to match what was saved.
-        state.managingFest.settings = newSettings;
-        state.managingFest.registrationOpen = registrationOpen;
-
-        // Re-render the tab to reflect the new status label
-        renderFestSetupTab();
-        // Check if the Participants tab is currently the active one in the UI.
-        const participantsTabPane = document.getElementById('fest-participants');
-        if (participantsTabPane && participantsTabPane.classList.contains('active')) {
-            // If it is, re-render it immediately to disable/enable its controls.
-            renderFestParticipantsTab();
-        }
-
-    } catch (error) {
-        console.error("Error saving fest settings:", error);
-        showAlert('Failed to save settings.', 'danger');
-    }
-}
 
 function renderHousesList() {
     const container = document.getElementById('houses-list');
@@ -22581,34 +22390,20 @@ function renderHousesList() {
     </div>`;
 }
 
+/**
+ * Attaches all necessary event listeners for the Fest Setup tab,
+ * including the main settings form and the dynamic category manager.
+ */
 function attachSetupTabListeners() {
+    // --- Main Save Button for ALL settings ---
+    const saveSettingsBtn = document.getElementById('save-fest-settings');
+    if (saveSettingsBtn) {
+        saveSettingsBtn.addEventListener('click', saveAllFestSettings);
+    }
 
-    
-
-    // Fest form submission
-    document.getElementById('fest-form')?.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const id = document.getElementById('fest-id').value.trim().toUpperCase();
-        const name = document.getElementById('fest-name').value.trim();
-        const registrationOpen = document.getElementById('fest-reg-status').checked;
-
-        if (!id || !name) {
-            return showAlert('Fest ID and Name are required.', 'danger');
-        }
-
-        const festData = { id, name, registrationOpen };
-        try {
-            await setDoc(getDocRef('fests', id), festData, { merge: true });
-            showAlert(`Fest '${name}' saved successfully.`, 'success');
-            clearFestEdit(); // This will clear the form and re-render
-        } catch (error) {
-            console.error("Error saving fest:", error);
-            showAlert('Failed to save fest. See console for details.', 'danger');
-        }
-    });
-
-    // House form submission
-    document.getElementById('house-form')?.addEventListener('submit', async (e) => {
+    // --- House Form Submission ---
+    const houseForm = document.getElementById('house-form');
+    houseForm?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const id = document.getElementById('house-id').value.trim().toUpperCase();
         const name = document.getElementById('house-name').value.trim();
@@ -22618,90 +22413,78 @@ function attachSetupTabListeners() {
         try {
             await setDoc(getDocRef('festHouses', id), { id, name, color }, { merge: true });
             showAlert(`House '${name}' saved successfully.`, 'success');
-            clearHouseEdit(); // This will clear the form and re-render
+            clearHouseEdit();
         } catch (error) {
             console.error("Error saving house:", error);
-            showAlert('Failed to save house. See console for details.', 'danger');
+            showAlert('Failed to save house.', 'danger');
         }
     });
-    // NEW: Listener for category type change
-    document.getElementById('new-cat-type')?.addEventListener('change', e => {
-        const uiContainer = document.getElementById('cat-type-specific-ui');
-        if (e.target.value === 'age') {
-            uiContainer.innerHTML = `<label>Born On or After Date</label><input type="date" id="new-cat-date" class="form-control">`;
-        } else {
-            uiContainer.innerHTML = `<label>Select Classes</label><select id="new-cat-classes" class="form-select" multiple size="4">${classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}</select>`;
-        }
+    
+    // --- Judge Code Form Submission ---
+    const judgeCodeForm = document.getElementById('judge-code-form');
+    judgeCodeForm?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        saveNewJudgeCode();
     });
 
+    // --- Dynamic Category Management & Registration Toggle ---
     const settingsWrapper = document.getElementById('fest-settings-wrapper');
     if (!settingsWrapper) return;
 
-    // --- Main Event Handler for the Settings/Category Section ---
+    // Use event delegation for all clicks within the settings area
     settingsWrapper.addEventListener('click', (e) => {
-        // Toggles the visibility of the "Add New Category" form
-        if (e.target.id === 'add-category-btn') {
+        const target = e.target;
+
+        if (target.id === 'add-category-btn') {
             document.getElementById('new-category-form').classList.toggle('d-none');
         }
 
-        // Removes a category row from the table (client-side)
-        if (e.target.classList.contains('remove-cat-row-btn')) {
-            e.target.closest('tr').remove();
+        if (target.classList.contains('remove-cat-row-btn')) {
+            target.closest('tr').remove();
         }
 
-        // Adds the newly defined category to the table (client-side)
-        if (e.target.id === 'save-new-cat-btn') {
+        if (target.id === 'save-new-cat-btn') {
             const nameInput = document.getElementById('new-cat-name');
             const typeSelect = document.getElementById('new-cat-type');
-            
             const name = nameInput.value.trim();
+            if (!name) return showAlert('Category Name is required.', 'danger');
+
             const type = typeSelect.value;
-
-            if (!name) {
-                return showAlert('Category Name is required.', 'danger');
-            }
-
             let criteria, criteriaDisplay;
             if (type === 'age') {
                 const ageInput = document.getElementById('new-cat-criteria-age');
-                if (!ageInput.value) return showAlert('"Born After Date" is required for age-wise categories.', 'danger');
+                if (!ageInput.value) return showAlert('"Born After Date" is required.', 'danger');
                 criteria = ageInput.value;
                 criteriaDisplay = `Born after ${criteria}`;
             } else {
                 const classSelect = document.getElementById('new-cat-criteria-class');
                 criteria = Array.from(classSelect.selectedOptions).map(opt => opt.value);
-                if (criteria.length === 0) return showAlert('At least one class must be selected for class-wise categories.', 'danger');
+                if (criteria.length === 0) return showAlert('At least one class must be selected.', 'danger');
                 criteriaDisplay = criteria.map(cid => classes.find(c => c.id === cid)?.name || 'Unknown').join(', ');
             }
 
-            // Create and append the new table row
             const tableBody = document.querySelector('#category-table tbody');
             const newRow = document.createElement('tr');
             newRow.dataset.name = name;
             newRow.dataset.type = type;
             newRow.dataset.criteria = criteria;
-
-            newRow.innerHTML = `
-                <td>${name}</td>
-                <td><span class="badge bg-info">${type === 'age' ? 'Age-wise' : 'Class-wise'}</span></td>
-                <td>${criteriaDisplay}</td>
-                <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger py-0 px-2 remove-cat-row-btn">&times;</button></td>
-            `;
+            newRow.innerHTML = `<td>${name}</td><td><span class="badge bg-info">${type}-wise</span></td><td>${criteriaDisplay}</td><td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger py-0 px-2 remove-cat-row-btn">&times;</button></td>`;
             tableBody.appendChild(newRow);
 
-            // Reset and hide the form
             nameInput.value = '';
             document.getElementById('new-category-form').classList.add('d-none');
         }
-
-        // Main Save Button for ALL settings for the selected fest
-        if (e.target.id === 'save-fest-settings') {
-            saveAllFestSettings(); 
-        }
     });
 
-    // Handles dynamic UI change when category type is selected
+    // Handle dynamic UI change when category type is selected
     settingsWrapper.addEventListener('change', e => {
+        // --- THIS IS THE FIX for the registration toggle ---
+        if (e.target.id === 'fest-registration-status') {
+            // When the toggle is changed, automatically trigger the save function
+            saveAllFestSettings();
+            return;
+        }
+
         if (e.target.id === 'new-cat-type') {
             const cell = document.getElementById('cat-criteria-cell');
             if (e.target.value === 'age') {
@@ -22711,71 +22494,60 @@ function attachSetupTabListeners() {
             }
         }
     });
-
-    // Add new age category row
-    document.getElementById('add-age-category')?.addEventListener('click', () => {
-        document.querySelector('#age-category-table tbody')?.insertAdjacentHTML('beforeend', `
-            <tr>
-                <td><input type="text" class="form-control form-control-sm age-cat-name" placeholder="e.g., Sub-Juniors"></td>
-                <td><input type="date" class="form-control form-control-sm age-cat-date"></td>
-                <td><button type="button" class="btn btn-sm btn-outline-danger py-0 px-2 remove-cat-row-btn">&times;</button></td>
-            </tr>`);
-    });
-    // NEW: Listener to remove a category from the table
-    document.getElementById('category-table')?.addEventListener('click', e => {
-        if (e.target.classList.contains('remove-cat-row-btn')) {
-            e.target.closest('tr').remove();
-        }
-    });
-
-    
-    // Remove age category row (delegated listener)
-    document.getElementById('age-category-table')?.addEventListener('click', e => {
-        if (e.target.classList.contains('remove-cat-row-btn')) {
-            e.target.closest('tr').remove();
-        }
-    });
-
-    // Save all global and age settings
-    document.getElementById('save-fest-settings')?.addEventListener('click', async () => {
-        // const newSettings = {
-        //     maxEventsPerStudent: parseInt(document.getElementById('max-events').value) || 3,
-        //     houseEventLimits: {
-        //         solo: parseInt(document.getElementById('limit-solo').value) || 2,
-        //         group: parseInt(document.getElementById('limit-group').value) || 1,
-        //     },
-        //     ageCategories: [],
-        //     categories: []
-        
-
-        //};
-        saveAllFestSettings();
-        
-        document.querySelectorAll('#age-category-table tbody tr').forEach(row => {
-            const name = row.querySelector('.age-cat-name')?.value.trim();
-            const bornAfterDate = row.querySelector('.age-cat-date')?.value;
-            if (name && bornAfterDate) {
-                newSettings.ageCategories.push({ name, bornAfterDate });
-            }
-        });
-        
-        // Sort categories by date to ensure correct logic later
-        newSettings.ageCategories.sort((a,b) => new Date(b.bornAfterDate) - new Date(a.bornAfterDate));
-
-        try {
-            await setDoc(getDocRef('festSettings', 'main'), newSettings);
-            showAlert('Global settings saved successfully.', 'success');
-        } catch (error) {
-            console.error("Error saving global settings:", error);
-            showAlert('Failed to save settings. See console for details.', 'danger');
-        }
-    });
-    document.getElementById('judge-code-form')?.addEventListener('submit', (e) => {
-        e.preventDefault();
-        saveNewJudgeCode();
-    });
 }
 
+/**
+ * A single, unified function that saves all fest-specific settings from the form to Firestore.
+ */
+async function saveAllFestSettings() {
+    if (!state.managingFest) return;
+
+    // 1. Gather all settings from the form
+    const registrationOpen = document.getElementById('fest-registration-status').checked;
+    const newSettings = {
+        maxOnStageSoloEvents: parseInt(document.getElementById('max-onstage-solo').value) || 0,
+        maxOnStageGroupEvents: parseInt(document.getElementById('max-onstage-group').value) || 0,
+        maxOffStageSoloEvents: parseInt(document.getElementById('max-offstage-solo').value) || 0,
+        maxOffStageGroupEvents: parseInt(document.getElementById('max-offstage-group').value) || 0,
+        houseEventLimits: {
+            onStage: {
+                solo: parseInt(document.getElementById('limit-onstage-solo-house').value) || 0,
+                group: parseInt(document.getElementById('limit-onstage-group-house').value) || 0,
+            },
+            offStage: {
+                solo: parseInt(document.getElementById('limit-offstage-solo-house').value) || 0,
+                group: parseInt(document.getElementById('limit-offstage-group-house').value) || 0,
+            }
+        },
+        categories: Array.from(document.querySelectorAll('#category-table tbody tr')).map(row => ({
+            name: row.dataset.name,
+            type: row.dataset.type,
+            criteria: row.dataset.type === 'age' ? row.dataset.criteria : row.dataset.criteria.split(','),
+        })),
+    };
+
+    try {
+        // 2. Update the fest document in Firestore
+        const festRef = getDocRef('fests', state.managingFest.id);
+        await updateDoc(festRef, { 
+            settings: newSettings,
+            registrationOpen: registrationOpen 
+        });
+
+        showAlert(`Settings for '${state.managingFest.name}' saved successfully.`, 'success');
+        
+        // 3. Update the local state to match what was saved
+        state.managingFest.settings = newSettings;
+        state.managingFest.registrationOpen = registrationOpen;
+
+        // 4. Re-render the tab to reflect any changes
+        renderFestSetupTab();
+
+    } catch (error) {
+        console.error("Error saving fest settings:", error);
+        showAlert('Failed to save settings.', 'danger');
+    }
+}
 
 // -------------------------------------------------------------------------
 // --- 4. EVENTS TAB ---
@@ -24495,7 +24267,7 @@ window.downloadChestNumbersPDF = function() {
     doc.text(subTitle, doc.internal.pageSize.getWidth() / 2, 29, { align: 'center' });
 
     // 5. Define the table headers
-    const head = [['Sl. No.', 'Admn No.', 'Chest No.', 'Name & Class', 'Registered Events']];
+    const head = [['Sl', 'Admn No.', 'Chest No.', 'Name & Class', 'Registered Events']];
 
     // 6. Generate the table using the autoTable plugin
     doc.autoTable({
@@ -24542,7 +24314,7 @@ window.downloadChestNumbersCSV = function() {
     });
 
     // 3. Define the CSV headers
-    const headers = ['Sl. No.', 'Admission Number', 'Chest Number', 'Name & Class', 'Registered Events'];
+    const headers = ['Sl', 'Admission Number', 'Chest Number', 'Name & Class', 'Registered Events'];
     const csvRows = [headers.join(',')]; // Start the CSV content with the header row
 
     // 4. Create a data row for each participant
@@ -28526,20 +28298,22 @@ window.loadFormFromLocalStorage = (formId) => {
     localStorage.removeItem(storageKey); 
 }
 
-// Add this event listener to handle browser back/forward buttons
 window.addEventListener('popstate', (event) => {
+    // ✅ Prevent any default or duplicate handling (defensive)
+    event.preventDefault();
+
+    // ✅ Check if the state contains a valid view ID
     if (event.state && event.state.viewId) {
-        // The 'false' argument is crucial. It prevents pushState from being called again,
-        // which would break the browser's history.
+        // The 'false' flag ensures no new history entry is pushed
         navigateTo(event.state.viewId, false);
     } else {
-        // If the state is null, it might be the initial page load.
-        // You can default to the dashboard.
+        // Fallback: load dashboard if no state
         if (currentUserRole) {
             navigateTo('dashboard', false);
         }
     }
 });
+
 
 
 
@@ -28551,116 +28325,138 @@ let selectedExamForControl = null;
          * Renders the main Examination Control module interface.
          * Access is restricted to Admins and Teachers with 'exam_controller' role.
          */
-        window.renderExamControlModule = () => {
-            const isAdmin = currentUserRole === 'admin';
-            const isExamController = currentUserRole === 'teacher' || selectedUser.roles && selectedUser.roles.includes('exam_controller');
+        /**
+ * Renders the main Examination Control module interface.
+ * Access is restricted to Admins and Teachers with 'exam_controller' role.
+ * This version uses a horizontal scrolling container for the tabs.
+ */
+/**
+ * Renders the main Examination Control module interface.
+ * Access is restricted to Admins and Teachers with 'exam_controller' role.
+ * This version uses a single, correct horizontal scrolling container for the tabs.
+ */
+window.renderExamControlModule = () => {
+    const isAdmin = currentUserRole === 'admin';
+    const isExamController = currentUserRole === 'teacher' || (selectedUser.roles && selectedUser.roles.includes('exam_controller'));
 
-            const mainContent = document.getElementById('main-content');
-            if (!mainContent) return;
+    const mainContent = document.getElementById('main-content');
+    if (!mainContent) return;
 
-            const hasAccess = currentUserRole === 'admin' || (selectedUser?.roles && selectedUser.roles.includes('exam_controller'));
+    const hasAccess = currentUserRole === 'admin' || (selectedUser?.roles && selectedUser.roles.includes('exam_controller'));
 
-            if (!hasAccess) {
-                mainContent.innerHTML = `
-                    <div class="alert alert-danger">
-                        <h4>Access Denied</h4>
-                        <p>You do not have permission to access the Examination Control module.</p>
-                    </div>`;
-                return;
-            }
+    if (!hasAccess) {
+        mainContent.innerHTML = `
+            <div class="alert alert-danger">
+                <h4>Access Denied</h4>
+                <p>You do not have permission to access the Examination Control module.</p>
+            </div>`;
+        return;
+    }
 
-            mainContent.innerHTML = `
-                <h1 class="h2 mb-4">Examination Control</h1>
-                <div class="tabs-container">
-                <ul class="nav nav-tabs" id="examControlTab" role="tablist">
+    mainContent.innerHTML = `
+        <h1 class="h2 mb-4">Examination Control</h1>
+        
+        <div class="tabs-container">
+            <ul class="nav nav-tabs" id="examControlTab" role="tablist" style="max-width:900px;">
                 ${isAdmin ? `<li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#add-exam" type="button">Add Exam</button></li>` : ''}
                 ${isAdmin ? `<li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#schedule" type="button">Schedule</button></li>` : '<li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#schedule" type="button">Schedule</button></li>'}
                 <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#consolidated-view" type="button">Consolidated View</button></li>
                 <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#timetable-view" type="button">Timetable</button></li>
                 
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#exam-control-overview" type="button" role="tab" aria-controls="exam-control-overview" aria-selected="true">Exam Overview</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-rooms" type="button" role="tab" aria-controls="exam-control-rooms" aria-selected="false">Room Management</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-duty" type="button" role="tab" aria-controls="exam-control-duty" aria-selected="false">Duty Assignment</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-absentee" type="button" role="tab" aria-controls="exam-control-absentee" aria-selected="false">Absentee Reporting</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-reg-no" type="button" role="tab" aria-controls="exam-control-reg-no" aria-selected="false">Reg. No. Assignment</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-room-alloc" type="button" role="tab" aria-controls="exam-control-room-alloc" aria-selected="false">Room Allocation</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-hall-ticket" type="button" role="tab" aria-controls="exam-control-hall-ticket" aria-selected="false">Hall Ticket</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-reports" type="button" role="tab" aria-controls="exam-control-reports" aria-selected="false">Reports</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-notifications" type="button" role="tab" aria-controls="exam-control-notifications" aria-selected="false">Notifications</button>
-                    </li>
-                </ul>
-                </div>
-                <div class="tab-content card" id="examControlTabContent">
-                     ${isAdmin ? `<div class="tab-pane fade p-2" id="add-exam" role="tabpanel"></div>` : ''}
-        ${isAdmin ? `<div class="tab-pane fade p-2" id="schedule" role="tabpanel"></div>` : '<div class="tab-pane fade p-4" id="schedule" role="tabpanel"></div>'}
-        <div class="tab-pane fade p-2" id="timetable-view" role="tabpanel"></div>
-        <div class="tab-pane fade p-2" id="consolidated-view" role="tabpanel"></div>
-    
-                    <div class="tab-pane fade show active p-4" id="exam-control-overview" role="tabpanel" aria-labelledby="exam-control-overview-tab"></div>
-                    <div class="tab-pane fade p-2" id="exam-control-rooms" role="tabpanel" aria-labelledby="exam-control-rooms-tab"></div>
-                    <div class="tab-pane fade p-3" id="exam-control-duty" role="tabpanel" aria-labelledby="exam-control-duty-tab"></div>
-                    <div class="tab-pane fade p-2" id="exam-control-absentee" role="tabpanel" aria-labelledby="exam-control-absentee-tab"></div>
-                    <div class="tab-pane fade p-2" id="exam-control-reg-no" role="tabpanel" aria-labelledby="exam-control-reg-no-tab"></div>
-                    <div class="tab-pane fade p-2" id="exam-control-room-alloc" role="tabpanel" aria-labelledby="exam-control-room-alloc-tab"></div>
-                    <div class="tab-pane fade p-2" id="exam-control-hall-ticket" role="tabpanel" aria-labelledby="exam-control-hall-ticket-tab"></div>
-                    <div class="tab-pane fade p-2" id="exam-control-reports" role="tabpanel" aria-labelledby="exam-control-reports-tab"></div>
-                    <div class="tab-pane fade p-2" id="exam-control-notifications" role="tabpanel" aria-labelledby="exam-control-notifications-tab"></div>
-                </div>
-            `;
-
-            // Render content for each sub-tab
-            if (isAdmin) {
-        renderExamAddTab();
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#exam-control-overview" type="button" role="tab" aria-controls="exam-control-overview" aria-selected="true">Overview</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-rooms" type="button" role="tab" aria-controls="exam-control-rooms" aria-selected="false">Rooms</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-duty" type="button" role="tab" aria-controls="exam-control-duty" aria-selected="false">Duty</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-absentee" type="button" role="tab" aria-controls="exam-control-absentee" aria-selected="false">Absentees</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-reg-no" type="button" role="tab" aria-controls="exam-control-reg-no" aria-selected="false">Reg. No.</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-room-alloc" type="button" role="tab" aria-controls="exam-control-room-alloc" aria-selected="false">Allocation</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-hall-ticket" type="button" role="tab" aria-controls="exam-control-hall-ticket" aria-selected="false">Hall Ticket</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-reports" type="button" role="tab" aria-controls="exam-control-reports" aria-selected="false">Reports</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-notifications" type="button" role="tab" aria-controls="exam-control-notifications" aria-selected="false">Notifications</button>
+                </li>
+            </ul>
+        </div>
         
+        <div class="tab-content card" id="examControlTabContent">
+            ${isAdmin ? `<div class="tab-pane fade p-2" id="add-exam" role="tabpanel"></div>` : ''}
+            ${isAdmin ? `<div class="tab-pane fade p-2" id="schedule" role="tabpanel"></div>` : '<div class="tab-pane fade p-4" id="schedule" role="tabpanel"></div>'}
+            <div class="tab-pane fade p-2" id="timetable-view" role="tabpanel"></div>
+            <div class="tab-pane fade p-2" id="consolidated-view" role="tabpanel"></div>
+
+            <div class="tab-pane fade show active p-4" id="exam-control-overview" role="tabpanel" aria-labelledby="exam-control-overview-tab"></div>
+            <div class="tab-pane fade p-2" id="exam-control-rooms" role="tabpanel" aria-labelledby="exam-control-rooms-tab"></div>
+            <div class="tab-pane fade p-3" id="exam-control-duty" role="tabpanel" aria-labelledby="exam-control-duty-tab"></div>
+            <div class="tab-pane fade p-2" id="exam-control-absentee" role="tabpanel" aria-labelledby="exam-control-absentee-tab"></div>
+            <div class="tab-pane fade p-2" id="exam-control-reg-no" role="tabpanel" aria-labelledby="exam-control-reg-no-tab"></div>
+            <div class="tab-pane fade p-2" id="exam-control-room-alloc" role="tabpanel" aria-labelledby="exam-control-room-alloc-tab"></div>
+            <div class="tab-pane fade p-2" id="exam-control-hall-ticket" role="tabpanel" aria-labelledby="exam-control-hall-ticket-tab"></div>
+            <div class="tab-pane fade p-2" id="exam-control-reports" role="tabpanel" aria-labelledby="exam-control-reports-tab"></div>
+            <div class="tab-pane fade p-2" id="exam-control-notifications" role="tabpanel" aria-labelledby="exam-control-notifications-tab"></div>
+        </div>
+    `;
+
+    // Render content for each sub-tab
+    if (isAdmin) {
+        renderExamAddTab();
     }
     renderExamScheduleTab();
     renderExamTimetableView();
     renderConsolidatedTimetableView(); 
-            renderExamControlOverviewTab();
-            renderExamControlRoomManagementTab();
-            renderExamControlDutyAssignmentTab();
-            renderExamControlAbsenteeReportingTab();
-            renderExamControlRegNoAssignmentTab();
-            renderExamControlRoomAllocationTab();
-            renderExamControlHallTicketTab();
-            renderExamControlReportsTab();
-            renderExamControlNotificationsTab();
+    renderExamControlOverviewTab();
+    renderExamControlRoomManagementTab();
+    renderExamControlDutyAssignmentTab();
+    renderExamControlAbsenteeReportingTab();
+    renderExamControlRegNoAssignmentTab();
+    renderExamControlRoomAllocationTab();
+    renderExamControlHallTicketTab();
+    renderExamControlReportsTab();
+    renderExamControlNotificationsTab();
 
-            // Attach listener for tab changes to re-render selected sub-tab
-            document.querySelectorAll('#examControlTab .nav-link').forEach(tab => {
-                tab.addEventListener('shown.bs.tab', (event) => {
-                    const targetId = event.target.dataset.bsTarget;
-                    switch(targetId) {
-                        case '#exam-control-overview': renderExamControlOverviewTab(); break;
-                        case '#exam-control-rooms': renderExamControlRoomManagementTab(); break;
-                        case '#exam-control-duty': renderExamControlDutyAssignmentTab(); break;
-                        case '#exam-control-absentee': renderExamControlAbsenteeReportingTab(); break;
-                        case '#exam-control-reg-no': renderExamControlRegNoAssignmentTab(); break;
-                        case '#exam-control-room-alloc': renderExamControlRoomAllocationTab(); break;
-                        case '#exam-control-hall-ticket': renderExamControlHallTicketTab(); break;
-                        case '#exam-control-reports': renderExamControlReportsTab(); break;
-                        case '#exam-control-notifications': renderExamControlNotificationsTab(); break;
-                    }
-                });
-            });
-        };
+    // Attach listener for tab changes to re-render selected sub-tab
+    document.querySelectorAll('#examControlTab .nav-link').forEach(tab => {
+        tab.addEventListener('shown.bs.tab', (event) => {
+            const targetId = event.target.dataset.bsTarget;
+            // Shorten the switch statement for clarity
+            const renderFunctions = {
+                '#exam-control-overview': renderExamControlOverviewTab,
+                '#exam-control-rooms': renderExamControlRoomManagementTab,
+                '#exam-control-duty': renderExamControlDutyAssignmentTab,
+                '#exam-control-absentee': renderExamControlAbsenteeReportingTab,
+                '#exam-control-reg-no': renderExamControlRegNoAssignmentTab,
+                '#exam-control-room-alloc': renderExamControlRoomAllocationTab,
+                '#exam-control-hall-ticket': renderExamControlHallTicketTab,
+                '#exam-control-reports': renderExamControlReportsTab,
+                '#exam-control-notifications': renderExamControlNotificationsTab,
+                // Also handle the other tabs
+                '#add-exam': isAdmin ? renderExamAddTab : null,
+                '#schedule': renderExamScheduleTab,
+                '#timetable-view': renderExamTimetableView,
+                '#consolidated-view': renderConsolidatedTimetableView
+            };
+            
+            const renderFunc = renderFunctions[targetId];
+            if (renderFunc) {
+                renderFunc();
+            }
+        });
+    });
+};
 
         /**
          * Renders the Exam Overview tab content.
@@ -30137,7 +29933,7 @@ function printReport({ contentHtml, title, onLoadCallback = null, extraCss = '' 
             <script src="https://cdn.jsdelivr.net/npm/davidshimjs-qrcodejs/qrcode.min.js"><\/script>
             <style>
                 body { font-family: 'Inter', sans-serif; -webkit-print-color-adjust: exact !important; color-adjust: exact !important; }
-                @page { size: A4 portrait; margin: 1cm; }
+                @page { size: A4; margin: 0.5cm; }
                 .table { border-collapse: collapse !important; }
                 th, td { border: 1px solid #dee2e6 !important; padding: .4rem .4rem; }
                 .no-print { display: none !important; }
@@ -30161,7 +29957,7 @@ function printReport({ contentHtml, title, onLoadCallback = null, extraCss = '' 
         setTimeout(() => {
             printWindow.focus();
             printWindow.print();
-            printWindow.close();
+           // printWindow.close();
         }, 250); // A 250ms delay is usually enough
     };
 }
@@ -33344,7 +33140,7 @@ function renderSubjectToppersTab() {
  * Calculates and displays the top 3 students for each subject in an exam.
  * @param {string} examId
  */
-function displaySubjectWiseToppers(examId) {
+async function displaySubjectWiseToppers(examId) {
     const container = document.getElementById('subject-toppers-display-container');
     if (!container) return;
     if (!examId) {
@@ -33353,7 +33149,7 @@ function displaySubjectWiseToppers(examId) {
     }
 
     container.innerHTML = `<div class="text-center p-4"><div class="spinner-border"></div><p>Calculating subject toppers...</p></div>`;
-
+    await attachMarksListener(teacherAssignedClasses);
     const schedulesForExam = examSchedules.filter(s => s.examId === examId);
     const uniqueSubjectIds = [...new Set(schedulesForExam.map(s => s.subjectId))];
 
@@ -33558,7 +33354,6 @@ async function renderExamReportsToppersTab() { // Renamed from renderExamControl
         generateToppers();
     }
 }
-
 
 
 /**
@@ -34754,7 +34549,8 @@ const masterControlCollections = {
 };
 
 /**
- * Renders the main shell for the Master Control "Database Explorer".
+ * Renders the main shell for the Master Control "Database Explorer",
+ * now including a new "Data Integrity Tools" section.
  */
 window.renderMasterControlModule = () => {
     const mainContent = document.getElementById('main-content');
@@ -34764,34 +34560,31 @@ window.renderMasterControlModule = () => {
     }
 
     mainContent.innerHTML = `
-        <h1 class="h2 mb-4">Database Explorer</h1>
-        <div class="alert alert-warning">
-            <strong><i class="fas fa-exclamation-triangle me-2"></i>Warning:</strong> You are directly editing the database. Changes are immediate and permanent.
-        </div>
+        <h1 class="h2 mb-4">Database Explorer & Tools</h1>
         <div class="row">
             <div class="col-md-4 col-lg-3">
-                <div class="card">
+                <div class="card shadow-sm mb-4">
                     <div class="card-header fw-bold">Collections</div>
                     <div id="master-control-tree" class="list-group list-group-flush"></div>
                 </div>
+                
+                <!-- NEW: Data Integrity Tools Card -->
+                <div class="card shadow-sm">
+                    <div class="card-header fw-bold text-warning">Data Integrity Tools</div>
+                    <div class="card-body">
+                        <h6 class="card-title">Set Missing Student Status</h6>
+                        <p class="card-text small text-muted">This will find all student records that are missing a 'status' field and set it to 'Active'. This is useful for ensuring dashboard counts are accurate.</p>
+                        <button id="set-active-status-btn" class="btn btn-warning">Run Status Update</button>
+                        <div id="status-update-progress" class="mt-2 small"></div>
+                    </div>
+                </div>
             </div>
             <div class="col-md-8 col-lg-9">
-                <div class="card">
+                <div class="card shadow-sm">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <span id="master-control-header-text" class="fw-bold">Select a collection</span>
                         <div id="master-control-actions" class="d-none align-items-center flex-grow-1 justify-content-end">
-                            <input type="search" id="master-control-search" class="form-control form-control-sm w-auto me-3" placeholder="Search...">
-                            
-                            <button id="expand-all-btn" class="btn btn-sm btn-outline-secondary me-2">Expand All</button>
-                            <button id="collapse-all-btn" class="btn btn-sm btn-outline-secondary me-3">Collapse All</button>
-
-                            <div class="form-check me-3">
-                                <input class="form-check-input" type="checkbox" id="master-control-select-all">
-                                <label class="form-check-label" for="master-control-select-all">Select All</label>
-                            </div>
-                            <button id="delete-selected-docs-btn" class="btn btn-sm btn-danger" disabled>
-                                <i class="fas fa-trash me-1"></i>Delete (<span id="selected-doc-count">0</span>)
-                            </button>
+                            <!-- ... all your existing filter/action buttons ... -->
                         </div>
                     </div>
                     <div id="master-control-content" class="card-body">
@@ -34800,11 +34593,11 @@ window.renderMasterControlModule = () => {
                 </div>
             </div>
         </div>
-        `;
+    `;
     
     renderNavigationTree();
     attachMasterControlListeners();
-}
+};
 /**
  * Renders the collapsible navigation tree on the left.
  */
@@ -35169,12 +34962,82 @@ function attachMasterControlListeners() {
 
     });
     
-const confirmInput = document.getElementById('delete-confirm-input');
+    const confirmInput = document.getElementById('delete-confirm-input');
     if (confirmInput) {
         confirmInput.addEventListener('input', () => {
             const finalDeleteBtn = document.getElementById('final-delete-btn');
             finalDeleteBtn.disabled = (confirmInput.value.trim() !== 'DELETE');
         });
+    }
+
+    const setActiveStatusBtn = document.getElementById('set-active-status-btn');
+    if (setActiveStatusBtn) {
+        setActiveStatusBtn.addEventListener('click', setMissingStudentStatusToActive);
+    }
+
+}
+
+/**
+ * A one-time utility function to find all students without a 'status' field,
+ * set their status to 'Active', and correct the dashboard counter.
+ */
+async function setMissingStudentStatusToActive() {
+    const progressDiv = document.getElementById('status-update-progress');
+    const updateBtn = document.getElementById('set-active-status-btn');
+    
+    if (!progressDiv || !updateBtn) return;
+
+    updateBtn.disabled = true;
+    updateBtn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Working...`;
+    progressDiv.innerHTML = '<em>Step 1/4: Fetching all student records...</em>';
+
+    try {
+        // 1. Fetch ALL students to check for the missing field
+        const allStudentsSnapshot = await getDocs(getCollectionRef('students'));
+        const allStudentsData = allStudentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        progressDiv.innerHTML = `<em>Step 2/4: Analyzing ${allStudentsData.length} records...</em>`;
+        
+        // 2. Filter to find only the students that need updating
+        const studentsToUpdate = allStudentsData.filter(s => s.status === undefined || s.status === null || s.status === '');
+        
+        if (studentsToUpdate.length === 0) {
+            progressDiv.innerHTML = '<div class="alert alert-info py-2"><strong>All Clear!</strong> All students already have a status. No action was needed.</div>';
+            return;
+        }
+
+        if (!confirm(`${studentsToUpdate.length} students were found without a 'status' field. Do you want to set their status to 'Active' and update the dashboard counter?`)) {
+            progressDiv.innerHTML = 'Operation cancelled by user.';
+            return;
+        }
+        
+        progressDiv.innerHTML = `<em>Step 3/4: Preparing to update ${studentsToUpdate.length} students...</em>`;
+
+        // 3. Create a batch to update all documents efficiently
+        const batch = writeBatch(db);
+        studentsToUpdate.forEach(student => {
+            const studentRef = getDocRef('students', student.id);
+            batch.update(studentRef, { status: 'Active' });
+        });
+
+        // --- THIS IS THE FIX ---
+        // 4. Update the stats counter using the correct modular 'increment' function.
+        const statsRef = getDocRef('school_stats', 'main');
+        //batch.update(statsRef, { studentCount: increment(studentsToUpdate.length) });
+        // --- END OF FIX ---
+
+        // 5. Commit all changes to the database at once
+        progressDiv.innerHTML = '<em>Step 4/4: Committing changes to the database...</em>';
+        await batch.commit();
+
+        progressDiv.innerHTML = `<div class="alert alert-success py-2"><strong>Success!</strong> ${studentsToUpdate.length} students have been updated to 'Active'. The dashboard count has been corrected.</div>`;
+
+    } catch (error) {
+        console.error("Error updating student statuses:", error);
+        progressDiv.innerHTML = `<div class="alert alert-danger py-2">An error occurred: ${error.message}</div>`;
+        showAlert('An error occurred during the update.', 'danger');
+    } finally {
+        updateBtn.disabled = false;
+        updateBtn.innerHTML = 'Run Status Update';
     }
 }
 /**
@@ -35575,7 +35438,7 @@ async function startMigration() {
 
 const appDb = new Dexie("SchoolAppDB");
 // IMPORTANT: Version number is incremented to apply the new indexes
-appDb.version(4.7).stores({
+appDb.version(4.9).stores({
     classes: "&id, name, lastUpdated",
     subjects: "&id, name, lastUpdated",
     students: "&id, classId, division, admissionNumber, name, lastUpdated",
@@ -35652,65 +35515,87 @@ appDb.version(4.7).stores({
 
 //let students = Objects.values(appDb.students.toArray());
 
+// --- 1. Global DOM References (Including the missing 'sidebar' definition) ---
+const sidebar = document.getElementById('sidebar');
 const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
 const sidebarCloseBtn = document.getElementById('sidebar-close-btn');
 const sidebarOverlay = document.getElementById('sidebar-overlay');
+// --- 2. Core Functions (No change, but provided for context) ---
 
-// Function to show the sidebar
+/**
+ * Function to show the sidebar: applies 'show' class and prevents body scrolling.
+ */
 export function showSidebar() {
-    sidebar.classList.add('show');
-    sidebarOverlay.classList.add('show');
-    document.body.style.overflow = 'hidden'; // Prevent scrolling main content when sidebar is open
-}
-
-// Function to hide the sidebar
-export function hideSidebar() {
-    sidebar.classList.remove('show');
-    sidebarOverlay.classList.remove('show');
-    document.body.style.overflow = ''; // Restore scrolling
-}
-
-// Event Listeners
-if (sidebarToggleBtn) {
-    sidebarToggleBtn.addEventListener('click', showSidebar);
-}
-
-if (sidebarCloseBtn) {
-    sidebarCloseBtn.addEventListener('click', hideSidebar);
-}
-
-if (sidebarOverlay) {
-    sidebarOverlay.addEventListener('click', hideSidebar); // Clicking outside closes sidebar
-}
-window.addEventListener('DOMContentLoaded', () => {
-    const mediaQuery = window.matchMedia('(max-width: 991.98px)');
-    if (mediaQuery.matches) {
-        // If it's a mobile view, ensure sidebar is hidden initially
-        hideSidebar(); // Also ensures overflow is not hidden
-    } else {
-        // Desktop view, ensure sidebar is visible and overlay is hidden
-        sidebar.classList.remove('show'); // Ensure no mobile 'show' class
-        sidebarOverlay.classList.remove('show');
-        document.body.style.overflow = ''; // Ensure scrolling is normal
+    if (sidebar && sidebarOverlay) {
+        sidebar.classList.add('show');
+        sidebarOverlay.classList.add('show');
+        document.body.style.overflow = 'hidden';
     }
-});
+}
 
-// Re-evaluate sidebar state on window resize
-window.addEventListener('resize', () => {
-    const mediaQuery = window.matchMedia('(max-width: 991.98px)');
-    if (mediaQuery.matches) {
-        // If resized to mobile, hide sidebar if not already hidden
-        if (!sidebar.classList.contains('show')) { // Only hide if it's not already intentionally open
-            hideSidebar();
-        }
-    } else {
-        // If resized to desktop, ensure sidebar is visible and overlay is hidden
-        sidebar.classList.remove('show'); // Ensure desktop default state
+/**
+ * Function to hide the sidebar: removes 'show' class and restores body scrolling.
+ */
+export function hideSidebar() {
+    if (sidebar && sidebarOverlay) {
+        sidebar.classList.remove('show');
         sidebarOverlay.classList.remove('show');
         document.body.style.overflow = '';
     }
+}
+
+// Function to render navigation items
+function renderSidebar(navItems) {
+    if (sidebarNav) {
+        sidebarNav.innerHTML = navItems.map(item => `<a href="#${item.id}" id="nav-${item.id}" class="nav-link text-dark"><i class="fas ${item.icon} me-2"></i>${item.text}</a>`).join('');
+        navItems.forEach(item => {
+            const navElement = document.getElementById(`nav-${item.id}`);
+            if (navElement) {
+                navElement.addEventListener('click', e => { 
+                    e.preventDefault(); 
+                    if (item.id === 'add-student') studentToEdit = null;
+                    navigateTo(item.id); 
+                    // Automatically hide the sidebar after navigation (crucial for mobile UX)
+                    hideSidebar(); 
+                });
+            }
+        });
+    }
+}
+
+// --- 3. Initial State & Interaction Handlers (Simplified Logic) ---
+
+window.addEventListener('DOMContentLoaded', () => {
+    // **SIMPLIFICATION:** Force the sidebar to be hidden initially, regardless of screen size.
+    hideSidebar();
+
+    // Event Listeners for user interaction
+    if (sidebarToggleBtn) {
+        sidebarToggleBtn.addEventListener('click', showSidebar);
+    }
+    if (sidebarCloseBtn) {
+        sidebarCloseBtn.addEventListener('click', hideSidebar);
+    }
+    if (sidebarOverlay) {
+        sidebarOverlay.addEventListener('click', hideSidebar); // Clicking outside closes sidebar
+    }
 });
 
+// --- 4. Simplified Resize Logic ---
+
+window.addEventListener('resize', () => {
+    const mediaQuery = window.matchMedia('(max-width: 991.98px)');
+
+    // Only take action when transitioning to a desktop view
+    if (!mediaQuery.matches) {
+        // If resized to desktop, ensure the sidebar is closed and the overlay/scroll lock is gone.
+        // This is necessary to prevent a 'stuck' mobile view if the user resizes a browser window.
+        if (sidebar && sidebar.classList.contains('show')) {
+            hideSidebar();
+        }
+    }
+    // No action needed when resizing to mobile; user click controls the state.
+});
 const offlineIndicator = document.getElementById('offline-indicator');
 
 export function handleOffline() {
@@ -35772,6 +35657,7 @@ window.addEventListener('beforeunload', (event) => {
  * @param {string} examId - The ID of the exam.
  * @param {number} rank - The rank/position of the student.
  */
+
 window.generateTopperPoster = async (studentId, examId, rank)=> {
     const student = students.find(s => s.id === studentId);
     const exam = exams.find(e => e.id === examId);
@@ -35799,7 +35685,10 @@ const queryString = new URLSearchParams({
 
 const editorUrl = `poster-editor.html?${queryString}`;
 window.open(editorUrl, '_blank');
+
+
 }
+
 window.generateTopperPosterold = async (studentId, examId, rank)=> {
     const student = students.find(s => s.id === studentId);
     const exam = exams.find(e => e.id === examId);
@@ -35812,7 +35701,7 @@ window.generateTopperPosterold = async (studentId, examId, rank)=> {
 
     try {
         // 1. --- Load Images (This part is the same) ---
-        const backgroundUrl = 'KYHSSLOGO.jpg'; // Example background
+        const backgroundUrl = 'tr1-t1.png'; // Example background
         const studentPhotoUrl = student.photoDriveId ? await getSafeImageFromDrive(student.photoDriveId) : 'https://placehold.co/200x250?text=No+Photo';
 
         const [bgImage, studentImage] = await Promise.all([
@@ -35823,7 +35712,7 @@ window.generateTopperPosterold = async (studentId, examId, rank)=> {
         // 2. --- Setup Canvas (This part is the same) ---
         const canvas = document.createElement('canvas');
         canvas.width = 1080;
-        canvas.height = 1920;
+        canvas.height = 1350;
         const ctx = canvas.getContext('2d');
 
         // 3. --- Draw on Canvas (This part is the same) ---
@@ -35888,6 +35777,88 @@ window.generateTopperPosterold = async (studentId, examId, rank)=> {
     }
 }
 
+window.generateTopperPosterDEMO = async ()=> {
+    
+    showAlert('Generating poster... please wait.', 'info');
+
+    try {
+        // 1. --- Load Images (This part is the same) ---
+        const backgroundUrl = 'tr1-t1.png'; // Example background
+        const studentPhotoUrl = 'KYHSSLOGO.jpg';//student.photoDriveId ? await getSafeImageFromDrive(student.photoDriveId) : 'https://placehold.co/200x250?text=No+Photo';
+
+        const [bgImage, studentImage] = await Promise.all([
+            loadImage(backgroundUrl),
+            loadImage(studentPhotoUrl)
+        ]);
+
+        // 2. --- Setup Canvas (This part is the same) ---
+        const canvas = document.createElement('canvas');
+        canvas.width = 1080;
+        canvas.height = 1350;
+        const ctx = canvas.getContext('2d');
+
+        // 3. --- Draw on Canvas (This part is the same) ---
+        ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(540, 550, 200, 0, Math.PI * 2, true);
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(studentImage, 340, 350, 400, 500);
+        ctx.restore();
+
+        const rankText = 'first';//`${rank}${rank === 1 ? 'st' : rank === 2 ? 'nd' : rank === 3 ? 'rd' : 'th'}`;
+        ctx.font = 'bold 120px Inter';
+        ctx.fillStyle = '#FFD700';
+        ctx.textAlign = 'center';
+        ctx.strokeStyle = '#8B4513';
+        ctx.lineWidth = 5;
+        ctx.strokeText(rankText, 540, 950);
+        ctx.fillText(rankText, 540, 950);
+        
+        ctx.font = 'bold 72px Inter';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillText('KYHSSSATHAVANAD', 540, 1100);
+
+        const className = 'VII-A';// classes.find(c => c.id === student.classId)?.name || '';
+        ctx.font = '50px Inter';
+        ctx.fillStyle = '#E0E0E0';
+        ctx.fillText(`${className}`, 540, 1180);
+        
+        ctx.font = 'italic 40px Inter';
+        ctx.fillText(TERM1, 540, 1250);
+
+        // 4. --- 👇 NEW: Display Poster in Modal (Replaces old download logic) 👇 ---
+        const dataUrl = canvas.toDataURL('image/png');
+
+        // Get the modal elements we created in the HTML
+        const posterImageEl = document.getElementById('poster-image-display');
+        const saveBtnEl = document.getElementById('save-poster-btn');
+        const posterModalEl = document.getElementById('poster-modal');
+
+        if (posterImageEl && saveBtnEl && posterModalEl) {
+            // Set the image source in the modal
+            posterImageEl.src = dataUrl;
+
+            // Set the download attributes on the save button
+            saveBtnEl.href = dataUrl;
+            saveBtnEl.download = `${student.name}_Topper_Poster.png`;
+
+            // Use Bootstrap's JS to show the modal
+            const modal = new bootstrap.Modal(posterModalEl);
+            modal.show();
+        } else {
+            // Fallback in case modal elements are not found
+            console.error('Poster modal elements not found!');
+            showAlert('Could not display poster preview.', 'danger');
+        }
+
+    } catch (error) {
+        console.error('Error generating poster:', error);
+        showAlert(`Failed to generate poster. Error: ${error.message}`, 'danger');
+    }
+}
+//generateTopperPosterDEMO();
 /**
  * Helper function to fetch a Google Drive image safely using our Apps Script proxy.
  * @param {string} fileId - The Google Drive file ID.
@@ -36114,3 +36085,4 @@ function printContentOfDiv(divId, title = 'Report', options = {}) {
 
 </body>
 </html>
+ 
