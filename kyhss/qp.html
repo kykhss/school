@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Question Paper Creator</title>
+    <!-- 1. Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 2. Load Google Fonts (Inter for UI, Amiri for Arabic) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Inter:wght@400;500;700&family=Tinos:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- 3. Custom Tailwind Configuration -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        serif: ['Tinos', 'serif'], // Good for print
+                        amiri: ['Amiri', 'serif'] // Good for Arabic
+                    },
+                    boxShadow: {
+                        'paper': '0 10px 30px -5px rgba(0, 0, 0, 0.1)',
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- 4. Custom Styles -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Styles for the paper preview */
+        #preview-area {
+            font-family: 'Tinos', serif;
+            transition: all 0.3s ease;
+        }
+
+        #preview-area.font-sans { font-family: 'Inter', sans-serif; }
+        #preview-area.font-serif { font-family: 'Tinos', serif; }
+        #preview-area.font-amiri { font-family: 'Amiri', serif; }
+
+        /* Simple toggle button style for 'Bold' */
+        .toggle-bold {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 1px solid #ccc;
+            background-color: #f8f8f8;
+            font-weight: bold;
+            color: #aaa;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .toggle-bold.active {
+            background-color: #3b82f6; /* blue-600 */
+            color: white;
+            border-color: #3b82f6;
+        }
+
+        /* Print styles: Hide the controls and show only the paper */
+        @media print {
+            body {
+                background-color: #fff;
+            }
+            #controls-panel, #print-button, #save-button, #new-button, #message-bar, #saved-papers-container {
+                display: none !important;
+            }
+            #preview-container {
+                width: 100% !important;
+                height: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                box-shadow: none !important;
+                border: none !important;
+            }
+            #preview-area {
+                box-shadow: none !important;
+                padding: 0 !important;
+                max-width: 100% !important;
+                margin: 0 !important;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <!-- Main Container -->
+    <div class="flex flex-col md:flex-row min-h-screen">
+
+        <!-- ===== CONTROLS PANEL (LEFT) ===== -->
+        <div id="controls-panel" class="w-full md:w-1/3 lg:w-1/4 bg-white shadow-lg p-6 overflow-y-auto space-y-6">
+            <h1 class="text-2xl font-bold text-blue-700">Question Paper Creator</h1>
+            
+            <!-- Message Bar -->
+            <div id="message-bar" class="hidden p-3 rounded-lg text-white"></div>
+            
+            <!-- --- Header Settings --- -->
+            <div class="space-y-4 p-4 border rounded-lg bg-gray-50">
+                <h3 class="font-semibold text-lg border-b pb-2">Exam Header</h3>
+                
+                <!-- School Name Controls -->
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-gray-700">School Name</label>
+                    <input type="text" id="school-name" placeholder="School Name" class="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500">
+                    <div class="flex items-center space-x-2">
+                        <select id="school-name-size" class="w-1/2 p-2 border rounded-md text-sm">
+                            <option value="text-xl">Size: XL</option>
+                            <option value="text-2xl">Size: 2XL</option>
+                            <option value="text-3xl" selected>Size: 3XL</option>
+                            <option value="text-4xl">Size: 4XL</option>
+                        </select>
+                        <button id="school-name-bold" class="toggle-bold">B</button>
+                    </div>
+                </div>
+
+                <!-- Exam Name Controls -->
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-gray-700">Exam Name</label>
+                    <input type="text" id="exam-name" placeholder="Exam Name (e.g., Final Term)" class="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500">
+                    <div class="flex items-center space-x-2">
+                        <select id="exam-name-size" class="w-1/2 p-2 border rounded-md text-sm">
+                            <option value="text-lg">Size: LG</option>
+                            <option value="text-xl" selected>Size: XL</option>
+                            <option value="text-2xl">Size: 2XL</option>
+                            <option value="text-3xl">Size: 3XL</option>
+                        </select>
+                        <button id="exam-name-bold" class="toggle-bold">B</button>
+                    </div>
+                </div>
+
+                <!-- Info Line Inputs -->
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-gray-700">Info Line (Year, Time, Score)</label>
+                    <div class="flex space-x-2">
+                        <input type="text" id="exam-year" placeholder="Year" class="w-1/2 p-2 border rounded-md focus:ring-2 focus:ring-blue-500">
+                        <input type="text" id="max-score" placeholder="Max Score" class="w-1/2 p-2 border rounded-md focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <input type="text" id="exam-time" placeholder="Time (e.g., 3 Hours)" class="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500">
+                    <div class="flex items-center space-x-2">
+                        <select id="info-line-size" class="w-1/2 p-2 border rounded-md text-sm">
+                            <option value="text-sm">Size: SM</option>
+                            <option value="text-base" selected>Size: Base</option>
+                            <option value="text-lg">Size: LG</option>
+                            <option value="text-xl">Size: XL</option>
+                        </select>
+                        <button id="info-line-bold" class="toggle-bold">B</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- --- Display Settings --- -->
+            <div class="space-y-4 p-4 border rounded-lg bg-gray-50">
+                <h3 class="font-semibold text-lg border-b pb-2">Display Settings</h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="font-family" class="block text-sm font-medium text-gray-700">Base Font</label>
+                        <select id="font-family" class="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500">
+                            <option value="font-serif">Serif (Tinos)</option>
+                            <option value="font-sans">Sans-Serif (Inter)</option>
+                            <option value="font-amiri">Arabic (Amiri)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="paper-padding" class="block text-sm font-medium text-gray-700">Paper Padding (px)</label>
+                        <input type="number" id="paper-padding" value="48" min="10" max="100" class="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label for="question-spacing" class="block text-sm font-medium text-gray-700">Question Spacing (px)</label>
+                        <input type="number" id="question-spacing" value="24" min="4" max="50" class="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <input id="mcq-two-column" type="checkbox" class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                        <label for="mcq-two-column" class="ml-2 block text-sm text-gray-900">MCQ 2-Column</label>
+                    </div>
+                    <button id="rtl-toggle" class="px-4 py-2 bg-blue-100 text-blue-700 rounded-md font-medium hover:bg-blue-200">Toggle RTL</button>
+                </div>
+            </div>
+
+            <!-- --- Saved Papers --- -->
+            <div id="saved-papers-container" class="space-y-2 p-4 border rounded-lg bg-gray-50">
+                <h3 class="font-semibold text-lg border-b pb-2">Saved Papers (from DB)</h3>
+                <div id="saved-papers-list" class="space-y-2 max-h-40 overflow-y-auto">
+                    <p class="text-gray-500 text-sm">Loading...</p>
+                </div>
+            </div>
+
+            <!-- --- Question Builder --- -->
+            <div class="space-y-4 p-4 border-2 border-blue-300 rounded-lg bg-blue-50">
+                <h3 class="font-semibold text-lg border-b border-blue-200 pb-2">Add New Question</h3>
+                <div>
+                    <label for="question-type" class="block text-sm font-medium text-gray-700">Question Type</label>
+                    <select id="question-type" class="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500">
+                        <option value="one-word">One Word / Short Answer</option>
+                        <option value="mcq">Multiple Choice (MCQ)</option>
+                        <option value="match">Match the Following</option>
+                        <option value="essay">Essay / Long Answer</option>
+                    </select>
+                </div>
+                <!-- Dynamic form area -->
+                <div id="question-form-area" class="space-y-3"></div>
+                <button id="add-question-btn" class="w-full py-2 px-4 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 shadow-md">
+                    Add Question to Paper
+                </button>
+            </div>
+            
+        </div>
+
+        <!-- ===== PREVIEW PANEL (RIGHT) ===== -->
+        <div id="preview-container" class="w-full md:w-2/3 lg:w-3/4 p-6 md:p-12 bg-gray-100 overflow-y-auto">
+            <!-- Action Buttons -->
+            <div class="flex justify-end space-x-3 mb-4">
+                <button id="new-button" class="py-2 px-5 bg-yellow-500 text-white font-semibold rounded-md hover:bg-yellow-600 shadow-md">New Paper</button>
+                <button id="save-button" class="py-2 px-5 bg-green-600 text-white font-semibold rounded-md hover:bg-green-700 shadow-md">Save Paper</button>
+                <button id="print-button" class="py-2 px-5 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 shadow-md">Print Paper</button>
+            </div>
+            
+            <!-- The "Paper" -->
+            <div id="preview-area" class="bg-white max-w-3xl mx-auto rounded-lg shadow-paper" style="padding: 48px;">
+                <!-- Header will be rendered here -->
+                <div id="preview-header" class="text-center mb-8"></div>
+                <!-- Questions will be rendered here -->
+                <div id="preview-questions" class_="space-y-6"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. Firebase SDKs -->
+    <script type="module">
+        // Import Firebase modules
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, 
+            doc, 
+            getDoc, 
+            setDoc, 
+            addDoc, 
+            deleteDoc, 
+            onSnapshot, 
+            collection, 
+            query,
+            setLogLevel
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Firebase Config (DO NOT EDIT) ---
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        
+        // --- App State ---
+        let app, auth, db;
+        let userId;
+        let dbCollectionPath;
+        
+        // Default state for a new paper
+        const defaultPaperState = {
+            firestoreId: null,
+            header: {
+                schoolName: "My School",
+                examName: "Mid-Term Examination",
+                year: "2024-25",
+                maxScore: "100",
+                time: "3 Hours",
+                direction: "ltr",
+                fontFamily: "font-serif",
+                // NEW header font controls
+                schoolNameSize: "text-3xl",
+                schoolNameBold: true,
+                examNameSize: "text-2xl",
+                examNameBold: false,
+                infoLineSize: "text-base",
+                infoLineBold: false,
+                // NEW layout controls
+                padding: 48,
+                questionSpacing: 24,
+                mcqTwoColumn: false
+            },
+            questions: []
+        };
+        
+        let currentPaper = JSON.parse(JSON.stringify(defaultPaperState)); // Deep copy
+
+        // --- DOM Elements ---
+        const elements = {
+            // Header
+            schoolName: document.getElementById('school-name'),
+            schoolNameSize: document.getElementById('school-name-size'),
+            schoolNameBold: document.getElementById('school-name-bold'),
+            examName: document.getElementById('exam-name'),
+            examNameSize: document.getElementById('exam-name-size'),
+            examNameBold: document.getElementById('exam-name-bold'),
+            examYear: document.getElementById('exam-year'),
+            maxScore: document.getElementById('max-score'),
+            examTime: document.getElementById('exam-time'),
+            infoLineSize: document.getElementById('info-line-size'),
+            infoLineBold: document.getElementById('info-line-bold'),
+            // Display
+            fontFamily: document.getElementById('font-family'),
+            paperPadding: document.getElementById('paper-padding'),
+            questionSpacing: document.getElementById('question-spacing'),
+            mcqTwoColumn: document.getElementById('mcq-two-column'),
+            rtlToggle: document.getElementById('rtl-toggle'),
+            // Question Builder
+            questionType: document.getElementById('question-type'),
+            questionFormArea: document.getElementById('question-form-area'),
+            addQuestionBtn: document.getElementById('add-question-btn'),
+            // Preview
+            previewHeader: document.getElementById('preview-header'),
+            previewQuestions: document.getElementById('preview-questions'),
+            previewArea: document.getElementById('preview-area'),
+            // Actions
+            printButton: document.getElementById('print-button'),
+            saveButton: document.getElementById('save-button'),
+            newButton: document.getElementById('new-button'),
+            // DB & Messages
+            messageBar: document.getElementById('message-bar'),
+            savedPapersList: document.getElementById('saved-papers-list')
+        };
+        
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            initFirebase();
+            setupEventListeners();
+            renderQuestionForm(); // Initial render for default type
+            renderPreview();
+            updateHeaderForm();
+        });
+
+        async function initFirebase() {
+            try {
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                setLogLevel('Debug'); // Enable Firestore logging
+
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        dbCollectionPath = `artifacts/${appId}/users/${userId}/questionPapers`;
+                        console.log("User authenticated. UID:", userId);
+                        setupOnSnapshot(); // Start listening for saved papers
+                    } else {
+                        console.log("User signed out or not authenticated.");
+                        userId = null;
+                        dbCollectionPath = null;
+                    }
+                });
+
+            } catch (error) {
+                console.error("Firebase Init Error:", error);
+                showMessage("Error connecting to database.", "error");
+            }
+        }
+        
+        // --- Firestore Realtime Listener ---
+        function setupOnSnapshot() {
+            if (!dbCollectionPath) return;
+
+            const q = query(collection(db, dbCollectionPath));
+            
+            onSnapshot(q, (snapshot) => {
+                elements.savedPapersList.innerHTML = ""; // Clear list
+                if (snapshot.empty) {
+                    elements.savedPapersList.innerHTML = '<p class="text-gray-500 text-sm">No saved papers found.</p>';
+                    return;
+                }
+                
+                snapshot.docs.forEach(doc => {
+                    const paper = doc.data();
+                    const paperName = paper.header?.examName || paper.header?.schoolName || 'Untitled Paper';
+                    const paperId = doc.id;
+                    
+                    const item = document.createElement('div');
+                    item.className = "flex justify-between items-center p-2 bg-white rounded shadow-sm";
+                    item.innerHTML = `
+                        <span class="text-sm truncate">${paperName}</span>
+                        <div class="flex-shrink-0 space-x-1">
+                            <button data-id="${paperId}" class="load-btn text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600">Load</button>
+                            <button data-id="${paperId}" class="delete-btn text-xs bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600">Del</button>
+                        </div>
+                    `;
+                    elements.savedPapersList.appendChild(item);
+                });
+            }, (error) => {
+                console.error("onSnapshot error: ", error);
+                showMessage("Error fetching saved papers.", "error");
+            });
+        }
+        
+        // --- Event Listeners ---
+        function setupEventListeners() {
+            // Header inputs
+            elements.schoolName.addEventListener('input', (e) => { currentPaper.header.schoolName = e.target.value; renderPreview(); });
+            elements.schoolNameSize.addEventListener('change', (e) => { currentPaper.header.schoolNameSize = e.target.value; renderPreview(); });
+            elements.schoolNameBold.addEventListener('click', (e) => { 
+                currentPaper.header.schoolNameBold = !currentPaper.header.schoolNameBold; 
+                e.target.classList.toggle('active', currentPaper.header.schoolNameBold);
+                renderPreview(); 
+            });
+            
+            elements.examName.addEventListener('input', (e) => { currentPaper.header.examName = e.target.value; renderPreview(); });
+            elements.examNameSize.addEventListener('change', (e) => { currentPaper.header.examNameSize = e.target.value; renderPreview(); });
+            elements.examNameBold.addEventListener('click', (e) => { 
+                currentPaper.header.examNameBold = !currentPaper.header.examNameBold; 
+                e.target.classList.toggle('active', currentPaper.header.examNameBold);
+                renderPreview(); 
+            });
+
+            elements.examYear.addEventListener('input', (e) => { currentPaper.header.year = e.target.value; renderPreview(); });
+            elements.maxScore.addEventListener('input', (e) => { currentPaper.header.maxScore = e.target.value; renderPreview(); });
+            elements.examTime.addEventListener('input', (e) => { currentPaper.header.time = e.target.value; renderPreview(); });
+            elements.infoLineSize.addEventListener('change', (e) => { currentPaper.header.infoLineSize = e.target.value; renderPreview(); });
+            elements.infoLineBold.addEventListener('click', (e) => { 
+                currentPaper.header.infoLineBold = !currentPaper.header.infoLineBold; 
+                e.target.classList.toggle('active', currentPaper.header.infoLineBold);
+                renderPreview(); 
+            });
+
+            // Display inputs
+            elements.fontFamily.addEventListener('change', (e) => { currentPaper.header.fontFamily = e.target.value; renderPreview(); });
+            elements.paperPadding.addEventListener('input', (e) => { currentPaper.header.padding = e.target.value; renderPreview(); });
+            elements.questionSpacing.addEventListener('input', (e) => { currentPaper.header.questionSpacing = e.target.value; renderPreview(); });
+            elements.mcqTwoColumn.addEventListener('change', (e) => { currentPaper.header.mcqTwoColumn = e.target.checked; renderPreview(); });
+            elements.rtlToggle.addEventListener('click', () => {
+                currentPaper.header.direction = currentPaper.header.direction === 'ltr' ? 'rtl' : 'ltr';
+                renderPreview();
+            });
+
+            // Question builder
+            elements.questionType.addEventListener('change', renderQuestionForm);
+            elements.addQuestionBtn.addEventListener('click', addQuestion);
+
+            // Main actions
+            elements.printButton.addEventListener('click', () => window.print());
+            elements.newButton.addEventListener('click', resetApp);
+            elements.saveButton.addEventListener('click', saveQuestionPaper);
+
+            // Saved papers list (Event Delegation)
+            elements.savedPapersList.addEventListener('click', (e) => {
+                const id = e.target.dataset.id;
+                if (!id) return;
+                
+                if (e.target.classList.contains('load-btn')) {
+                    loadPaper(id);
+                } else if (e.target.classList.contains('delete-btn')) {
+                    showConfirm("Delete Paper?", "Are you sure you want to delete this paper? This cannot be undone.", () => {
+                         deletePaper(id);
+                    });
+                }
+            });
+        }
+        
+        // --- Question Form Logic ---
+        function renderQuestionForm() {
+            const type = elements.questionType.value;
+            // COMMON controls for all question types
+            let commonControls = `
+                <div class="grid grid-cols-2 gap-2 pt-2 border-t">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Font Size</label>
+                        <select id="q-font-size" class="w-full p-2 border rounded-md text-sm">
+                            <option value="text-sm">Small</option>
+                            <option value="text-base" selected>Base</option>
+                            <option value="text-lg">Large</option>
+                            <option value="text-xl">Extra Large</option>
+                        </select>
+                    </div>
+                    <div class="flex flex-col justify-between">
+                         <label class="block text-sm font-medium text-gray-700">Style</label>
+                        <div class="flex items-center">
+                            <input id="q-is-bold" type="checkbox" class="h-4 w-4 text-blue-600 border-gray-300 rounded">
+                            <label for="q-is-bold" class="ml-2 block text-sm text-gray-900">Bold</label>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            let html = `
+                <textarea id="q-text" class="w-full p-2 border rounded-md" rows="3" placeholder="Enter Question Text"></textarea>
+                <input type="text" id="q-image" class="w-full p-2 border rounded-md" placeholder="Image URL (Optional)">
+                <input type="number" id="q-marks" class="w-full p-2 border rounded-md" placeholder="Marks">
+            `;
+            
+            switch (type) {
+                case 'mcq':
+                    html += `
+                        <div id="mcq-options" class="space-y-2">
+                            <label class="font-medium">Options:</label>
+                            <div class="flex space-x-2">
+                                <input type="text" class="mcq-option w-full p-2 border rounded-md" placeholder="Option 1">
+                                <button type="button" class="mcq-remove-option bg-red-200 text-red-700 px-2 rounded hidden">-</button>
+                            </div>
+                        </div>
+                        <button type="button" id="add-mcq-option" class="text-sm text-blue-600 hover:underline">+ Add Option</button>
+                        ${commonControls}
+                    `;
+                    break;
+                case 'match':
+                    html = `
+                        <textarea id="q-text" class="w-full p-2 border rounded-md" rows="2" placeholder="Question Title (e.g., Match Column A with Column B)"></textarea>
+                        <input type="number" id="q-marks" class="w-full p-2 border rounded-md" placeholder="Marks (per pair)">
+                        <div class="flex space-x-2">
+                             <input type="text" id="q-col-a-header" class="w-1/2 p-2 border rounded-md" placeholder="Column A Header" value="Column A">
+                             <input type="text" id="q-col-b-header" class="w-1/2 p-2 border rounded-md" placeholder="Column B Header" value="Column B">
+                        </div>
+                        <div id="match-pairs" class="space-y-2">
+                            <label class="font-medium">Pairs:</label>
+                            <div class="flex space-x-2">
+                                <input type="text" class="match-a w-1/2 p-2 border rounded-md" placeholder="Column A">
+                                <input type="text" class="match-b w-1/2 p-2 border rounded-md" placeholder="Column B">
+                                <button type="button" class="match-remove-pair bg-red-200 text-red-700 px-2 rounded hidden">-</button>
+                            </div>
+                        </div>
+                        <button type="button" id="add-match-pair" class="text-sm text-blue-600 hover:underline">+ Add Pair</button>
+                        ${commonControls}
+                    `;
+                    break;
+                case 'one-word':
+                case 'essay':
+                    html += `
+                        <div class="flex items-center">
+                            <input id="q-or-toggle" type="checkbox" class="h-4 w-4 text-blue-600 border-gray-300 rounded">
+                            <label for="q-or-toggle" class="ml-2 block text-sm text-gray-900">Add "OR" Question</label>
+                        </div>
+                        <textarea id="q-or-text" class="w-full p-2 border rounded-md hidden" rows="3" placeholder="Enter 'OR' Question Text"></textarea>
+                        ${commonControls}
+                    `;
+                    break;
+            }
+            
+            elements.questionFormArea.innerHTML = html;
+            
+            // Add dynamic listeners for new buttons
+            if (type === 'mcq') {
+                document.getElementById('add-mcq-option').addEventListener('click', addMcqOption);
+                elements.questionFormArea.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('mcq-remove-option')) {
+                        e.target.parentElement.remove();
+                    }
+                });
+            } else if (type === 'match') {
+                document.getElementById('add-match-pair').addEventListener('click', addMatchPair);
+                elements.questionFormArea.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('match-remove-pair')) {
+                        e.target.parentElement.remove();
+                    }
+                });
+            } else if (type === 'one-word' || type === 'essay') {
+                document.getElementById('q-or-toggle').addEventListener('change', (e) => {
+                    document.getElementById('q-or-text').classList.toggle('hidden', !e.target.checked);
+                });
+            }
+        }
+        
+        function addMcqOption() {
+            const container = document.getElementById('mcq-options');
+            const count = container.querySelectorAll('.mcq-option').length;
+            const newOption = document.createElement('div');
+            newOption.className = "flex space-x-2";
+            newOption.innerHTML = `
+                <input type="text" class="mcq-option w-full p-2 border rounded-md" placeholder="Option ${count + 1}">
+                <button type="button" class="mcq-remove-option bg-red-200 text-red-700 px-2 rounded">-</button>
+            `;
+            container.appendChild(newOption);
+        }
+
+        function addMatchPair() {
+            const container = document.getElementById('match-pairs');
+            const newPair = document.createElement('div');
+            newPair.className = "flex space-x-2";
+            newPair.innerHTML = `
+                <input type="text" class="match-a w-1/2 p-2 border rounded-md" placeholder="Column A">
+                <input type="text" class="match-b w-1/2 p-2 border rounded-md" placeholder="Column B">
+                <button type="button" class="match-remove-pair bg-red-200 text-red-700 px-2 rounded">-</button>
+            `;
+            container.appendChild(newPair);
+        }
+
+        function addQuestion() {
+            const type = elements.questionType.value;
+            const questionText = document.getElementById('q-text')?.value;
+            const marks = document.getElementById('q-marks')?.value;
+            const imageUrl = document.getElementById('q-image')?.value;
+            // NEW per-question style controls
+            const qFontSize = document.getElementById('q-font-size')?.value;
+            const qIsBold = document.getElementById('q-is-bold')?.checked;
+
+            let questionData = {
+                type: type,
+                text: questionText,
+                marks: marks,
+                imageUrl: imageUrl || null,
+                qFontSize: qFontSize,
+                qIsBold: qIsBold
+            };
+            
+            if (type === 'mcq') {
+                questionData.options = Array.from(document.querySelectorAll('.mcq-option')).map(opt => opt.value);
+            } else if (type === 'match') {
+                questionData.colAHeader = document.getElementById('q-col-a-header')?.value;
+                questionData.colBHeader = document.getElementById('q-col-b-header')?.value;
+                const pairsA = Array.from(document.querySelectorAll('.match-a')).map(opt => opt.value);
+                const pairsB = Array.from(document.querySelectorAll('.match-b')).map(opt => opt.value);
+                questionData.pairs = pairsA.map((a, index) => ({ a: a, b: pairsB[index] }));
+            } else if (type === 'one-word' || type === 'essay') {
+                const orToggle = document.getElementById('q-or-toggle');
+                if (orToggle?.checked) {
+                    questionData.orQuestion = document.getElementById('q-or-text')?.value;
+                }
+            }
+            
+            currentPaper.questions.push(questionData);
+            renderPreview();
+            renderQuestionForm(); // Reset form
+        }
+
+        // --- Preview Rendering ---
+        function renderPreview() {
+            const { header, questions } = currentPaper;
+            
+            // 1. Render Header
+            const schoolNameClasses = `${header.schoolNameSize} ${header.schoolNameBold ? 'font-bold' : ''}`;
+            const examNameClasses = `${header.examNameSize} ${header.examNameBold ? 'font-bold' : ''}`;
+            const infoLineClasses = `${header.infoLineSize} ${header.infoLineBold ? 'font-bold' : ''}`;
+            
+            elements.previewHeader.innerHTML = `
+                <h1 class="${schoolNameClasses}">${header.schoolName || 'School Name'}</h1>
+                <h2 class="${examNameClasses} mt-1">${header.examName || 'Exam Name'}</h2>
+                <div class="flex justify-between items-center mt-4 ${infoLineClasses}">
+                    <span>${header.year || 'Year'}</span>
+                    <span>Time: ${header.time || 'Time'}</span>
+                    <span>Max Score: ${header.maxScore || 'Score'}</span>
+                </div>
+                <hr class="my-6 border-t-2 border-gray-300">
+            `;
+            
+            // 2. Apply Container Styles
+            elements.previewArea.style.direction = header.direction;
+            elements.previewArea.style.padding = `${header.padding}px`;
+            elements.previewArea.className = `bg-white max-w-3xl mx-auto rounded-lg shadow-paper ${header.fontFamily}`;
+
+            // 3. Render Questions
+            elements.previewQuestions.innerHTML = ""; // Clear old questions
+            let questionNumber = 1;
+
+            questions.forEach((q) => {
+                const questionEl = document.createElement('div');
+                // Apply per-question styles
+                const qClasses = `${q.qFontSize || 'text-base'} ${q.qIsBold ? 'font-bold' : ''}`;
+                questionEl.className = `question-item ${qClasses}`;
+                questionEl.style.marginBottom = `${header.questionSpacing}px`;
+                
+                let questionContent = `
+                    <div class="flex justify-between">
+                        <div class="flex-1">
+                            <strong style="margin-right: 8px;">Q${questionNumber}.</strong>
+                            <span>${q.text.replace(/\n/g, '<br>')}</span>
+                        </div>
+                        <div class="flex-shrink-0 pl-4 font-bold">[${q.marks}]</div>
+                    </div>
+                `;
+
+                if (q.imageUrl) {
+                    questionContent += `
+                        <div class="my-4 flex ${header.direction === 'rtl' ? 'justify-end' : 'justify-start'}">
+                            <img src="${q.imageUrl}" 
+                                 onerror="this.src='https://placehold.co/400x200/eee/ccc?text=Image+Not+Found';" 
+                                 alt="Diagram" 
+                                 class="max-w-xs border rounded shadow-sm">
+                        </div>
+                    `;
+                }
+
+                if (q.type === 'mcq') {
+                    const optionsList = q.options.map((opt, i) => {
+                        return `<li class="ml-8">${String.fromCharCode(97 + i)}) ${opt}</li>`; // a), b), c)
+                    }).join('');
+                    const mcqGridClass = header.mcqTwoColumn ? 'grid grid-cols-2 gap-x-4' : '';
+                    questionContent += `<ol style="list-style: none; padding-left: 20px;" class="${mcqGridClass}" type="a">${optionsList}</ol>`;
+                }
+                
+                if (q.type === 'match') {
+                    // Shuffle Column B
+                    let colB = q.pairs.map(p => p.b);
+                    for (let i = colB.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [colB[i], colB[j]] = [colB[j], colB[i]];
+                    }
+                    
+                    const colAHeader = q.colAHeader || 'Column A';
+                    const colBHeader = q.colBHeader || 'Column B';
+                    const colBHtml = colB.map((b, i) => `<tr><td class="border px-4 py-2">${String.fromCharCode(97 + i)}) ${b}</td></tr>`).join('');
+                    
+                    questionContent = `
+                        <div class="flex justify-between">
+                            <strong style="margin-right: 8px;">Q${questionNumber}.</strong>
+                            <div class="flex-1">${q.text.replace(/\n/g, '<br>')}</div>
+                            <div class="flex-shrink-0 pl-4 font-bold">[${q.marks * q.pairs.length}]</div>
+                        </div>
+                        <div class="flex flex-col md:flex-row justify-around my-4" style="page-break-inside: avoid;">
+                            <table class="w-full md:w-5/12 border-collapse">
+                                <thead><tr><th class="border px-4 py-2 bg-gray-100">${colAHeader}</th></tr></thead>
+                                <tbody>${q.pairs.map((p, i) => `<tr><td class="border px-4 py-2">${i+1}. ${p.a}</td></tr>`).join('')}</tbody>
+                            </table>
+                            <table class="w-full md:w-5/12 border-collapse mt-4 md:mt-0">
+                                <thead><tr><th class="border px-4 py-2 bg-gray-100">${colBHeader}</th></tr></thead>
+                                <tbody>${colBHtml}</tbody>
+                            </table>
+                        </div>
+                    `;
+                }
+                
+                if (q.orQuestion) {
+                    questionContent += `
+                        <div class="my-3 text-center font-bold">OR</div>
+                        <div class="flex justify-between">
+                            <div class="flex-1">
+                                <span>${q.orQuestion.replace(/\n/g, '<br>')}</span>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                questionEl.innerHTML = questionContent;
+                elements.previewQuestions.appendChild(questionEl);
+                questionNumber++;
+            });
+        }
+        
+        // --- App Actions (Save, Load, Delete, New) ---
+        
+        async function saveQuestionPaper() {
+            if (!dbCollectionPath) {
+                showMessage("Database not ready. Please wait.", "error");
+                return;
+            }
+
+            let paperName = currentPaper.header.examName.trim() || "Untitled Paper";
+            currentPaper.header.examName = paperName; // Save it back
+
+            const { firestoreId, ...paperData } = currentPaper;
+
+            try {
+                let docRef;
+                if (currentPaper.firestoreId) {
+                    docRef = doc(db, dbCollectionPath, currentPaper.firestoreId);
+                    await setDoc(docRef, paperData, { merge: true });
+                } else {
+                    docRef = await addDoc(collection(db, dbCollectionPath), paperData);
+                    currentPaper.firestoreId = docRef.id; // Store new ID
+                }
+                showMessage(`Paper "${paperName}" saved successfully!`, "success");
+            } catch (error) {
+                console.error("Error saving paper: ", error);
+                showMessage(`Error saving paper: ${error.message}`, "error");
+            }
+        }
+        
+        async function loadPaper(id) {
+            if (!dbCollectionPath) return;
+            try {
+                const docRef = doc(db, dbCollectionPath, id);
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists()) {
+                    // Start with defaults, then merge saved data
+                    const loadedData = docSnap.data();
+                    currentPaper = JSON.parse(JSON.stringify(defaultPaperState)); // Reset to default
+                    currentPaper.firestoreId = docSnap.id;
+                    currentPaper.questions = loadedData.questions || [];
+                    // Merge header, ensuring all new properties have a default
+                    currentPaper.header = { ...defaultPaperState.header, ...loadedData.header };
+                    
+                    renderPreview();
+                    updateHeaderForm();
+                    showMessage(`Loaded paper: ${currentPaper.header.examName}`, "success");
+                } else {
+                    showMessage("Error: Paper not found.", "error");
+                }
+            } catch (error) {
+                console.error("Error loading paper: ", error);
+                showMessage(`Error loading paper: ${error.message}`, "error");
+            }
+        }
+
+        async function deletePaper(id) {
+            if (!dbCollectionPath) return;
+            try {
+                await deleteDoc(doc(db, dbCollectionPath, id));
+                showMessage("Paper deleted successfully.", "success");
+                if (currentPaper.firestoreId === id) {
+                    resetApp(); // Clear app if the deleted paper was loaded
+                }
+            } catch (error) {
+                console.error("Error deleting paper: ", error);
+                showMessage(`Error deleting paper: ${error.message}`, "error");
+            }
+        }
+
+        function resetApp() {
+            currentPaper = JSON.parse(JSON.stringify(defaultPaperState)); // Deep copy
+            renderPreview();
+            updateHeaderForm();
+            renderQuestionForm();
+            showMessage("New paper created. Start building!", "info");
+        }
+
+        // --- UI Helpers ---
+        
+        function updateHeaderForm() {
+            const { header } = currentPaper;
+            elements.schoolName.value = header.schoolName;
+            elements.schoolNameSize.value = header.schoolNameSize;
+            elements.schoolNameBold.classList.toggle('active', header.schoolNameBold);
+            
+            elements.examName.value = header.examName;
+            elements.examNameSize.value = header.examNameSize;
+            elements.examNameBold.classList.toggle('active', header.examNameBold);
+            
+            elements.examYear.value = header.year;
+            elements.maxScore.value = header.maxScore;
+            elements.examTime.value = header.time;
+            elements.infoLineSize.value = header.infoLineSize;
+            elements.infoLineBold.classList.toggle('active', header.infoLineBold);
+
+            elements.fontFamily.value = header.fontFamily;
+            elements.paperPadding.value = header.padding;
+            elements.questionSpacing.value = header.questionSpacing;
+            elements.mcqTwoColumn.checked = header.mcqTwoColumn;
+        }
+
+        function showMessage(message, type = "info") {
+            const bar = elements.messageBar;
+            bar.textContent = message;
+            bar.classList.remove('hidden', 'bg-green-500', 'bg-red-500', 'bg-blue-500');
+
+            if (type === "success") {
+                bar.classList.add('bg-green-500');
+            } else if (type === "error") {
+                bar.classList.add('bg-red-500');
+            } else {
+                bar.classList.add('bg-blue-500');
+            }
+            
+            bar.classList.remove('hidden');
+            setTimeout(() => {
+                bar.classList.add('hidden');
+            }, 3000);
+        }
+
+        function showConfirm(title, message, onConfirm) {
+            const existingModal = document.getElementById('confirm-modal');
+            if (existingModal) existingModal.remove();
+
+            const modal = document.createElement('div');
+            modal.id = 'confirm-modal';
+            modal.className = 'fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50';
+            modal.innerHTML = `
+                <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm">
+                    <h3 class="text-lg font-bold mb-2">${title}</h3>
+                    <p class="text-sm text-gray-700 mb-6">${message}</p>
+                    <div class="flex justify-end space-x-3">
+                        <button id="confirm-cancel" class="px-4 py-2 bg-gray-200 rounded-md hover:bg-gray-300">Cancel</button>
+                        <button id="confirm-ok" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">Delete</button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+
+            document.getElementById('confirm-cancel').onclick = () => {
+                modal.remove();
+            };
+            document.getElementById('confirm-ok').onclick = () => {
+                onConfirm();
+                modal.remove();
+            };
+        }
+
+    </script>
+</body>
+</html>
