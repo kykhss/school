@@ -671,7 +671,7 @@
   <!-- Top App Bar -->
    <div id="appbar" class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3 flex-wrap p-1" style="gap:2px;">
         <div class="d-flex g-1 gap-1 align-items-center">
-            <button id="sidebar-toggle-btn" class="btn btn-primary d-lg-none">
+            <button id="sidebar-toggle-btn" class="btn btn-primary p-1">
         <i class="fas fa-bars"></i>
         </button>
             <button class="btn btn-sm btn-outline-secondary me-1" onclick="history.back()">
@@ -1141,7 +1141,7 @@ async function getData(storeName, idOrQueryObj = null) {
         const isById = typeof idOrQueryObj === 'string';
         if (!navigator.onLine) showAlert('You are offline. Data may be outdated.', 'warning');
         if (navigator.onLine){
-            attachDataListeners([storeName]);
+           await attachDataListeners([storeName]);
         }
         
         // --- PATH 1: Fetch by ID ---
@@ -1164,6 +1164,8 @@ async function getData(storeName, idOrQueryObj = null) {
             try {
                 if (storeName === 'marks') {
                     //await syncDataForUser();
+                    return [];
+
                 } else {
                     attachDataListeners([storeName]);
                 }
@@ -1495,54 +1497,71 @@ let activeListeners = {};
  * @param {string[]} collectionsToWatch - An array of collection names to listen to.
  */
 const collectionMap = {
-        classes: { setter: data => classes = data, renderer: null },
-        subjects: { setter: data => subjects = data, renderer: null },
-        students: { setter: data => students = data, renderer: null },
-        teachers: { setter: data => teachers = data, renderer: null },
-        exams: { setter: data => exams = data, renderer: renderExamsList },
-        classroomSubjects: { setter: data => classroomSubjects = data, renderer: updateTeacherAssignedClasses },
-        examSchedules: { setter: data => examSchedules = data, renderer: null },
-        examRoomAllocationRules: { setter: data => examRoomAllocationRules = data, renderer: null },
-        attendance: { setter: data => attendance = data, renderer: null },
-        holidays: { setter: data => holidays = data, renderer: null },
-        syllabuses: { setter: data => syllabuses = data, renderer: null },
-        syllabusCompletion: { setter: data => syllabusCompletion = data, renderer: null },
-        chapters: { setter: data => chapters = data, renderer: null },
-        books: { setter: data => books = data, renderer: null },
-        bookIssuances: { setter: data => bookIssuances = data, renderer: null },
-        bookAllotments: {setter: data => bookAllotments = data, renderer: null },
-        feeStructures: { setter: data => feeStructures = data, renderer: null },
-        studentFeeSetups: { setter: data => studentFeeSetups = data, renderer: null },
-        receipts: { setter: data => receipts = data, renderer: null },
-        forms: { setter: data => forms = data, renderer: updateAllNotifications },
-        formResponses: { setter: data => formResponses = data, renderer: null },
-        reports: { setter: data => reports = data, renderer: null },
-        schoolDetails: { setter: data => { if (data.length > 0) schoolDetails = data[0]; }, renderer: null },
-        vehicles: { setter: data => vehicles = data, renderer: updateAllNotifications },
-        festHouses: { setter: data => festHouses = data, renderer: null },
-        fests: { setter: data => fests = data, renderer: null },
-        festEvents: { setter: data => festEvents = data, renderer: null },
-        festGroups: { setter: data => festGroups = data, renderer: null },
-        festRegistrations: { setter: data => festRegistrations = data, renderer: null },
-        festResults: { setter: data => festResults = data, renderer: null },
-        festSettings: { setter: data => { if (data.length > 0) festSettings = data[0]; }, renderer: null },
-        timetables: { setter: data => timetables = data, renderer: null },
-        examRooms: { setter: data => examRooms = data, renderer: null },
-        pendingPayments: { setter: data => pendingPayments = data, renderer: null },
-    examDuties: { setter: data => examDuties = data, renderer: null },
-    examAbsentees: { setter: data => examAbsentees = data, renderer: checkAbsenteeNotifications },
-    examRegistrationSettings: { setter: data => { if (data.length > 0) examRegistrationSettings = data[0]; }, renderer: null }, // Assuming it's a single doc
-    
-    
-    };
+    // Core Data
+    classes: { setter: data => classes = data, renderer: window.renderClassManagement },
+    subjects: { setter: data => subjects = data, renderer: window.renderSubjectManagement },
+    students: { setter: data => students = data, renderer: window.renderStudentManagement },
+    teachers: { setter: data => teachers = data, renderer: window.renderTeacherManagement },
+    schoolDetails: { setter: data => { if (data.length > 0) schoolDetails = data[0]; }, renderer: window.renderSchoolDetailsModule },
+    reports: { setter: data => reports = data, renderer: window.renderReportsModule },
+
+    // Attendance & Holidays
+    attendance: { setter: data => attendance = data, renderer: window.renderAttendanceManagement },
+    holidays: { setter: data => holidays = data, renderer: window.renderHolidayManagement },
+
+    // Syllabus
+    syllabuses: { setter: data => syllabuses = data, renderer: window.renderSyllabusTracker },
+    syllabusCompletion: { setter: data => syllabusCompletion = data, renderer: window.renderSyllabusTracker },
+    chapters: { setter: data => chapters = data, renderer: window.renderSyllabusTracker },
+
+    // Library
+    books: { setter: data => books = data, renderer: window.renderLibraryManagement },
+    bookIssuances: { setter: data => bookIssuances = data, renderer: window.renderLibraryManagement },
+    bookAllotments: {setter: data => bookAllotments = data, renderer: window.renderLibraryManagement },
+
+    // Fees
+    feeStructures: { setter: data => feeStructures = data, renderer: window.renderFeeManagement },
+    studentFeeSetups: { setter: data => studentFeeSetups = data, renderer: window.renderFeeManagement },
+    receipts: { setter: data => receipts = data, renderer: window.renderFeeManagement },
+    pendingPayments: { setter: data => pendingPayments = data, renderer: window.renderFeeManagement },
+
+    // Fests
+    festHouses: { setter: data => festHouses = data, renderer: window.renderFestManagement },
+    fests: { setter: data => fests = data, renderer: window.renderFestManagement },
+    festEvents: { setter: data => festEvents = data, renderer: window.renderFestManagement },
+    festGroups: { setter: data => festGroups = data, renderer: window.renderFestManagement },
+    festRegistrations: { setter: data => festRegistrations = data, renderer: window.renderFestManagement },
+    festResults: { setter: data => festResults = data, renderer: window.renderFestManagement },
+    festSettings: { setter: data => { if (data.length > 0) festSettings = data[0]; }, renderer: window.renderFestManagement },
+
+    // Timetable
+    timetables: { setter: data => timetables = data, renderer: window.renderTimetableManagement },
+    classroomSubjects: { setter: data => classroomSubjects = data, renderer: window.renderSubjectAllocation },
+
+    // Exam Management (Main)
+    exams: { setter: data => exams = data, renderer: window.renderExamControlModule },
+    examSchedules: { setter: data => examSchedules = data, renderer: window.renderExamControlModule },
+    // Exam Control (Sub-module of Exam)
+    examRooms: { setter: data => examRooms = data, renderer: window.renderExamControlModule },
+    examRoomAllocationRules: { setter: data => examRoomAllocationRules = data, renderer: window.renderExamControlModule },
+    examDuties: { setter: data => examDuties = data, renderer: window.renderExamControlModule },
+    examRegistrationSettings: { setter: data => { if (data.length > 0) examRegistrationSettings = data[0]; }, renderer: window.renderExamControlModule },
+
+    // Special Notification/Updating Renderers (These are correct)
+    forms: { setter: data => forms = data, renderer: updateAllNotifications },
+    formResponses: { setter: data => formResponses = data, renderer: window.renderFormManagement },
+    vehicles: { setter: data => vehicles = data, renderer: updateAllNotifications },
+    examAbsentees: { setter: data => examAbsentees = data, renderer: checkAbsenteeNotifications }
+};
 /**
- * Attaches real-time listeners with an intelligent sync strategy and reactive UI updates.
- * When data changes, it updates the local data and then calls the appropriate
- * renderer function ONLY IF the user is currently on the relevant screen.
+ * (REVISED) Attaches real-time listeners with a corrected sync strategy.
+ * This version fixes a bug where the local database was cleared on every delta update.
  * @param {Array<string>} collectionsToWatch - The names of the collections to listen to.
  */
 async function attachDataListeners(collectionsToWatch) {
     if (!collectionsToWatch || collectionsToWatch.length === 0) return;
+    
+    // This Set helps identify which collections have the 'lastUpdated' index
     const smartSyncCollections = new Set();
     for (const tableName in collectionMap) {
         if (appDb[tableName] && appDb[tableName].schema.idxByName.lastUpdated) {
@@ -1551,23 +1570,25 @@ async function attachDataListeners(collectionsToWatch) {
     }
 
     for (const name of collectionsToWatch) {
-        if (activeListeners[name] && dataLoadStatus[name]) continue;
+        if (activeListeners[name] && dataLoadStatus[name]) continue; // Already listening and loaded
 
         const config = collectionMap[name];
         if (!config) {
-            resolvePromiseFor(name);
+            resolvePromiseFor(name); // Resolve promise for non-mapped collections
             continue;
         }
 
         if (activeListeners[name]) {
-            activeListeners[name]();
+            activeListeners[name](); // Unsubscribe old listener
             delete activeListeners[name];
         }
 
         let needsSync = true;
         let localCount = 0;
         let serverCount = 0;
+        let lastLocalSyncTime = new Date(0);
 
+        // --- Smart Sync Check (runs ONCE before attaching listener) ---
         if (smartSyncCollections.has(name)) {
             localCount = await appDb[name].count();
             if (localCount > 0) {
@@ -1575,29 +1596,42 @@ async function attachDataListeners(collectionsToWatch) {
                 const serverCountSnapshot = await getCountFromServer(collectionRef);
                 serverCount = serverCountSnapshot.data().count;
 
-                if (localCount !== serverCount) {
-                    needsSync = true;
-                } else {
-                    const lastLocalSyncTime = await appDb[name].orderBy('lastUpdated').last().then(item => item?.lastUpdated || new Date(0));
+                if (localCount === serverCount) {
+                    // Counts match, now check for recent updates
+                    lastLocalSyncTime = await appDb[name].orderBy('lastUpdated').last().then(item => item?.lastUpdated || new Date(0));
                     const updatesQuery = query(collectionRef, where('lastUpdated', '>', lastLocalSyncTime), limit(1));
                     const updatesSnapshot = await getDocs(updatesQuery);
                     
                     if (updatesSnapshot.empty) {
+                        // Local data is in perfect sync.
                         needsSync = false;
                         const dataFromDB = await appDb[name].toArray();
                         config.setter(dataFromDB);
                         dataLoadStatus[name] = true;
                         resolvePromiseFor(name);
-                        if (config.renderer && Object.values(viewRenderers).includes(config.renderer) && `nav-${Object.keys(viewRenderers).find(key => viewRenderers[key] === config.renderer)}` === document.querySelector('.nav-link.active')?.id) {
-                            config.renderer();
+                        
+                        // Trigger renderer if needed (no changes, just initial load)
+                        if (config.renderer && Object.values(viewRenderers).includes(config.renderer)) {
+                            const activeNavId = document.querySelector('.nav-link.active')?.id;
+                            const rendererNavId = `nav-${Object.keys(viewRenderers).find(key => viewRenderers[key] === config.renderer)}`;
+                            if (activeNavId === rendererNavId) {
+                                config.renderer();
+                            }
                         }
+                    } else {
+                        // Counts match, but newer documents exist (e.g., modified)
+                        needsSync = true; 
                     }
+                } else {
+                    // Counts mismatch, full sync is required
+                    needsSync = true; 
                 }
             }
         }
         
-        if (!needsSync) continue;
+        if (!needsSync) continue; // Skip attaching listener if data is in sync
         
+        // --- Attach Listener ---
         const queriesToExecute = getQueriesForCollection(name);
         if (queriesToExecute.length === 0) {
             dataLoadStatus[name] = true;
@@ -1608,39 +1642,41 @@ async function attachDataListeners(collectionsToWatch) {
         let queriesCompletedInitialSnapshot = 0;
         const expectedInitialSnapshots = queriesToExecute.length;
         const currentCollectionUnsubs = [];
-        let collectedData = {};
+        let collectedData = {}; // In-memory cache
 
         queriesToExecute.forEach(qInfo => {
             const unsub = onSnapshot(qInfo.query, async snapshot => {
+
+                // --- THIS BLOCK IS THE FIX ---
+                // It only runs on the *very first* snapshot from this listener.
                 if (!dataLoadStatus[name]) {
                     queriesCompletedInitialSnapshot++;
                     if (queriesCompletedInitialSnapshot >= expectedInitialSnapshots) {
                         dataLoadStatus[name] = true;
                         resolvePromiseFor(name);
+                        
+                        // We check for full sync *inside* this block.
+                        // This ensures appDb[name].clear() runs ONLY ONCE.
+                        if (needsSync && localCount !== serverCount) {
+                            console.log(`[Sync] Mismatch detected for ${name}. Clearing local cache for full refresh.`);
+                            await appDb[name].clear();
+                        }
                     }
                 }
+                // --- END OF FIX ---
 
                 const changes = snapshot.docChanges();
-                if (needsSync && localCount !== serverCount) {
-                    await appDb[name].clear();
-                }
-                if (changes.length === 0 && snapshot.size > 0 && needsSync) {
-                    if (config.renderer) {
-                       const activeNavId = document.querySelector('.nav-link.active')?.id;
-                       const rendererNavId = `nav-${Object.keys(viewRenderers).find(key => viewRenderers[key] === config.renderer)}`;
-                       if (activeNavId === rendererNavId) {
-                           config.renderer();
-                       }
-                    }
-                    return;
-                }
-                
+                if (changes.length === 0) return; // No changes to process
+
+                // Process changes
                 const { toAddOrUpdate, toDelete } = processFirestoreChanges(changes);
                 
+                // Update in-memory data
                 toDelete.forEach(id => delete collectedData[id]);
                 toAddOrUpdate.forEach(doc => collectedData[doc.id] = doc);
                 config.setter(Object.values(collectedData));
                 
+                // Update IndexedDB
                 try {
                     const store = appDb[name];
                     await appDb.transaction('rw', store, async () => {
@@ -1651,13 +1687,11 @@ async function attachDataListeners(collectionsToWatch) {
                     console.error(`Error applying updates to ${name} in IndexedDB:`, error);
                 }
 
-                // --- THIS IS THE KEY CHANGE ---
-                // After data is updated, check if a renderer exists and if the user
-                // is currently on the view that needs to be updated.
+                // Re-render if the user is on the matching view
                 if (config.renderer) {
                    const activeNavId = document.querySelector('.nav-link.active')?.id;
+                   // Find the viewId that corresponds to this renderer
                    const rendererNavId = `nav-${Object.keys(viewRenderers).find(key => viewRenderers[key] === config.renderer)}`;
-                   // Only re-render if the active tab matches the renderer for this data.
                    if (activeNavId === rendererNavId) {
                        config.renderer();
                    }
@@ -6629,9 +6663,9 @@ const exportReportToPdf = (examId) => {
 function renderExamScheduleTab() {
     const container = document.getElementById('schedule');
     if (!container) return;
-
-    // Conditionally generate class options based on user role
+    
     let classOptions = '';
+    // (Your existing classOptions logic is correct)
     if (currentUserRole === 'teacher') {
         const teacherAllocations = classroomSubjects.filter(cs => cs.teacherId === selectedUser.id);
         const uniqueClassIds = [...new Set(teacherAllocations.map(a => a.classId))];
@@ -6639,7 +6673,7 @@ function renderExamScheduleTab() {
             const c = classes.find(cls => cls.id === classId);
             return c ? `<option value="${c.id}">${c.name}</option>` : '';
         }).join('');
-    } else { // For admin
+    } else {
         classOptions = classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
     }
 
@@ -6653,21 +6687,28 @@ function renderExamScheduleTab() {
             </div>
         </div>
         <div id="schedule-sheet">
-            <p class="text-center p-5 text-muted">Please select an exam, class, and at least one division to create the schedule.</p>
+            <p class="text-center p-5 text-muted">Please select a class and at least one division to create the schedule.</p>
         </div>`;
     
     const examSelect = document.getElementById('sched-exam');
     const classSelect = document.getElementById('sched-class');
     const divisionContainer = document.getElementById('sched-division-checkboxes');
 
+    // --- THIS IS THE NEW LOGIC ---
+    if (selectedExamForControl) {
+        examSelect.value = selectedExamForControl;
+        examSelect.disabled = true;
+    }
+    // --- END NEW LOGIC ---
+
     const updateScheduleView = () => {
         const classId = classSelect.value;
         const selectedDivisions = Array.from(divisionContainer.querySelectorAll('input:checked')).map(cb => cb.value);
-        const examId = examSelect.value;
+        const examId = examSelect.value; // Will be the pre-selected one
         if (classId && selectedDivisions.length > 0 && examId) {
             loadScheduleSheet(examId, classId, selectedDivisions);
         } else {
-            document.getElementById('schedule-sheet').innerHTML = `<p class="text-center p-5 text-muted">Please select an exam, class, and at least one division.</p>`;
+            document.getElementById('schedule-sheet').innerHTML = `<p class="text-center p-5 text-muted">Please select a class and at least one division.</p>`;
         }
     };
 
@@ -6675,7 +6716,6 @@ function renderExamScheduleTab() {
         const selectedClassId = classSelect.value;
         divisionContainer.innerHTML = '';
         let divisionsToShow = [];
-
         if (currentUserRole === 'teacher') {
             const teacherAllocationsForClass = classroomSubjects.filter(cs => cs.teacherId === selectedUser.id && cs.classId === selectedClassId);
             divisionsToShow = [...new Set(teacherAllocationsForClass.map(a => a.division))];
@@ -6683,13 +6723,8 @@ function renderExamScheduleTab() {
             const cls = classes.find(c => c.id === selectedClassId);
             if (cls) divisionsToShow = cls.divisions;
         }
-        
         divisionsToShow.forEach(d => {
-            divisionContainer.innerHTML += `
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" value="${d}" id="div_${d}">
-                    <label class="form-check-label" for="div_${d}">${d}</label>
-                </div>`;
+            divisionContainer.innerHTML += `<div class="form-check"><input class="form-check-input" type="checkbox" value="${d}" id="div_${d}"><label class="form-check-label" for="div_${d}">${d}</label></div>`;
         });
         updateScheduleView();
     });
@@ -6697,7 +6732,9 @@ function renderExamScheduleTab() {
     divisionContainer.addEventListener('change', updateScheduleView);
     examSelect.addEventListener('change', updateScheduleView);
     
+    // Auto-trigger the first class if it exists
     if (classSelect.options.length > 0) {
+        classSelect.value = classSelect.options[0].value;
         classSelect.dispatchEvent(new Event('change'));
     }
 }
@@ -6722,7 +6759,7 @@ async function loadScheduleSheet(examId, classId, divisions) {
     }
 
     relevantSubjects.forEach(cs => subjectIds.add(cs.subjectId));
-    const allocatedSubjects = Array.from(subjectIds).map(id => subjects.find(s => s.id === id)).filter(Boolean).sort((a,b)=>a.name.localeCompare(b.name));
+    const allocatedSubjects = Array.from(subjectIds).map(id => subjects.find(s => s.id === id && s.sector === selectedExam.sector)).filter(Boolean).sort((a,b)=>a.name.localeCompare(b.name));
 
     if (allocatedSubjects.length === 0) {
         container.innerHTML = `<div class="alert alert-warning">No subjects allocated for this combination that match your permissions.</div>`;
@@ -6975,7 +7012,11 @@ function renderConsolidatedTimetableView() {
 
     const examSelect = document.getElementById('consolidated-exam');
     const divisionSelect = document.getElementById('consolidated-division');
-
+// --- THIS IS THE NEW LOGIC ---
+    if (selectedExamForControl) {
+        examSelect.value = selectedExamForControl;
+        examSelect.readOnly = true;
+    }
     const displayTable = () => {
         displayConsolidatedTimetable(examSelect.value, divisionSelect.value);
     };
@@ -7477,11 +7518,11 @@ function processExamResultsData(studentsInClass, schedulesForClass, marksObject,
                 teGrade = gradeFunc(te, maxTE);
                 ceGrade = gradeFunc(ce, maxCE);
 
-                if (grade === 'E' || grade === 'F') finalStatus = 'FAIL';
+                if (grade === 'E' || grade === 'F') finalStatus!=="NC"?  finalStatus='FAIL':"";
                 grandTotalMarks += total;
                 grandMaxMarks += maxTotal;
             } else {
-                finalStatus = 'FAIL';
+                finalStatus = 'NC';
                 if (maxTotal > 0) grandMaxMarks += maxTotal;
             }
 
@@ -7558,9 +7599,10 @@ function renderExamResultsTable(resultsData, subjectHeaders, schedulesForClass) 
         // --- MODIFIED: Data Rows now have a compact structure ---
         res.subjectResults.forEach(subRes => {
             const gradeColor = (subRes.grade === 'E' || subRes.grade === 'F') ? 'text-danger fw-bold' : '';
+            const NEColor = (subRes.grade === 'N/A') ? 'text-primary fw-bold' : '';
             
             bodyHTML += `
-                <td class="text-center">
+                <td class="text-center ${NEColor}">
                     ${subRes.te} / ${subRes.ce}
                     <br>
                     <small class="text-muted">(${subRes.teGrade} / ${subRes.ceGrade})</small>
@@ -8038,28 +8080,94 @@ function copySubjectWiseColumnData(columnType) {
  */
 function renderExamAddTab() {
     const container = document.getElementById('add-exam');
-    container.innerHTML = `<div class="column"><div class="col-lg-4"><div class="card"><div class="card-header fw-bold">Add Exam Title</div><div class="card-body"><form id="add-exam-form" class="d-flex gap-2"><input id="exam-sector" class="form-control" placeholder="SECTOR , SCHOOL/MADRASSA" required><br><input id="exam-name" class="form-control" placeholder="E.G., QUARTERLY EXAM" required><button type="submit" class="btn btn-primary">Add</button></form></div></div></div><div class="col-lg-7"><div class="card"><div class="card-header fw-bold">Existing Exams</div><div class="card-body" id="exams-list"></div></div></div></div>`;
+    if (!container) return; // Exit if the container isn't on the page
+
+    const isEditMode = examToEdit !== null;
+    const currentExam = examToEdit || {}; // Use current exam or empty object
+
+    container.innerHTML = `
+        <div class="row">
+            <div class="col-lg-12"> <div class="card shadow mb-4">
+                    <div class="card-header fw-bold text-primary">
+                        ${isEditMode ? `Edit Exam: ${currentExam.name}` : 'Add Exam Title'}
+                    </div>
+                    <div class="card-body">
+                        <form id="add-exam-form">
+                            <div class="mb-3">
+                                <label class="form-label">Sector</label>
+                                <input id="exam-sector" class="form-control" placeholder="e.g., SCHOOL or MADRASSA" 
+                                       value="${currentExam.sector || 'SCHOOL'}" required ${isEditMode ? 'readonly' : ''}>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Exam Name</label>
+                                <input id="exam-name" class="form-control" placeholder="e.g., QUARTERLY EXAM" 
+                                       value="${currentExam.name || ''}" required>
+                            </div>
+                            
+                            <div class="d-flex justify-content-around mb-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="exam-is-active" 
+                                           ${(isEditMode ? currentExam.isActive : true) ? 'checked' : ''}>
+                                    <label class="form-check-label" for="exam-is-active">Is Active</label>
+                                </div>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="exam-is-published" 
+                                           ${(currentExam.isPublished || false) ? 'checked' : ''}>
+                                    <label class="form-check-label" for="exam-is-published">Publish Results</label>
+                                </div>
+                            </div>
+                            
+                            <div class="d-flex justify-content-end gap-2">
+                                ${isEditMode ? `<button type="button" class="btn btn-secondary" onclick="window.clearExamEdit()">Cancel</button>` : ''}
+                                <button type="submit" class="btn btn-primary">
+                                    ${isEditMode ? 'Update Exam' : 'Add Exam'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-12"> <div class="card shadow">
+                    <div class="card-header fw-bold">Existing Exams</div>
+                    <div class="card-body" id="exams-list">
+                        </div>
+                </div>
+            </div>
+        </div>
+    `;
     
     document.getElementById('add-exam-form').addEventListener('submit', async e => { 
         e.preventDefault(); 
         const examName = document.getElementById('exam-name').value;
         const sector = document.getElementById('exam-sector').value;
-        const examId = `2025-26${examName.replace(/\s+/g, '_').toUpperCase()}`; // Create a more robust ID
+        
+        // --- NEW: Read from toggles and form ---
+        const isActive = document.getElementById('exam-is-active').checked;
+        const isPublished = document.getElementById('exam-is-published').checked;
 
         if(examName && sector) {
-            // Add the 'isActive' field, defaulting to true for new exams
-            await setDoc(getDocRef('exams', examId), {
+            // --- NEW: Handle both Edit and Add ---
+            const examId = isEditMode ? 
+                examToEdit.id : // Use existing ID if editing
+                `${activeFinancialYear.replace('-', '')}_${examName.replace(/\s+/g, '_').toUpperCase()}`; // Create new ID if adding
+
+            const examData = {
+                ...examToEdit, // Spread existing data (like posterSettings)
                 id: examId,
                 name: examName,
                 sector: sector,
-                isActive: true, // New exams are active by default
-                isPublished:false
-            });
-            e.target.reset(); 
-            showAlert('Exam Added', 'success');
+                isActive: isActive,
+                isPublished: isPublished
+            };
+
+            await setDoc(getDocRef('exams', examId), examData, { merge: true });
+            showAlert(`Exam '${examName}' ${isEditMode ? 'updated' : 'added'}.`, 'success');
+            
+            clearExamEdit(); // This will reset the form
         }
     });
     
+    // This function call remains the same, but the list it renders will be updated
     renderExamsList();
 }
 
@@ -8449,17 +8557,47 @@ async function saveMarks(examId, classId, division, subjectId) {
  * This is the most reliable way to fetch the data.
  */
 async function loadMarkEntrySheetobject(examId, classId, division, subjectId) {
+    
+    // --> 1. Guard against missing container
     const container = document.getElementById('mark-entry-sheet');
+    if (!container) {
+        console.error("Fatal Error: 'mark-entry-sheet' container not found in the DOM.");
+        return;
+    }
+
+    // Helper function to show errors/messages in the container
+    const showMessage = (message, type = 'muted') => {
+        let alertClass = 'text-muted';
+        if (type === 'danger') alertClass = 'alert alert-danger';
+        if (type === 'warning') alertClass = 'alert alert-warning';
+        container.innerHTML = `<div class="text-center p-5 ${alertClass}">${message}</div>`;
+    };
+
     if (!examId || !classId || !division || !subjectId) {
-        container.innerHTML = `<div class="text-center p-5 text-muted">Please select all filters to enter marks.</div>`;
+        showMessage(`Please select all filters to enter marks.`);
         return;
     }
     
+
     container.innerHTML = `<div class="text-center p-5"><div class="spinner-border text-primary"></div><p class="mt-2">Loading student marks...</p></div>`;
+
+    // --> 2. Guard against missing global/external data
+    if (!Array.isArray(examSchedules)) {
+        showMessage('Error: Exam schedules are not loaded.', 'danger');
+        return;
+    }
+    if (!Array.isArray(students)) {
+        showMessage('Error: Student list is not loaded.', 'danger');
+        return;
+    }
+    if (!activeFinancialYear) {
+        showMessage('Error: Active academic year is not set.', 'danger');
+        return;
+    }
 
     const schedule = examSchedules.find(s => s.examId === examId && s.classId === classId && s.division === division && s.subjectId === subjectId);
     if (!schedule) {
-        container.innerHTML = '<div class="alert alert-danger">Could not find a valid exam schedule for this selection.</div>';
+        showMessage('Could not find a valid exam schedule for this selection.', 'danger');
         return;
     }
     
@@ -8470,19 +8608,16 @@ async function loadMarkEntrySheetobject(examId, classId, division, subjectId) {
         .sort((a, b) => a.name.localeCompare(b.name));
 
     if (studentsInClass.length === 0) {
-        container.innerHTML = '<div class="alert alert-warning">No active students found in this class/division.</div>';
+        showMessage('No active students found in this class/division.', 'warning');
         return;
     }
     
     // --- THIS IS THE REFACTORED FETCH LOGIC ---
     const marksForSheet = {};
     try {
-        // 1. Determine the correct, year-specific collection name.
         const academicYear = activeFinancialYear;
         const marksCollectionName = `marks-${academicYear}`;
         
-        // 2. Directly query the marks collection for all documents matching the class and division.
-        // This is more robust as it doesn't depend on the local student list.
         const q = query(getCollectionRef(marksCollectionName), 
             where('classId', '==', classId),
             where('division', '==', division)
@@ -8500,7 +8635,9 @@ async function loadMarkEntrySheetobject(examId, classId, division, subjectId) {
         });
     } catch (error) {
         console.error("Error fetching marks directly:", error);
-        showAlert('Could not fetch the latest marks. Please check your connection.', 'danger');
+        // Use the helper to show a consistent error
+        showMessage(`Error fetching data: ${error.message}. Please check your connection.`, 'danger');
+        return;
     }
     
     // --- The rest of the function renders the UI with the fetched data ---
@@ -8543,12 +8680,29 @@ async function loadMarkEntrySheetobject(examId, classId, division, subjectId) {
         input.addEventListener('input', (e) => {
             e.target.classList.remove('absent-mark');
             if(e.target.value.toUpperCase() === 'AB') { e.target.classList.add('absent-mark'); return; }
+            
+            // --> Added a check for empty string to avoid NaN issues
+            if (e.target.value === '') { return; } 
+
             const maxValue = parseInt(e.target.dataset.max, 10);
             const currentValue = parseInt(e.target.value, 10);
-            if (!isNaN(currentValue) && currentValue > maxValue) { e.target.value = ''; }
+            
+            // --> Handle non-numeric input gracefully
+            if (isNaN(currentValue)) {
+                e.target.value = '';
+            } else if (currentValue > maxValue) {
+                e.target.value = ''; // Or you could set it to maxValue
+            }
         });
     });
-    document.getElementById('save-marks-btn').addEventListener('click', () => saveMarksobject(examId, classId, division, subjectId));
+    
+    // --> 4. Safely attach listener for the save button
+    const saveButton = document.getElementById('save-marks-btn');
+    if (saveButton) {
+        saveButton.addEventListener('click', () => saveMarksobject(examId, classId, division, subjectId));
+    } else {
+        console.warn("Could not find 'save-marks-btn' to attach listener.");
+    }
 }
 
 /**
@@ -8592,8 +8746,16 @@ async function saveMarksobject(examId, classId, division, subjectId) {
                 }
 
                 changesFound++;
-                const te = currentTE.toUpperCase() === 'AB' ? 'AB' : (parseInt(currentTE) || 0);
-                const ce = currentCE.toUpperCase() === 'AB' ? 'AB' : (parseInt(currentCE) || 0);
+
+                const te = currentTE.toUpperCase() === 'AB' ? 'AB' : (parseInt(currentTE)||"");
+                const ce = currentCE.toUpperCase() === 'AB' ? 'AB' : (parseInt(currentCE)||"");
+                
+                if(te===""){
+                    showAlert('No empty marks save.'&studentId, 'info');
+                    saveButton.disabled = false;
+                    saveButton.innerHTML = originalButtonHtml;
+                    return
+                }
                 
                 // 1. The collection name is now dynamic, based on the active year.
                 const marksCollectionName = `marks-${academicYear}`;
@@ -8606,7 +8768,8 @@ async function saveMarksobject(examId, classId, division, subjectId) {
                     // Store student info for easier querying
                     studentId: studentId, 
                     classId: classId,
-                    division: division
+                    division: division,
+                    lastUpdated: serverTimestamp()
                 };
                 
                 // 4. Use { merge: true } to add/update marks without overwriting the whole document.
@@ -26175,13 +26338,16 @@ function generateWinnersSummaryHTML(festId, category, eventType) {
                 }
 
                 // Add the table row for this winner
-                eventWinnersHtml += `
+                if(standing.position === 1){
+                    eventWinnersHtml += `
                     <tr>
                         <td style="width: 15%;"><strong>${standing.position}</strong><sup style="font-size: 0.8em;">${getRankSuffix(standing.position)}</sup></td>
                         <td>${winnerName}</td>
                         <td style="width: 25%;"><span class="badge" style="background-color:${houseColor}; color:white;">${houseName}</span></td>
                     </tr>
                 `;
+                }
+                
             });
 
             eventWinnersHtml += `</table></div>`;
@@ -28315,124 +28481,108 @@ window.addEventListener('popstate', (event) => {
 });
 
 
+// =========================================================================
+// --- EXAM CONTROL MODULE (NEW ROUTER LOGIC) ---
+// =========================================================================
 
-
-
-// // Global variable to store the currently selected Exam ID in this module
+// Global variable to store the currently selected Exam ID
 let selectedExamForControl = null;
 
 /**
-         * Renders the main Examination Control module interface.
-         * Access is restricted to Admins and Teachers with 'exam_controller' role.
-         */
-        /**
- * Renders the main Examination Control module interface.
- * Access is restricted to Admins and Teachers with 'exam_controller' role.
- * This version uses a horizontal scrolling container for the tabs.
- */
-/**
- * Renders the main Examination Control module interface.
- * Access is restricted to Admins and Teachers with 'exam_controller' role.
- * This version uses a single, correct horizontal scrolling container for the tabs.
+ * Main entry point for the Examination Control module.
+ * This acts as a "router":
+ * - If no exam is selected, it shows the exam selection screen.
+ * - If an exam IS selected, it shows the main tabbed dashboard for that exam.
  */
 window.renderExamControlModule = () => {
-    const isAdmin = currentUserRole === 'admin';
-    const isExamController = currentUserRole === 'teacher' || (selectedUser.roles && selectedUser.roles.includes('exam_controller'));
-
     const mainContent = document.getElementById('main-content');
     if (!mainContent) return;
 
+    // Access Check
     const hasAccess = currentUserRole === 'admin' || (selectedUser?.roles && selectedUser.roles.includes('exam_controller'));
-
     if (!hasAccess) {
         mainContent.innerHTML = `
             <div class="alert alert-danger">
                 <h4>Access Denied</h4>
-                <p>You do not have permission to access the Examination Control module.</p>
+                <p>You do not have permission to access this module.</p>
             </div>`;
         return;
     }
 
+    if (selectedExamForControl === null) {
+        // No exam is selected, so show the selection screen
+        renderExamSelectionScreen();
+    } else {
+        // An exam IS selected, so show the main dashboard
+        renderExamControlDashboard();
+    }
+};
+
+/**
+ * (REVISED) Renders the main tabbed dashboard for the selected exam.
+ * This was formerly renderExamControlModule.
+ */
+function renderExamControlDashboard() {
+    const isAdmin = currentUserRole === 'admin';
+    const isExamController = currentUserRole ==='teacher' || (selectedUser.roles && selectedUser.roles.includes('exam_controller'));
+
+    const mainContent = document.getElementById('main-content');
+    if (!mainContent) return;
+    
+    const selectedExam = exams.find(e => e.id === selectedExamForControl);
+    if (!selectedExam) {
+        showAlert('Error: Could not find the selected exam. Returning to selection.', 'danger');
+        unselectExam();
+        return;
+    }
+
     mainContent.innerHTML = `
-        <h1 class="h2 mb-4">Examination Control</h1>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="h2 mb-0">Managing: <span class="text-primary">${selectedExam.name}</span></h1>
+            <button class="btn btn-sm btn-outline-secondary" onclick="window.unselectExam()">
+                <i class="fas fa-arrow-left me-2"></i>Back to Exam List
+            </button>
+        </div>
         
         <div class="tabs-container">
-            <ul class="nav nav-tabs" id="examControlTab" role="tablist" style="max-width:900px;">
-                ${isAdmin ? `<li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#add-exam" type="button">Add Exam</button></li>` : ''}
-                ${isAdmin ? `<li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#schedule" type="button">Schedule</button></li>` : '<li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#schedule" type="button">Schedule</button></li>'}
+            <ul class="nav nav-tabs" id="examControlTab" role="tablist"style="max-width:900px;">
+                <li class="nav-item" role="presentation"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#exam-control-overview" type="button">Overview</button></li>
+                <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-reg-no" type="button">Reg. No.</button></li>
+                <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-rooms" type="button">Rooms</button></li>
+                <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-room-alloc" type="button">Allocation</button></li>
+                <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-hall-ticket" type="button">Hall Ticket</button></li>
+                <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-duty" type="button">Duty</button></li>
+                <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-absentee" type="button">Absentees</button></li>
+                <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-reports" type="button">Reports</button></li>
+                <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-notifications" type="button">Notifications</button></li>
+                
+                <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#schedule" type="button">Edit Schedule</button></li>
                 <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#consolidated-view" type="button">Consolidated View</button></li>
                 <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#timetable-view" type="button">Timetable</button></li>
-                
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#exam-control-overview" type="button" role="tab" aria-controls="exam-control-overview" aria-selected="true">Overview</button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-rooms" type="button" role="tab" aria-controls="exam-control-rooms" aria-selected="false">Rooms</button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-duty" type="button" role="tab" aria-controls="exam-control-duty" aria-selected="false">Duty</button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-absentee" type="button" role="tab" aria-controls="exam-control-absentee" aria-selected="false">Absentees</button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-reg-no" type="button" role="tab" aria-controls="exam-control-reg-no" aria-selected="false">Reg. No.</button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-room-alloc" type="button" role="tab" aria-controls="exam-control-room-alloc" aria-selected="false">Allocation</button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-hall-ticket" type="button" role="tab" aria-controls="exam-control-hall-ticket" aria-selected="false">Hall Ticket</button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-reports" type="button" role="tab" aria-controls="exam-control-reports" aria-selected="false">Reports</button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-notifications" type="button" role="tab" aria-controls="exam-control-notifications" aria-selected="false">Notifications</button>
-                </li>
             </ul>
         </div>
         
         <div class="tab-content card" id="examControlTabContent">
-            ${isAdmin ? `<div class="tab-pane fade p-2" id="add-exam" role="tabpanel"></div>` : ''}
-            ${isAdmin ? `<div class="tab-pane fade p-2" id="schedule" role="tabpanel"></div>` : '<div class="tab-pane fade p-4" id="schedule" role="tabpanel"></div>'}
+            <div class="tab-pane fade p-2" id="schedule" role="tabpanel"></div>
             <div class="tab-pane fade p-2" id="timetable-view" role="tabpanel"></div>
             <div class="tab-pane fade p-2" id="consolidated-view" role="tabpanel"></div>
 
-            <div class="tab-pane fade show active p-4" id="exam-control-overview" role="tabpanel" aria-labelledby="exam-control-overview-tab"></div>
-            <div class="tab-pane fade p-2" id="exam-control-rooms" role="tabpanel" aria-labelledby="exam-control-rooms-tab"></div>
-            <div class="tab-pane fade p-3" id="exam-control-duty" role="tabpanel" aria-labelledby="exam-control-duty-tab"></div>
-            <div class="tab-pane fade p-2" id="exam-control-absentee" role="tabpanel" aria-labelledby="exam-control-absentee-tab"></div>
-            <div class="tab-pane fade p-2" id="exam-control-reg-no" role="tabpanel" aria-labelledby="exam-control-reg-no-tab"></div>
-            <div class="tab-pane fade p-2" id="exam-control-room-alloc" role="tabpanel" aria-labelledby="exam-control-room-alloc-tab"></div>
-            <div class="tab-pane fade p-2" id="exam-control-hall-ticket" role="tabpanel" aria-labelledby="exam-control-hall-ticket-tab"></div>
-            <div class="tab-pane fade p-2" id="exam-control-reports" role="tabpanel" aria-labelledby="exam-control-reports-tab"></div>
-            <div class="tab-pane fade p-2" id="exam-control-notifications" role="tabpanel" aria-labelledby="exam-control-notifications-tab"></div>
+            <div class="tab-pane fade show active p-4" id="exam-control-overview" role="tabpanel"></div>
+            <div class="tab-pane fade p-2" id="exam-control-rooms" role="tabpanel"></div>
+            <div class="tab-pane fade p-3" id="exam-control-duty" role="tabpanel"></div>
+            <div class="tab-pane fade p-2" id="exam-control-absentee" role="tabpanel"></div>
+            <div class="tab-pane fade p-2" id="exam-control-reg-no" role="tabpanel"></div>
+            <div class="tab-pane fade p-2" id="exam-control-room-alloc" role="tabpanel"></div>
+            <div class="tab-pane fade p-2" id="exam-control-hall-ticket" role="tabpanel"></div>
+            <div class="tab-pane fade p-2" id="exam-control-reports" role="tabpanel"></div>
+            <div class="tab-pane fade p-2" id="exam-control-notifications" role="tabpanel"></div>
         </div>
     `;
 
-    // Render content for each sub-tab
-    if (isAdmin) {
-        renderExamAddTab();
-    }
-    renderExamScheduleTab();
-    renderExamTimetableView();
-    renderConsolidatedTimetableView(); 
-    renderExamControlOverviewTab();
-    renderExamControlRoomManagementTab();
-    renderExamControlDutyAssignmentTab();
-    renderExamControlAbsenteeReportingTab();
-    renderExamControlRegNoAssignmentTab();
-    renderExamControlRoomAllocationTab();
-    renderExamControlHallTicketTab();
-    renderExamControlReportsTab();
-    renderExamControlNotificationsTab();
-
-    // Attach listener for tab changes to re-render selected sub-tab
+    // Attach listener for tab changes
     document.querySelectorAll('#examControlTab .nav-link').forEach(tab => {
         tab.addEventListener('shown.bs.tab', (event) => {
             const targetId = event.target.dataset.bsTarget;
-            // Shorten the switch statement for clarity
             const renderFunctions = {
                 '#exam-control-overview': renderExamControlOverviewTab,
                 '#exam-control-rooms': renderExamControlRoomManagementTab,
@@ -28443,8 +28593,6 @@ window.renderExamControlModule = () => {
                 '#exam-control-hall-ticket': renderExamControlHallTicketTab,
                 '#exam-control-reports': renderExamControlReportsTab,
                 '#exam-control-notifications': renderExamControlNotificationsTab,
-                // Also handle the other tabs
-                '#add-exam': isAdmin ? renderExamAddTab : null,
                 '#schedule': renderExamScheduleTab,
                 '#timetable-view': renderExamTimetableView,
                 '#consolidated-view': renderConsolidatedTimetableView
@@ -28457,45 +28605,237 @@ window.renderExamControlModule = () => {
         });
     });
 };
+/**
+ * Renders the Exam Selection screen (the new "first page").
+ * Shows "Add Exam" form and the list of clickable exams to manage.
+ */
+function renderExamSelectionScreen() {
+    const mainContent = document.getElementById('main-content');
+    if (!mainContent) return;
 
-        /**
-         * Renders the Exam Overview tab content.
-         * Shows exams and schedule details based on selection.
-         */
-        function renderExamControlOverviewTab() {
-            const container = document.getElementById('exam-control-overview');
-            if (!container) return;
-
-            container.innerHTML = `
-                <div class="row g-3 align-items-end mb-4">
-                    <div class="col-md-6">
-                        <label class="form-label" for="exam-overview-select">Select Exam</label>
-                        <select id="exam-overview-select" class="form-select">
-                            <option value="">-- Select an Exam --</option>
-                            ${exams.map(e => `<option value="${e.id}">${e.name}</option>`).join('')}
-                        </select>
+    mainContent.innerHTML = `
+        <h1 class="h2 mb-4">Examination Control</h1>
+        <div class="row">
+            <div class="col-lg-4">
+                <div id="add-exam-container"></div>
+            </div>
+            <div class="col-lg-8">
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 fw-bold text-primary">Select an Exam to Manage</h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="exam-selection-list" class="row g-3">
+                            </div>
                     </div>
                 </div>
-                <div id="exam-overview-details-container">
-                    <p class="text-muted text-center p-4">Select an exam to view its schedule.</p>
-                </div>
-            `;
+            </div>
+        </div>
+    `;
 
-            const examSelect = document.getElementById('exam-overview-select');
-            examSelect.addEventListener('change', () => {
-                window.selectedExamForControl = examSelect.value;
-                displayExamOverviewDetails(window.selectedExamForControl);
-            });
-
-            // Initial display if an exam was previously selected or to default to first
-            if (exams.length > 0) {
-                if (!window.selectedExamForControl) {
-                    window.selectedExamForControl = exams[0].id; // Default to first exam
-                }
-                examSelect.value = window.selectedExamForControl;
-                displayExamOverviewDetails(window.selectedExamForControl);
-            }
+    // 1. Render the "Add Exam" form
+    const addExamContainer = document.getElementById('add-exam-container');
+    if (currentUserRole === 'admin') {
+        const tempDiv = document.createElement('div');
+        tempDiv.id = 'add-exam';
+        addExamContainer.appendChild(tempDiv);
+        renderExamAddTab(); // This will now render the Add/Edit form
+        
+        // Hide the redundant list
+        const examListInCard = tempDiv.querySelector('#exams-list');
+        if (examListInCard) {
+            examListInCard.parentElement.style.display = 'none';
         }
+    } else {
+        addExamContainer.innerHTML = `<div class="card shadow"><div class="card-body"><p class="text-muted">Select an exam from the list to manage.</p></div></div>`;
+    }
+
+    // 2. Render the "Select Exam" cards
+    const selectionList = document.getElementById('exam-selection-list');
+    if (exams.length === 0) {
+        selectionList.innerHTML = `<p class="text-muted">No exams found. Please add one.</p>`;
+        return;
+    }
+
+    // Sort exams to show active ones first
+    const sortedExams = [...exams].sort((a, b) => (b.isActive ? 1 : 0) - (a.isActive ? 1 : 0));
+
+    selectionList.innerHTML = sortedExams.map(exam => `
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 shadow-sm fest-selection-card">
+                <div class="card-body text-center d-flex flex-column">
+                    <i class="fas ${exam.isActive ? 'fa-file-signature' : 'fa-file-alt'} fa-3x ${exam.isActive ? 'text-primary' : 'text-muted'} mb-3"></i>
+                    <h5 class="card-title">${exam.name}</h5>
+                    
+                    <div class="mb-2">
+                        <span class="badge bg-${exam.isActive ? 'success' : 'secondary'}">
+                            ${exam.isActive ? 'Active' : 'Inactive'}
+                        </span>
+                        <span class="badge bg-${exam.isPublished ? 'info' : 'light text-dark'}">
+                            ${exam.isPublished ? 'Results Published' : 'Not Published'}
+                        </span>
+                    </div>
+
+                    <div class="mt-auto">
+                        <button class="btn btn-primary" onclick="window.selectExamToManage('${exam.id}')">
+                            <i class="fas fa-cog me-2"></i>Manage
+                        </button>
+                        
+                        ${currentUserRole === 'admin' ? `
+                        <button class="btn btn-outline-secondary ms-2" onclick="window.editExamDetails('${exam.id}')" title="Edit Exam Details">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+/**
+ * Sets the form to edit a specific exam.
+ * @param {string} examId - The ID of the exam to edit.
+ */
+window.editExamDetails = (examId) => {
+    examToEdit = exams.find(e => e.id === examId);
+    if (!examToEdit) {
+        return showAlert('Could not find that exam to edit.', 'danger');
+    }
+
+    // This logic handles finding the correct "Add Exam" form to update,
+    // whether it's in the "Exam Selection" screen or the "Exam Control" tab.
+    
+    let container = document.getElementById('add-exam-container');
+    let formId = 'add-exam';
+
+    if (container) {
+        // We are on the Exam Selection screen
+        container.innerHTML = `<div id="${formId}"></div>`;
+        renderExamAddTab();
+        
+        // This is your clever hack to hide the redundant list; we must re-apply it.
+        const examListInCard = container.querySelector('#exams-list');
+        if (examListInCard) {
+            examListInCard.parentElement.style.display = 'none';
+        }
+        // Scroll to the form for editing
+        container.scrollIntoView({ behavior: 'smooth' });
+
+    } else if (document.getElementById('add-exam')) {
+        // We are on the "Exam Control" screen's "Add Exam" tab
+        renderExamAddTab();
+    }
+};
+
+/**
+ * Clears the exam edit state and resets the form.
+ */
+let examToEdit = null;
+window.clearExamEdit = () => {
+    examToEdit = null;
+    
+    // Re-render the form container wherever it might be
+    let container = document.getElementById('add-exam-container');
+    if (container) {
+        container.innerHTML = '<div id="add-exam"></div>';
+        renderExamAddTab();
+        const examListInCard = container.querySelector('#exams-list');
+        if (examListInCard) {
+            examListInCard.parentElement.style.display = 'none';
+        }
+    } else if (document.getElementById('add-exam')) {
+        renderExamAddTab();
+    }
+};
+/**
+ * Sets the form to edit a specific exam.
+ * @param {string} examId - The ID of the exam to edit.
+ */
+window.editExamDetails = (examId) => {
+    examToEdit = exams.find(e => e.id === examId);
+    if (!examToEdit) {
+        return showAlert('Could not find that exam to edit.', 'danger');
+    }
+
+    // This logic handles finding the correct "Add Exam" form to update,
+    // whether it's in the "Exam Selection" screen or the "Exam Control" tab.
+    
+    let container = document.getElementById('add-exam-container');
+    let formId = 'add-exam';
+
+    if (container) {
+        // We are on the Exam Selection screen
+        container.innerHTML = `<div id="${formId}"></div>`;
+        renderExamAddTab();
+        
+        // This is your clever hack to hide the redundant list; we must re-apply it.
+        const examListInCard = container.querySelector('#exams-list');
+        if (examListInCard) {
+            examListInCard.parentElement.style.display = 'none';
+        }
+        // Scroll to the form for editing
+        container.scrollIntoView({ behavior: 'smooth' });
+
+    } else if (document.getElementById('add-exam')) {
+        // We are on the "Exam Control" screen's "Add Exam" tab
+        renderExamAddTab();
+    }
+};
+
+/**
+ * Clears the exam edit state and resets the form.
+ */
+window.clearExamEdit = () => {
+    examToEdit = null;
+    
+    // Re-render the form container wherever it might be
+    let container = document.getElementById('add-exam-container');
+    if (container) {
+        container.innerHTML = '<div id="add-exam"></div>';
+        renderExamAddTab();
+        const examListInCard = container.querySelector('#exams-list');
+        if (examListInCard) {
+            examListInCard.parentElement.style.display = 'none';
+        }
+    } else if (document.getElementById('add-exam')) {
+        renderExamAddTab();
+    }
+};
+/**
+ * Helper function to set the global state and re-render the module.
+ * @param {string} examId The ID of the exam to manage.
+ */
+window.selectExamToManage = (examId) => {
+    selectedExamForControl = examId;
+    renderExamControlModule(); // This will now render the dashboard
+};
+
+/**
+ * Helper function to clear the global state and return to the selection screen.
+ */
+window.unselectExam = () => {
+    selectedExamForControl = null;
+    renderExamControlModule(); // This will now render the selection screen
+};
+       function renderExamControlOverviewTab() {
+    const container = document.getElementById('exam-control-overview');
+    if (!container) return;
+
+    // This tab is now much simpler. It just displays details for the selected exam.
+    // The dropdown is removed.
+    container.innerHTML = `
+        <div id="exam-overview-details-container">
+            <p class="text-muted text-center p-4">Loading exam details...</p>
+        </div>
+    `;
+
+    if (selectedExamForControl) {
+        displayExamOverviewDetails(selectedExamForControl);
+    } else {
+        document.getElementById('exam-overview-details-container').innerHTML = 
+            `<p class="text-muted text-center p-4">No exam selected.</p>`;
+    }
+}
 
         /**
          * Displays the schedule details for the selected exam in the Overview tab.
@@ -28799,6 +29139,9 @@ function displayTeacherAvailabilityRoster(examId, date) {
  * Intelligently SUGGESTS duties for a SINGLE session using the multi-pass system.
  * This is the final, corrected version with advanced logic.
  */
+/**
+ * (REVISED) Intelligently SUGGESTS duties for a SINGLE session using the new rule-based logic.
+ */
 window.autoSuggestDutiesForSession = function(examId, date, session) {
     let slotsToFill = [];
     document.querySelectorAll(`#duty-assignment-table tr[data-room-id]`).forEach(row => {
@@ -28822,28 +29165,37 @@ window.autoSuggestDutiesForSession = function(examId, date, session) {
     }));
     
     const availableTeacherIds = new Set(Array.from(document.querySelectorAll('.teacher-availability-checkbox:checked')).map(cb => cb.value));
-    
-    // This tracks assignments made *during this suggestion run* to prevent conflicts
     const sessionAssignments = new Set(Array.from(document.querySelectorAll(`select[data-session="${session}"]`)).map(s => s.value).filter(Boolean));
 
-    // Helper function to assign a teacher and update our temporary trackers
+    // --- NEW HELPER: Finds students in a room by cross-referencing rules ---
+    const getStudentsInRoomFromRules = (roomId, session) => {
+        const rulesForRoom = examRoomAllocationRules.filter(r => r.examId === examId && r.date === date && r.session === session && r.roomId === roomId);
+        const studentsInRoom = [];
+        if (rulesForRoom.length > 0) {
+            students.forEach(student => {
+                const regNo = student.examRegNumbers?.[examId];
+                if (regNo && rulesForRoom.some(rule => doesRegNoMatchRule(regNo, rule.regNoRangeText))) {
+                    studentsInRoom.push(student);
+                }
+            });
+        }
+        return studentsInRoom;
+    };
+    // --- END HELPER ---
+
     const assignTeacherToSlot = (teacher, slot) => {
         const selectToUpdate = document.querySelector(`tr[data-room-id="${slot.roomId}"] select[data-session="${slot.session}"]`);
         if (selectToUpdate) {
             selectToUpdate.value = teacher.teacherId;
-            // Update temporary trackers
             const teacherInCount = teacherDutyCounts.find(t => t.teacherId === teacher.teacherId);
             if (teacherInCount) teacherInCount.count++;
             sessionAssignments.add(teacher.teacherId);
         }
     };
 
-    // --- The Multi-Pass Logic ---
-
-    // PASS 1: Assign specific SUBJECT TEACHERS
+    // --- PASS 1: Assign specific SUBJECT TEACHERS ---
     slotsToFill.forEach(slot => {
-        const sessionKey = `${examId}_${date.replace(/-/g, '')}_${slot.session}`;
-        const studentsInRoom = students.filter(s => s.examRoomAllocations?.[sessionKey] === slot.roomId);
+        const studentsInRoom = getStudentsInRoomFromRules(slot.roomId, slot.session); // <-- REVISED
         const availableNow = teacherDutyCounts.filter(t => availableTeacherIds.has(t.teacherId) && !sessionAssignments.has(t.teacherId));
         if (studentsInRoom.length === 0 || availableNow.length === 0) return;
 
@@ -28861,21 +29213,21 @@ window.autoSuggestDutiesForSession = function(examId, date, session) {
         }
     });
 
-    // Update slotsToFill to only include the remaining empty ones
     slotsToFill = slotsToFill.filter(slot => document.querySelector(`tr[data-room-id="${slot.roomId}"] select[data-session="${slot.session}"]`).value === '');
 
-    // PASS 2: Assign any CLASS TEACHERS
+    // --- PASS 2: Assign any CLASS TEACHERS ---
     if (slotsToFill.length > 0) {
         slotsToFill.forEach(slot => {
-            const sessionKey = `${examId}_${date.replace(/-/g, '')}_${slot.session}`;
-            const studentsInRoom = students.filter(s => s.examRoomAllocations?.[sessionKey] === slot.roomId);
+            const studentsInRoom = getStudentsInRoomFromRules(slot.roomId, slot.session); // <-- REVISED
             const availableNow = teacherDutyCounts.filter(t => availableTeacherIds.has(t.teacherId) && !sessionAssignments.has(t.teacherId));
             if (studentsInRoom.length === 0 || availableNow.length === 0) return;
 
             const studentClassesInRoom = new Set(studentsInRoom.map(s => `${s.classId}_${s.division}`));
             const classTeacherIds = new Set();
-            classroomSubjects.forEach(cs => {
-                if (studentClassesInRoom.has(`${cs.classId}_${cs.division}`)) classTeacherIds.add(cs.teacherId);
+            teachers.forEach(teacher => {
+                if (teacher.classCharge && studentClassesInRoom.has(`${teacher.classCharge.classId}_${teacher.classCharge.division}`)) {
+                    classTeacherIds.add(teacher.id);
+                }
             });
 
             let classTeachersAvailable = availableNow.filter(t => classTeacherIds.has(t.teacherId));
@@ -28886,10 +29238,9 @@ window.autoSuggestDutiesForSession = function(examId, date, session) {
         });
     }
 
-    // Update slotsToFill again
     slotsToFill = slotsToFill.filter(slot => document.querySelector(`tr[data-room-id="${slot.roomId}"] select[data-session="${slot.session}"]`).value === '');
 
-    // PASS 3: Assign ANY remaining teacher
+    // --- PASS 3: Assign ANY remaining teacher ---
     if (slotsToFill.length > 0) {
         slotsToFill.forEach(slot => {
             let availableNow = teacherDutyCounts.filter(t => availableTeacherIds.has(t.teacherId) && !sessionAssignments.has(t.teacherId));
@@ -28915,19 +29266,18 @@ window.clearAllDutiesForDay = function(examId, date) {
     displayDutyAssignmentGrid(examId, date);
 }
 
-
 /**
- * Displays the duty assignment grid with categorized dropdowns.
- */
-/**
- * Displays the duty assignment grid with categorized dropdowns and now includes
- * a summary of classes allocated to each room for each session.
+ * (REVISED) Displays the duty assignment grid with categorized dropdowns.
+ * This version reads from examRoomAllocationRules to find students.
  */
 function displayDutyAssignmentGrid(examId, date) {
     const container = document.getElementById('duty-assignment-grid-container');
-    if (!container || !examId || !date) { container.innerHTML = `<p class="text-muted text-center p-4">Select an exam and date.</p>`; return; }
+    if (!container || !examId || !date) { 
+        container.innerHTML = `<p class="text-muted text-center p-4">Select an exam and date.</p>`; 
+        return; 
+    }
     
-    // Before redrawing, capture the current unsaved selections from the UI.
+    // Capture the current unsaved selections from the UI.
     const currentSelections = {};
     document.querySelectorAll('#duty-assignment-table .duty-teacher-select').forEach(select => {
         if (select.value) {
@@ -28935,19 +29285,24 @@ function displayDutyAssignmentGrid(examId, date) {
         }
     });
 
-    const rooms = examRooms.sort((a, b) => a.name.localeCompare(b.name));
-    if (rooms.length === 0) { container.innerHTML = `<p class="alert alert-warning">No exam rooms defined.</p>`; return; }
+    const rooms = examRooms.sort((a, b) => (parseInt(a.roomNumber, 10) || 0) - (parseInt(b.roomNumber, 10) || 0));
+    if (rooms.length === 0) { 
+        container.innerHTML = `<p class="alert alert-warning">No exam rooms defined.</p>`; 
+        return; 
+    }
     
     container.innerHTML = `
         <h5 class="section-header">Assignments for ${new Date(date).toLocaleDateString('en-GB')}</h5>
-        <div class="table-responsive"><table class="table table-bordered table-sm" id="duty-assignment-table">
-            <thead><tr>
-                <th class="align-middle">Room & Class Summary</th>
-                <th class="text-center">Forenoon (FN) <button class="btn btn-xs btn-info ms-2" onclick="window.autoSuggestDutiesForSession('${examId}', '${date}', 'FN')">Suggest</button></th>
-                <th class="text-center">Afternoon (AN) <button class="btn btn-xs btn-info ms-2" onclick="window.autoSuggestDutiesForSession('${examId}', '${date}', 'AN')">Suggest</button></th>
-            </tr></thead>
-            <tbody></tbody>
-        </table></div>
+        <div class="table-responsive">
+            <table class="table table-bordered table-sm" id="duty-assignment-table">
+                <thead><tr>
+                    <th class="align-middle">Room & Allocation Summary</th>
+                    <th class="text-center">Forenoon (FN) <button class="btn btn-xs btn-info ms-2" onclick="window.autoSuggestDutiesForSession('${examId}', '${date}', 'FN')">Suggest</button></th>
+                    <th class="text-center">Afternoon (AN) <button class="btn btn-xs btn-info ms-2" onclick="window.autoSuggestDutiesForSession('${examId}', '${date}', 'AN')">Suggest</button></th>
+                </tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
         <div class="d-flex justify-content-end mt-3">
             <button class="btn btn-outline-secondary me-2" onclick="window.clearDutiesFromUI('${examId}', '${date}')"><i class="fas fa-eraser me-2"></i>Clear Screen</button>
             <button class="btn btn-outline-danger me-2" onclick="window.clearSavedDutiesForDay('${examId}', '${date}')"><i class="fas fa-trash-alt me-2"></i>Clear & Un-assign</button>
@@ -28960,24 +29315,27 @@ function displayDutyAssignmentGrid(examId, date) {
     const availableTeacherIds = new Set(Array.from(document.querySelectorAll('.teacher-availability-checkbox:checked')).map(cb => cb.value));
     const tbody = container.querySelector('#duty-assignment-table tbody');
 
-    // --- NEW LOGIC IS INTEGRATED HERE ---
     tbody.innerHTML = rooms.map(room => {
+        // --- NEW RULE-BASED SUMMARY LOGIC ---
         const getSessionInfo = (session) => {
-            const sessionKey = `${examId}_${date.replace(/-/g, '')}_${session}`;
-            const studentsInRoom = students.filter(s => s.examRoomAllocations?.[sessionKey] === room.id);
-            const classSummary = [...new Set(studentsInRoom.map(s => classes.find(c => c.id === s.classId)?.name))]
-                                .sort().join(', ');
-            return { studentsInRoom, classSummary };
+            const rulesForRoomAndSession = examRoomAllocationRules.filter(r => 
+                r.examId === examId && 
+                r.date === date && 
+                r.session === session && 
+                r.roomId === room.id
+            );
+            const ruleSummary = rulesForRoomAndSession.map(r => r.regNoRangeText).join('<br>');
+            return { ruleSummary };
         };
-
         const fnInfo = getSessionInfo('FN');
         const anInfo = getSessionInfo('AN');
+        // --- END NEW LOGIC ---
 
         return `<tr data-room-id="${room.id}">
                     <td class="align-middle">
-                        <strong>${room.name}</strong>
-                        <div class="small text-muted">FN Classes: ${fnInfo.classSummary || 'N/A'}</div>
-                        <div class="small text-muted">AN Classes: ${anInfo.classSummary || 'N/A'}</div>
+                        <strong>${room.name} (${room.roomNumber})</strong>
+                        <div class="small text-muted">FN Rules: ${fnInfo.ruleSummary || 'N/A'}</div>
+                        <div class="small text-muted">AN Rules: ${anInfo.ruleSummary || 'N/A'}</div>
                     </td>
                     <td><select class="form-select form-select-sm duty-teacher-select" data-session="FN"></select></td>
                     <td><select class="form-select form-select-sm duty-teacher-select" data-session="AN"></select></td>
@@ -28992,9 +29350,20 @@ function displayDutyAssignmentGrid(examId, date) {
             const currentSelection = currentSelections[`${session}_${roomId}`] || examDuties.find(d => d.examId === examId && d.date === date && d.session === session && d.roomId === roomId)?.dutyTeacherId;
             const availableNow = teacherDutyCounts.filter(t => availableTeacherIds.has(t.teacherId) && (!assignedInSession.includes(t.teacherId) || t.teacherId === currentSelection));
             
-            // Categorize available teachers
-            const sessionKey = `${examId}_${date.replace(/-/g, '')}_${session}`;
-            const studentsInRoom = students.filter(s => s.examRoomAllocations?.[sessionKey] === roomId);
+            // --- NEW RULE-BASED STUDENT FINDER ---
+            const rulesForRoom = examRoomAllocationRules.filter(r => r.examId === examId && r.date === date && r.session === session && r.roomId === roomId);
+            const studentsInRoom = [];
+            if (rulesForRoom.length > 0) {
+                students.forEach(student => {
+                    const regNo = student.examRegNumbers?.[examId];
+                    if (regNo && rulesForRoom.some(rule => doesRegNoMatchRule(regNo, rule.regNoRangeText))) {
+                        studentsInRoom.push(student);
+                    }
+                });
+            }
+            // --- END NEW LOGIC ---
+
+            // This logic for finding teachers is now correct again, as it's based on the new `studentsInRoom` list
             const subjectTeacherIds = new Set();
              if (studentsInRoom.length > 0) {
                 const subjectsInRoom = new Set(examSchedules.filter(sch => sch.date === date && sch.session === session && studentsInRoom.some(s => s.classId === sch.classId && s.division === sch.division)).map(sch => sch.subjectId));
@@ -29006,8 +29375,13 @@ function displayDutyAssignmentGrid(examId, date) {
             const classTeacherIds = new Set();
             if (studentsInRoom.length > 0) {
                 const studentClassesInRoom = new Set(studentsInRoom.map(s => `${s.classId}_${s.division}`));
-                classroomSubjects.forEach(cs => { if (studentClassesInRoom.has(`${cs.classId}_${cs.division}`)) classTeacherIds.add(cs.teacherId); });
+                teachers.forEach(teacher => {
+                    if (teacher.classCharge && studentClassesInRoom.has(`${teacher.classCharge.classId}_${teacher.classCharge.division}`)) {
+                        classTeacherIds.add(teacher.id);
+                    }
+                });
             }
+            
             const bestMatches = availableNow.filter(t => subjectTeacherIds.has(t.teacherId)).sort((a,b)=>a.count-b.count);
             const goodMatches = availableNow.filter(t => classTeacherIds.has(t.teacherId) && !subjectTeacherIds.has(t.teacherId)).sort((a,b)=>a.count-b.count);
             const otherMatches = availableNow.filter(t => !subjectTeacherIds.has(t.teacherId) && !classTeacherIds.has(t.teacherId)).sort((a,b)=>a.count-b.count);
@@ -29024,9 +29398,38 @@ function displayDutyAssignmentGrid(examId, date) {
             select.value = currentSelection || "";
         });
     });
-    
-    //container.querySelector('#duty-assignment-table').addEventListener('change', () => displayDutyAssignmentGrid(examId, date));
 }
+
+/**
+ * Checks if a specific student registration number falls within a rule's range.
+ * @param {string} regNo - The student's exam registration number (e.g., "M-X_101").
+ * @param {string} regNoRangeText - The rule's range text (e.g., "M-X_101 - M-X_120").
+ * @returns {boolean} True if the registration number is within the range.
+ */
+function doesRegNoMatchRule(regNo, regNoRangeText) {
+    if (!regNo || !regNoRangeText) return false;
+    
+    // Find the first range in the text
+    const firstLine = (regNoRangeText || '').split('\n')[0];
+    const [startStr, endStr] = firstLine.split('-').map(s => s.trim());
+    const regNoRegex = /^([A-Z0-9]+)_(\d+)$/;
+
+    const regNoMatch = regNo.match(regNoRegex);
+    const startMatch = startStr.match(regNoRegex);
+    // Use startStr as fallback if endStr is missing (for single-number ranges)
+    const endMatch = (endStr || startStr).match(regNoRegex); 
+
+    if (!regNoMatch || !startMatch || !endMatch) return false;
+
+    const [regNoPrefix, regNoNum] = [regNoMatch[1], parseInt(regNoMatch[2], 10)];
+    const [startPrefix, startNum] = [startMatch[1], parseInt(startMatch[2], 10)];
+    const [endPrefix, endNum] = [endMatch[1], parseInt(endMatch[2], 10)];
+
+    // Check if the prefix matches and the number is within the numeric range
+    return regNoPrefix === startPrefix && regNoPrefix === endPrefix && 
+           regNoNum >= startNum && regNoNum <= endNum;
+}
+
 /**
  * Clears saved duties for a day from the database.
  */
@@ -29149,7 +29552,7 @@ function renderExamControlHallTicketTab() {
                 <div class="col-md-3 d-grid">
                     <button id="generate-all-hall-tickets-btn" class="btn btn-primary" disabled>Generate All Hall Tickets</button>
                 </div>
-            </div>
+            </div><div><button id="downloadbutton"> download table </button></div>
             <div id="hall-ticket-student-list-container" class="mt-4">
                 <p class="text-muted text-center p-4">Select an exam, class and division to load students.</p>
             </div>
@@ -29172,13 +29575,17 @@ function renderExamControlHallTicketTab() {
             </div>
         </div>
     `;
-
+    
+        const dwnldbtn =document.getElementById('downloadbutton');
     const examSelect = document.getElementById('hall-ticket-exam-select');
     const classSelect = document.getElementById('hall-ticket-class-select');
     const divisionSelect = document.getElementById('hall-ticket-division-select');
     const generateAllBtn = document.getElementById('generate-all-hall-tickets-btn');
     const studentListContainer = document.getElementById('hall-ticket-student-list-container');
-
+// --- THIS IS THE NEW LOGIC ---
+    if (selectedExamForControl) {
+        examSelect.value = selectedExamForControl;
+    }
     // --- NEW LOCAL VARIABLE TO STORE THE CURRENTLY DISPLAYED STUDENTS ---
     let currentStudentsForHallTicket = [];
 
@@ -29219,6 +29626,9 @@ function renderExamControlHallTicketTab() {
 
     divisionSelect.addEventListener('change', loadStudentsForHallTicket);
 
+dwnldbtn.addEventListener('click', () => {
+    printContentOfDiv('hall-ticket-student-list-container','Seating Arrangements')
+});
     generateAllBtn.addEventListener('click', () => {
         if (currentStudentsForHallTicket.length === 0) {
             showAlert('No students found for generating hall tickets for the selected exam, class, and division.', 'info');
@@ -29297,84 +29707,56 @@ function renderExamControlHallTicketTab() {
         }
     });
 }
-
-
-/**
- * Renders the Examination Control Reports tab content.
- */
-/**
- * Renders the main UI for the Examination Reports tab with specific report sections.
- */
-/**
- * Renders the UI for the Examination Reports tab with an improved layout.
- */
 function renderExamControlReportsTab() {
     const container = document.getElementById('exam-control-reports');
     if (!container) return;
 
-    // The classOptions are now removed from here, as they will be populated dynamically.
     container.innerHTML = `
         <div class="ui-card mb-4">
             <h5 class="section-header">Report Filters</h5>
             <div class="row g-3 align-items-end">
-                <div class="col-md-4"><label class="form-label">Exam</label><select id="report-exam-select" class="form-select"><option value="">-- Select --</option>        ${exams
-            .filter(e => e.isActive) // This line only keeps active exams
-            .map(e => `<option value="${e.id}">${e.name}</option>`)
-            .join('')}</select></div>
+                <div class="col-md-4"><label class="form-label">Exam</label><select id="report-exam-select" class="form-select" disabled>${exams.filter(e => e.isActive).map(e => `<option value="${e.id}">${e.name}</option>`).join('')}</select></div>
                 <div class="col-md-4"><label class="form-label">Date</label><select id="report-date-select" class="form-select" disabled><option>-- Select Exam --</option></select></div>
                 <div class="col-md-4"><label class="form-label">Session</label><select id="report-session-select" class="form-select"><option value="FN">Forenoon</option><option value="AN">Afternoon</option></select></div>
             </div>
         </div>
-        
         <div class="ui-card">
             <h5 class="section-header">Available Reports</h5>
             <div class="list-group">
                 <div class="list-group-item">
-                    <div class="d-flex w-100 justify-content-between">
-                        <h6 class="mb-1">Full Day Duty Report</h6>
-                        <button id="print-full-day-duty-report-btn" class="btn btn-sm btn-outline-primary">Generate</button>
-                    </div>
+                    <div class="d-flex w-100 justify-content-between"><h6 class="mb-1">Full Day Duty Report</h6><button id="print-full-day-duty-report-btn" class="btn btn-sm btn-outline-primary">Generate</button></div>
                     <p class="mb-1 small text-muted">A complete list of room duties and allocations for the selected date.</p>
                 </div>
-
                 <div class="list-group-item">
-                    <div class="row align-items-center">
-                        <div class="col-md-4">
-                            <h6 class="mb-1">Class Seating Summary</h6>
-                            <p class="mb-1 small text-muted">A gender-separated summary of which rooms selected classes are in.</p>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small">Select Class(es) with Scheduled Exams</label>
-                            <select id="report-class-select" class="form-select form-select-sm" multiple size="5" disabled></select>
-                        </div>
-                        <div class="col-md-2 d-grid">
-                            <button id="print-class-summary-btn" class="btn btn-sm btn-primary">Generate</button>
-                        </div>
+                    <div class="row align-items-center"><div class="col-md-4"><h6 class="mb-1">Class Seating Summary</h6><p class="mb-1 small text-muted">A gender-separated summary of which rooms selected classes are in.</p></div>
+                        <div class="col-md-6"><label class="form-label small">Select Class(es) with Scheduled Exams</label><select id="report-class-select" class="form-select form-select-sm" multiple size="5" disabled></select></div>
+                        <div class="col-md-2 d-grid"><button id="print-class-summary-btn" class="btn btn-sm btn-primary">Generate</button></div>
                     </div>
                 </div>
-
                 <div class="list-group-item">
-                    <div class="d-flex w-100 justify-content-between">
-                         <h6 class="mb-1">Exam Room Labels (4 per page)</h6>
-                         <button id="print-room-labels-btn" class="btn btn-sm btn-outline-info">Generate</button>
-                     </div>
+                     <div class="d-flex w-100 justify-content-between"><h6 class="mb-1">Exam Room Labels (4 per page)</h6><button id="print-room-labels-btn" class="btn btn-sm btn-outline-info">Generate</button></div>
                      <p class="mb-1 small text-muted">Print labels for each exam room door for the selected session.</p>
                  </div>
                  <div class="list-group-item">
-                     <div class="d-flex w-100 justify-content-between">
-                         <h6 class="mb-1">Question Paper Bundle Labels</h6>
-                         <button id="print-qp-labels-btn" class="btn btn-sm btn-outline-dark">Generate</button>
-                     </div>
+                     <div class="d-flex w-100 justify-content-between"><h6 class="mb-1">Question Paper Bundle Labels</h6><button id="print-qp-labels-btn" class="btn btn-sm btn-outline-dark">Generate</button></div>
                     <p class="mb-1 small text-muted">Labels for QP bundles with class, subject, and medium counts for the selected session.</p>
                  </div>
             </div>
         </div>
     `;
     
-    attachReportsTabListeners();
+    // --- THIS IS THE NEW LOGIC ---
+    const examSelect = document.getElementById('report-exam-select');
+    if (selectedExamForControl) {
+        examSelect.value = selectedExamForControl;
+    }
+    // --- END NEW LOGIC ---
+    
+    attachReportsTabListeners(); // This will now run with the exam pre-selected
+    
+    // Manually trigger the 'change' event to populate the date dropdown
+    examSelect.dispatchEvent(new Event('change'));
 }
-
-
 /**
  * Attaches event listeners and handles dynamic population of the class filter.
  */
@@ -29465,25 +29847,42 @@ function attachReportsTabListeners() {
 function generateQuestionPaperLabels(examId, date, session) {
     if (!examId || !date || !session) return showAlert('Please select Exam, Date, and Session.', 'danger');
     
-    const sessionKey = `${examId}_${date.replace(/-/g, '')}_${session}`;
-    const studentsWithAllocation = students.filter(s => s.examRoomAllocations?.[sessionKey]);
-    if (studentsWithAllocation.length === 0) return showAlert('No students allocated to generate QP labels.', 'info');
+    // --- NEW RULE-BASED DATA FETCHING ---
+    const rulesForSession = examRoomAllocationRules.filter(r => 
+        r.examId === examId && r.date === date && r.session === session
+    );
 
-    const dataByRoom = studentsWithAllocation.reduce((acc, student) => {
-        const roomId = student.examRoomAllocations[sessionKey];
-        if (!acc[roomId]) {
-            acc[roomId] = { 
-                room: examRooms.find(r => r.id === roomId), 
-                students: [],
-                duty: examDuties.find(d => d.examId === examId && d.date === date && d.session === session && d.roomId === roomId)
-            };
+    if (rulesForSession.length === 0) {
+        return showAlert('No allocation rules found for this session.', 'info');
+    }
+
+    const dataByRoom = {};
+    students.forEach(student => {
+        const regNo = student.examRegNumbers?.[examId];
+        if (!regNo) return; 
+        const matchingRule = rulesForSession.find(rule => 
+            doesRegNoMatchRule(regNo, rule.regNoRangeText)
+        );
+        if (matchingRule) {
+            const roomId = matchingRule.roomId;
+            if (!dataByRoom[roomId]) {
+                dataByRoom[roomId] = { 
+                    room: examRooms.find(r => r.id === roomId), 
+                    duty: examDuties.find(d => d.roomId === roomId && d.date === date && d.session === session), 
+                    students: [] 
+                };
+            }
+            dataByRoom[roomId].students.push(student);
         }
-        acc[roomId].students.push(student);
-        return acc;
-    }, {});
+    });
+    // --- END NEW LOGIC ---
 
+    if (Object.keys(dataByRoom).length === 0) {
+        return showAlert('No students were found matching the allocation rules for this session.', 'info');
+    }
+
+    // The rest of the function (HTML generation) is the same as before.
     const contentHtml = Object.values(dataByRoom).map(data => {
-        // --- 1. Advanced Grouping Logic ---
         const countsByClassAndSubject = data.students.reduce((acc, s) => {
             const schedule = examSchedules.find(sch => sch.examId === examId && sch.date === date && sch.session === session && sch.classId === s.classId && sch.division === s.division);
             if (!schedule) return acc;
@@ -29515,7 +29914,6 @@ function generateQuestionPaperLabels(examId, date, session) {
             return acc;
         }, {});
 
-        // --- 2. Build the Dynamic Table ---
         const allMediumsInRoom = [...new Set(Object.values(countsByClassAndSubject).flatMap(c => Object.keys(c.mediums)))].sort();
         const mediumHeaderHtml = allMediumsInRoom.map(m => `<th colspan="3" class="text-center">${m}</th>`).join('');
         const subHeaderHtml = allMediumsInRoom.map(() => `<th>M</th><th>F</th><th>Total</th>`).join('');
@@ -29589,106 +29987,176 @@ function generateClassSeatingSummary(examId, date, classIds, session) {
 
     let combinedHtml = '';
 
+    // 1. Find all rules for this specific session
+    const rulesForSession = examRoomAllocationRules.filter(rule => 
+        rule.examId === examId && rule.date === date && rule.session === session
+    );
+
+    if (rulesForSession.length === 0) {
+        return showAlert('No allocation rules have been saved for this session.', 'info');
+    }
+
+    // 2. Iterate through each class the user wants to report on
     classIds.forEach(classId => {
         const className = classes.find(c => c.id === classId)?.name || classId;
-        const sessionKey = `${examId}_${date.replace(/-/g, '')}_${session}`;
         
-        // Find all rules for this specific session
-        const rulesForSession = examRoomAllocationRules.filter(rule => 
-            rule.examId === examId && rule.date === date && rule.session === session
+        // 3. Find all students in this class who are taking the exam (have a reg no)
+        const studentsInClass = students.filter(s => 
+            s.classId === classId && 
+            s.examRegNumbers?.[examId] &&
+            s.status !== 'TC Issued' && s.status !== 'Graduated' // Ignore inactive students
         );
 
-        const genderGroups = { M: [], F: [] }; // To hold rules for Boys (M) and Girls (F)
+        if (studentsInClass.length === 0) {
+            combinedHtml += `<h4 class="class-title">${className}</h4><p class="text-muted">No students from this class are registered for this exam.</p>`;
+            return; // Go to the next classId
+        }
 
-        rulesForSession.forEach(rule => {
-            const regNoRegex = /^([A-Z0-9]+)_(\d+)$/;
-            const affectedRegNos = new Set();
-            const rangeParts = (rule.regNoRangeText || '').split('-').map(p => p.trim());
-            const startMatch = rangeParts[0].match(regNoRegex);
-            const endMatch = (rangeParts[1] || rangeParts[0]).match(regNoRegex);
+        const genderGroups = { M: [], F: [] }; // To hold {range, room, count}
 
-            if (startMatch && endMatch && startMatch[1] === endMatch[1]) {
-                const prefix = startMatch[1];
-                for (let i = parseInt(startMatch[2]); i <= parseInt(endMatch[2]); i++) {
-                    affectedRegNos.add(`${prefix}_${i.toString().padStart(3, '0')}`);
-                }
-            }
+        // --- NEW LOGIC ---
+        // 4. Group students by the allocation rule they match
+        const studentsByRule = {};
+        studentsInClass.forEach(student => {
+            const regNo = student.examRegNumbers[examId];
+            const matchingRule = rulesForSession.find(rule => doesRegNoMatchRule(regNo, rule.regNoRangeText));
             
-            // Count only students from the current classId that match the rule's reg numbers
-            const studentCount = students.filter(s => 
-                s.classId === classId && 
-                affectedRegNos.has(s.examRegNumbers?.[examId]) &&
-                s.examRoomAllocations?.[sessionKey] === rule.roomId
-            ).length;
-
-            if (studentCount > 0) {
-                const genderPrefix = (startMatch[1] || '').charAt(0).toUpperCase();
-                if (genderPrefix === 'M' || genderPrefix === 'F') {
-                    genderGroups[genderPrefix].push({
-                        range: rule.regNoRangeText,
-                        room: examRooms.find(r => r.id === rule.roomId)?.name || rule.roomId,
-                        count: studentCount
-                    });
+            if (matchingRule) {
+                if (!studentsByRule[matchingRule.id]) {
+                    studentsByRule[matchingRule.id] = {
+                        rule: matchingRule,
+                        students: [],
+                        // Infer gender from the registration number prefix
+                        gender: (regNo.startsWith('M') ? 'M' : 'F') 
+                    };
                 }
+                studentsByRule[matchingRule.id].students.push(student);
             }
         });
+        
+        // 5. Process the grouped students into the final report format
+        Object.values(studentsByRule).forEach(group => {
+            const { rule, students, gender } = group;
+            if (students.length > 0) {
+                // Get all reg numbers for this group and compact them (e.g., "M-X_101 - M-X_105")
+                const studentRegNos = students.map(s => s.examRegNumbers[examId]);
+                
+                genderGroups[gender].push({
+                    range: generateCompactRegNoRanges(studentRegNos), // Use the compacting function
+                    room: examRooms.find(r => r.id === rule.roomId)?.name || rule.roomId,
+                    count: students.length
+                });
+            }
+        });
+        // --- END NEW LOGIC ---
 
-        // Function to build a table for a specific gender
+        // 6. Helper to build the final HTML tables (no change)
         const buildGenderTable = (gender, rules) => {
             if (rules.length === 0) return '';
             rules.sort((a, b) => a.range.localeCompare(b.range, undefined, { numeric: true }));
             return `
-                <h6 class="mt-3">${gender}</h6>
-                <table class="table table-sm table-bordered" style="font-size: 1.85em;">
-                    <thead class="table-light"><tr><th>Reg. No. Range</th><th>Exam Room</th><th class="text-center">Count</th></tr></thead>
+                <h6 class="mt-3">${gender === 'M' ? 'Boys' : 'Girls'}</h6>
+                <table class="table table-sm table-bordered" style="font-size: 0.85em;">
+                    <thead class="table-light"><tr><th>Reg. No. Range(s)</th><th>Exam Room</th><th class="text-center">Count</th></tr></thead>
                     <tbody>${rules.map(r => `<tr><td>${r.range}</td><td>${r.room}</td><td class="text-center">${r.count}</td></tr>`).join('')}</tbody>
                 </table>`;
         };
         
-        const boysTable = buildGenderTable('Boys', genderGroups.M);
-        const girlsTable = buildGenderTable('Girls', genderGroups.F);
+        const boysTable = buildGenderTable('M', genderGroups.M);
+        const girlsTable = buildGenderTable('F', genderGroups.F);
 
+        // 7. Assemble the HTML for this class (no change)
         if (boysTable || girlsTable) {
             combinedHtml += `
                 <div class="class-summary-section">
-                    <div class="class-summary-section2">
                     <h4 class="class-title">${className}</h4>
-                    <div class="column class-summary-section2">
-                        <div class="border-end pe-4">${boysTable || '<p class="text-muted">No boys allocated.</p>'}</div>
-                        <div class="ps-4">${girlsTable || '<p class="text-muted">No girls allocated.</p>'}</div>
-                    </div>
+                    <div class="row">
+                        <div class="col-6 border-end pe-4">${boysTable || '<p class="text-muted">No boys allocated.</p>'}</div>
+                        <div class="col-6 ps-4">${girlsTable || '<p class="text-muted">No girls allocated.</p>'}</div>
                     </div>
                 </div>`;
         }
     });
 
     if (combinedHtml === '') {
-        return showAlert('No applicable allocation rules found for the selected class(es).', 'info');
+        return showAlert('No students from the selected class(es) matched any allocation rules.', 'info');
     }
 
+    // 8. Prepare and call the print function (no change)
     const reportTitle = `Seating Arrangement Summary`;
     const subTitle = `Exam: ${exams.find(e => e.id === examId).name} | Date: ${new Date(date).toLocaleDateString('en-GB')} | Session: ${session}`;
-    const customHeaderHtml = `<div class='text-center'><h3>${reportTitle}</h3><p class="text-muted">${subTitle}</p></div>`;
-    const extraCss = `.class-summary-section2 { margin-top: 20px; page-break-inside: avoid; } .class-title { text-align: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #eee; }`;
+    const customHeaderHtml = `
+        <div class='text-center'>
+            <h3>${schoolDetails.name || 'School Name'}</h3>
+            <h4>${reportTitle}</h4>
+            <p class="text-muted">${subTitle}</p>
+        </div>`;
+    const extraCss = `
+        .class-summary-section { margin-top: 20px; page-break-inside: avoid; } 
+        .class-title { 
+            text-align: center; 
+            margin-bottom: 15px; 
+            padding-bottom: 10px; 
+            border-bottom: 2px solid #eee; 
+        }
+        .row { display: flex; flex-direction: row; }
+        .col-6 { width: 50%; }
+        .border-end { border-right: 1px solid #dee2e6; }
+        .pe-4 { padding-right: 1.5rem; }
+        .ps-4 { padding-left: 1.5rem; }
+    `;
 
     printReport({ contentHtml: combinedHtml, title: reportTitle, customHeaderHtml, extraCss });
 }
 /**
  * REPORT 3: Generates printable labels for exam room doors (4 per page).
  */
+/**
+ * (REVISED) REPORT 3: Generates printable labels for exam room doors (4 per page).
+ * This version reads from examRoomAllocationRules to find students.
+ */
 function generateExamRoomLabels(examId, date, session) {
     if (!examId || !date || !session) return showAlert('Please select Exam, Date, and Session.', 'danger');
-    const sessionKey = `${examId}_${date.replace(/-/g, '')}_${session}`;
-    const studentsWithAllocation = students.filter(s => s.examRoomAllocations?.[sessionKey]);
-    if (studentsWithAllocation.length === 0) return showAlert('No students allocated to generate room labels.', 'info');
+    
+    // --- NEW RULE-BASED DATA FETCHING ---
+    const rulesForSession = examRoomAllocationRules.filter(r => 
+        r.examId === examId && r.date === date && r.session === session
+    );
 
-    const dataByRoom = studentsWithAllocation.reduce((acc, student) => {
-        const roomId = student.examRoomAllocations[sessionKey];
-        if (!acc[roomId]) acc[roomId] = { room: examRooms.find(r => r.id === roomId), duty: examDuties.find(d => d.roomId === roomId && d.date === date && d.session === session), students: [] };
-        acc[roomId].students.push(student);
-        return acc;
-    }, {});
+    if (rulesForSession.length === 0) {
+        return showAlert('No allocation rules found for this session.', 'info');
+    }
 
+    const dataByRoom = {};
+
+    students.forEach(student => {
+        const regNo = student.examRegNumbers?.[examId];
+        if (!regNo) return; // Skip student if they have no reg number for this exam
+
+        // Find the rule this student matches
+        const matchingRule = rulesForSession.find(rule => 
+            doesRegNoMatchRule(regNo, rule.regNoRangeText)
+        );
+
+        if (matchingRule) {
+            const roomId = matchingRule.roomId;
+            if (!dataByRoom[roomId]) {
+                dataByRoom[roomId] = { 
+                    room: examRooms.find(r => r.id === roomId), 
+                    duty: examDuties.find(d => d.roomId === roomId && d.date === date && d.session === session), 
+                    students: [] 
+                };
+            }
+            dataByRoom[roomId].students.push(student);
+        }
+    });
+    // --- END NEW LOGIC ---
+
+    if (Object.keys(dataByRoom).length === 0) {
+        return showAlert('No students were found matching the allocation rules for this session.', 'info');
+    }
+
+    // The rest of the function (HTML generation) is the same as before.
     const contentHtml = Object.values(dataByRoom).map(data => {
         const regNos = data.students.map(s => s.examRegNumbers?.[examId]).filter(Boolean);
         const regNoSummary = generateCompactRegNoRanges(regNos);
@@ -30423,27 +30891,23 @@ function generateAndPrintRoomAllocationReport(examId, date, session) {
     document.body.removeChild(tempDiv);
 }
 
-// generateCompactRegNoRanges helper function (remains unchanged, it handles the sorting internally)
-/*
-function generateCompactRegNoRanges(regNos) {
-    // ... (your existing implementation) ...
-}
-*/
-
-
+/**
+ * (REVISED) Converts a sorted array of registration numbers into compact ranges.
+ * e.g., ["M_101", "M_102", "M_104"] becomes "M_101 - M_102, M_104"
+ * @param {string[]} regNos - A list of registration numbers.
+ * @returns {string} A comma-separated string of ranges.
+ */
 function generateCompactRegNoRanges(regNos) {
     if (!regNos || regNos.length === 0) return '';
 
-    // Sort the numbers to ensure correct range generation
+    // 1. Sort the numbers to ensure correct range generation
     regNos.sort((a, b) => {
         const parseRegNo = (reg) => {
-            const parts = reg.split('_');
-            return { prefix: parts[0], num: parseInt(parts[1], 10) };
+            const parts = (reg || 'N/A_0').split('_');
+            return { prefix: parts[0], num: parseInt(parts[1], 10) || 0 };
         };
-
         const parsedA = parseRegNo(a);
         const parsedB = parseRegNo(b);
-
         const prefixCompare = parsedA.prefix.localeCompare(parsedB.prefix);
         if (prefixCompare !== 0) return prefixCompare;
         return parsedA.num - parsedB.num;
@@ -30456,22 +30920,23 @@ function generateCompactRegNoRanges(regNos) {
     for (let i = 1; i < regNos.length; i++) {
         const currentPrefix = regNos[i].substring(0, regNos[i].lastIndexOf('_'));
         const currentNum = parseInt(regNos[i].substring(regNos[i].lastIndexOf('_') + 1), 10);
-
         const prevPrefix = currentRangeEnd.substring(0, currentRangeEnd.lastIndexOf('_'));
         const prevNum = parseInt(currentRangeEnd.substring(currentRangeEnd.lastIndexOf('_') + 1), 10);
 
+        // 2. Check if the current number is sequential and has the same prefix
         if (currentPrefix === prevPrefix && currentNum === prevNum + 1) {
             currentRangeEnd = regNos[i]; // Extend current range
         } else {
-            // End of a range, add it
-            ranges.push(currentRangeStart === currentRangeEnd ? currentRangeStart : `${currentRangeStart}-${currentRangeEnd}`);
-            // Start a new range
+            // 3. End of a range, add it to the list
+            ranges.push(currentRangeStart === currentRangeEnd ? currentRangeStart : `${currentRangeStart} - ${currentRangeEnd}`);
+            // 4. Start a new range
             currentRangeStart = regNos[i];
             currentRangeEnd = regNos[i];
         }
     }
-    // Add the last range
-    ranges.push(currentRangeStart === currentRangeEnd ? currentRangeStart : `${currentRangeStart}------${currentRangeEnd}`);
+    
+    // 5. Add the final range to the list
+    ranges.push(currentRangeStart === currentRangeEnd ? currentRangeStart : `${currentRangeStart} - ${currentRangeEnd}`);
 
     return ranges.join(', ');
 }
@@ -30858,31 +31323,35 @@ function renderExamControlAbsenteeReportingTab() {
         <div class="ui-card mb-4">
             <h5 class="section-header">Report Absentees</h5>
             <div class="row g-3">
-                <div class="col-md-4"><label class="form-label">Exam</label><select id="absentee-exam-select" class="form-select">${exams.filter(e=>e.isActive).map(e => `<option value="${e.id}">${e.name}</option>`).join('')}</select></div>
+                <div class="col-md-4"><label class="form-label">Exam</label><select id="absentee-exam-select" class="form-select" disabled>${exams.filter(e=>e.isActive).map(e => `<option value="${e.id}">${e.name}</option>`).join('')}</select></div>
                 <div class="col-md-4"><label class="form-label">Date</label><select id="absentee-date-select" class="form-select" disabled><option>-- Select Exam --</option></select></div>
                 <div class="col-md-4"><label class="form-label">Session</label><select id="absentee-session-select" class="form-select"><option value="FN">Forenoon</option><option value="AN">Afternoon</option></select></div>
             </div>
         </div>
-
         <div class="row g-4">
-            <div class="col-lg-5">
-                <div class="ui-card h-100">
-                    <h5 class="section-header">Find Student</h5>
-                    <div class="input-group">
-                        <select id="absentee-search-type" class="form-select" style="max-width: 150px;"><option value="regNo">Exam Reg. No.</option><option value="admnNo">Admission No.</option></select>
-                        <input type="text" id="absentee-search-input" class="form-control" placeholder="Enter Exam Reg. No.">
-                        <button id="find-student-btn" class="btn btn-primary">Find</button>
-                    </div>
-                    <div id="absentee-student-details" class="mt-4"></div>
+            <div class="col-lg-5"><div class="ui-card h-100"><h5 class="section-header">Find Student</h5>
+                <div class="input-group">
+                    <select id="absentee-search-type" class="form-select" style="max-width: 150px;"><option value="regNo">Exam Reg. No.</option><option value="admnNo">Admission No.</option></select>
+                    <input type="text" id="absentee-search-input" class="form-control" placeholder="Enter Exam Reg. No.">
+                    <button id="find-student-btn" class="btn btn-primary">Find</button>
                 </div>
-            </div>
-            <div class="col-lg-7">
-                <div id="absentee-list-container" class="ui-card h-100"></div>
-            </div>
+                <div id="absentee-student-details" class="mt-4"></div>
+            </div></div>
+            <div class="col-lg-7"><div id="absentee-list-container" class="ui-card h-100"></div></div>
         </div>
     `;
     
-    attachAbsenteeTabListeners();
+    // --- THIS IS THE NEW LOGIC ---
+    const examSelect = document.getElementById('absentee-exam-select');
+    if (selectedExamForControl) {
+        examSelect.value = selectedExamForControl;
+    }
+    // --- END NEW LOGIC ---
+    
+    attachAbsenteeTabListeners(); // This will now run with the exam pre-selected
+    
+    // Manually trigger the 'change' event to populate the date dropdown
+    examSelect.dispatchEvent(new Event('change'));
 }
 
 /**
@@ -31292,7 +31761,6 @@ let currentExamRegSettings = {};
 function renderExamControlRegNoAssignmentTab() {
     const container = document.getElementById('exam-control-reg-no');
     if (!container) return;
-
     const classOptions = classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
 
     container.innerHTML = `
@@ -31301,12 +31769,7 @@ function renderExamControlRegNoAssignmentTab() {
             <div class="row g-3 align-items-end">
                 <div class="col-md-4">
                     <label class="form-label">Select Exam</label>
-                    <select id="reg-exam-select" class="form-select">
-                        <option value="">-- Select Exam --</option>
-                                ${exams
-            .filter(e => e.isActive) // This line only keeps active exams
-            .map(e => `<option value="${e.id}">${e.name}</option>`)
-            .join('')}
+                    <select id="reg-exam-select" class="form-select" disabled> ${exams.filter(e => e.isActive).map(e => `<option value="${e.id}">${e.name}</option>`).join('')}
                     </select>
                 </div>
                 <div class="col-md-4">
@@ -31316,21 +31779,13 @@ function renderExamControlRegNoAssignmentTab() {
                         ${classOptions}
                     </select>
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label">Male Start No.</label>
-                    <input type="number" id="reg-male-start" class="form-control" value="101" min="1">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label">Female Start No.</label>
-                    <input type="number" id="reg-female-start" class="form-control" value="101" min="1">
-                </div>
+                <div class="col-md-2"><label class="form-label">Male Start No.</label><input type="number" id="reg-male-start" class="form-control" value="101" min="1"></div>
+                <div class="col-md-2"><label class="form-label">Female Start No.</label><input type="number" id="reg-female-start" class="form-control" value="101" min="1"></div>
             </div>
             <div class="text-end mt-3">
                 <button id="generate-reg-nos-btn" class="btn btn-primary" disabled>Generate Numbers</button>
             </div>
-            <div id="reg-no-assignment-list" class="mt-4">
-                <p class="text-muted text-center p-4">Select an exam and class to generate registration numbers.</p>
-            </div>
+            <div id="reg-no-assignment-list" class="mt-4"></div>
         </div>
     `;
 
@@ -31339,42 +31794,35 @@ function renderExamControlRegNoAssignmentTab() {
     const maleStartInput = document.getElementById('reg-male-start');
     const femaleStartInput = document.getElementById('reg-female-start');
     const generateBtn = document.getElementById('generate-reg-nos-btn');
-    const assignmentListContainer = document.getElementById('reg-no-assignment-list');
+
+    // --- THIS IS THE NEW LOGIC ---
+    if (selectedExamForControl) {
+        examSelect.value = selectedExamForControl;
+    }
+    // --- END NEW LOGIC ---
 
     const updateUIAndButton = async () => {
         const examId = examSelect.value;
         const classId = classSelect.value;
-
         generateBtn.disabled = !(examId && classId);
-
-        // Load and pre-fill starting numbers from settings
         if (examRegistrationSettings && examRegistrationSettings[`${classId}_M`]) {
             maleStartInput.value = examRegistrationSettings[`${classId}_M`];
         } else {
-            maleStartInput.value = '101'; // Default
+            maleStartInput.value = '101';
         }
         if (examRegistrationSettings && examRegistrationSettings[`${classId}_F`]) {
             femaleStartInput.value = examRegistrationSettings[`${classId}_F`];
         } else {
-            femaleStartInput.value = '101'; // Default
+            femaleStartInput.value = '101';
         }
-        
-        displayRegNoStatus(examId, classId); // Pass only classId, no division
+        displayRegNoStatus(examId, classId);
     };
 
     classSelect.addEventListener('change', updateUIAndButton);
-    examSelect.addEventListener('change', updateUIAndButton);
-    maleStartInput.addEventListener('input', updateUIAndButton); // Re-evaluate button state
-    femaleStartInput.addEventListener('input', updateUIAndButton); // Re-evaluate button state
-
     generateBtn.addEventListener('click', async () => {
-        const examId = examSelect.value;
-        const classId = classSelect.value;
-        const maleStart = parseInt(maleStartInput.value, 10);
-        const femaleStart = parseInt(femaleStartInput.value, 10);
-        await generateAndSaveExamRegNumbers(examId, classId, maleStart, femaleStart);
+        await generateAndSaveExamRegNumbers(examSelect.value, classSelect.value, parseInt(maleStartInput.value), parseInt(femaleStartInput.value));
     });
-
+    
     // Initial display
     updateUIAndButton();
 }
@@ -31679,10 +32127,10 @@ async function generateAndSaveExamRegNumbers(examId, classId, division) {
     let currentSettings = examRegistrationSettings || {}; // Ensure it's initialized
 
     let nextMaleSeq = currentSettings[`${classId}_M`] || 101; // Start from 101 by default
-    let nextFemaleSeq = currentSettings[`${classId}_F`] || 101;
+    let nextFemaleSeq =currentSettings[`${classId}_F`] || 101;
 
-    const maleStudents = studentsInClass.filter(s => s.gender === 'M').sort((a, b) => a.name.localeCompare(b.name));
-    const femaleStudents = studentsInClass.filter(s => s.gender === 'F').sort((a, b) => a.name.localeCompare(b.name));
+    const maleStudents = studentsInClass.filter(s =>  s.gender === 'M').sort((a, b) => a.name.localeCompare(b.name));
+    const femaleStudents = studentsInClass.filter(s =>  s.gender === 'F').sort((a, b) => a.name.localeCompare(b.name));
 
     const classNameAbbr = classes.find(c => c.id === classId)?.alias.toUpperCase() || classId.slice(0, 5).toUpperCase();
     const batch = writeBatch(db);
@@ -31730,13 +32178,18 @@ async function generateAndSaveExamRegNumbers(examId, classId, division) {
         showAlert('All students in this group already have exam registration numbers for this exam.', 'info');
     }
 }
+// =========================================================================
+// --- EXAM ROOM ALLOCATION MODULE (RULE-BASED LOGIC) ---
+// =========================================================================
 
 // Local variable to store selected session and exam for allocation
 let currentAllocationExamId = null;
 let currentAllocationDate = null;
 let currentAllocationSession = null;
+
 /**
  * Renders the main tab for student-wise exam room allocation.
+ * (REVISED: Removed "Full Allocation Details" button as it's no longer applicable)
  */
 function renderExamControlRoomAllocationTab() {
     const container = document.getElementById('exam-control-room-alloc');
@@ -31746,70 +32199,58 @@ function renderExamControlRoomAllocationTab() {
         <div class="ui-card mb-4">
             <h5 class="section-header">1. Select Exam & Session(s)</h5>
             <div class="row g-3 align-items-end">
-                <div class="col-md-6">
-                    <label class="form-label" for="alloc-exam-select">Exam</label>
-                    <select id="alloc-exam-select" class="form-select"> 
-                        <option value="">-- Select an Exam --</option>
-                           ${exams
-            .filter(e => e.isActive) // This line only keeps active exams
-            .map(e => `<option value="${e.id}">${e.name}</option>`).join('')}</select>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label" for="alloc-session-select">Session(s)</label>
-                    <select id="alloc-session-select" class="form-select" multiple size="5" disabled>
-                        <option>-- Select an Exam --</option>
+                <div class="col-md-6"><label class="form-label" for="alloc-exam-select">Exam</label>
+                    <select id="alloc-exam-select" class="form-select" disabled> ${exams.filter(e => e.isActive).map(e => `<option value="${e.id}">${e.name}</option>`).join('')}
                     </select>
                 </div>
+                <div class="col-md-6"><label class="form-label" for="alloc-session-select">Session(s)</label>
+                    <select id="alloc-session-select" class="form-select" multiple size="5" disabled></select>
+                </div>
             </div>
-            <div class="form-text text-muted mt-2">Hold Ctrl (or Cmd) to select multiple sessions. The same rules will be applied to all.</div>
             <div id="allocation-summary" class="mt-4"></div>
         </div>
-
         <div id="allocation-rules-grid" class="ui-card mb-4 d-none">
             <h5 class="section-header">2. Define Allocation Rules</h5>
-            <div class="table-responsive">
-                <table class="table table-sm">
-                    <thead>
-                        <tr>
-                            <th>Room</th>
-                            <th>Capacity</th>
-                            <th>Remaining</th>
-                            <th>Start Reg No.</th>
-                            <th>Count</th>
-                            <th>Available</th>
-                            <th>End Reg No.</th>
-                            <th style="min-width: 150px;">Status</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody id="allocation-rules-tbody"></tbody>
-                </table>
-            </div>
+            <div class="table-responsive"><table class="table table-sm"><thead><tr>
+                <th></th><th>Room</th><th>Capacity</th><th>Remaining</th>
+                <th>Start Reg No.</th><th>Count</th><th>Available</th>
+                <th>End Reg No.</th><th style="min-width: 150px;">Status</th>
+            </tr></thead><tbody id="allocation-rules-tbody"></tbody></table></div>
             <div class="d-flex justify-content-between align-items-center mt-3">
                 <button id="add-alloc-rule-btn" class="btn btn-sm btn-outline-primary"><i class="fas fa-plus me-1"></i>Add Rule</button>
                 <button id="save-all-allocations-btn" class="btn btn-success btn-lg">
-                    <span class="spinner-border spinner-border-sm d-none me-2" role="status" aria-hidden="true"></span>
-                    Save All Allocations
+                    <span class="spinner-border spinner-border-sm d-none me-2"></span>Save All Allocation Rules
                 </button>
             </div>
         </div>
-
         <div id="room-allocation-list-container" class="ui-card mt-4">
-             <h5 class="section-header">3. Current Allocations & Reports</h5>
+             <h5 class="section-header">3. Current Allocation Rules</h5>
              <div class="d-flex justify-content-end mb-3">
-                 <button id="view-full-allocation-btn" class="btn btn-outline-secondary">
-                    <i class="fas fa-users me-2"></i>View Full Allocation Details Report
+                 <button id="view-rule-summary-btn" class="btn btn-outline-secondary">
+                    <i class="fas fa-file-alt me-2"></i>View Rule Summary Report
                  </button>
              </div>
              <div id="current-room-allocations-table"></div>
              <div id="exam-reports-preview" class="mt-4"></div>
         </div>
     `;
-    attachAllocationTabListeners();
+
+    // --- THIS IS THE NEW LOGIC ---
+    const examSelect = document.getElementById('alloc-exam-select');
+    if (selectedExamForControl) {
+        examSelect.value = selectedExamForControl;
+    }
+    // --- END NEW LOGIC ---
+    
+    attachAllocationTabListeners(); // This will now run with the exam pre-selected
+    
+    // Manually trigger the 'change' event to populate the session dropdown
+    examSelect.dispatchEvent(new Event('change'));
 }
 
 /**
  * Attaches all necessary event listeners for the allocation tab.
+ * (REVISED: Re-wired the "View Full Report" button)
  */
 function attachAllocationTabListeners() {
     const examSelect = document.getElementById('alloc-exam-select');
@@ -31820,9 +32261,10 @@ function attachAllocationTabListeners() {
     const loadDataForSession = () => {
         const examId = examSelect.value;
         const selectedSessions = Array.from(sessionSelect.selectedOptions).map(opt => opt.value);
+        
+        // This function must be updated to read from rules, not students
         updateAllocationStatusSummary(examId, selectedSessions);
 
-        // Clear previous views
         document.getElementById('exam-reports-preview').innerHTML = '';
 
         if (examId && selectedSessions.length > 0) {
@@ -31830,6 +32272,7 @@ function attachAllocationTabListeners() {
             rulesTbody.innerHTML = '';
             addAllocationRuleRow();
             const [firstDate, firstSession] = selectedSessions[0].split('_');
+            // This function must be updated to read from rules
             displayCurrentAllocations(examId, firstDate, firstSession);
         } else {
             rulesGrid.classList.add('d-none');
@@ -31857,7 +32300,6 @@ function attachAllocationTabListeners() {
 
     sessionSelect.addEventListener('change', loadDataForSession);
 
-    // Delegate events for the dynamic rules table
     rulesTbody.addEventListener('input', recalculateAllocationGrid);
     rulesTbody.addEventListener('change', recalculateAllocationGrid);
 
@@ -31871,32 +32313,29 @@ function attachAllocationTabListeners() {
     document.getElementById('add-alloc-rule-btn').addEventListener('click', addAllocationRuleRow);
     document.getElementById('save-all-allocations-btn').addEventListener('click', saveAllAllocations);
 
-    document.getElementById('view-full-allocation-btn').addEventListener('click', () => {
+    // RE-WIRED this button to point to a different, rule-based report
+    document.getElementById('view-rule-summary-btn').addEventListener('click', () => {
         const examId = examSelect.value;
         const selectedSessions = Array.from(sessionSelect.selectedOptions).map(opt => opt.value);
         if (!examId || selectedSessions.length === 0) {
             showAlert('Please select an exam and at least one session to view the report.', 'warning');
             return;
         }
-        displayFullAllocationDetailsByClass(examId, selectedSessions);
+        // This report just shows the rules and their counts
+        const [date, session] = selectedSessions[0].split('_');
+        generateAndPrintRuleSummaryReport(examId, date, session);
     });
 }
 
-
 /**
- * Adds a new row to the allocation table with several UI enhancements:
- * - Moves the remove button to the left.
- * - Auto-selects the next available exam room.
- * - Auto-fills the next sequential registration number.
- * - Auto-focuses the 'Start Reg No.' input field.
+ * Adds a new row to the allocation table.
+ * (No changes needed, this function is correct)
  */
 function addAllocationRuleRow() {
     const tbody = document.getElementById('allocation-rules-tbody');
     let nextStartRegNo = '';
     let nextRoomId = null;
-    // --- KEY CHANGE IS HERE: Sort exam rooms by roomNumber ---
     const sortedExamRooms = [...examRooms].sort((a, b) => {
-        // Ensure roomNumber is treated as a number for correct sorting
         const numA = parseInt(a.roomNumber, 10) || 0;
         const numB = parseInt(b.roomNumber, 10) || 0;
         return numA - numB;
@@ -31904,7 +32343,6 @@ function addAllocationRuleRow() {
 
     const lastRow = tbody.querySelector('tr:last-child');
     if (lastRow) {
-        // 1. Get the next sequential registration number from the previous row
         const lastEndRegNo = lastRow.querySelector('.end-reg-no').textContent;
         const regNoRegex = /^([A-Z0-9]+)_(\d+)$/;
         const match = lastEndRegNo.match(regNoRegex);
@@ -31914,25 +32352,19 @@ function addAllocationRuleRow() {
             nextStartRegNo = `${prefix}_${nextNum.toString().padStart(3, '0')}`;
         }
 
-        // 2. Get the next room in the sequence
         const lastRoomId = lastRow.querySelector('.room-select').value;
         const lastRoomIndex = sortedExamRooms.findIndex(r => r.id === lastRoomId);
         if (lastRoomIndex > -1) {
-            // Modulo operator (%) ensures it wraps around to the start if at the end
             const nextRoomIndex = (lastRoomIndex + 1) % sortedExamRooms.length;
             nextRoomId = sortedExamRooms[nextRoomIndex].id;
         }
     }
 
-
     const newRow = document.createElement('tr');
-    
-    // Create room options, pre-selecting the next room if available
     const roomOptions = examRooms.map(r => 
         `<option value="${r.id}" data-capacity="${r.capacity}" ${r.id === nextRoomId ? 'selected' : ''}>${r.name}</option>`
     ).join('');
 
-    // 3. Update the HTML structure with the remove button on the left
     newRow.innerHTML = `
         <td><button type="button" class="btn btn-sm btn-outline-danger remove-rule-btn">&times;</button></td>
         <td><select class="form-select form-select-sm room-select">${roomOptions}</select></td>
@@ -31946,18 +32378,16 @@ function addAllocationRuleRow() {
     `;
     tbody.appendChild(newRow);
 
-    // 4. Auto-focus the 'Start Reg No.' input field for immediate typing
     const startRegNoInput = newRow.querySelector('.count');
     if (startRegNoInput) {
         startRegNoInput.focus();
     }
-
-    // Refresh the entire grid to update all calculations
+    
     recalculateAllocationGrid();
 }
 
 /**
- * Updates the summary card with total, allocated, and balance counts for selected sessions.
+ * (REWRITTEN) Updates the summary card by simulating rule-based allocation.
  */
 async function updateAllocationStatusSummary(examId, selectedSessions) {
     const summaryContainer = document.getElementById('allocation-summary');
@@ -31971,16 +32401,37 @@ async function updateAllocationStatusSummary(examId, selectedSessions) {
 
     for (const sessionKeyString of selectedSessions) {
         const [date, session] = sessionKeyString.split('_');
+        
+        // 1. Calculate Total Slots to Fill (Same as before)
         const schedulesForSession = examSchedules.filter(s => s.examId === examId && s.date === date && s.session === session);
         let studentsInThisSession = 0;
         schedulesForSession.forEach(schedule => {
-            studentsInThisSession += students.filter(student => student.classId === schedule.classId && student.division === schedule.division).length;
+            studentsInThisSession += students.filter(student => student.classId === schedule.classId && student.division === schedule.division && student.status !== 'TC Issued').length;
         });
         totalSlotsToFill += studentsInThisSession;
 
-        const firestoreSessionKey = `${examId}_${date.replace(/-/g, '')}_${session}`;
+        // 2. Calculate Allocated Slots (NEW LOGIC)
+        // Find all rules for this session
+        const rulesForSession = examRoomAllocationRules.filter(r => r.examId === examId && r.date === date && r.session === session);
+        const allocatedRegNosInSession = new Set();
+        
+        // Build a set of all registration numbers covered by these rules
+        rulesForSession.forEach(rule => {
+            const [startStr, endStr] = (rule.regNoRangeText || '').split('-').map(s => s.trim());
+            const regNoRegex = /^([A-Z0-9]+)_(\d+)$/;
+            const startMatch = startStr.match(regNoRegex);
+            const endMatch = (endStr || startStr).match(regNoRegex);
+            if (startMatch && endMatch && startMatch[1] === endMatch[1]) {
+                const prefix = startMatch[1];
+                for (let i = parseInt(startMatch[2]); i <= parseInt(endMatch[2]); i++) {
+                    allocatedRegNosInSession.add(`${prefix}_${i.toString().padStart(3, '0')}`);
+                }
+            }
+        });
+        
+        // Count how many students match the allocated registration numbers
         students.forEach(student => {
-            if (student.examRoomAllocations?.[firestoreSessionKey]) {
+            if (allocatedRegNosInSession.has(student.examRegNumbers?.[examId])) {
                 totalAllocatedSlots++;
             }
         });
@@ -31990,13 +32441,13 @@ async function updateAllocationStatusSummary(examId, selectedSessions) {
     summaryContainer.innerHTML = `
         <div class="row text-center g-3">
             <div class="col"><div class="p-3 border rounded bg-light"><h6 class="text-muted mb-1">Total Slots to Fill</h6><h4 class="fw-bold mb-0">${totalSlotsToFill}</h4></div></div>
-            <div class="col"><div class="p-3 border rounded bg-light"><h6 class="text-muted mb-1">Slots Allocated</h6><h4 class="fw-bold mb-0 text-success">${totalAllocatedSlots}</h4></div></div>
+            <div class="col"><div class="p-3 border rounded bg-light"><h6 class="text-muted mb-1">Slots Allocated (by Rules)</h6><h4 class="fw-bold mb-0 text-success">${totalAllocatedSlots}</h4></div></div>
             <div class="col"><div class="p-3 border rounded ${balance > 0 ? 'bg-danger text-white' : 'bg-success text-white'}"><h6 class="mb-1">Balance</h6><h4 class="fw-bold mb-0">${balance}</h4></div></div>
         </div>`;
 }
 
 /**
- * Recalculates the entire allocation grid, ensuring each row is aware of allocations above it and in the database.
+ * (REWRITTEN) Recalculates the grid based on saved rules, not student documents.
  */
 function recalculateAllocationGrid() {
     const examId = document.getElementById('alloc-exam-select').value;
@@ -32005,23 +32456,39 @@ function recalculateAllocationGrid() {
     const [date, session] = selectedSessions[0] ? selectedSessions[0].split('_') : [null, null];
     if (!date || !session) return;
     
-    const sessionKey = `${examId}_${date.replace(/-/g, '')}_${session}`;
-
+    // --- NEW LOGIC: Build room/reg.no. usage from examRoomAllocationRules ---
     const roomUsageFromDB = {};
     const allocatedRegNosFromDB = new Set();
-    students.forEach(student => {
-        const roomId = student.examRoomAllocations?.[sessionKey];
-        if (roomId) {
-            roomUsageFromDB[roomId] = (roomUsageFromDB[roomId] || 0) + 1;
-            const regNo = student.examRegNumbers?.[examId];
-            if (regNo) allocatedRegNosFromDB.add(regNo);
+    
+    const rulesForSession = examRoomAllocationRules.filter(r => r.examId === examId && r.date === date && r.session === session);
+
+    rulesForSession.forEach(rule => {
+        const [startStr, endStr] = (rule.regNoRangeText || '').split('-').map(s => s.trim());
+        const regNoRegex = /^([A-Z0-9]+)_(\d+)$/;
+        const startMatch = startStr.match(regNoRegex);
+        const endMatch = (endStr || startStr).match(regNoRegex);
+        
+        let countInRule = 0;
+        if (startMatch && endMatch && startMatch[1] === endMatch[1]) {
+            const prefix = startMatch[1];
+            for (let i = parseInt(startMatch[2]); i <= parseInt(endMatch[2]); i++) {
+                const regNo = `${prefix}_${i.toString().padStart(3, '0')}`;
+                // Only count students who *exist* and have this reg no
+                if (students.some(s => s.examRegNumbers?.[examId] === regNo)) {
+                    allocatedRegNosFromDB.add(regNo);
+                    countInRule++;
+                }
+            }
         }
+        roomUsageFromDB[rule.roomId] = (roomUsageFromDB[rule.roomId] || 0) + countInRule;
     });
+    // --- END OF NEW LOGIC ---
 
     const roomUsageInGrid = {};
     const allocatedRegNosInGrid = new Set();
 
     document.querySelectorAll('#allocation-rules-tbody tr').forEach(row => {
+        // Pass the sets of *already allocated* numbers (from DB and grid rows above)
         const combinedAllocatedNos = new Set([...allocatedRegNosFromDB, ...allocatedRegNosInGrid]);
         const result = updateAllocationRow(row, examId, roomUsageInGrid, roomUsageFromDB, combinedAllocatedNos);
         
@@ -32034,8 +32501,8 @@ function recalculateAllocationGrid() {
 }
 
 /**
- * Updates a single row's status based on its inputs and the allocations made so far.
- * @returns {object} An object containing the count, regNos, and validity status.
+ * Updates a single row's status.
+ * (No changes needed, this function is correct as it already simulates allocation)
  */
 function updateAllocationRow(rowElement, examId, roomUsageInGrid, roomUsageFromDB, combinedAllocatedNos) {
     const roomSelect = rowElement.querySelector('.room-select');
@@ -32076,6 +32543,7 @@ function updateAllocationRow(rowElement, examId, roomUsageInGrid, roomUsageFromD
     const rangeRegNos = Array.from({length: count}, (_, i) => `${prefix}_${(startNum + i).toString().padStart(3, '0')}`);
     
     const alreadyAllocated = rangeRegNos.filter(regNo => combinedAllocatedNos.has(regNo));
+    // Check against the *actual* student list to see who has this reg no
     const nonExistent = rangeRegNos.filter(regNo => !students.some(s => s.examRegNumbers?.[examId] === regNo));
     
     const availableCount = count - nonExistent.length - alreadyAllocated.length;
@@ -32084,8 +32552,8 @@ function updateAllocationRow(rowElement, examId, roomUsageInGrid, roomUsageFromD
 
     let statusHtml = '';
     let isValid = true;
-    if (count > remainingCapacity) {
-        statusHtml = `<span class="badge bg-danger" title="Requires ${count} seats, but only ${remainingCapacity} are free.">Capacity Exceeded</span>`;
+    if (availableCount > remainingCapacity) { // Check against *available* students, not just raw count
+        statusHtml = `<span class="badge bg-danger" title="Requires ${availableCount} seats, but only ${remainingCapacity} are free.">Capacity Exceeded</span>`;
         isValid = false;
     } else if (alreadyAllocated.length > 0) {
         statusHtml = `<span class="badge bg-danger" title="Duplicates: ${alreadyAllocated.join(', ')}">${alreadyAllocated.length} Already Allocated</span>`;
@@ -32099,11 +32567,12 @@ function updateAllocationRow(rowElement, examId, roomUsageInGrid, roomUsageFromD
     statusCell.innerHTML = statusHtml;
     
     const validRegNos = rangeRegNos.filter(regNo => !nonExistent.includes(regNo) && !alreadyAllocated.includes(regNo));
-    return { count: validRegNos.length, regNos: validRegNos, isValid };
+    return { count: validRegNos.length, regNos: validRegNos, isValid: true }; // isValid is true if it passes checks
 }
+
 /**
- * Saves all valid allocation rules from the UI to all selected sessions.
- * This is the complete and corrected version.
+ * (REWRITTEN) Saves all valid allocation RULES to the database.
+ * Does NOT write to any student documents.
  */
 async function saveAllAllocations() {
     const saveBtn = document.getElementById('save-all-allocations-btn');
@@ -32129,76 +32598,45 @@ async function saveAllAllocations() {
 
     try {
         const batch = writeBatch(db);
-        let totalStudentsAllocated = 0;
+        let totalRulesSaved = 0;
 
         for (const sessionKeyString of selectedSessions) {
             const [date, session] = sessionKeyString.split('_');
-            const firestoreSessionKey = `${examId}_${date.replace(/-/g, '')}_${session}`;
 
             for (const row of validRows) {
                 const roomId = row.querySelector('.room-select').value;
                 const startRegNo = row.querySelector('.start-reg-no').value.trim().toUpperCase();
-                const count = parseInt(row.querySelector('.count').value);
-                const regNoRegex = /^([A-Z0-9]+)_(\d+)$/;
-                const match = startRegNo.match(regNoRegex);
-
-                if (!match) continue;
-
-                const prefix = match[1];
-                const startNum = parseInt(match[2], 10);
-
-                // Find all valid students that match this rule's range
-                const studentsToAllocate = [];
-                for (let i = 0; i < count; i++) {
-                    const regNo = `${prefix}_${(startNum + i).toString().padStart(3, '0')}`;
-                    const student = students.find(s => s.examRegNumbers?.[examId] === regNo);
-                    if (student && student.id) { // Ensure student is valid
-                        studentsToAllocate.push(student);
-                    }
-                }
-
-                if (studentsToAllocate.length > 0) {
-                    // Update each student's record
-                    studentsToAllocate.forEach(student => {
-                        const studentRef = getDocRef('students', student.id);
-                        const updatedAllocations = { ...student.examRoomAllocations, [firestoreSessionKey]: roomId };
-                        batch.update(studentRef, { examRoomAllocations: updatedAllocations });
-                    });
-
-                    // Only count the students once for the final alert message
-                    if (sessionKeyString === selectedSessions[0]) {
-                        totalStudentsAllocated += studentsToAllocate.length;
-                    }
-
-                    // --- KEY FIX IS HERE ---
-                    // 1. Create a reference for a NEW document with an AUTO-GENERATED ID.
-                    const newRuleRef = doc(collection(db, `artifacts/${appId}/public/data/examRoomAllocationRules`));
-                    
-                    // 2. Create the data for the rule, including its own new ID.
-                    const ruleData = {
-                        id: newRuleRef.id, // Use the new, auto-generated ID
-                        examId,
-                        date,
-                        session,
-                        roomId,
-                        regNoRangeText: `${startRegNo} - ${row.querySelector('.end-reg-no').textContent}`,
-                        allocatedBy: selectedUser.id,
-                        allocatedAt: serverTimestamp()
-                    };
-                    
-                    // 3. Add the "set" operation for the new rule to the batch.
-                    batch.set(newRuleRef, ruleData);
-                }
+                const endRegNo = row.querySelector('.end-reg-no').textContent;
+                
+                // --- THIS IS THE ONLY DATABASE OPERATION ---
+                // 1. Create a reference for a NEW document with an AUTO-GENERATED ID.
+                const newRuleRef = doc(collection(db, `artifacts/${appId}/public/data/examRoomAllocationRules`));
+                
+                // 2. Create the data for the rule.
+                const ruleData = {
+                    id: newRuleRef.id, // Use the new, auto-generated ID
+                    examId,
+                    date,
+                    session,
+                    roomId,
+                    regNoRangeText: `${startRegNo} - ${endRegNo}`, // Save the calculated range
+                    allocatedBy: selectedUser.id,
+                    allocatedAt: serverTimestamp()
+                };
+                
+                // 3. Add the "set" operation for the new rule to the batch.
+                batch.set(newRuleRef, ruleData);
+                totalRulesSaved++;
             }
         }
 
-        if (totalStudentsAllocated > 0) {
+        if (totalRulesSaved > 0) {
             await batch.commit();
-            showAlert(`${totalStudentsAllocated} student allocations saved successfully across ${selectedSessions.length} session(s)!`, 'success');
+            showAlert(`${totalRulesSaved} allocation rules saved successfully across ${selectedSessions.length} session(s)!`, 'success');
             // Refresh the UI to show the newly saved rules
             document.getElementById('alloc-session-select').dispatchEvent(new Event('change'));
         } else {
-            showAlert('No students matched the valid rules provided.', 'warning');
+            showAlert('No valid rules were processed.', 'warning');
         }
     } catch (error) {
         console.error("Error saving allocations:", error);
@@ -32210,23 +32648,10 @@ async function saveAllAllocations() {
 }
 
 /**
- * Displays the current room allocation RULES for a specific exam session.
- */
-/**
- * Displays current room allocation rules for a specific exam session,
- * now sorted by the registration number sequence.
- * @param {string} examId
- * @param {string} date
- * @param {string} session
- */
-/**
- * Displays current room allocation rules with bulk-deletion and a "destructive delete" toggle.
- * @param {string} examId
- * @param {string} date
- * @param {string} session
+ * (REWRITTEN) Displays current allocation rules with bulk-deletion.
+ * Removed the "destructive delete" checkbox as it's no longer relevant.
  */
 function displayCurrentAllocations(examId, date, session) {
-    
     const container = document.getElementById('current-room-allocations-table');
     if (!container || !examId || !date || !session) {
         container.innerHTML = `<p class="text-muted text-center p-4">Select an exam and session to view current allocations.</p>`;
@@ -32240,14 +32665,11 @@ function displayCurrentAllocations(examId, date, session) {
         return;
     }
 
-    // --- NEW: Get other sessions for the "Copy To" dropdown ---
     const otherSessions = [...new Set(examSchedules.filter(s => s.examId === examId).map(s => `${s.date}_${s.session}`))]
         .filter(sKey => sKey !== `${date}_${session}`)
         .sort();
 
-
-
-    const sessionKey = `${examId}_${date.replace(/-/g, '')}_${session}`;
+    // Calculate student counts *simulated* from rules
     const studentCountsByRule = {};
     rulesForSession.forEach(rule => {
         const affectedRegNos = new Set();
@@ -32263,8 +32685,9 @@ function displayCurrentAllocations(examId, date, session) {
             }
         }
         
+        // Count students who match the rule
         studentCountsByRule[rule.id] = students.filter(s => 
-            affectedRegNos.has(s.examRegNumbers?.[examId]) && s.examRoomAllocations?.[sessionKey] === rule.roomId
+            affectedRegNos.has(s.examRegNumbers?.[examId])
         ).length;
     });
 
@@ -32276,7 +32699,7 @@ function displayCurrentAllocations(examId, date, session) {
                         <th style="width: 40px;"><input class="form-check-input" type="checkbox" id="select-all-rules"></th>
                         <th>Room</th>
                         <th>Allocation Rule (Reg. No. Range)</th>
-                        <th>Students Allocated</th>
+                        <th>Est. Students</th>
                         <th class="text-end">Actions</th>
                     </tr>
                 </thead>
@@ -32306,18 +32729,14 @@ function displayCurrentAllocations(examId, date, session) {
                 </select>
                 <button class="btn btn-sm btn-info" id="copy-selected-rules-btn" disabled>Copy</button>
             </div>
-
-            <div class="form-check form-switch me-3">
-                <input class="form-check-input" type="checkbox" id="destructive-delete-toggle">
-                <label class="form-check-label" for="destructive-delete-toggle">Un-assign Students on Delete</label>
-            </div>
+            
             <button class="btn btn-sm btn-danger" id="delete-selected-rules-btn" disabled>
-                <i class="fas fa-trash-alt me-2"></i>Delete Selected
+                <i class="fas fa-trash-alt me-2"></i>Delete Selected Rules
             </button>
         </div>
     `;
 
-    // Attach listeners for the bulk-action functionality
+    // Attach listeners
     const table = container.querySelector('#allocation-rules-table');
     const selectAll = container.querySelector('#select-all-rules');
     const checkboxes = container.querySelectorAll('.rule-select-checkbox');
@@ -32338,37 +32757,33 @@ function displayCurrentAllocations(examId, date, session) {
 
     deleteBtn.addEventListener('click', () => {
         const selectedRuleIds = Array.from(container.querySelectorAll('.rule-select-checkbox:checked')).map(cb => cb.value);
-        const isDestructive = container.querySelector('#destructive-delete-toggle').checked;
-        deleteSelectedAllocationRules(selectedRuleIds, isDestructive);
+        // Call the simplified delete function
+        deleteSelectedAllocationRules(selectedRuleIds);
     });
 
     copyBtn.addEventListener('click', () => {
         const selectedRuleIds = Array.from(container.querySelectorAll('.rule-select-checkbox:checked')).map(cb => cb.value);
         const targetSessionKey = container.querySelector('#copy-to-session-select').value;
-        copySelectedAllocationRules(examId,selectedRuleIds, targetSessionKey);
+        copySelectedAllocationRules(examId, selectedRuleIds, targetSessionKey);
     });
-
 }
 
 /**
- * NEW: Copies selected allocation rules and their student assignments to a new session.
+ * (REWRITTEN) Copies selected allocation RULES to a new session.
+ * Does NOT write to any student documents.
  */
-async function copySelectedAllocationRules(examId,ruleIds, targetSessionKey) {
+async function copySelectedAllocationRules(examId, ruleIds, targetSessionKey) {
     if (ruleIds.length === 0 || !targetSessionKey) {
         showAlert('Please select one or more rules and a target session to copy to.', 'warning');
         return;
     }
 
     const [targetDate, targetSession] = targetSessionKey.split('_');
-    const targetFirestoreSessionKey = `${examId}_${targetDate.replace(/-/g, '')}_${targetSession}`;
-
-    if (!confirm(`Are you sure you want to copy ${ruleIds.length} rule(s) to the session on ${new Date(targetDate).toLocaleDateString()}? This will also allocate the corresponding students.`)) {
+    if (!confirm(`Are you sure you want to copy ${ruleIds.length} rule(s) to the session on ${new Date(targetDate).toLocaleDateString()}?`)) {
         return;
     }
 
     const batch = writeBatch(db);
-    let totalStudentsAffected = 0;
-
     for (const ruleId of ruleIds) {
         const originalRule = examRoomAllocationRules.find(r => r.id === ruleId);
         if (!originalRule) continue;
@@ -32383,38 +32798,11 @@ async function copySelectedAllocationRules(examId,ruleIds, targetSessionKey) {
             allocatedAt: serverTimestamp()
         };
         batch.set(newRuleRef, newRuleData);
-
-        // Find and allocate students for the new rule
-        const affectedRegNos = new Set();
-        const [startStr, endStr] = (originalRule.regNoRangeText || '').split('-').map(s => s.trim());
-        const regNoRegex = /^([A-Z0-9]+)_(\d+)$/;
-        const startMatch = startStr.match(regNoRegex);
-        const endMatch = (endStr || startStr).match(regNoRegex);
-
-        if (startMatch && endMatch && startMatch[1] === endMatch[1]) {
-            const prefix = startMatch[1];
-            for (let i = parseInt(startMatch[2]); i <= parseInt(endMatch[2]); i++) {
-                affectedRegNos.add(`${prefix}_${i.toString().padStart(3, '0')}`);
-            }
-        }
-        
-        studentsToAllocate.forEach(student => {
-    const studentRef = getDocRef('students', student.id);
-    const updatedAllocations = { ...student.examRoomAllocations, [firestoreSessionKey]: roomId };
-    batch.update(studentRef, {
-        examRoomAllocations: updatedAllocations,
-        lastUpdated: serverTimestamp() // <-- ADD THIS LINE
-    });
-});
-
-        totalStudentsAffected += studentsToAllocate.length;
     }
 
     try {
         await batch.commit();
-        showAlert(`Successfully copied ${ruleIds.length} rule(s) and allocated ${totalStudentsAffected} students to the new session.`, 'success');
-        // The real-time listener will refresh the data, but you might want to switch views
-        // to the new session to see the results immediately.
+        showAlert(`Successfully copied ${ruleIds.length} rule(s) to the new session.`, 'success');
     } catch (error) {
         console.error("Error copying allocation rules:", error);
         showAlert('Failed to copy the selected rules. See console for details.', 'danger');
@@ -32422,363 +32810,49 @@ async function copySelectedAllocationRules(examId,ruleIds, targetSessionKey) {
 }
 
 /**
- * Deletes selected allocation rules. If 'isDestructive' is true, it also
- * de-allocates all associated students.
+ * (REWRITTEN) Deletes selected allocation rules ONLY.
+ * Does NOT write to any student documents.
  * @param {Array<string>} ruleIds - An array of rule IDs to delete.
- * @param {boolean} isDestructive - Whether to un-assign students.
  */
-async function deleteSelectedAllocationRules(ruleIds, isDestructive) {
+async function deleteSelectedAllocationRules(ruleIds) {
     if (ruleIds.length === 0) return;
 
-    let confirmMessage = `Are you sure you want to delete ${ruleIds.length} rule(s)?`;
-    if (isDestructive) {
-        confirmMessage += `\n\nDANGER: You have chosen to also un-assign all students covered by these rules. This action cannot be undone.`;
-    }
-
+    let confirmMessage = `Are you sure you want to permanently delete ${ruleIds.length} allocation rule(s)? This will not un-assign students.`;
     if (!confirm(confirmMessage)) return;
 
     const batch = writeBatch(db);
-    let totalStudentsAffected = 0;
-
     for (const ruleId of ruleIds) {
         const rule = examRoomAllocationRules.find(r => r.id === ruleId);
         if (!rule) continue;
-
-        // If in destructive mode, find and de-allocate all affected students
-        if (isDestructive) {
-            const { examId, date, session, regNoRangeText } = rule;
-            const sessionKey = `${examId}_${date.replace(/-/g, '')}_${session}`;
-            const affectedRegNos = new Set();
-            const [startStr, endStr] = (regNoRangeText || '').split('-').map(s => s.trim());
-            const regNoRegex = /^([A-Z0-9]+)_(\d+)$/;
-            const startMatch = startStr.match(regNoRegex);
-            const endMatch = (endStr || startStr).match(regNoRegex);
-
-            if (startMatch && endMatch && startMatch[1] === endMatch[1]) {
-                const prefix = startMatch[1];
-                for (let i = parseInt(startMatch[2]); i <= parseInt(endMatch[2]); i++) {
-                    affectedRegNos.add(`${prefix}_${i.toString().padStart(3, '0')}`);
-                }
-            }
-            
-            const studentsToDeallocate = students.filter(s => 
-                affectedRegNos.has(s.examRegNumbers?.[examId]) && 
-                s.examRoomAllocations?.[sessionKey] === rule.roomId
-            );
-
-            studentsToDeallocate.forEach(student => {
-    const studentRef = getDocRef('students', student.id);
-    let updatedAllocations = { ...student.examRoomAllocations };
-    delete updatedAllocations[sessionKey];
-    batch.update(studentRef, {
-        examRoomAllocations: updatedAllocations,
-        lastUpdated: serverTimestamp() // <-- ADD THIS LINE
-    });
-});
-            totalStudentsAffected += studentsToDeallocate.length;
-        }
         
-        // Always delete the rule document itself
+        // Only delete the rule document
         batch.delete(getDocRef('examRoomAllocationRules', ruleId));
     }
 
     try {
         await batch.commit();
         let successMessage = `${ruleIds.length} rule(s) deleted successfully.`;
-        if (isDestructive && totalStudentsAffected > 0) {
-            successMessage += ` ${totalStudentsAffected} student allocations were removed.`;
-        }
         showAlert(successMessage, 'success');
-        // The real-time listener will refresh the data and UI automatically.
+        
+        // Refresh the UI
         const examSelect = document.getElementById('alloc-exam-select');
         const sessionSelect = document.getElementById('alloc-session-select');
         const selectedSessions = Array.from(sessionSelect.selectedOptions).map(opt => opt.value);
-        const [firstDate, firstSession] = selectedSessions[0].split('_');
-
-        displayCurrentAllocations(examId, firstDate, firstSession);
-        updateAllocationStatusSummary(examId, [firstDate + '_' + firstSession]);
-
+        if (selectedSessions.length > 0) {
+            const [firstDate, firstSession] = selectedSessions[0].split('_');
+            displayCurrentAllocations(examSelect.value, firstDate, firstSession);
+            updateAllocationStatusSummary(examSelect.value, selectedSessions);
+        }
 
     } catch (error) {
         console.error("Error deleting allocation rules:", error);
         showAlert('Failed to delete the selected rules. See console for details.', 'danger');
     }
 }
-/**
- * Displays a detailed, student-wise allocation report with checkboxes for bulk removal.
- * @param {string} examId The ID of the exam.
- * @param {string[]} selectedSessions An array of selected session strings.
- */
-/**
-/**
- * Displays a detailed, student-wise allocation report for all classes on a given day,
- * with checkboxes for bulk removal and properly attached event listeners.
- */
-function displayFullAllocationDetailsByClass(examId, selectedSessions) {
-    const container = document.getElementById('exam-reports-preview');
-    if (!container) return;
-    const [date, ] = selectedSessions[0].split('_');
-
-    if (!examId || !date) {
-        container.innerHTML = `<p class="alert alert-info text-center mt-3">Please select an Exam and Date.</p>`;
-        return;
-    }
-
-    const fnSessionKey = `${examId}_${date.replace(/-/g, '')}_FN`;
-    const anSessionKey = `${examId}_${date.replace(/-/g, '')}_AN`;
-
-    const allocatedStudents = students.filter(s => s.examRoomAllocations && (s.examRoomAllocations[fnSessionKey] || s.examRoomAllocations[anSessionKey]));
-
-    if (allocatedStudents.length === 0) {
-        container.innerHTML = `<p class="alert alert-info text-center mt-3">No students allocated for the selected date.</p>`;
-        return;
-    }
-
-    const studentsByClass = allocatedStudents.reduce((acc, student) => {
-        (acc[student.classId] = acc[student.classId] || []).push(student);
-        return acc;
-    }, {});
-
-    const sortedClassIds = Object.keys(studentsByClass).sort((a, b) => (classes.find(c => c.id === a)?.name || '').localeCompare(classes.find(c => c.id === b)?.name || ''));
-
-    let reportHtml = `<h4 class="text-center mt-4">Full Allocation Details for ${new Date(date).toLocaleDateString('en-GB')}</h4>`;
-
-    sortedClassIds.forEach(classId => {
-        const className = classes.find(c => c.id === classId)?.name || classId;
-        const studentsInClass = studentsByClass[classId].sort((a, b) => (a.examRegNumbers?.[examId] || '').localeCompare(b.examRegNumbers?.[examId] || ''));
-
-        reportHtml += `
-            <div class="mt-4">
-                <h5 class="section-header">${className}</h5>
-                <div class="table-responsive">
-                    <table class="table table-bordered table-sm table-striped" id="class-table-${classId}">
-                        <thead class="table-light">
-                            <tr>
-                                <th style="width: 40px;"><input class="form-check-input" type="checkbox" title="Select All in this Class"></th>
-                                <th>Reg. No</th>
-                                <th>Student Name</th>
-                                <th>Forenoon Room</th>
-                                <th>Afternoon Room</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${studentsInClass.map(student => {
-                                const fnRoomId = student.examRoomAllocations[fnSessionKey];
-                                const anRoomId = student.examRoomAllocations[anSessionKey];
-                                let fnCellHtml = fnRoomId ? `<div class="d-flex align-items-center"><input class="form-check-input student-alloc-checkbox me-2" type="checkbox" value="${student.id}__FN"><span>${examRooms.find(r => r.id === fnRoomId)?.name || fnRoomId}</span></div>` : '–';
-                                let anCellHtml = anRoomId ? `<div class="d-flex align-items-center"><input class="form-check-input student-alloc-checkbox me-2" type="checkbox" value="${student.id}__AN"><span>${examRooms.find(r => r.id === anRoomId)?.name || anRoomId}</span></div>` : '–';
-                                
-                                return `<tr>
-                                    <td>${student.admissionNumber || 'N/A'}</td>
-                                    <td>${student.examRegNumbers?.[examId] || 'N/A'}</td>
-                                    <td>${student.name}</td>
-                                    <td>${fnCellHtml}</td>
-                                    <td>${anCellHtml}</td>
-                                </tr>`;
-                            }).join('')}
-                        </tbody>
-                        <tfoot>
-                            <tr><td colspan="5" class="text-end">
-                                <button class="btn btn-sm btn-danger remove-selected-btn" data-class-id="${classId}">
-                                    <i class="fas fa-trash-alt me-2"></i>Remove Selected from ${className}
-                                </button>
-                            </td></tr>
-                        </tfoot>
-                    </table>
-                </div>
-            </div>`;
-    });
-    container.innerHTML = reportHtml;
-
-    // --- Add Event Listeners After Rendering ---
-    container.querySelectorAll('thead .form-check-input').forEach(headerCheckbox => {
-        headerCheckbox.addEventListener('change', (e) => {
-            e.target.closest('table').querySelectorAll('tbody .student-alloc-checkbox').forEach(cb => cb.checked = e.target.checked);
-        });
-    });
-
-    container.querySelectorAll('.remove-selected-btn').forEach(button => {
-        button.addEventListener('click', (e) => {
-            const classId = e.target.dataset.classId;
-            // Correctly call the global function
-            window.removeSelectedAllocations(classId, examId, date);
-        });
-    });
-}
-
 
 /**
- * Removes all selected student allocations for a specific class from the database
- * and ensures the local data is updated instantly for a reliable UI refresh.
- * @param {string} classId The ID of the class table to process.
- * @param {string} examId The ID of the current exam.
- * @param {string} date The date of the allocations (YYYY-MM-DD).
- */
-window.removeSelectedAllocations = async function(classId, examId, date) {
-    const table = document.getElementById(`class-table-${classId}`);
-    if (!table) return;
-
-    const selectedCheckboxes = table.querySelectorAll('tbody .student-alloc-checkbox:checked');
-    if (selectedCheckboxes.length === 0) {
-        showAlert('No students selected to remove.', 'info');
-        return;
-    }
-
-    if (!confirm(`Are you sure you want to remove ${selectedCheckboxes.length} selected allocation(s)? This action cannot be undone.`)) {
-        return;
-    }
-
-    const batch = writeBatch(db);
-    // Create a temporary map to track which students and sessions are being updated
-    const studentsToUpdateLocally = new Map();
-
-    selectedCheckboxes.forEach(checkbox => {
-        const [studentId, session] = checkbox.value.split('__');
-        const student = students.find(s => s.id === studentId);
-        
-        if (student) {
-            const sessionKey = `${examId}_${date.replace(/-/g, '')}_${session}`;
-            const studentRef = getDocRef('students', student.id);
-            
-            // This correctly removes the single, unique key for that session from a copy of the object
-            let updatedAllocations = { ...student.examRoomAllocations };
-            delete updatedAllocations[sessionKey];
-
-            batch.update(studentRef, { examRoomAllocations: updatedAllocations });
-
-            // Store the planned update for our local data refresh
-            studentsToUpdateLocally.set(studentId, updatedAllocations);
-        }
-    });
-
-    try {
-        // 1. Commit changes to the database
-        await batch.commit();
-        showAlert(`${selectedCheckboxes.length} allocation(s) removed successfully.`, 'success');
-        
-        // --- KEY FIX IS HERE ---
-        // 2. Manually update the local 'students' array immediately.
-        // This avoids waiting for the real-time listener and prevents the refresh error.
-        studentsToUpdateLocally.forEach((newAllocations, studentId) => {
-            const studentIndex = students.findIndex(s => s.id === studentId);
-            if (studentIndex > -1) {
-                // Directly mutate the student object in the global array
-                students[studentIndex].examRoomAllocations = newAllocations;
-            }
-        });
-
-        // 3. Now, refresh the view with the guaranteed-to-be-correct local data.
-        displayFullAllocationDetailsByClass(examId, date);
-
-    } catch (error) {
-        console.error("Error removing selected allocations:", error);
-        showAlert('Failed to remove allocations. See console for details.', 'danger');
-    }
-};
-
-/**
- * Removes a single student's room allocation for a specific session.
- * This is a window function to be accessible from onclick attributes.
- * @param {string} studentId - The ID of the student to update.
- * @param {string} examId - The ID of the current exam.
- * @param {string} date - The date of the session (YYYY-MM-DD).
- * @param {string} session - The session identifier ('FN' or 'AN').
- */
-window.removeStudentAllocation = async (studentId, examId, date, session) => {
-    // 1. Confirm the action with the user
-    if (!confirm("Are you sure you want to remove this student's room allocation for this session?")) {
-        return;
-    }
-
-    const student = students.find(s => s.id === studentId);
-    if (!student) {
-        showAlert('Student not found.', 'danger');
-        return;
-    }
-
-    // 2. Prepare the data for the update
-    const sessionKey = `${examId}_${date.replace(/-/g, '')}_${session}`;
-    const studentRef = getDocRef('students', student.id);
-    
-    // Create a new map of allocations, omitting the one to be removed
-    let updatedAllocations = { ...student.examRoomAllocations };
-    delete updatedAllocations[sessionKey];
-
-    try {
-        // 3. Update the student's document in Firestore
-        await updateDoc(studentRef, { examRoomAllocations: updatedAllocations });
-        showAlert('Student room allocation removed successfully.', 'success');
-
-        // 4. Refresh the UI to reflect the change
-        // Note: The real-time listener will update the 'students' array automatically,
-        // but calling these ensures the UI refreshes instantly.
-        const examSelect = document.getElementById('alloc-exam-select');
-        const sessionSelect = document.getElementById('alloc-session-select');
-        const selectedSessions = Array.from(sessionSelect.selectedOptions).map(opt => opt.value);
-
-        displayFullAllocationDetailsByClass(examId, selectedSessions);
-        updateAllocationStatusSummary(examId, selectedSessions);
-        
-    } catch (error) {
-        console.error("Error removing student allocation:", error);
-        showAlert('Failed to remove allocation. See console for details.', 'danger');
-    }
-};
-/**
- * Deletes an allocation rule and de-allocates all associated students from that room for that session.
- * @param {string} ruleId The ID of the examRoomAllocationRules document.
- */
-window.deleteAllocationRule = async (ruleId) => {
-    if (!confirm('Are you sure you want to delete this rule? This will remove the room assignment for all students covered by it.')) return;
-
-    const rule = examRoomAllocationRules.find(r => r.id === ruleId);
-    if (!rule) {
-        showAlert('Allocation rule not found.', 'danger');
-        return;
-    }
-
-    const { examId, date, session, regNoRangeText } = rule;
-    const sessionKey = `${examId}_${date.replace(/-/g, '')}_${session}`;
-    const affectedRegNos = new Set();
-    const [startStr, endStr] = regNoRangeText.split('-').map(s => s.trim());
-    const regNoRegex = /^([A-Z0-9]+)_(\d+)$/;
-    const startMatch = startStr.match(regNoRegex);
-    const endMatch = endStr.match(regNoRegex);
-    if(startMatch && endMatch && startMatch[1] === endMatch[1]) {
-        const prefix = startMatch[1];
-        for (let i = parseInt(startMatch[2]); i <= parseInt(endMatch[2]); i++) {
-            affectedRegNos.add(`${prefix}_${i.toString().padStart(3, '0')}`);
-        }
-    }
-
-    studentsToDeallocate.forEach(student => {
-    const studentRef = getDocRef('students', student.id);
-    let updatedAllocations = { ...student.examRoomAllocations };
-    delete updatedAllocations[sessionKey];
-    
-    // The change is adding the lastUpdated field to the update operation
-    batch.update(studentRef, { 
-        examRoomAllocations: updatedAllocations,
-        lastUpdated: serverTimestamp() // <-- This is the required change
-    });
-    });
-    batch.delete(getDocRef('examRoomAllocationRules', ruleId));
-    try {
-        await batch.commit();
-        showAlert('Allocation rule and student assignments successfully removed.', 'success');
-        // The real-time listener will refresh data, but this ensures instant UI update
-        displayCurrentAllocations(examId, date, session);
-        updateAllocationStatusSummary(examId, [date + '_' + session]);
-    } catch (error) {
-        console.error("Error deleting allocation rule:", error);
-        showAlert('Failed to delete the rule. See console for details.', 'danger');
-    }
-};
-
-/**
- * Prepares the UI for editing an allocation rule by repopulating the input grid with its values.
- * This version does NOT delete the old rule, promoting a safer "review and save" workflow.
- * @param {string} ruleId The ID of the rule to edit.
+ * Prepares the UI for editing an allocation rule.
+ * (REVISED: Removed obsolete 'deleteAllocationRule' call)
  */
 window.editAllocationRule = (ruleId) => {
     const rule = examRoomAllocationRules.find(r => r.id === ruleId);
@@ -32800,7 +32874,7 @@ window.editAllocationRule = (ruleId) => {
 
     const regNoRegex = /^([A-Z0-9]+)_(\d+)$/;
     const startMatch = startStr.match(regNoRegex);
-    const endMatch = endStr.match(regNoRegex);
+    const endMatch = (endStr || startStr).match(regNoRegex);
     
     if (startMatch && endMatch) {
         const count = parseInt(endMatch[2]) - parseInt(startMatch[2]) + 1;
@@ -32810,9 +32884,8 @@ window.editAllocationRule = (ruleId) => {
     }
 
     recalculateAllocationGrid();
-    showAlert(`Editing rule for room ${examRooms.find(r=>r.id===rule.roomId)?.name}. Please review, make changes, and click "Save All Allocations". The original rule will be deleted upon saving.`, 'info');
+    showAlert(`Editing rule for room ${examRooms.find(r=>r.id===rule.roomId)?.name}. Review, make changes, and click "Save All Allocations". The original rule will NOT be deleted automatically. You must delete it manually if this is a replacement.`, 'info');
 };
-
 
 // Local variables to store selected filters for Hall Ticket generation
 let hallTicketClassId = null;
@@ -32820,9 +32893,9 @@ let hallTicketDivision = null;
 let hallTicketExamId = null; // Added this variable for Hall Ticket's exam selection
 
 
-
-        /**
- * Displays the list of students for Hall Ticket generation.
+/**
+ * (REVISED) Displays the list of students for Hall Ticket generation.
+ * This version reads from examRoomAllocationRules instead of student.examRoomAllocations.
  * @param {string} examId - The selected Exam ID.
  * @param {string} classId - The selected Class ID.
  * @param {string} division - The selected Division.
@@ -32835,13 +32908,11 @@ function displayHallTicketStudentList(examId, classId, division) {
         return []; // Return empty array if filters are incomplete
     }
 
-    // Filter students by class, division AND if they have a reg number for the selected exam
     const studentsForHT = students.filter(s =>
         s.classId === classId &&
         s.division === division &&
-        s.examRegNumbers?.[examId] // Student must have a reg number for this exam
+        s.examRegNumbers?.[examId] 
     ).sort((a, b) => {
-        // Sort by exam registration number for the selected exam
         const regNoA = a.examRegNumbers[examId] || '';
         const regNoB = b.examRegNumbers[examId] || '';
         return regNoA.localeCompare(regNoB, undefined, { numeric: true });
@@ -32849,7 +32920,7 @@ function displayHallTicketStudentList(examId, classId, division) {
 
     if (studentsForHT.length === 0) {
         container.innerHTML = `<p class="alert alert-info text-center">No students found in this class/division with an assigned Exam Reg. No. for the selected exam.</p>`;
-        return []; // Return empty array
+        return []; 
     }
 
     let tableHtml = `
@@ -32861,18 +32932,35 @@ function displayHallTicketStudentList(examId, classId, division) {
                     ${studentsForHT.map(student => {
                         const examRegNoDisplay = student.examRegNumbers?.[examId] || 'N/A';
                         
-                        // Filter room allocations specifically for the selected exam
-                        const relevantRoomAllocations = Object.keys(student.examRoomAllocations || {})
-                            .filter(sessionKey => sessionKey.startsWith(`${examId}_`)); // Filter by current examId
+                        // --- NEW RULE-BASED LOGIC ---
+                        const studentRegNo = student.examRegNumbers?.[examId];
+                        let roomAllocDisplay = 'N/A';
 
-                        const roomAllocDisplay = relevantRoomAllocations.length > 0
-                            ? relevantRoomAllocations.map(sessionKey => {
-                                const [examIdFromKey, dateRaw, session] = sessionKey.split('_');
-                                const roomName = examRooms.find(r => r.id === student.examRoomAllocations[sessionKey])?.name || student.examRoomAllocations[sessionKey];
-                                const formattedDate = new Date(dateRaw.slice(0,4) + '-' + dateRaw.slice(4,6) + '-' + dateRaw.slice(6,8)).toLocaleDateString('en-GB');
-                                return `${formattedDate} (${session}): ${roomName}`;
-                            }).join('<br>')
-                            : 'N/A';
+                        if (studentRegNo) {
+                            // Find all rules this student's Reg No. matches for this exam
+                            const matchingRules = examRoomAllocationRules.filter(rule => 
+                                rule.examId === examId && 
+                                doesRegNoMatchRule(studentRegNo, rule.regNoRangeText)
+                            );
+                            
+                            if (matchingRules.length > 0) {
+                                // Sort by date, then session to display chronologically
+                                matchingRules.sort((a, b) => {
+                                    const dateDiff = a.date.localeCompare(b.date);
+                                    if (dateDiff !== 0) return dateDiff;
+                                    return a.session.localeCompare(b.session);
+                                });
+                                
+                                roomAllocDisplay = matchingRules.map(rule => {
+                                    const roomName = examRooms.find(r => r.id === rule.roomId)?.name || rule.roomId;
+                                    const formattedDate = new Date(rule.date).toLocaleDateString('en-GB');
+                                    return `${formattedDate} (${rule.session}): ${roomName}`;
+                                }).join('<br>');
+                            } else {
+                                roomAllocDisplay = 'Not Allocated';
+                            }
+                        }
+                        // --- END NEW LOGIC ---
 
                         return `
                             <tr>
@@ -32891,10 +32979,10 @@ function displayHallTicketStudentList(examId, classId, division) {
         </div>
     `;
     container.innerHTML = tableHtml;
-
-    // --- CRITICAL CHANGE: Return the filtered list of students ---
+    
     return studentsForHT;
 }
+
 
 // Helper to show a single hall ticket in a modal (now internal)
         window. showSingleHallTicketModal=(studentId, examId)=> {
@@ -32909,143 +32997,154 @@ function displayHallTicketStudentList(examId, classId, division) {
         
 
 
-        function generateSingleHallTicketHTML(studentId, examId) {
-            const student = students.find(s => s.id === studentId);
-            const exam = exams.find(e => e.id === examId);
+        /**
+ * (REVISED) Generates the HTML for a single student's hall ticket.
+ * This version reads from examRoomAllocationRules to find the room.
+ * @param {string} studentId - The ID of the student.
+ * @param {string} examId - The ID of the exam.
+ * @returns {string} The HTML for the hall ticket page.
+ */
+function generateSingleHallTicketHTML(studentId, examId) {
+    const student = students.find(s => s.id === studentId);
+    const exam = exams.find(e => e.id === examId);
 
-            if (!student || !exam) return `<p class="alert alert-danger">Student or Exam details not found.</p>`;
+    if (!student || !exam) return `<p class="alert alert-danger">Student or Exam details not found.</p>`;
 
-            const studentClass = classes.find(c => c.id === student.classId);
-            const className = studentClass?.name || 'N/A';
+    const studentClass = classes.find(c => c.id === student.classId);
+    const className = studentClass?.name || 'N/A';
+    
+    // Get the student's registration number for this exam
+    const studentRegNo = student.examRegNumbers?.[examId];
 
-            let examScheduleHtml = '';
-            // Filter schedules for this specific student, class, division AND the selected exam
-            const relevantSchedules = examSchedules.filter(sch =>
-                sch.examId === examId && // Filter by selected exam
-                sch.classId === student.classId &&
-                sch.division === student.division
-            ).sort((a, b) => {
-  // Primary: sort by date
-  const dateDiff = new Date(a.date) - new Date(b.date);
-  if (dateDiff !== 0) return dateDiff;
+    let examScheduleHtml = '';
+    const relevantSchedules = examSchedules.filter(sch =>
+        sch.examId === examId &&
+        sch.classId === student.classId &&
+        sch.division === student.division
+    ).sort((a, b) => {
+        const dateDiff = new Date(a.date) - new Date(b.date);
+        if (dateDiff !== 0) return dateDiff;
+        return a.session.localeCompare(b.session); // 'AN' comes after 'FN'
+    });
 
-  // Secondary: custom session order
-  const order = { FN: 0, AN: 1 }; // Lower number comes first
-  return order[a.session] - order[b.session];
-});
+    relevantSchedules.forEach(schedule => {
+        const subjectName = subjects.find(s => s.id === schedule.subjectId)?.name || schedule.subjectId;
+        const examDate = new Date(schedule.date).toLocaleDateString('en-GB');
+        const examDay = new Date(schedule.date).toLocaleString('en-GB', { weekday: 'long' });
+        const session = schedule.session === 'FN' ? 'Forenoon' : 'Afternoon';
+        
+        // --- NEW RULE-BASED LOGIC ---
+        let roomName = 'N/A';
+        if (studentRegNo) {
+            // Find the *specific rule* for this exam, date, and session that the student matches
+            const matchingRule = examRoomAllocationRules.find(rule =>
+                rule.examId === examId &&
+                rule.date === schedule.date &&
+                rule.session === schedule.session &&
+                doesRegNoMatchRule(studentRegNo, rule.regNoRangeText)
+            );
+            
+            if (matchingRule) {
+                roomName = examRooms.find(r => r.id === matchingRule.roomId)?.name || matchingRule.roomId;
+            }
+        }
+        // --- END NEW LOGIC ---
+        
+        examScheduleHtml += `
+            <tr>
+                <td>${subjectName}</td>
+                <td>${examDate} (${examDay})</td>
+                <td class="text-center">${session}</td>
+                <td class="text-center">${roomName}</td>
+            </tr>
+        `;
+    });
+    
+    const classTeacher = teachers.find(t => t.classCharge?.classId === student.classId && t.classCharge?.division === student.division)?.name || 'Not Assigned';
+    const studentPhotoSrc = student.photoDriveId ? `https://drive.google.com/thumbnail?id=${student.photoDriveId}&sz=400` : 'https://placehold.co/100x120?text=Photo';
+    const hmSignPng = schoolDetails.hmSignPng || 'https://via.placeholder.com/100x50?text=HM+Sign';
+    const schoolSealPng = schoolDetails.schoolSealPng || 'https://via.placeholder.com/100x100?text=School+Seal';
 
-
-            relevantSchedules.forEach(schedule => {
-                const subjectName = subjects.find(s => s.id === schedule.subjectId)?.name || schedule.subjectId;
-                const classTeacher = teachers.find(s => s.classCharge === schedule.classId&&s.division===schedule.division)?.name || 'iqbal c';
-                const examDate = new Date(schedule.date).toLocaleDateString('en-GB');
-                const examDay = new Date(schedule.date).toLocaleString('en-GB', { weekday: 'long' });
-
-                const session = schedule.session === 'FN' ? 'Forenoon' : 'Afternoon';
+    // (The HTML structure remains the same, but the table header is updated to "Room")
+    return `
+        <div class="hall-ticket-page">
+            <div style="position: relative; top: 0; left: 0; width:21cm; min-height:27cm; height: 27cm; border: 2px solid #333; box-sizing: border-box; padding: 5mm;">
+                <div class="text-center mb-4">
+                    ${schoolDetails.logoUrl ? `<img src="${schoolDetails.logoUrl}" alt="School Logo" style="max-height: 70px; margin-bottom: 0.5rem;">` : ''}
+                    <h4 class="mb-0 text-primary">${schoolDetails.address.toUpperCase() || 'School Name'}</h4>
+                    <p class="text-muted" style="font-size: 0.8em; margin-bottom: 5px;">${schoolDetails.name || 'School Address'}</p>
+                    <h5 class="mt-2 p-2 text-white text-uppercase fw-bold d-block mx-auto" 
+                        style="background-color: black; border-radius: 4px; width: fit-content;">
+                      HALL TICKET
+                    </h5>
+                    <h5 class="mt-0" style="font-weight: bold;">${exam.name} Examination (25-26)</h5>
+                </div>
                 
-                const sessionKey = `${schedule.examId}_${schedule.date.replace(/-/g, '')}_${schedule.session}`;
-                const allocatedRoomId = student.examRoomAllocations?.[sessionKey];
-                const roomName = examRooms.find(r => r.id === allocatedRoomId)?.name || allocatedRoomId || 'N/A';
-                
-                examScheduleHtml += `
-                    <tr>
-                        <td >${subjectName}</td>
-                        <td >${examDate}/( ${examDay} )</td>
-                        <td class="text-center">${session}</td>
-                        <td class="text-center">${''}</td>
-                    </tr>
-                `;
-            });
-            const classTeacher = teachers.find(t => t.classCharge?.classId === student.classId && t.classCharge?.division === student.division)?.name || 'Not Assigned';
-
-            const studentPhotoSrc = student.photoDriveId
-                ? `https://drive.google.com/thumbnail?id=${student.photoDriveId}&sz=400`
-                : 'https://placehold.co/100x120?text=Photo';
-
-            const hmSignPng = schoolDetails.hmSignPng || 'https://via.placeholder.com/100x50?text=HM+Sign';
-            const schoolSealPng = schoolDetails.schoolSealPng || 'https://via.placeholder.com/100x100?text=School+Seal';
-
-            return `
-                <div class="hall-ticket-page">
-                    <div style="position: relative; top: 0; left: 0; width:21cm; min-height:27cm; height: 27cm; border: 2px solid #333; box-sizing: border-box; padding: 5mm;">
-                        <div class="text-center mb-4">
-                            ${schoolDetails.logoUrl ? `<img src="${schoolDetails.logoUrl}" alt="School Logo" style="max-height: 70px; margin-bottom: 0.5rem;">` : ''}
-                            <h4 class="mb-0 text-primary">${schoolDetails.address.toUpperCase() || 'School Name'}</h4>
-                            <p class="text-muted" style="font-size: 0.8em; margin-bottom: 5px;">${schoolDetails.name || 'School Address'}</p>
-                            <h5 class="mt-2 p-2 text-white text-uppercase fw-bold d-block mx-auto" 
-    style="background-color: black; border-radius: 4px; width: fit-content;">
-  HALL TICKET
-</h5>
-<h5 class="mt-0" style="font-weight: bold;">${exam.name} Examination (25-26)</h5>
-                        </div>
-                        
-                        <div class="row mb-4 align-items-center">
-                            <div class="col-8 tabledetails">
-                                <table class="table table-sm table-borderless" style="font-size: 0.9em;">
-                                    <tbody>
-                                        <tr><th colspan="2" class="text-center">Exam Reg. No. ${student.examRegNumbers?.[examId] || 'Not Assigned'}</th></tr>
-                                
-                                        <tr><th style="width: 120px;">Student Name</th><td>: ${student.name}</td></tr>
-                                        <tr><th>Admission No</th><td>: ${student.admissionNumber || 'N/A'}</td></tr>
-                                        <tr><th>Class / Div</th><td>: ${className} - ${student.division || 'N/A'}</td></tr>
-                                        <tr><th colspan="2">Signature of the Student ................ </th></tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                            <div class="col-4 text-center">
-                                <img src="${studentPhotoSrc}"
-                                        alt="Student Photo" class="img-thumbnail" style="width: 150px; height: 200px; object-fit: cover; border: 1px solid #ccc; background-color: #f8f8f8;">
-                                <p class="mt-1 mb-0" style="font-size: 0.7em;">(Student Photo)</p>
-                            </div>
-                        </div>
-
-                        <h6 class="text-info border-bottom pb-1 mb-2" style="font-weight: bold;">Examination Schedule</h6>
-                        <div class="table-responsive">
-                            <table class="table table-bordered table-sm" style="font-size: 0.85em;">
-                                <thead>
-                                    <tr>
-                                        <th class="text-center">Subject</th>
-                                        <th class="text-center">Date</th>
-                                        <th class="text-center">Session</th>
-                                        <th class="text-center">Invigilator Sign</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${examScheduleHtml || '<tr><td colspan="4" class="text-muted text-center">No exams scheduled for this student.</td></tr>'}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <div class="row mt-9" style="position: absolute; bottom: 10mm; left: 5mm; right: 5mm; font-size: 0.85em;">
-                            <div class="col-4 text-center">
-                                <img src="sign3.jpg" alt="HM Sign" style="max-height: 80px; opacity: 0.7;"><br>
-                                <hr class="mx-auto w-50 my-1">
-                                <p>Signature of H.M. / Principal</p>
-                            </div>
-                            <div class="col-4 text-center">
-                                <img src="SEAL.jpg" alt="School Seal" style="max-height: 90px; opacity: 0.8;"><br>
-                                <p class="mt-1">School Seal</p>
-                            </div>
-                            <div class="col-4 text-center">
-                                <br>
-                                <hr class="mx-auto w-50 my-1">
-                                <span style="gap:0px;">
-                                    <p  class="mx-auto w-90 my-1">Signature of classTeacher</p>
-                                    <p class="mt-0">(${classTeacher})</p>
-                                </span>
-                            </div>
-                        </div>
-                        <div class="text-center text-muted" style="position: absolute; bottom: 0px; left: 0; right: 0; font-size: 0.75em;">
-                           <p>KATTILANGADI YATHEEMKHANA HIGHER SECONDARY SCHOOL ATHAVANAD, MOB: 9447570250 GMAIL: KYHSSCHOOL@GMAIL.COM</p>
-                        </div>
-
-                        <div class="text-center text-muted" style="position: absolute; bottom: -10px; left: 0; right: 0; font-size: 0.75em;">
-                            <p>Generated on: ${new Date().toLocaleDateString('en-GB', { dateStyle: 'long' })} | Exam Control Module</p>
-                        </div>
+                <div class="row mb-4 align-items-center">
+                    <div class="col-8 tabledetails">
+                        <table class="table table-sm table-borderless" style="font-size: 0.9em;">
+                            <tbody>
+                                <tr><th colspan="2" class="text-center">Exam Reg. No. ${student.examRegNumbers?.[examId] || 'Not Assigned'}</th></tr>
+                                <tr><th style="width: 120px;">Student Name</th><td>: ${student.name}</td></tr>
+                                <tr><th>Admission No</th><td>: ${student.admissionNumber || 'N/A'}</td></tr>
+                                <tr><th>Class / Div</th><td>: ${className} - ${student.division || 'N/A'}</td></tr>
+                                <tr><th colspan="2">Signature of the Student ................ </th></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="col-4 text-center">
+                        <img src="${studentPhotoSrc}"
+                                alt="Student Photo" class="img-thumbnail" style="width: 150px; height: 200px; object-fit: cover; border: 1px solid #ccc; background-color: #f8f8f8;">
+                        <p class="mt-1 mb-0" style="font-size: 0.7em;">(Student Photo)</p>
                     </div>
                 </div>
-            `;
-        }
+
+                <h6 class="text-info border-bottom pb-1 mb-2" style="font-weight: bold;">Examination Schedule</h6>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm" style="font-size: 0.85em;">
+                        <thead>
+                            <tr>
+                                <th class="text-center">Subject</th>
+                                <th class="text-center">Date</th>
+                                <th class="text-center">Session</th>
+                                <th class="text-center">Room</th> </tr>
+                        </thead>
+                        <tbody>
+                            ${examScheduleHtml || '<tr><td colspan="4" class="text-muted text-center">No exams scheduled for this student.</td></tr>'}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="row mt-9" style="position: absolute; bottom: 10mm; left: 5mm; right: 5mm; font-size: 0.85em;">
+                    <div class="col-4 text-center">
+                        <img src="sign3.jpg" alt="HM Sign" style="max-height: 80px; opacity: 0.7;"><br>
+                        <hr class="mx-auto w-50 my-1">
+                        <p>Signature of H.M. / Principal</p>
+                    </div>
+                    <div class="col-4 text-center">
+                        <img src="SEAL.jpg" alt="School Seal" style="max-height: 90px; opacity: 0.8;"><br>
+                        <p class="mt-1">School Seal</p>
+                    </div>
+                    <div class="col-4 text-center">
+                        <br>
+                        <hr class="mx-auto w-50 my-1">
+                        <span style="gap:0px;">
+                            <p  class="mx-auto w-90 my-1">Signature of classTeacher</p>
+                            <p class="mt-0">(${classTeacher})</p>
+                        </span>
+                    </div>
+                </div>
+                <div class="text-center text-muted" style="position: absolute; bottom: 0px; left: 0; right: 0; font-size: 0.75em;">
+                   <p>KATTILANGADI YATHEEMKHANA HIGHER SECONDARY SCHOOL ATHAVANAD, MOB: 9447570250 GMAIL: KYHSSCHOOL@GMAIL.COM</p>
+                </div>
+
+                <div class="text-center text-muted" style="position: absolute; bottom: -10px; left: 0; right: 0; font-size: 0.75em;">
+                    <p>Generated on: ${new Date().toLocaleDateString('en-GB', { dateStyle: 'long' })} | Exam Control Module</p>
+                </div>
+            </div>
+        </div>
+    `;
+}
         // // Initialize the module when the DOM is ready
         // document.addEventListener('DOMContentLoaded', () => {
         //     renderExamControlModule();
