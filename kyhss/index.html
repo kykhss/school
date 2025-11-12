@@ -2996,18 +2996,23 @@ document.getElementById('logout-btn').addEventListener('click', async () => {
  * Renders the admin dashboard. It fetches data only on the first load and uses
  * a cached version for subsequent views for instant rendering.
  */
+        let navs =[];
 window.renderDashboard = async () => {
     const mainContent = document.getElementById('main-content');
-     if(currentUserRole!=="admin"){
+   
+    if(currentUserRole!=="admin"){
         if(currentUserRole==="teacher"){
-            renderTeacherDashboardData();
-            return;
+            navs = teacherNav;
+           // renderTeacherDashboardData();
+            //return;
         }
         if(currentUserRole==="student"){
+            navs = studentNav;
             renderStudentDashboardData();
             return;
         }
     }
+    navs = adminNav;
     // If the dashboard data is already loaded, render it from the cache and exit.
     if (isDashboardDataLoaded) {
         console.log("Rendering dashboard from cached stats.");
@@ -3066,24 +3071,11 @@ if(navigator.onLine){
  * calls updateAllNotifications() on load.
  * @param {object} stats - The object containing dashboard counts.
  */
-        let navs = [];
 function renderDashboardHTML(stats) {
     const mainContent = document.getElementById('main-content');
     if (!mainContent) return;
     
-     if(currentUserRole!=="admin"){
-        if(currentUserRole==="teacher"){
-            navs = teacherNav;
-            renderTeacherDashboardData();
-            return;
-        }
-        if(currentUserRole==="student"){
-            navs = studentNav;
-            renderStudentDashboardData();
-            return;
-        }
-    }
-    navs = adminNav;
+     
     const content = `
         <div class="row g-4">
             <div class="col-md-6 col-xl-3"><div class="ui-card-stat h-100"><div class="stat-icon bg-primary"><i class="fas fa-users"></i></div><div class="stat-info"><div class="stat-number">${stats?.studentCount||""}</div><div class="stat-label">Active Students</div></div></div></div>
