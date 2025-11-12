@@ -2998,12 +2998,12 @@ document.getElementById('logout-btn').addEventListener('click', async () => {
  */
 window.renderDashboard = async () => {
     const mainContent = document.getElementById('main-content');
-     if(selectedUser!=="admin"){
-        if(selectedUser==="teacher"){
+     if(currentUserRole!=="admin"){
+        if(currentUserRole==="teacher"){
             renderTeacherDashboardData();
             return;
         }
-        if(selectedUser==="student"){
+        if(currentUserRole==="student"){
             renderStudentDashboardData();
             return;
         }
@@ -3066,10 +3066,24 @@ if(navigator.onLine){
  * calls updateAllNotifications() on load.
  * @param {object} stats - The object containing dashboard counts.
  */
+        let navs = [];
 function renderDashboardHTML(stats) {
     const mainContent = document.getElementById('main-content');
     if (!mainContent) return;
-
+    
+     if(currentUserRole!=="admin"){
+        if(currentUserRole==="teacher"){
+            navs = teacherNav;
+            renderTeacherDashboardData();
+            return;
+        }
+        if(currentUserRole==="student"){
+            navs = studentNav;
+            renderStudentDashboardData();
+            return;
+        }
+    }
+    navs = adminNav;
     const content = `
         <div class="row g-4">
             <div class="col-md-6 col-xl-3"><div class="ui-card-stat h-100"><div class="stat-icon bg-primary"><i class="fas fa-users"></i></div><div class="stat-info"><div class="stat-number">${stats?.studentCount||""}</div><div class="stat-label">Active Students</div></div></div></div>
@@ -3081,7 +3095,7 @@ function renderDashboardHTML(stats) {
         <div class="ui-card mt-4">
              <h5 class="section-header">System Modules</h5>
              <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-3">
-                ${adminNav.filter(item => item.id !== 'dashboard').map(item => `
+                ${navs.filter(item => item.id !== 'dashboard').map(item => `
                     <div class="col">
                         <a href="#" id="dashboard-link-${item.id}" class="text-decoration-none">
                             <div class="card h-100 text-center card-hover-shadow">
@@ -3115,7 +3129,7 @@ function renderDashboardHTML(stats) {
  * This is a more robust method than using inline onclick attributes.
  */
 function attachDashboardListeners() {
-  adminNav.forEach(item => {
+  navs.forEach(item => {
     if (item.id === 'dashboard') return;
 
     const link = document.getElementById(`dashboard-link-${item.id}`);
@@ -3146,7 +3160,7 @@ function updateDashboardModuleBadges(allNotifications) {
 
     // 2. Loop over *all* adminNav items to update or hide their badges
     // We check adminNav because only admins see this dashboard.
-    adminNav.forEach(item => {
+    navs.forEach(item => {
         const badgeId = `dashboard-badge-${item.id}`;
         const badgeEl = document.getElementById(badgeId);
         
