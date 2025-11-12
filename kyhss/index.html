@@ -2998,6 +2998,16 @@ document.getElementById('logout-btn').addEventListener('click', async () => {
  */
 window.renderDashboard = async () => {
     const mainContent = document.getElementById('main-content');
+     if(selectedUser!=="admin"){
+        if(selectedUser==="teacher"){
+            renderTeacherDashboardData();
+            return;
+        }
+        if(selectedUser==="student"){
+            renderStudentDashboardData();
+            return;
+        }
+    }
     // If the dashboard data is already loaded, render it from the cache and exit.
     if (isDashboardDataLoaded) {
         console.log("Rendering dashboard from cached stats.");
