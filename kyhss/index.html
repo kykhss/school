@@ -1499,21 +1499,41 @@ function attachNotificationManagerListeners() {
             return showAlert('Please fill out all fields.', 'warning');
         }
 
+        // --- NEW LOGIC: Save to Server ---
+        
+        // 1. Create a new Firestore document reference to get a unique ID
+        const newNotifRef = doc(collection(db, `artifacts/${appId}/public/data/customNotifications`));
+        
+        // 2. Prepare the data object with the new ID
+        const notificationData = {
+            id: newNotifRef.id, // Use the new Firestore-generated ID
+            message: message,
+            targetView: targetView,
+            expiryDate: expiryDate,
+            isDismissed: 0, // 0 = Not dismissed
+            createdAt: serverTimestamp() // Add a creation timestamp
+        };
+        
+        // --- END NEW LOGIC ---
+
         try {
-            // Save to Dexie
-            await appDb.customNotifications.add({
-                message: message,
-                targetView: targetView,
-                expiryDate: expiryDate,
-                isDismissed: 0 // 0 = Not dismissed
-            });
+            // --- MODIFIED SAVE LOGIC ---
             
-            showAlert('Notification created successfully!', 'success');
+            // 1. Save to Dexie (using `put` since we have a primary key 'id')
+            await appDb.customNotifications.put(notificationData);
+            
+            // 2. Save to server (Firestore)
+            await setDoc(newNotifRef, notificationData);
+            
+            // --- END MODIFIED LOGIC ---
+            
+            showAlert('Notification created and synced successfully!', 'success');
             form.reset();
             renderNotificationManagerList(); // Refresh the list
+            
         } catch (error) {
             console.error('Error saving notification:', error);
-            showAlert('Failed to save notification.', 'danger');
+            showAlert('Failed to save notification to Dexie or Firestore.', 'danger');
         }
     });
 }
