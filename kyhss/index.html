@@ -1438,7 +1438,7 @@ const viewDependencies = {
     'class-mgt': ['classes'],
     'subject-mgt': ['subjects'],
     'subject-allocation': ['classes', 'subjects', 'teachers', 'classroomSubjects'],
-    'exam-mgt': ['marks','exams', 'classes', 'subjects', 'teachers', 'examSchedules','classroomSubjects'],
+    'exam-mgt': ['marks','exams', 'classes', 'subjects', 'teachers', 'examSchedules','classroomSubjects','students'],
     'exam-control': ['exams', 'classes', 'subjects', 'teachers', 'examSchedules','classroomSubjects','examRooms', 'examDuties', 'examAbsentees', 'examRegistrationSettings','examRoomAllocationRules'],
     'exam-reports':['students','exams','classes','examSchedules','classroomSubjects','subjects','teachers', ],
     'attendance-mgt': ['students', 'classes', 'holidays', 'attendance'],
@@ -2237,13 +2237,25 @@ window.navigateTo = async (viewId, pushState = true) => {
     const deps = viewDependencies[viewId] || [];
     const results = await Promise.all(deps.map(name => getData(name)));
 
-    deps.forEach((name, i) => {
-      const data = results[i];
-      const config = collectionMap[name];
-      if (data && config?.setter) config.setter(data);
-    });
+    // 1. Map 'deps' to an array of promises
+const setterPromises = deps.map((name, i) => {
+    const data = results[i];
+    const config = collectionMap[name];
+    
+    // If there's a setter, call it and return the promise.
+    // If not, return null (Promise.all handles this).
+    if (data && config?.setter) {
+        return config.setter(data); // This returns the promise from the async setter
+    }
+    return null; // Or return Promise.resolve()
+});
 
-    updateTeacherAssignedClasses();
+// 2. Wait for ALL promises in the array to finish
+await Promise.all(setterPromises);
+
+// 3. This line will only run after every setter has completed
+console.log("All data has been loaded and set!");
+   await updateTeacherAssignedClasses();
 
     const renderFunc = window.viewRenderers[viewId];
     if (renderFunc) {
@@ -2257,6 +2269,7 @@ window.navigateTo = async (viewId, pushState = true) => {
     console.error(`Failed to render '${viewId}':`, error);
     mainContent.innerHTML = `<div class="alert alert-danger">Error loading view.</div>`;
   } finally {
+    window.viewRenderers[viewId];
     if (document.getElementById('sidebar')?.classList.contains('show')) hideSidebar();
   }
 };
