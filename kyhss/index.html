@@ -8701,11 +8701,7 @@ async function loadMarkEntrySheetobject(examId, classId, division, subjectId) {
             const currentValue = parseInt(e.target.value, 10);
             
             // --> Handle non-numeric input gracefully
-            if (isNaN(currentValue)) {
-                e.target.value = '';
-            } else if (currentValue > maxValue) {
-                e.target.value = ''; // Or you could set it to maxValue
-            }
+             if (!isNaN(currentValue) && currentValue > maxValue) { e.target.value = ''; }
         });
     });
     
