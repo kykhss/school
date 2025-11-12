@@ -14,6 +14,10 @@
     <link href="https://unpkg.com/cropperjs/dist/cropper.css" rel="stylesheet">
    
     <style>
+        html, body {
+    /* This is the magic line. It stops the "pull-to-refresh" gesture. */
+    overscroll-behavior-y: contain; 
+}
         .hall-ticket-page {
             position: relative;
             overflow: hidden;
@@ -1241,10 +1245,8 @@ function waitForCollectionLoad(collectionName) {
 { id: 'fest-scoreboard', icon: 'fa-chart-line', text: 'Live Scoreboard' },
 { id: 'master-control', icon: 'fa-cogs', text: 'Master Control' },
 { id: 'data-migration', icon: 'fa-database', text: 'Data Migration Tool' }, // <-- ADD THIS LINE
-  { id: 'settings', icon: 'fa-cog', text: 'Settings' }
-
-
-
+  { id: 'settings', icon: 'fa-cog', text: 'Settings' },
+  {id: 'notification-mgt', icon: 'fa-bullhorn', text: 'Notification Manager'}
 
  
 ];
@@ -1424,6 +1426,195 @@ async function updateTeacherAssignedClasses() {
 }
 
 
+/**
+ * Renders the main UI for the Notification Manager (form and list).
+ */
+window.renderNotificationManager = () => {
+    const mainContent = document.getElementById('main-content');
+    if (!mainContent) return;
+
+    // Create a dropdown of all available modules/views
+    const moduleOptions = Object.keys(window.viewRenderers).map(viewId => {
+        // Find the matching text from the sidebar nav
+        const navItem = [...adminNav, ...teacherNav, ...studentNav].find(item => item.id === viewId);
+        const text = navItem ? navItem.text : viewId; // Use nav text or just the ID
+        return `<option value="${viewId}">${text}</option>`;
+    }).join('');
+
+    mainContent.innerHTML = `
+        <h1 class="h2 mb-4">Notification Manager</h1>
+        <div class="row g-4">
+            <div class="col-lg-4">
+                <div class="ui-card">
+                    <h5 class="section-header">Create New Notification</h5>
+                    <form id="notification-form">
+                        <div class="mb-3">
+                            <label for="notif-message" class="form-label">Message</label>
+                            <textarea id="notif-message" class="form-control" rows="3" required placeholder="e.g., Vehicle tax for KL-10-AB-1234 is due."></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="notif-module" class="form-label">Target Module (On Click)</label>
+                            <select id="notif-module" class="form-select" required>
+                                <option value="">-- Select Module --</option>
+                                ${moduleOptions}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="notif-expiry" class="form-label">Expiry Date</label>
+                            <input type="date" id="notif-expiry" class="form-control" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">Create Notification</button>
+                    </form>
+                </div>
+            </div>
+            <div class="col-lg-8">
+                <div class="ui-card">
+                    <h5 class="section-header">Manage Notifications</h5>
+                    <div id="notification-list-container" class="list-group" style="max-height: 60vh; overflow-y: auto;">
+                        </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Attach listeners for the form
+    attachNotificationManagerListeners();
+    // Render the list
+    renderNotificationManagerList();
+}
+
+/**
+ * Attaches listeners for the Notification Manager form.
+ */
+function attachNotificationManagerListeners() {
+    const form = document.getElementById('notification-form');
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const message = document.getElementById('notif-message').value;
+        const targetView = document.getElementById('notif-module').value;
+        const expiryDate = document.getElementById('notif-expiry').value;
+
+        if (!message || !targetView || !expiryDate) {
+            return showAlert('Please fill out all fields.', 'warning');
+        }
+
+        try {
+            // Save to Dexie
+            await appDb.customNotifications.add({
+                message: message,
+                targetView: targetView,
+                expiryDate: expiryDate,
+                isDismissed: 0 // 0 = Not dismissed
+            });
+            
+            showAlert('Notification created successfully!', 'success');
+            form.reset();
+            renderNotificationManagerList(); // Refresh the list
+        } catch (error) {
+            console.error('Error saving notification:', error);
+            showAlert('Failed to save notification.', 'danger');
+        }
+    });
+}
+
+/**
+ * Renders the list of notifications in the manager view.
+ */
+async function renderNotificationManagerList() {
+    const container = document.getElementById('notification-list-container');
+    if (!container) return;
+    
+    const allNotifications = await appDb.customNotifications.toArray();
+    
+    // Sort by expiry date, newest first
+    allNotifications.sort((a, b) => new Date(b.expiryDate) - new Date(a.expiryDate));
+
+    if (allNotifications.length === 0) {
+        container.innerHTML = '<p class="text-muted text-center p-3">No custom notifications found.</p>';
+        return;
+    }
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    container.innerHTML = allNotifications.map(item => {
+        const expiry = new Date(item.expiryDate);
+        const isExpired = expiry < today;
+        const isDismissed = item.isDismissed === 1;
+
+        let statusBadge;
+        if (isDismissed) {
+            statusBadge = `<span class="badge bg-secondary">Dismissed</span>`;
+        } else if (isExpired) {
+            statusBadge = `<span class="badge bg-danger">Expired</span>`;
+        } else {
+            statusBadge = `<span class="badge bg-success">Active</span>`;
+        }
+        
+        return `
+            <div class="list-group-item list-group-item-action ${isDismissed ? 'opacity-50' : ''}">
+                <div class="d-flex w-100 justify-content-between">
+                    <h6 class="mb-1">${item.message}</h6>
+                    ${statusBadge}
+                </div>
+                <p class="mb-1 small">
+                    <i class="fas fa-link me-1"></i> Links to: <strong>${item.targetView}</strong>
+                    <br>
+                    <i class="fas fa-clock me-1"></i> Expires: <strong>${new Date(item.expiryDate).toLocaleDateString('en-GB')}</strong>
+                </p>
+                <button class="btn btn-sm btn-outline-danger" 
+                        onclick="window.dismissCustomNotification(${item.id})"
+                        ${!isExpired || isDismissed ? 'disabled' : ''}>
+                    <i class="fas fa-check me-1"></i> Dismiss
+                </button>
+            </div>
+        `;
+    }).join('');
+}
+
+/**
+ * Marks a custom notification as "dismissed" in Dexie.
+ * @param {number} id - The Dexie ID of the notification.
+ */
+window.dismissCustomNotification = async (id) => {
+    try {
+        await appDb.customNotifications.update(id, { isDismissed: 1 });
+        showAlert('Notification dismissed.', 'info');
+        renderNotificationManagerList(); // Refresh the list
+    } catch (error) {
+        console.error('Error dismissing notification:', error);
+        showAlert('Failed to dismiss notification.', 'danger');
+    }
+}
+/**
+ * Gets active custom notifications from Dexie.
+ */
+async function getCustomNotifications() {
+    const notifications = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Get all notifications that are NOT dismissed
+    const activeNotifs = await appDb.customNotifications.where('isDismissed').equals(0).toArray();
+
+    for (const item of activeNotifs) {
+        const expiryDate = new Date(item.expiryDate);
+        const diffTime = expiryDate.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        notifications.push({
+            type: 'custom', // New type
+            title: 'Message',
+            text: item.message,
+            daysRemaining: diffDays,
+            expiryDate: expiryDate.toLocaleDateString('en-GB'),
+            targetView: item.targetView
+        });
+    }
+    return notifications;
+}
+
 
 
 
@@ -1478,6 +1669,7 @@ const viewDependencies = {
     'my-library': ['bookIssuances'],
     'data-migration': ['bookIssuances'],
     'my-fest-events': ['fests', 'festRegistrations', 'festEvents','festGroups'],
+    'notification-mgt': ['customNotifications']
 };
 
 // Keep track of active listeners
@@ -1561,7 +1753,6 @@ const collectionMap = {
 async function attachDataListeners(collectionsToWatch) {
     if (!collectionsToWatch || collectionsToWatch.length === 0) return;
     
-    // This Set helps identify which collections have the 'lastUpdated' index
     const smartSyncCollections = new Set();
     for (const tableName in collectionMap) {
         if (appDb[tableName] && appDb[tableName].schema.idxByName.lastUpdated) {
@@ -1570,16 +1761,16 @@ async function attachDataListeners(collectionsToWatch) {
     }
 
     for (const name of collectionsToWatch) {
-        if (activeListeners[name] && dataLoadStatus[name]) continue; // Already listening and loaded
+        if (activeListeners[name] && dataLoadStatus[name]) continue; 
 
         const config = collectionMap[name];
         if (!config) {
-            resolvePromiseFor(name); // Resolve promise for non-mapped collections
+            resolvePromiseFor(name); 
             continue;
         }
 
         if (activeListeners[name]) {
-            activeListeners[name](); // Unsubscribe old listener
+            activeListeners[name](); 
             delete activeListeners[name];
         }
 
@@ -1588,7 +1779,6 @@ async function attachDataListeners(collectionsToWatch) {
         let serverCount = 0;
         let lastLocalSyncTime = new Date(0);
 
-        // --- Smart Sync Check (runs ONCE before attaching listener) ---
         if (smartSyncCollections.has(name)) {
             localCount = await appDb[name].count();
             if (localCount > 0) {
@@ -1597,20 +1787,17 @@ async function attachDataListeners(collectionsToWatch) {
                 serverCount = serverCountSnapshot.data().count;
 
                 if (localCount === serverCount) {
-                    // Counts match, now check for recent updates
                     lastLocalSyncTime = await appDb[name].orderBy('lastUpdated').last().then(item => item?.lastUpdated || new Date(0));
                     const updatesQuery = query(collectionRef, where('lastUpdated', '>', lastLocalSyncTime), limit(1));
                     const updatesSnapshot = await getDocs(updatesQuery);
                     
                     if (updatesSnapshot.empty) {
-                        // Local data is in perfect sync.
                         needsSync = false;
                         const dataFromDB = await appDb[name].toArray();
                         config.setter(dataFromDB);
                         dataLoadStatus[name] = true;
                         resolvePromiseFor(name);
                         
-                        // Trigger renderer if needed (no changes, just initial load)
                         if (config.renderer && Object.values(viewRenderers).includes(config.renderer)) {
                             const activeNavId = document.querySelector('.nav-link.active')?.id;
                             const rendererNavId = `nav-${Object.keys(viewRenderers).find(key => viewRenderers[key] === config.renderer)}`;
@@ -1619,19 +1806,16 @@ async function attachDataListeners(collectionsToWatch) {
                             }
                         }
                     } else {
-                        // Counts match, but newer documents exist (e.g., modified)
                         needsSync = true; 
                     }
                 } else {
-                    // Counts mismatch, full sync is required
                     needsSync = true; 
                 }
             }
         }
         
-        if (!needsSync) continue; // Skip attaching listener if data is in sync
+        if (!needsSync) continue;
         
-        // --- Attach Listener ---
         const queriesToExecute = getQueriesForCollection(name);
         if (queriesToExecute.length === 0) {
             dataLoadStatus[name] = true;
@@ -1642,41 +1826,38 @@ async function attachDataListeners(collectionsToWatch) {
         let queriesCompletedInitialSnapshot = 0;
         const expectedInitialSnapshots = queriesToExecute.length;
         const currentCollectionUnsubs = [];
-        let collectedData = {}; // In-memory cache
+        let collectedData = {};
 
         queriesToExecute.forEach(qInfo => {
             const unsub = onSnapshot(qInfo.query, async snapshot => {
-
-                // --- THIS BLOCK IS THE FIX ---
-                // It only runs on the *very first* snapshot from this listener.
+                
+                // --- THIS IS THE FIX ---
+                // We will set a flag *if* this is the initial load,
+                // but we will NOT resolve the promise yet.
+                let isInitialSnapshot = false;
                 if (!dataLoadStatus[name]) {
                     queriesCompletedInitialSnapshot++;
                     if (queriesCompletedInitialSnapshot >= expectedInitialSnapshots) {
                         dataLoadStatus[name] = true;
-                        resolvePromiseFor(name);
+                        isInitialSnapshot = true; // Mark this as the first load
                         
-                        // We check for full sync *inside* this block.
-                        // This ensures appDb[name].clear() runs ONLY ONCE.
                         if (needsSync && localCount !== serverCount) {
-                            console.log(`[Sync] Mismatch detected for ${name}. Clearing local cache for full refresh.`);
+                            console.log(`[Sync] Mismatch for ${name}. Clearing local cache.`);
                             await appDb[name].clear();
                         }
                     }
                 }
-                // --- END OF FIX ---
+                // --- END OF MOVED BLOCK ---
 
                 const changes = snapshot.docChanges();
-                if (changes.length === 0) return; // No changes to process
+                if (changes.length === 0) return;
 
-                // Process changes
                 const { toAddOrUpdate, toDelete } = processFirestoreChanges(changes);
                 
-                // Update in-memory data
                 toDelete.forEach(id => delete collectedData[id]);
                 toAddOrUpdate.forEach(doc => collectedData[doc.id] = doc);
                 config.setter(Object.values(collectedData));
                 
-                // Update IndexedDB
                 try {
                     const store = appDb[name];
                     await appDb.transaction('rw', store, async () => {
@@ -1687,21 +1868,30 @@ async function attachDataListeners(collectionsToWatch) {
                     console.error(`Error applying updates to ${name} in IndexedDB:`, error);
                 }
 
+                // --- THIS IS THE FIX ---
+                // Now that the data is saved in Dexie, we can safely
+                // send the "finished" signal (resolve the promise).
+                if (isInitialSnapshot) {
+                    resolvePromiseFor(name);
+                }
+                // --- END OF FIX ---
+
                 // Re-render if the user is on the matching view
                 if (config.renderer) {
+                    updateAllNotifications();
                    const activeNavId = document.querySelector('.nav-link.active')?.id;
-                   // Find the viewId that corresponds to this renderer
                    const rendererNavId = `nav-${Object.keys(viewRenderers).find(key => viewRenderers[key] === config.renderer)}`;
                    if (activeNavId === rendererNavId) {
                        config.renderer();
                    }
                 }
-
+                
             }, error => {
                 console.error(`[Firestore] Error listening to ${name}: `, error);
+                // Also resolve the promise on error to prevent the app from hanging
                 if (!dataLoadStatus[name]) {
                     queriesCompletedInitialSnapshot++;
-                    if (queriesCompletedInitialSnapshots >= expectedInitialSnapshots) {
+                    if (queriesCompletedInitialSnapshot >= expectedInitialSnapshots) {
                         dataLoadStatus[name] = true;
                         resolvePromiseFor(name);
                     }
@@ -2238,24 +2428,26 @@ window.navigateTo = async (viewId, pushState = true) => {
     const results = await Promise.all(deps.map(name => getData(name)));
 
     // 1. Map 'deps' to an array of promises
-const setterPromises = deps.map((name, i) => {
-    const data = results[i];
-    const config = collectionMap[name];
+    const setterPromises = deps.map((name, i) => {
+        const data = results[i];
+        const config = collectionMap[name];
+        
+        // If there's a setter, call it.
+        // Your setters are synchronous, so they don't return promises,
+        // but this structure is fine and will work.
+        if (data && config?.setter) {
+            return config.setter(data); 
+        }
+        return null;
+    });
+
+    // 2. Wait for ALL setters to finish (this will be instant)
+    await Promise.all(setterPromises);
+
+    // 3. This line will only run after every setter has completed
+    console.log("All data has been loaded and set!");
     
-    // If there's a setter, call it and return the promise.
-    // If not, return null (Promise.all handles this).
-    if (data && config?.setter) {
-        return config.setter(data); // This returns the promise from the async setter
-    }
-    return null; // Or return Promise.resolve()
-});
-
-// 2. Wait for ALL promises in the array to finish
-await Promise.all(setterPromises);
-
-// 3. This line will only run after every setter has completed
-console.log("All data has been loaded and set!");
-   await updateTeacherAssignedClasses();
+    await updateTeacherAssignedClasses();
 
     const renderFunc = window.viewRenderers[viewId];
     if (renderFunc) {
@@ -2269,59 +2461,121 @@ console.log("All data has been loaded and set!");
     console.error(`Failed to render '${viewId}':`, error);
     mainContent.innerHTML = `<div class="alert alert-danger">Error loading view.</div>`;
   } finally {
-    window.viewRenderers[viewId];
+    
     if (document.getElementById('sidebar')?.classList.contains('show')) hideSidebar();
   }
 };
-
-
         
         // Find your existing showMainApp function and modify it like this:
 
-function showMainApp() {
+/**
+ * (REVISED) Renders the main app, automatically restoring the
+ * user's session and last-viewed page if it exists.
+ */
+async function showMainApp() {
+    let sessionRole = currentUserRole;
+    let sessionUser = selectedUser;
+    let lastViewId = 'dashboard';
+    let restoredState = null;
+
+    // --- NEW: SESSION RESTORE LOGIC ---
+    // If the user isn't logged in, check if a session is saved in localStorage
+    if (!sessionRole || !sessionUser) {
+        const savedSessionJSON = localStorage.getItem('schoolAppUserSession');
+        if (savedSessionJSON) {
+            const session = JSON.parse(savedSessionJSON);
+            const isRecent = (Date.now() - session.timestamp) < (8 * 60 * 60 * 1000); // 8-hour session
+
+            if (isRecent) {
+                // Try to get the user from the local Dexie database
+                const dbName = session.role === 'admin' ? 'teachers' : session.role + 's';
+                const localUser = await appDb[dbName].get(session.userId);
+                
+                if (localUser) {
+                    // SUCCESS! We found the user locally. Log them in silently.
+                    sessionRole = session.role;
+                    sessionUser = localUser;
+                    
+                    // Now, get their last saved state
+                    const lastStateJSON = localStorage.getItem('schoolAppLastState');
+                    if (lastStateJSON) {
+                        restoredState = JSON.parse(lastStateJSON);
+                        lastViewId = restoredState.viewId || 'dashboard';
+                        
+                        // Restore global state variables
+                        selectedExamForControl = restoredState.selectedExamForControl || null;
+                        // We must find the fest object from the 'fests' array
+                        if (restoredState.managingFestId) {
+                            const festData = await appDb.fests.get(restoredState.managingFestId);
+                            if(festData) state.managingFest = festData;
+                        }
+                    }
+                    
+                    // Set the global variables
+                    currentUserRole = sessionRole;
+                    selectedUser = sessionUser;
+                    showAlert('Session restored.', 'success');
+                } else {
+                    // User was in localStorage but not Dexie. Force re-login.
+                    localStorage.removeItem('schoolAppUserSession');
+                    localStorage.removeItem('schoolAppLastState');
+                }
+            } else {
+                // Session expired.
+                localStorage.removeItem('schoolAppUserSession');
+                localStorage.removeItem('schoolAppLastState');
+            }
+        }
+    }
+    // --- END: SESSION RESTORE LOGIC ---
+
+    // If, after all that, we still don't have a user, show the login screen.
+    if (!sessionRole || !sessionUser) {
+        document.getElementById('login-screen').classList.add('active');
+        return;
+    }
+
+    // --- Original showMainApp logic ---
     document.getElementById('login-screen').classList.remove('active');
     document.getElementById('main-app').classList.add('active');
     const panelTitle = document.getElementById('panel-title');
 
     let navItems;
-    if (currentUserRole === 'admin') {
+    if (sessionRole === 'admin') {
         navItems = adminNav;
         panelTitle.textContent = "Admin Panel";
-    } else if (currentUserRole === 'student') {
+    } else if (sessionRole === 'student') {
         navItems = studentNav;
         panelTitle.textContent = "Student Portal";
-    } else if (currentUserRole === 'teacher') {
+    } else if (sessionRole === 'teacher') {
+        // (Your existing dynamic teacher nav logic)
         let dynamicTeacherNav = teacherNav.filter(item =>
             item.id !== 'library-mgt' && item.id !== 'library-status' 
         );
-
-        if (selectedUser.roles && selectedUser.roles.includes('librarian')) {
+        if (sessionUser.roles && sessionUser.roles.includes('librarian')) {
             dynamicTeacherNav.push({ id: 'library-mgt', icon: 'fa-book-reader', text: 'Library Management' });
-        } else if (selectedUser.classCharge) {
+        } else if (sessionUser.classCharge) {
             dynamicTeacherNav.push({ id: 'library-status', icon: 'fa-books', text: 'Library Status' });
         }
-        
-        if (selectedUser.roles && selectedUser.roles.includes('exam_controller')) {
+        if (sessionUser.roles && sessionUser.roles.includes('exam_controller')) {
             dynamicTeacherNav.push(
-               { id: 'exam-mgt', icon: 'fa-file-signature', text: 'Mark Entry' }, // Existing mark entry
-                { id: 'exam-control', icon: 'fa-clipboard-check', text: 'Exam Control' } // New Exam Control
+               { id: 'exam-control', icon: 'fa-clipboard-check', text: 'Exam Control' }
              );
         }
-        if (selectedUser.roles && selectedUser.roles.includes('festmgr')) {
+        if (sessionUser.roles && sessionUser.roles.includes('festmgr')) {
             dynamicTeacherNav.push(
-               { id: 'fest-mgt', icon: 'fa-trophy', text: 'Fest Management' } // Existing mark entry
+               { id: 'fest-mgt', icon: 'fa-trophy', text: 'Fest Management' }
              );
         }
-        
         navItems = dynamicTeacherNav;
         panelTitle.textContent = "Teacher Panel";
     }
 
     renderSidebar(navItems);
-    // REMOVED the navigation logic from here.
-     const initialViewId = 'dashboard';
-     history.replaceState({ viewId: initialViewId }, initialViewId, `#${initialViewId}`);
-    navigateTo(initialViewId, false);
+    
+    // --- MODIFIED: Navigate to the last saved view, not always dashboard ---
+    history.replaceState({ viewId: lastViewId }, lastViewId, `#${lastViewId}`);
+    navigateTo(lastViewId, false); // 'false' prevents a new history entry
 }
 // Add all of these new functions to your main <script> block
 /**
@@ -2613,6 +2867,11 @@ window.saveJudgeResults = async (festData, eventData, participants, groups) => {
         if(password===(t.mobile||'').slice(-5)){
           await appDb.teachers.put(t);
           showAlert('Logged in from server.','success');
+          // --- ADD THIS BLOCK ---
+  const session = { role: 'teacher', userId: t.id, timestamp: Date.now() };
+  localStorage.setItem('schoolAppUserSession', JSON.stringify(session));
+  // --- END ADD ---
+          
           onLoginSuccess('teacher',t);
         }else showAlert('Incorrect password.','danger');
       }
@@ -2651,6 +2910,7 @@ window.saveJudgeResults = async (festData, eventData, participants, groups) => {
       const localAdmin=await appDb.teachers.where('email').equalsIgnoreCase(email).first();
       if(localAdmin&&localAdmin.role==='admin'&&pass===(localAdmin.mobile||'').slice(-5)){
         showAlert('Logged in as Admin (cache).','success');
+        
         onLoginSuccess('admin',localAdmin);return;
       }
       if(!navigator.onLine){showAlert('Offline admin login failed.','danger');return;}
@@ -2672,36 +2932,39 @@ window.saveJudgeResults = async (festData, eventData, participants, groups) => {
   }
 });
 
-
-        document.getElementById('logout-btn').addEventListener('click', async () => {
-    // 1. Unsubscribe from all active Firestore listeners to stop data syncing
+document.getElementById('logout-btn').addEventListener('click', async () => {
+    // 1. Unsubscribe from all active Firestore listeners
     unsubscribeAllListeners();
 
-    // 2. Destroy any active charts to prevent memory leaks
+    // 2. Destroy any active charts
     if(window.attendanceChart) { 
         window.attendanceChart.destroy(); 
         window.attendanceChart = null; 
     }
-    // (Destroy any other charts here as well)
 
     try {
-        // --- THIS IS THE KEY CHANGE ---
-        // 3. Close the active connection to the database. This is essential, especially on mobile.
+        // 3. Close the active connection to the database.
         console.log('Closing IndexedDB connection...');
         appDb.close();
 
-        // 4. Delete the entire 'SchoolAppDB' database and wait for it to complete.
+        // 4. Delete the entire 'SchoolAppDB' database.
         console.log('Deleting IndexedDB database...');
-        await Dexie.delete('SchoolAppDB'); // Use Dexie's static delete method
+        await Dexie.delete('SchoolAppDB'); 
         console.log('IndexedDB database has been deleted successfully.');
 
-        // 5. After deletion is successful, update the UI and reload for a fresh start.
+        // --- THIS IS THE NEW PART ---
+        // 5. Clear the saved session data from localStorage
+        localStorage.removeItem('schoolAppUserSession');
+        localStorage.removeItem('schoolAppLastState');
+        // --- END NEW PART ---
+
+        // 6. After deletion is successful, update the UI and reload
         document.getElementById('main-app').classList.remove('active');
         document.getElementById('login-screen').classList.add('active');
         window.location.reload();
 
     } catch (error) {
-        console.error('Failed to delete IndexedDB:', error);
+        console.error('Failed to delete IndexedDB or clear session:', error);
         showAlert('Error during logout. You may need to clear your browser cache manually.', 'danger');
         
         // As a fallback, still try to log the user out visually
@@ -2767,6 +3030,12 @@ if(navigator.onLine){
  * so that event listeners can be attached cleanly using JavaScript.
  * @param {object} stats - The object containing dashboard counts.
  */
+/**
+ * (REVISED) Renders the dashboard HTML.
+ * Now includes badge placeholders in the module cards and
+ * calls updateAllNotifications() on load.
+ * @param {object} stats - The object containing dashboard counts.
+ */
 function renderDashboardHTML(stats) {
     const mainContent = document.getElementById('main-content');
     if (!mainContent) return;
@@ -2776,7 +3045,7 @@ function renderDashboardHTML(stats) {
             <div class="col-md-6 col-xl-3"><div class="ui-card-stat h-100"><div class="stat-icon bg-primary"><i class="fas fa-users"></i></div><div class="stat-info"><div class="stat-number">${stats?.studentCount||""}</div><div class="stat-label">Active Students</div></div></div></div>
             <div class="col-md-6 col-xl-3"><div class="ui-card-stat h-100"><div class="stat-icon bg-success"><i class="fas fa-chalkboard-teacher"></i></div><div class="stat-info"><div class="stat-number">${stats?.teacherCount||""}</div><div class="stat-label">Active Teachers</div></div></div></div>
             <div class="col-md-6 col-xl-3"><div class="ui-card-stat h-100"><div class="stat-icon bg-danger"><i class="fas fa-rupee-sign"></i></div><div class="stat-info"><div class="stat-number">₹ ${stats?.totalBalance.toLocaleString('en-IN')||""}</div><div class="stat-label">Fee Balance Due</div></div></div></div>
-            <div class="col-md-6 col-xl-3"><div class="ui-card-stat h-100"><div class="stat-icon bg-warning"><i class="fas fa-trophy"></i></div><div class="stat-info"><div class="stat-number">${stats?.festCount}||""</div><div class="stat-label">Active Fests</div></div></div></div>
+            <div class="col-md-6 col-xl-3"><div class="ui-card-stat h-100"><div class="stat-icon bg-warning"><i class="fas fa-trophy"></i></div><div class="stat-info"><div class="stat-number">${stats?.festCount||""}</div><div class="stat-label">Active Fests</div></div></div></div>
         </div>
 
         <div class="ui-card mt-4">
@@ -2788,8 +3057,12 @@ function renderDashboardHTML(stats) {
                             <div class="card h-100 text-center card-hover-shadow">
                                 <div class="card-body d-flex flex-column justify-content-center">
                                     <i class="fas ${item.icon} fa-2x text-primary mb-2"></i>
-                                    <p class="card-text small mb-0">${item.text}-${item.id}</p>
-                                </div>
+                                    
+                                    <p class="card-text small mb-0 d-flex justify-content-center align-items-center">
+                                        ${item.text}
+                                        <span id="dashboard-badge-${item.id}" class="badge bg-danger rounded-pill ms-2 d-none"></span>
+                                    </p>
+                                    </div>
                             </div>
                         </a>
                     </div>
@@ -2799,9 +3072,12 @@ function renderDashboardHTML(stats) {
     `;
     mainContent.innerHTML = content;
 
-    // After rendering the HTML, call the new function to attach all the click listeners.
+    // After rendering the HTML, attach click listeners.
     attachDashboardListeners();
-
+    
+    // --- NEW: Trigger a notification update when dashboard loads ---
+    // This populates the badges for the first time.
+    updateAllNotifications(); 
 }
 
 /**
@@ -2822,6 +3098,39 @@ function attachDashboardListeners() {
       });
     }
   });
+}
+/**
+ * NEW: Updates notification badges on the dashboard module cards.
+ * This is called by updateAllNotifications.
+ * @param {Array<object>} allNotifications - The combined list of all notifications.
+ */
+function updateDashboardModuleBadges(allNotifications) {
+    // 1. Create a count of notifications for each module
+    const counts = allNotifications.reduce((acc, notification) => {
+        const view = notification.targetView;
+        if (view) {
+            acc[view] = (acc[view] || 0) + 1;
+        }
+        return acc;
+    }, {});
+
+    // 2. Loop over *all* adminNav items to update or hide their badges
+    // We check adminNav because only admins see this dashboard.
+    adminNav.forEach(item => {
+        const badgeId = `dashboard-badge-${item.id}`;
+        const badgeEl = document.getElementById(badgeId);
+        
+        if (badgeEl) {
+            const count = counts[item.id] || 0;
+            if (count > 0) {
+                badgeEl.textContent = count;
+                badgeEl.classList.remove('d-none');
+            } else {
+                badgeEl.textContent = '';
+                badgeEl.classList.add('d-none');
+            }
+        }
+    });
 }
 
 
@@ -8701,7 +9010,7 @@ async function loadMarkEntrySheetobject(examId, classId, division, subjectId) {
             const currentValue = parseInt(e.target.value, 10);
             
             // --> Handle non-numeric input gracefully
-             if (!isNaN(currentValue) && currentValue > maxValue) { e.target.value = ''; }
+            if (!isNaN(currentValue) && currentValue > maxValue) { e.target.value = ''; }
         });
     });
     
@@ -18620,27 +18929,40 @@ let previousNotificationCount = 0; // To track new notifications for sound alert
 /**
  * The main function to gather all notifications from different sources and update the UI.
  */
-function updateAllNotifications() {
+/**
+ * (REVISED) The main function to gather ALL notifications.
+ * Now includes custom notifications.
+ */
+async function updateAllNotifications() {
+    // 1. Get notifications from all sources
     const vehicleNotifications = getVehicleExpiryNotifications();
     const formNotifications = getPendingFormNotifications();
-    const libraryNotifications = getLibraryDueNotifications(); 
-
-    const allNotifications = [...vehicleNotifications, ...formNotifications ,...libraryNotifications];
+    const libraryNotifications = getLibraryDueNotifications();
     
-    // Play a sound if the number of notifications has increased
+    // --- NEW ---
+    const customNotifications = await getCustomNotifications();
+    // --- END NEW ---
+
+    const allNotifications = [
+        ...vehicleNotifications, 
+        ...formNotifications, 
+        ...libraryNotifications,
+        ...customNotifications // Add them to the list
+    ];
+    
+    // 2. Play sound if count has increased
     if (allNotifications.length > previousNotificationCount) {
-        // Use Tone.js to play a simple synth note without external files
         try {
             const synth = new Tone.Synth().toDestination();
             synth.triggerAttackRelease("C5", "8n");
-        } catch(e) {
-            console.warn("Tone.js not available for notification sound.", e);
-        }
+        } catch(e) { /* Tone.js might not be loaded */ }
     }
     previousNotificationCount = allNotifications.length;
 
-    renderNotifications(allNotifications);
-    updateSidebarBadges(allNotifications);
+    // 3. Update all parts of the UI
+    renderNotifications(allNotifications);         // Updates the top-right notification bell
+    updateSidebarBadges(allNotifications);       // Updates the sidebar navigation
+    updateDashboardModuleBadges(allNotifications); // Updates the dashboard module cards
 }
 
 /**
@@ -18731,6 +19053,9 @@ function renderNotifications(notifications) {
     const notificationBadge = document.getElementById('notification-badge');
     if (!notificationList || !notificationBadge) return;
 
+    notificationList.style.maxHeight = '400px';
+    notificationList.style.overflowY = 'auto';
+
     if (notifications.length > 0) {
         notificationBadge.textContent = notifications.length;
         notificationBadge.classList.remove('d-none');
@@ -18745,21 +19070,39 @@ function renderNotifications(notifications) {
                 else daysText = `<span>${n.docName} renewal due in ${n.daysRemaining} days.</span>`;
                 
                 return `<li><a class="dropdown-item" href="#" onclick="event.preventDefault(); navigateTo('${n.targetView}');"><div class="d-flex w-100 justify-content-between"><h6 class="mb-1 fw-bold">${n.title}</h6><small class="text-muted">${n.expiryDate}</small></div><p class="mb-0 small">${daysText}</p></a></li>`;
-            } 
-            else if (n.type === 'form') {
+            
+            } else if (n.type === 'form') {
                  return `<li><a class="dropdown-item" href="#" onclick="event.preventDefault(); navigateTo('${n.targetView}');"><div class="d-flex w-100 justify-content-between"><h6 class="mb-1 fw-bold">${n.title}</h6><small class="text-primary">New Form</small></div><p class="mb-0 small text-muted">${n.text}</p></a></li>`;
+            
+            // --- NEW BLOCK ---
+            } else if (n.type === 'custom') {
+                let dateText;
+                if (n.daysRemaining < 0) dateText = `<span class="text-danger fw-bold">Expired ${Math.abs(n.daysRemaining)} days ago</span>`;
+                else if (n.daysRemaining === 0) dateText = `<span class="text-danger fw-bold">Expires today</span>`;
+                else dateText = `<span class="text-muted">Expires in ${n.daysRemaining} days</span>`;
+
+                return `<li><a class="dropdown-item" href="#" onclick="event.preventDefault(); navigateTo('${n.targetView}');"><div class="d-flex w-100 justify-content-between"><h6 class="mb-1 fw-bold">${n.title}</h6><small>${dateText}</small></div><p class="mb-0 small">${n.text}</p></a></li>`;
+            // --- END NEW BLOCK ---
+            
+            } else if (n.type === 'library') {
+                 // (Your existing library notification, if you have one)
+                 return `<li><a class="dropdown-item" href="#" onclick="event.preventDefault(); navigateTo('${n.targetView}');"><div class="d-flex w-100 justify-content-between"><h6 class="mb-1 fw-bold">${n.title}</h6><small class="text-danger">Overdue</small></div><p class="mb-0 small">${n.text}</p></a></li>`;
             }
             return '';
         }).join('') + '<li><hr class="dropdown-divider"></li><li><a id="clear-all-notifications" class="dropdown-item text-center text-muted small" href="#">Clear all</a></li>';
     
-        document.getElementById('clear-all-notifications').addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            notificationList.innerHTML = '<li><p class="p-3 text-center text-muted mb-0">No new notifications.</p></li>';
-            notificationBadge.classList.add('d-none');
-            previousNotificationCount = 0;
-            updateSidebarBadges([]); // Clear sidebar badges as well
-        });
+        const clearAllBtn = document.getElementById('clear-all-notifications');
+        if (clearAllBtn) {
+            clearAllBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                notificationList.innerHTML = '<li><p class="p-3 text-center text-muted mb-0">No new notifications.</p></li>';
+                notificationBadge.classList.add('d-none');
+                previousNotificationCount = 0;
+                updateSidebarBadges([]); 
+                updateDashboardModuleBadges([]); 
+            });
+        }
 
     } else {
         notificationBadge.classList.add('d-none');
@@ -19070,10 +19413,14 @@ function attachVehicleFormListeners() {
  * Populates the form with data for editing a vehicle.
  * @param {string} regNo - The registration number of the vehicle to edit.
  */
+// --- (REVISED) window.editVehicle ---
+// Now includes smooth scroll and expiry date highlighting.
+
 window.editVehicle = (regNo) => {
     const vehicle = vehicles.find(v => v.id === regNo);
     if (!vehicle) return;
 
+    // --- 1. Populate all form fields ---
     document.getElementById('vehicle-form-title').textContent = `Edit Vehicle: ${regNo}`;
     document.getElementById('vehicle-reg-no').value = vehicle.id;
     document.getElementById('vehicle-reg-no').readOnly = true;
@@ -19086,10 +19433,56 @@ window.editVehicle = (regNo) => {
     document.getElementById('vehicle-pollution').value = vehicle.pollutionExpiry;
     document.getElementById('vehicle-gps').value = vehicle.gpsExpiry;
 
+    // --- 2. NEW: Check dates and style labels ---
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Normalize to the start of today
+
+    // Helper function to find the label and apply style
+    const styleLabel = (inputId, dateString) => {
+        const input = document.getElementById(inputId);
+        if (!input) return;
+        const label = input.previousElementSibling; // Gets the <label> right before the <input>
+        if (!label) return;
+
+        label.classList.remove('text-danger', 'fw-bold'); // Clear old styles
+        if (dateString) {
+            const expiryDate = new Date(dateString);
+            if (expiryDate < today) {
+                label.classList.add('text-danger', 'fw-bold'); // Apply expired style
+            }
+        }
+    };
+
+    // Check all expiry dates
+    styleLabel('vehicle-tax', vehicle.taxExpiry);
+    styleLabel('vehicle-permit', vehicle.permitExpiry);
+    styleLabel('vehicle-insurance', vehicle.insuranceExpiry);
+    styleLabel('vehicle-fitness', vehicle.fitnessExpiry);
+    styleLabel('vehicle-pollution', vehicle.pollutionExpiry);
+    styleLabel('vehicle-gps', vehicle.gpsExpiry);
+
+    // --- 3. Show "Cancel" button ---
     document.getElementById('cancel-vehicle-edit-btn').classList.remove('d-none');
+
+    // --- 4. NEW: Smooth scroll to the form ---
+    const formElement = document.getElementById('vehicle-form');
+    if (formElement) {
+        formElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
 };
 
 
+// --- (NEW) clearVehicleExpiryStyles ---
+// Helper function to remove all expiry styles from the form.
+
+function clearVehicleExpiryStyles() {
+    const form = document.getElementById('vehicle-form');
+    if (!form) return;
+    // Find all labels inside the form and remove the styling
+    form.querySelectorAll('label').forEach(label => {
+        label.classList.remove('text-danger', 'fw-bold');
+    });
+}
 
 function checkVehicleExpiriesAndNotify() { /// not part of the notifications
     const notificationList = document.getElementById('notification-list');
@@ -35538,6 +35931,7 @@ async function startMigration() {
     'master-control': window.renderMasterControlModule,
     'progression-mgt': window.renderProgressionModule, // <-- ADD THIS LINE
     'data-migration': window.renderMigrationTool, // <-- ADD THIS LINE
+    'notification-mgt': window.renderNotificationManager
 
 };      
 // --- In your <script type="module"> block ---
@@ -35546,7 +35940,7 @@ async function startMigration() {
 
 const appDb = new Dexie("SchoolAppDB");
 // IMPORTANT: Version number is incremented to apply the new indexes
-appDb.version(4.9).stores({
+appDb.version(5).stores({
     classes: "&id, name, lastUpdated",
     subjects: "&id, name, lastUpdated",
     students: "&id, classId, division, admissionNumber, name, lastUpdated",
@@ -35584,6 +35978,7 @@ appDb.version(4.9).stores({
     forms :"&id, lastUpdated",
     formResponses :"&id, lastUpdated",
     reports :"&id, lastUpdated",
+    customNotifications: '++id, targetView, expiryDate, isDismissed'
 });
     
 
@@ -35737,20 +36132,21 @@ window.addEventListener('online', handleOnline);
 
 // --- SESSION SAVE & RESTORE LOGIC ---
 
-// Save the last active view before the page is unloaded
 window.addEventListener('beforeunload', (event) => {
-    // Only save state if a user is logged in
     if (currentUserRole && selectedUser) {
         const activeNavId = document.querySelector('.nav-link.active')?.id.replace('nav-', '');
-        if (activeNavId) {
-            const sessionState = {
-                userId: selectedUser.id,
-                viewId: activeNavId,
-                timestamp: Date.now()
-            };
-            localStorage.setItem('schoolAppLastSession', JSON.stringify(sessionState));
-        }
-        // This will trigger the browser's confirmation prompt
+        
+        // --- THIS IS THE NEW PART ---
+        // We now save the *full application state*
+        const appState = {
+            viewId: activeNavId || 'dashboard',
+            selectedExamForControl: selectedExamForControl, // Save the selected exam
+            managingFestId: state.managingFest ? state.managingFest.id : null // Save the selected fest ID
+        };
+        localStorage.setItem('schoolAppLastState', JSON.stringify(appState));
+        // --- END NEW PART ---
+
+        // This part is unchanged and correctly warns the user
         event.preventDefault();
         event.returnValue = '';
     }
