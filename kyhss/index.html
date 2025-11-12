@@ -1132,7 +1132,7 @@ schoolDetails = {
             hmSignPng: 'sign3.jpg',
             schoolSealPng: 'SEAL.jpg'
         };
-
+let customNotifications =[];
         // A final, unified function to handle all data fetching needs.
 async function getData(storeName, idOrQueryObj = null) {
     try {
@@ -1422,7 +1422,7 @@ async function updateTeacherAssignedClasses() {
     unsubscribeAllListeners();
 
     showMainApp(); // Render the main app layout
-
+    getData ('customNotifications');
 }
 
 
@@ -18954,6 +18954,7 @@ let previousNotificationCount = 0; // To track new notifications for sound alert
  * Now includes custom notifications.
  */
 async function updateAllNotifications() {
+    getData('customNotifications');
     // 1. Get notifications from all sources
     const vehicleNotifications = getVehicleExpiryNotifications();
     const formNotifications = getPendingFormNotifications();
