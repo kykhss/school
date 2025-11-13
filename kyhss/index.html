@@ -1766,9 +1766,15 @@ const collectionMap = {
     examAbsentees: { setter: data => examAbsentees = data, renderer: checkAbsenteeNotifications }
 };
 /**
- * (REVISED) Attaches real-time listeners with a corrected sync strategy.
- * This version fixes a bug where the local database was cleared on every delta update.
- * @param {Array<string>} collectionsToWatch - The names of the collections to listen to.
+ * (FINAL OPTIMIZED) Attaches real-time listeners with Role-Based Sync.
+ * - Admin: Uses 'Count Match' for strict sync.
+ * - Teacher/Student: Uses 'Delta Patching' to avoid wiping local data.
+ * - Fixes "undefined query" error by checking query existence first.
+ */
+/**
+ * (FINAL ROBUST VERSION) Attaches listeners with Delta Sync & Strict Consistency.
+ * Order: Save DB -> Update Memory -> Resolve Promise -> Render.
+ * This prevents "stale data" race conditions.
  */
 async function attachDataListeners(collectionsToWatch) {
     if (!collectionsToWatch || collectionsToWatch.length === 0) return;
@@ -1794,124 +1800,159 @@ async function attachDataListeners(collectionsToWatch) {
             delete activeListeners[name];
         }
 
-        let needsSync = true;
+        let needsFullSync = true;
         let localCount = 0;
-        let serverCount = 0;
-        let lastLocalSyncTime = new Date(0);
+        let collectedData = {}; // Initialize in-memory cache
 
+        // --- 1. SMART SYNC (DELTA FETCH) ---
         if (smartSyncCollections.has(name)) {
-            localCount = await appDb[name].count();
-            if (localCount > 0) {
-                const collectionRef = getQueriesForCollection(name)[0].query;
-                const serverCountSnapshot = await getCountFromServer(collectionRef);
-                serverCount = serverCountSnapshot.data().count;
-
-                if (localCount === serverCount) {
-                    lastLocalSyncTime = await appDb[name].orderBy('lastUpdated').last().then(item => item?.lastUpdated || new Date(0));
-                    const updatesQuery = query(collectionRef, where('lastUpdated', '>', lastLocalSyncTime), limit(1));
-                    const updatesSnapshot = await getDocs(updatesQuery);
+            try {
+                localCount = await appDb[name].count();
+                
+                if (localCount > 0) {
+                    const generatedQueries = getQueriesForCollection(name);
                     
-                    if (updatesSnapshot.empty) {
-                        needsSync = false;
-                        const dataFromDB = await appDb[name].toArray();
-                        config.setter(dataFromDB);
-                        dataLoadStatus[name] = true;
-                        resolvePromiseFor(name);
-                        
-                        if (config.renderer && Object.values(viewRenderers).includes(config.renderer)) {
-                            const activeNavId = document.querySelector('.nav-link.active')?.id;
-                            const rendererNavId = `nav-${Object.keys(viewRenderers).find(key => viewRenderers[key] === config.renderer)}`;
-                            if (activeNavId === rendererNavId) {
-                                config.renderer();
+                    if (generatedQueries.length > 0) {
+                        // A. Sum up server counts
+                        const countPromises = generatedQueries.map(qInfo => getCountFromServer(qInfo.query));
+                        const countSnapshots = await Promise.all(countPromises);
+                        let totalServerCount = 0;
+                        countSnapshots.forEach(snap => totalServerCount += snap.data().count);
+
+                        // B. Compare Counts
+                        if (localCount === totalServerCount) {
+                            const lastLocalItem = await appDb[name].orderBy('lastUpdated').last();
+                            const lastLocalSyncTime = (lastLocalItem && lastLocalItem.lastUpdated) 
+                                ? lastLocalItem.lastUpdated 
+                                : new Date(0);
+
+                            const updatePromises = generatedQueries.map(qInfo => 
+                                getDocs(query(qInfo.query, where('lastUpdated', '>', lastLocalSyncTime)))
+                            );
+                            const allSnapshots = await Promise.all(updatePromises);
+                            
+                            let docsToSave = [];
+                            allSnapshots.forEach(snapshot => {
+                                if (!snapshot.empty) {
+                                    docsToSave.push(...snapshot.docs.map(d => ({id: d.id, ...d.data()})));
+                                }
+                            });
+
+                            // C. Apply Delta Patch to Dexie
+                            if (docsToSave.length > 0) {
+                                console.log(`[Smart Sync] Found ${docsToSave.length} updates for ${name}. Patching local DB...`);
+                                await appDb[name].bulkPut(docsToSave);
                             }
+
+                            // D. Load Consistent Data into Memory
+                            const dataFromDB = await appDb[name].toArray();
+                            dataFromDB.forEach(doc => collectedData[doc.id] = doc);
+                            config.setter(dataFromDB); // Update global variable
+                            
+                            // E. Unlock UI
+                            dataLoadStatus[name] = true; 
+                            resolvePromiseFor(name);
+                            
+                            // F. Render
+                            if (config.renderer) {
+                                const isMainViewRenderer = Object.values(window.viewRenderers).includes(config.renderer);
+                                if (!isMainViewRenderer) {
+                                    config.renderer(); 
+                                } else {
+                                    const activeNavId = document.querySelector('.nav-link.active')?.id;
+                                    const rendererNavId = `nav-${Object.keys(viewRenderers).find(key => viewRenderers[key] === config.renderer)}`;
+                                    if (activeNavId === rendererNavId) config.renderer();
+                                }
+                            }
+                            needsFullSync = false;
+                        } else {
+                            console.log(`[Smart Sync] Count mismatch for ${name}. Forcing full sync.`);
                         }
-                    } else {
-                        needsSync = true; 
                     }
-                } else {
-                    needsSync = true; 
                 }
+            } catch (e) {
+                console.warn(`[Smart Sync] Failed for ${name}. Falling back to full sync.`, e);
+                needsFullSync = true;
             }
         }
         
-        if (!needsSync) continue;
+        // --- 2. ATTACH LISTENER ---
         
         const queriesToExecute = getQueriesForCollection(name);
         if (queriesToExecute.length === 0) {
             dataLoadStatus[name] = true;
-            resolvePromiseFor(name);
+            //resolvePromiseFor(name);
             continue;
         }
 
-        let queriesCompletedInitialSnapshot = 0;
+        let queriesReceivedInitialSnapshot = 0;
+        let queriesFinishedProcessing = 0;
         const expectedInitialSnapshots = queriesToExecute.length;
         const currentCollectionUnsubs = [];
-        let collectedData = {};
 
         queriesToExecute.forEach(qInfo => {
             const unsub = onSnapshot(qInfo.query, async snapshot => {
+
+                let isInitialPhase = !dataLoadStatus[name];
                 
-                // --- THIS IS THE FIX ---
-                // We will set a flag *if* this is the initial load,
-                // but we will NOT resolve the promise yet.
-                let isInitialSnapshot = false;
-                if (!dataLoadStatus[name]) {
-                    queriesCompletedInitialSnapshot++;
-                    if (queriesCompletedInitialSnapshot >= expectedInitialSnapshots) {
-                        dataLoadStatus[name] = true;
-                        isInitialSnapshot = true; // Mark this as the first load
-                        
-                        if (needsSync && localCount !== serverCount) {
-                            console.log(`[Sync] Mismatch for ${name}. Clearing local cache.`);
-                            await appDb[name].clear();
-                        }
+                if (isInitialPhase) {
+                    queriesReceivedInitialSnapshot++;
+                    // Clear DB only on first snapshot of a Full Sync
+                    if (needsFullSync && localCount > 0 && queriesReceivedInitialSnapshot === 1) {
+                         await appDb[name].clear();
+                         collectedData = {}; // Reset cache
                     }
                 }
-                // --- END OF MOVED BLOCK ---
 
                 const changes = snapshot.docChanges();
-                if (changes.length === 0) return;
+                
+                if (changes.length > 0) {
+                    const { toAddOrUpdate, toDelete } = processFirestoreChanges(changes);
+                    
+                    // 1. Update Dexie (Persistence First)
+                    try {
+                        const store = appDb[name];
+                        await appDb.transaction('rw', store, async () => {
+                            if (toDelete.length > 0) await store.bulkDelete(toDelete);
+                            if (toAddOrUpdate.length > 0) await store.bulkPut(toAddOrUpdate);
+                        });
+                    } catch (error) {
+                        console.error(`Error applying updates to ${name} in IndexedDB:`, error);
+                    }
 
-                const { toAddOrUpdate, toDelete } = processFirestoreChanges(changes);
-                
-                toDelete.forEach(id => delete collectedData[id]);
-                toAddOrUpdate.forEach(doc => collectedData[doc.id] = doc);
-                config.setter(Object.values(collectedData));
-                
-                try {
-                    const store = appDb[name];
-                    await appDb.transaction('rw', store, async () => {
-                        if (toDelete.length > 0) await store.bulkDelete(toDelete);
-                        if (toAddOrUpdate.length > 0) await store.bulkPut(toAddOrUpdate);
-                    });
-                } catch (error) {
-                    console.error(`Error applying updates to ${name} in IndexedDB:`, error);
+                    // 2. Update Memory (Consistency Second)
+                    toDelete.forEach(id => delete collectedData[id]);
+                    toAddOrUpdate.forEach(doc => collectedData[doc.id] = doc);
+                    config.setter(Object.values(collectedData));
                 }
 
-                // --- THIS IS THE FIX ---
-                // Now that the data is saved in Dexie, we can safely
-                // send the "finished" signal (resolve the promise).
-                if (isInitialSnapshot) {
-                    resolvePromiseFor(name);
+                // 3. Resolve Promise (Unlock Third)
+                if (isInitialPhase) {
+                    queriesFinishedProcessing++;
+                    if (queriesFinishedProcessing >= expectedInitialSnapshots) {
+                        dataLoadStatus[name] = true;
+                        resolvePromiseFor(name);
+                    }
                 }
-                // --- END OF FIX ---
 
-                // Re-render if the user is on the matching view
+                // 4. Render UI (Visibility Fourth)
                 if (config.renderer) {
-                    updateAllNotifications();
-                   const activeNavId = document.querySelector('.nav-link.active')?.id;
-                   const rendererNavId = `nav-${Object.keys(viewRenderers).find(key => viewRenderers[key] === config.renderer)}`;
-                   if (activeNavId === rendererNavId) {
-                       config.renderer();
-                   }
+                    const isMainViewRenderer = Object.values(window.viewRenderers).includes(config.renderer);
+                    if (isMainViewRenderer) {
+                        const activeNavId = document.querySelector('.nav-link.active')?.id;
+                        const rendererNavId = `nav-${Object.keys(viewRenderers).find(key => viewRenderers[key] === config.renderer)}`;
+                        if (activeNavId === rendererNavId) config.renderer();
+                    } else {
+                        config.renderer(); 
+                    }
                 }
-                
+
             }, error => {
                 console.error(`[Firestore] Error listening to ${name}: `, error);
-                // Also resolve the promise on error to prevent the app from hanging
+                // Emergency unlock on error
                 if (!dataLoadStatus[name]) {
-                    queriesCompletedInitialSnapshot++;
-                    if (queriesCompletedInitialSnapshot >= expectedInitialSnapshots) {
+                    queriesFinishedProcessing++;
+                    if (queriesFinishedProcessing >= expectedInitialSnapshots) {
                         dataLoadStatus[name] = true;
                         resolvePromiseFor(name);
                     }
@@ -1919,6 +1960,7 @@ async function attachDataListeners(collectionsToWatch) {
             });
             currentCollectionUnsubs.push(unsub);
         });
+        
         activeListeners[name] = () => currentCollectionUnsubs.forEach(unsub => unsub());
     }
 }
@@ -2182,65 +2224,97 @@ function processMarksChanges(changes) {
  * @param {Array<object>} classDataArray - An array of objects, e.g., [{ classId: 'C1', division: 'A' }]
  * @param {boolean} [refresh=false] - If true, a new listener is created even if one exists.
  */
+/**
+ * (OPTIMIZED) Attaches real-time listeners for marks with Delta Sync.
+ * 1. Fetches only changed data (Delta) based on lastUpdated.
+ * 2. Updates local DB.
+ * 3. Loads data to memory and Resolves Promise (UI Unblocks).
+ * 4. Attaches background listener for full consistency.
+ */
+/**
+ * (FINAL ROBUST VERSION) Attaches listeners and WAITS for data to load.
+ * This version returns a Promise that only resolves when all marks are
+ * loaded into memory, ensuring 'await' works perfectly.
+ */
 async function attachMarksListener(classDataArray, refresh = false) {
     if (!Array.isArray(classDataArray) || classDataArray.length === 0) {
         console.warn("attachMarksListener was called with an invalid or empty classDataArray.");
         return;
     }
 
-    for (const { classId, division } of classDataArray) {
-        if (!classId || !division) {
-            console.warn("Skipping an item due to missing classId or division.", { classId, division });
-            continue;
-        }
-
-        const listenerKey = `${classId}_${division}`;
-        if (activeMarksListeners[listenerKey] && !refresh) {
-            continue;
-        }
-
-        const academicYear = activeFinancialYear;
-        const marksCollectionName = `marks-${academicYear}`;
-        
-        const localMarks = await appDb.marks.where({ classId, division }).toArray();
-        let needsSync = false;
-
-        if (localMarks.length === 0) {
-            console.log(`No local marks for ${classId}-${division}. Performing initial full sync.`);
-            needsSync = true;
-        } else {
-            const lastLocalSyncTime = localMarks.reduce((max, mark) => 
-                (mark.lastUpdated && mark.lastUpdated > max) ? mark.lastUpdated : max, new Date(0));
-
-            const updatesQuery = query(
-                getCollectionRef(marksCollectionName),
-                where('classId', '==', classId),
-                where('division', '==', division),
-                where('lastUpdated', '>', lastLocalSyncTime),
-                limit(1)
-            );
-            
-            const updatesSnapshot = await getDocs(updatesQuery);
-
-            if (!updatesSnapshot.empty) {
-                console.log(`Newer marks found on server for ${classId}-${division}. Starting sync.`);
-                needsSync = true;
-            } else {
-                // --- THIS IS THE FIX YOU CORRECTLY IDENTIFIED ---
-                console.log(`Local marks for ${classId}-${division} are up-to-date. Sync skipped. Loading from local DB.`);
-                // 1. Get all marks from the local DB.
-                const allLocalMarks = await appDb.marks.toArray();
-                // 2. Convert the array into the object format that the app expects.
-                marks = allLocalMarks.reduce((acc, mark) => {
-                    acc[mark.id] = mark;
-                    return acc;
-                }, {});
-                needsSync = false;
-                // --- END OF FIX ---
+    const academicYear = activeFinancialYear;
+    const marksCollectionName = `marks-${academicYear}`;
+    
+    // 1. Create an array of promises (one for each class/division)
+    const loadingPromises = classDataArray.map(async ({ classId, division }) => {
+        return new Promise(async (resolve) => {
+            if (!classId || !division) {
+                resolve(); // Skip invalid items
+                return;
             }
-        }
-        
-        if (needsSync) {
+
+            const listenerKey = `${classId}_${division}`;
+            
+            // If already listening and not refreshing, we assume data is ready.
+            if (activeMarksListeners[listenerKey] && !refresh) {
+                resolve();
+                return;
+            }
+
+            let dataLoadedViaDelta = false;
+
+            // --- STEP 1: TRY SMART DELTA SYNC ---
+            try {
+                const lastLocalMark = await appDb.marks
+                    .where({ classId, division })
+                    .reverse()
+                    .sortBy('lastUpdated');
+                
+                const lastLocalSyncTime = (lastLocalMark.length > 0 && lastLocalMark[0].lastUpdated) 
+                    ? lastLocalMark[0].lastUpdated 
+                    : new Date(0);
+
+                const updatesQuery = query(
+                    getCollectionRef(marksCollectionName),
+                    where('classId', '==', classId),
+                    where('division', '==', division),
+                    where('lastUpdated', '>', lastLocalSyncTime)
+                );
+
+                const updatesSnapshot = await getDocs(updatesQuery);
+
+                if (!updatesSnapshot.empty) {
+                    // Convert docs for processing
+                    const changesMock = updatesSnapshot.docs.map(doc => ({ type: 'modified', doc: doc }));
+                    const { toAddOrUpdate, toDelete } = processMarksChanges(changesMock);
+
+                    if (toAddOrUpdate.length > 0) await appDb.marks.bulkPut(toAddOrUpdate);
+                    // (Deletes are handled by background listener later)
+                }
+
+                // LOAD DATA INTO MEMORY
+                const allLocalMarks = await appDb.marks.where({ classId, division }).toArray();
+                allLocalMarks.forEach(mark => { marks[mark.id] = mark; });
+
+                dataLoadedViaDelta = true;
+                
+                // *** SUCCESS! Resolve the promise now. ***
+                resolve(); 
+
+            } catch (error) {
+                console.warn(`[Marks Sync] Delta sync failed for ${listenerKey}, falling back to listener.`, error);
+                // Do NOT resolve yet. We will resolve inside the listener.
+            }
+
+            // --- STEP 2: ATTACH BACKGROUND LISTENER ---
+            // We still attach this to catch future updates or if Delta Sync failed.
+            if (activeMarksListeners[listenerKey]) {
+                 // If we resolved via Delta, we are done. 
+                 // If Delta failed, but a listener exists (rare edge case), we resolve to be safe.
+                 if(!dataLoadedViaDelta) resolve(); 
+                 return;
+            }
+
             const fullQuery = query(
                 getCollectionRef(marksCollectionName),
                 where('classId', '==', classId),
@@ -2249,30 +2323,52 @@ async function attachMarksListener(classDataArray, refresh = false) {
 
             const unsubscribe = onSnapshot(fullQuery, async (snapshot) => {
                 const changes = snapshot.docChanges();
-                if (changes.length === 0) return;
-
-                const { toAddOrUpdate, toDelete } = processMarksChanges(changes);
-
-                try {
-                    if (toAddOrUpdate.length > 0) {
-                        await appDb.marks.bulkPut(toAddOrUpdate);
+                
+                // If this is the first snapshot and Delta Sync failed, we process and resolve here
+                if (!dataLoadedViaDelta) {
+                    if (changes.length > 0) {
+                        const { toAddOrUpdate, toDelete } = processMarksChanges(changes);
+                        try {
+                            if (toAddOrUpdate.length > 0) {
+                                await appDb.marks.bulkPut(toAddOrUpdate);
+                                toAddOrUpdate.forEach(m => marks[m.id] = m);
+                            }
+                            if (toDelete.length > 0) {
+                                await appDb.marks.bulkDelete([...new Set(toDelete)]);
+                                toDelete.forEach(id => delete marks[id]);
+                            }
+                        } catch (error) {
+                            console.error('Error syncing marks stream:', error);
+                        }
                     }
-                    if (toDelete.length > 0) {
-                        await appDb.marks.bulkDelete([...new Set(toDelete)]);
-                    }
-                } catch (error) {
-                    console.error('Error syncing marks to IndexedDB:', error);
-                    showAlert('Failed to save marks data locally.', 'danger');
+                    
+                    dataLoadedViaDelta = true; // Mark as loaded so we don't resolve again
+                    resolve(); // *** RESOLVE PROMISE HERE (Fallback Path) ***
+                } else {
+                    // Normal background update
+                    if (changes.length === 0) return;
+                    const { toAddOrUpdate, toDelete } = processMarksChanges(changes);
+                    try {
+                        if (toAddOrUpdate.length > 0) await appDb.marks.bulkPut(toAddOrUpdate);
+                        if (toDelete.length > 0) await appDb.marks.bulkDelete([...new Set(toDelete)]);
+                        // Update memory too
+                        toAddOrUpdate.forEach(m => marks[m.id] = m);
+                        toDelete.forEach(id => delete marks[id]);
+                    } catch(e) { console.error(e); }
                 }
             }, (error) => {
-                console.error(`[Firestore] Error listening to marks for ${listenerKey}: `, error);
+                console.error(`[Firestore] Error listening to marks: `, error);
+                resolve(); // Resolve on error so app doesn't hang
             });
 
             activeMarksListeners[listenerKey] = unsubscribe;
-        }
-    }
-}
+        });
+    });
 
+    // 2. Wait for ALL class promises to finish before letting the code continue
+    await Promise.all(loadingPromises);
+    console.log("All marks loaded into memory.");
+}
 
 
 function attachMarksListenerarray(examId, classDataArray = []) {
