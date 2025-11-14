@@ -9047,6 +9047,10 @@ async function loadMarkEntrySheetobject(examId, classId, division, subjectId) {
         showMessage('No active students found in this class/division.', 'warning');
         return;
     }
+    if (!navigator.onLine) {
+        showMessage('Error: no proper internet connection.', 'danger');
+        return;
+    }
     
     // --- THIS IS THE REFACTORED FETCH LOGIC ---
     const marksForSheet = {};
