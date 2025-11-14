@@ -1139,58 +1139,41 @@ async function getData(storeName, idOrQueryObj = null) {
         const store = appDb[storeName];
         if (!store) {
             console.error(`Store "${storeName}" does not exist in the database.`);
-            return null;
+            return null; 
         }
 
         const isById = typeof idOrQueryObj === 'string';
-        if (!navigator.onLine) showAlert('You are offline. Data may be outdated.', 'warning');
-        if (navigator.onLine){
-           await attachDataListeners([storeName]);
+
+        // 1. Start the data listener/sync process if online.
+        if (navigator.onLine) {
+            attachDataListeners([storeName]);
+        } else if (!dataLoadStatus[storeName]) {
+            showAlert('You are offline. Data may be incomplete.', 'warning');
         }
-        
-        // --- PATH 1: Fetch by ID ---
+
+        // 2. *** THE CRITICAL FIX (from last message) ***
+        // ALWAYS wait for the collection's initial load to complete.
+        try {
+            await waitForCollectionLoad(storeName);
+        } catch (err) {
+            console.warn(`Error during waitForCollectionLoad for ${storeName}:`, err);
+        }
+
+        // 3. Now that we've waited, read the fresh data from Dexie.
         if (isById) {
             const docId = idOrQueryObj;
             let localDoc = await store.get(docId);
-
-            if (localDoc) return localDoc;
+            return localDoc || null; 
         }
 
-        // --- PATH 2: Query data from cache ---
         let localData = idOrQueryObj
             ? await store.where(idOrQueryObj).toArray()
             : await store.toArray();
+                return localData||[]; 
 
-        if (localData.length > 0) return localData;
-
-        // --- Try online fetch if offline cache is empty ---
-        if (navigator.onLine) {
-            try {
-                if (storeName === 'marks') {
-                    //await syncDataForUser();
-                    return [];
-
-                } else {
-                    attachDataListeners([storeName]);
-                }
-
-                await waitForCollectionLoad(storeName);
-
-                // re-fetch from IndexedDB after sync
-                localData = idOrQueryObj
-                    ? await store.where(idOrQueryObj).toArray()
-                    : await store.toArray();
-
-                return localData;
-            } catch (err) {
-                console.error(`Error fetching ${storeName} from Firestore:`, err);
-            }
-        }
-
-        return [];
     } catch (error) {
         console.error(`Error fetching data from "${storeName}":`, error);
-        return null;
+        return null; 
     }
 }
 
@@ -1642,14 +1625,14 @@ async function getCustomNotifications() {
 // Add this new object to your script
 const viewDependencies = {
     // Admin & General Views
-    'dashboard': ['schoolDetails','students', 'teachers', 'classes', 'subjects', 'attendance','classroomSubjects'],
+    'dashboard': ['teachers', 'classes', 'subjects','classroomSubjects'],
     'add-student': ['classes', 'students'],
     'student-mgt': ['students', 'classes'],
     'teacher-mgt': ['teachers', 'classes'],
     'class-mgt': ['classes'],
     'subject-mgt': ['subjects'],
     'subject-allocation': ['classes', 'subjects', 'teachers', 'classroomSubjects'],
-    'exam-mgt': ['marks','exams', 'classes', 'subjects', 'teachers', 'examSchedules','classroomSubjects','students'],
+    'exam-mgt': ['exams', 'classes', 'subjects', 'teachers', 'examSchedules','classroomSubjects','students'],
     'exam-control': ['exams', 'classes', 'subjects', 'teachers', 'examSchedules','classroomSubjects','examRooms', 'examDuties', 'examAbsentees', 'examRegistrationSettings','examRoomAllocationRules'],
     'exam-reports':['students','exams','classes','examSchedules','classroomSubjects','subjects','teachers', ],
     'attendance-mgt': ['students', 'classes', 'holidays', 'attendance'],
@@ -1881,7 +1864,7 @@ async function attachDataListeners(collectionsToWatch) {
         const queriesToExecute = getQueriesForCollection(name);
         if (queriesToExecute.length === 0) {
             dataLoadStatus[name] = true;
-            //resolvePromiseFor(name);
+            resolvePromiseFor(name);
             continue;
         }
 
@@ -5512,18 +5495,16 @@ window.formatAadhaar = (input) => {
     input.value = value;
 };
 
-
-
-
-        let currentFilteredStudents = []; // Store the full list of filtered students
+let currentFilteredStudents = []; // Store the full list of filtered students
 
 window.renderStudentManagement = () => {
+    
     const mainContent = document.getElementById('main-content');
     if (!mainContent) {
         console.error('Main content element not found!');
         return;
     }
-
+     waitForCollectionLoad('sudents');
     const currentYear = new Date().getFullYear();
     const currentAcademicYear = `${currentYear}-${currentYear + 1}`;
     const classOptions = classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
