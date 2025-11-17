@@ -9183,15 +9183,18 @@ async function saveMarksobject(examId, classId, division, subjectId) {
 
                 changesFound++;
 
-                const te = currentTE.toUpperCase() === 'AB' ? 'AB' : (parseInt(currentTE)||"");
-                const ce = currentCE.toUpperCase() === 'AB' ? 'AB' : (parseInt(currentCE)||"");
+                
+                const te = currentTE.toUpperCase() === 'AB' ? 'AB' : currentTE.toUpperCase() === '0'? '0':(parseInt(currentTE)||"");
+                const ce = currentCE.toUpperCase() === 'AB' ? 'AB' : currentCE.toUpperCase() === '0' ? '0' :(parseInt(currentCE)||"");
                 
                 if(te===""){
-                    showAlert('No empty marks save.'&studentId, 'info');
+                    var message = `No empty marks save.${studentAdnumber}`;
+                    showAlert(message, 'info');
                     saveButton.disabled = false;
                     saveButton.innerHTML = originalButtonHtml;
                     return
                 }
+
                 
                 // 1. The collection name is now dynamic, based on the active year.
                 const marksCollectionName = `marks-${academicYear}`;
