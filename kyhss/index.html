@@ -1146,9 +1146,34 @@ async function getData(storeName, idOrQueryObj = null) {
 
         // 1. Start the data listener/sync process if online.
         if (navigator.onLine) {
-            attachDataListeners([storeName]);
+         attachDataListeners([storeName]);
+            // 3. Now that we've waited, read the fresh data from Dexie.
+        // if (isById) {
+        //     const docId = idOrQueryObj;
+        //     let localDoc = await store.get(docId);
+        //     return localDoc || null; 
+        // }
+
+        // let localData = idOrQueryObj
+        //     ? await store.where(idOrQueryObj).toArray()
+        //     : await store.toArray();
+        //         return localData||[]; 
+
         } else if (!dataLoadStatus[storeName]) {
             showAlert('You are offline. Data may be incomplete.', 'warning');
+            
+        // 3. Now that we've waited, read the fresh data from Dexie.
+        if (isById) {
+            const docId = idOrQueryObj;
+            let localDoc = await store.get(docId);
+            return localDoc || null; 
+        }
+
+        let localData = idOrQueryObj
+            ? await store.where(idOrQueryObj).toArray()
+            : await store.toArray();
+                return localData||[]; 
+
         }
 
         // 2. *** THE CRITICAL FIX (from last message) ***
@@ -5507,7 +5532,16 @@ window.renderStudentManagement = () => {
      waitForCollectionLoad('sudents');
     const currentYear = new Date().getFullYear();
     const currentAcademicYear = `${currentYear}-${currentYear + 1}`;
-    const classOptions = classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    let classOptions = '';
+
+    const teacherAllocations = teacherAssignedClasses.filter(cs => cs.classId);
+        const uniqueClassIds = [...new Set(teacherAssignedClasses.map(a => a.classId))];
+        classOptions = uniqueClassIds.map(classId => {
+            const c = classes.find(cls => cls.id === classId);
+            return c ? `<option value="${c.id}">${c.name}</option>` : '';
+        }).join('');
+
+    //const classOptions = teacherAssignedClasses.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
 
     mainContent.innerHTML = `
         <h1 class="h2 mb-4">Student Management</h1>
@@ -5515,6 +5549,10 @@ window.renderStudentManagement = () => {
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h5 class="fw-bold mb-0">Filter Students</h5>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" role="switch" id="new-admissions-btn">
+                        <label class="form-check-label" for="new-admissions-btn">New Admissions (${currentAcademicYear})</label>
+                    </div>
                     <div class="form-check form-switch">
                         <input class="form-check-input" type="checkbox" role="switch" id="show-inactive-toggle">
                         <label class="form-check-label" for="show-inactive-toggle">Show Inactive Students</label>
@@ -5538,11 +5576,12 @@ window.renderStudentManagement = () => {
                         <label for="student-search-input" class="form-label">Search (Admn No. or Name)</label>
                         <input type="text" id="student-search-input" class="form-control" placeholder="Search by Admn No. or Name">
                     </div>
-                    <div class="col-md-2 d-flex justify-content-end">
+                   <!----
+                     <div class="col-md-2 d-flex justify-content-end">
                         <button id="new-admissions-btn" class="btn btn-outline-info w-100">
                             New Admissions (${currentAcademicYear})
                         </button>
-                    </div>
+                    </div> ---->
                 </div>
                 <hr class="mt-4 mb-3">
                 <div class="d-flex justify-content-between align-items-center">
@@ -5587,6 +5626,7 @@ window.renderStudentManagement = () => {
                     <table class="table table-hover">
                         <thead>
                             <tr>
+                                <th>sl</th>
                                 <th>id</th>
                                 <th>Admn No</th>
                                 <th>Name</th>
@@ -5617,11 +5657,12 @@ window.renderStudentManagement = () => {
     let currentFilteredStudents = [];
 
     const updateFilterDivisions = () => {
-        const selectedClass = classes.find(c => c.id === filterClassDropdown.value);
+        const selectedClass = teacherAssignedClasses.find(c => c.id === filterClassDropdown.value);
+        const uniqueDivisions = [...new Set(teacherAssignedClasses.map(a => a.classId === filterClassDropdown.value&&a.division))];
         filterDivisionDropdown.innerHTML = '<option value="">-- All Divisions --</option>';
-        if (selectedClass?.divisions) {
+        if (uniqueDivisions) {
             filterDivisionDropdown.disabled = false;
-            filterDivisionDropdown.innerHTML += selectedClass.divisions.map(d => `<option value="${d}">${d}</option>`).join('');
+            filterDivisionDropdown.innerHTML += uniqueDivisions.map(d => `<option value="${d}">${d}</option>`).join('');
         } else {
             filterDivisionDropdown.disabled = true;
         }
@@ -5644,11 +5685,13 @@ window.renderStudentManagement = () => {
         const filterClassId = filterClassDropdown.value;
         const filterDivision = filterDivisionDropdown.value;
         const searchTerm = studentSearchInput.value.toLowerCase();
-        const isNewAdmissionsFiltered = newAdmissionsBtn.classList.contains('btn-info');
+        const isNewAdmissionsFiltered = newAdmissionsBtn.checked;//newAdmissionsBtn.classList.contains('btn-info');
         
         let studentsToFilter = currentUserRole === 'teacher' 
-            ? baseStudentList.filter(s => s.classId === selectedUser.classCharge?.classId && s.division === selectedUser.classCharge?.division) 
-            : baseStudentList;
+            ?
+            baseStudentList : baseStudentList;
+            // baseStudentList.filter(s => s.classId === selectedUser.classCharge?.classId && s.division === selectedUser.classCharge?.division) 
+            
 
         if (filterClassId) studentsToFilter = studentsToFilter.filter(s => s.classId === filterClassId);
         if (filterDivision) studentsToFilter = studentsToFilter.filter(s => s.division === filterDivision);
@@ -5707,9 +5750,12 @@ window.renderStudentManagement = () => {
         nextPageBtn.disabled = currentPage === totalPages || totalPages === 0;
 
         if (studentsToDisplay.length > 0) {
+            let index = startIndex;
             studentListTbody.innerHTML = studentsToDisplay.map(s => {
+                index++
                 const cls = classes.find(c => c.id === s.classId);
                 return `<tr>
+                    <td>${index}</td>
                     <td>${s.id || 'id'}</td>
                     <td>${s.admissionNumber || 'N/A'}</td>
                     <td><a href="#" class="student-name-link fw-bold" data-id="${s.id}">${s.name || 'N/A'}</a></td>
@@ -6409,7 +6455,12 @@ function populateAndShowFullStudentModal(studentId) {
             modalFooter.insertAdjacentHTML('afterbegin', viewTcButtonHtml);
         }
     }
+    if(selectedUser.role!=="admin"){
+        document.getElementById('print-student-details-btn').classList.add('d-none');
+
+        document.getElementById('print-student-extract-btn').classList.add('d-none');
     
+    }
     // c. Re-attach onclick events for standard buttons
     modalFooter.querySelector('#print-student-details-btn').onclick = () => {
          printContentOfDiv('student-details-printable', `Student Profile - ${student.name}`);
@@ -6785,11 +6836,17 @@ async function renderEntryReportTab() {
         ${tabContent}
         </div>
     `;
+    const examSelect = document.getElementById('entry-report-exam');
+    // After setting innerHTML, find the active exam and set the value
+const firstActiveExam = exams.find(ex => ex.isActive);
+if (firstActiveExam) {
+    examSelect.value = firstActiveExam.id;
+}
 
     document.getElementById('entry-report-exam').addEventListener('change', async (e) => {
         await attachMarksListener(teacherAssignedClasses);
     
-        const examId = e.target.value;
+        const examId = e.target.value||firstActiveExam.id;
         if (examId) {
             generateEntryReport(examId); // Always generate the main report
             if (isClassTeacher) {
@@ -6947,44 +7004,70 @@ function renderSummaryTableHTML(displayData, examId) {
  * for each subject in their class for the selected exam.
  */
 function renderMyClassPendingList(examId) {
+    console.log(exams);
     const container = document.getElementById('my-class-pending-container');
     if (!container || !selectedUser.classCharge) return;
 
     const { classId, division } = selectedUser.classCharge;
-    
-    // Get active students in the teacher's class
-    const studentsInClass = students.filter(s => 
-        s.classId === classId && 
-        s.division === division && 
-        s.status !== 'TC Issued' && 
-        s.status !== 'Graduated'
-    );
 
-    // Get all subjects allocated to this specific class and division
-    const subjectsForClass = classroomSubjects.filter(cs => 
-        cs.classId === classId && 
-        cs.division === division
-    );
-    
-    if (studentsInClass.length === 0 || subjectsForClass.length === 0) {
-        container.innerHTML = '<div class="alert alert-info">There are no active students or subjects allocated to your class.</div>';
+    // FIXED: Correct exam lookup
+    const exam = exams.find(e => e.id === examId);
+    if (!exam) {
+        container.innerHTML = '<div class="alert alert-danger">Invalid exam selected.</div>';
         return;
     }
 
-    // --- NEW: Calculate the entry status for each subject ---
-    const subjectStatusList = subjectsForClass.map(cs => {
+    // Active students in class
+    const studentsInClass = students.filter(s =>
+        s.classId === classId &&
+        s.division === division &&
+        s.status !== 'TC Issued' &&
+        s.status !== 'Graduated'
+    );
+
+    // Subjects already scheduled for this exam
+    const relevantSchedules = examSchedules.filter(s =>
+        s.examId === examId &&
+        s.classId === classId &&
+        s.division === division
+    );
+
+    // All subjects allocated to this class/division/sector
+    const subjectsForClass = classroomSubjects.filter(cs =>
+        cs.classId === classId &&
+        cs.division === division
+    );
+
+    // Subjects not scheduled
+    const scheduledSubjectIds = new Set(relevantSchedules.map(s => s.subjectId));
+    const missingSubjects = subjectsForClass.filter(sub => {
+    const subject = subjects.find(s => s.id === sub.subjectId);
+    return subject && 
+           subject.sector === exam.sector && 
+           !scheduledSubjectIds.has(sub.subjectId);
+});
+
+        //console.log(missingSubjects);
+    if (studentsInClass.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">There are no active students in your class.</div>';
+        return;
+    }
+
+    // --- Calculate entry status ---
+    const subjectStatusList = relevantSchedules.map(cs => {
         const subject = subjects.find(s => s.id === cs.subjectId);
         const totalStudents = studentsInClass.length;
-        
-        // Count how many students have marks entered for this specific subject
+
         const enteredCount = studentsInClass.filter(student => {
             const markId = `${examId}_${student.id}_${cs.subjectId}`;
-            return !!marks[markId]; // Check if a mark entry exists
+            return !!marks[markId];
         }).length;
-        
+
         const pendingCount = totalStudents - enteredCount;
         const percentage = totalStudents > 0 ? (enteredCount / totalStudents) * 100 : 0;
-        const statusClass = percentage === 100 ? 'bg-success' : (percentage > 0 ? 'bg-warning' : 'bg-danger');
+        const statusClass =
+            percentage === 100 ? 'bg-success' :
+            percentage > 0 ? 'bg-warning' : 'bg-danger';
 
         return {
             subjectName: subject?.name || 'Unknown Subject',
@@ -6994,11 +7077,12 @@ function renderMyClassPendingList(examId) {
             percentage,
             statusClass
         };
-    }).sort((a, b) => a.subjectName.localeCompare(b.subjectName)); // Sort alphabetically by subject name
+    }).sort((a, b) => a.subjectName.localeCompare(b.subjectName));
 
-    // --- NEW: Render the summary table ---
+    // --- Render both tables ---
     const tableHtml = `
-        <div class="table-responsive">
+        <!-- Scheduled Subjects Summary Table -->
+        <div class="table-responsive mb-4">
             <table class="table table-bordered table-hover table-sm">
                 <thead class="table-light">
                     <tr>
@@ -7030,10 +7114,35 @@ function renderMyClassPendingList(examId) {
                 </tbody>
             </table>
         </div>
+
+        <!-- Missing Subjects Table -->
+        <div class="table-responsive mt-4">
+            <h6 class="fw-bold text-danger">Subjects NOT Scheduled in Exam</h6>
+            <table class="table table-bordered table-hover table-sm">
+                <thead class="table-light">
+                    <tr>
+                        <th>Subject</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${missingSubjects.length > 0 ? missingSubjects.map(row => {
+                        const subject = subjects.find(s => s.id === row.subjectId&&s.sector === exam.sector);
+                        console.log(subject);
+                        return `
+                            <tr>
+                                <td>${subject ? (subject.sector === exam.sector? subject.name : 'Unknown Subject'):"Unknown Subject"}</td>
+                            </tr>
+                        `;
+                    }).join('') :
+                    `<tr><td class="text-center text-muted">All subjects are scheduled.</td></tr>`}
+                </tbody>
+            </table>
+        </div>
     `;
 
     container.innerHTML = tableHtml;
 }
+
 
 const exportReportToPdf = (examId) => {
     // 1. --- Basic Setup ---
@@ -7129,6 +7238,11 @@ function renderExamScheduleTab() {
     const examSelect = document.getElementById('sched-exam');
     const classSelect = document.getElementById('sched-class');
     const divisionContainer = document.getElementById('sched-division-checkboxes');
+    // After setting innerHTML, find the active exam and set the value
+const firstActiveExam = exams.find(ex => ex.isActive);
+if (firstActiveExam) {
+    examSelect.value = firstActiveExam.id;
+}
 
     // --- THIS IS THE NEW LOGIC ---
     if (selectedExamForControl) {
@@ -7322,7 +7436,11 @@ function renderExamTimetableView() {
 
     const examSelect = document.getElementById('tt-view-exam');
     const classSelect = document.getElementById('tt-view-class');
-
+    // After setting innerHTML, find the active exam and set the value
+const firstActiveExam = exams.find(ex => ex.isActive);
+if (firstActiveExam) {
+    examSelect.value = firstActiveExam.id;
+}
     const displayTimetableAll = () => {
         const examId = examSelect.value;
         const classId = classSelect.value;
@@ -7447,6 +7565,11 @@ function renderConsolidatedTimetableView() {
     `;
 
     const examSelect = document.getElementById('consolidated-exam');
+    // After setting innerHTML, find the active exam and set the value
+const firstActiveExam = exams.find(ex => ex.isActive);
+if (firstActiveExam) {
+    examSelect.value = firstActiveExam.id;
+}
     const divisionSelect = document.getElementById('consolidated-division');
 // --- THIS IS THE NEW LOGIC ---
     if (selectedExamForControl) {
@@ -8691,7 +8814,7 @@ window.toggleExamStatus = async function(examId, newStatus) {
 
     container.innerHTML = `
         <div class="row g-1 align-items-end border-bottom pb-3 mb-3">
-    <div class="col-6 col-md-2"><label class="form-label">Exam</label><select id="mark-entry-exam" class="form-select">${exams.map(ex => `<option value="${ex.id}">${ex.name}</option>`).join('')}</select></div>
+    <div class="col-6 col-md-2"><label class="form-label">Exam</label><select id="mark-entry-exam" class="form-select">${exams.filter(e => e.isActive).map(ex => `<option value="${ex.id}">${ex.name}</option>`).join('')}</select></div>
     <div class="col-6 col-md-2"><label class="form-label">Class</label><select id="mark-entry-class" class="md form-select"><option value="">-- Select Class --</option>${classOptions}</select></div>
     <div class="col-6 col-md-2"><label class="form-label">Division</label><select id="mark-entry-division" class="form-select" disabled><option value="">-- Select Division --</option></select></div>
     <div class="col-6 col-md-2"><label class="form-label">Subject</label><select id="mark-entry-subject" class="form-select" disabled><option value="">-- Select Subject --</option></select></div>
@@ -8720,9 +8843,12 @@ window.toggleExamStatus = async function(examId, newStatus) {
         if (examId && classId && division && subjectId) {
             // All options selected: Load the mark entry sheet
             loadMarkEntrySheetobject(examId, classId, division, subjectId);
+            
         } else if (examId && !classId) {
             // Only exam selected: Show the summary table
             renderMarkEntrySummaryTable(examId);
+            document.getElementById('mark-entry-summary-container').innerHTML = '<p class="text-danger p-5 text-center">you have no proper internet connection</p>';
+        
         } else {
              // Not enough options selected, show a placeholder
              document.getElementById('mark-entry-summary-container').innerHTML = '<p class="text-muted p-5 text-center">Select Exam, Class, and Division to see subjects, or just an Exam for a summary.</p>';
@@ -9051,7 +9177,7 @@ async function loadMarkEntrySheetobject(examId, classId, division, subjectId) {
         showMessage('Error: no proper internet connection.', 'danger');
         return;
     }
-    
+
     // --- THIS IS THE REFACTORED FETCH LOGIC ---
     const marksForSheet = {};
     try {
@@ -9093,6 +9219,7 @@ async function loadMarkEntrySheetobject(examId, classId, division, subjectId) {
                 <div><h5 class="mb-0 text-danger">${notEnteredStudents.length}</h5><small class="text-muted">Pending</small></div>
             </div>
             ${notEnteredStudents.length > 0 ? `<div class="mt-3"><a class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" href="#pending-list-collapse">Show Pending</a><div class="collapse mt-2" id="pending-list-collapse"><ul class="list-group list-group-flush small">${notEnteredStudents.map(name => `<li class="list-group-item py-1 bg-light">${name}</li>`).join('')}</ul></div></div>` : ''}
+            <p style="color:red;">for Absentees enter "00"</p>
         </div>`;
 
     let tableHTML = `<div class="table-responsive"><table id="marks-table" class="table table-bordered">
@@ -9103,10 +9230,10 @@ async function loadMarkEntrySheetobject(examId, classId, division, subjectId) {
         const teValue = mark?.te ?? '';
         const ceValue = mark?.ce ?? '';
         
-        tableHTML += `<tr data-student-id="${student.id}">
+        tableHTML += `<tr data-student-id="${student.id}"data-student-name="${student.name}">
             <td class="fw-bold">${student.name}<br>(${student.admissionNumber})</td>
-            <td><input type="text" name="te" class="form-control form-control-sm" value="${teValue}" data-max="${maxTE}" data-original-value="${teValue}"></td>
-            <td><input type="text" name="ce" class="form-control form-control-sm" value="${ceValue}" data-max="${maxCE}" data-original-value="${ceValue}"></td>
+            <td><input type="${teValue.toUpperCase()==="AB"?"text":"number"}"name="te" class="form-control form-control-sm" value="${teValue}" data-max="${maxTE}" data-original-value="${teValue}"></td>
+            <td><input type="${parseInt(ceValue)?"number":"number"}" name="ce" class="form-control form-control-sm" value="${ceValue}" data-max="${maxCE}" data-original-value="${ceValue}"></td>
         </tr>`;
     });
     
@@ -9119,7 +9246,7 @@ async function loadMarkEntrySheetobject(examId, classId, division, subjectId) {
         if(String(input.value).toUpperCase() === 'AB') { input.classList.add('absent-mark'); }
         input.addEventListener('input', (e) => {
             e.target.classList.remove('absent-mark');
-            if(e.target.value.toUpperCase() === 'AB') { e.target.classList.add('absent-mark'); return; }
+            if(e.target.value.toUpperCase() === 'AB'||e.target.value.toUpperCase() === '00') { e.target.classList.add('absent-mark'); e.target.type = "text"; e.target.value = "Ab"; return; }
             
             // --> Added a check for empty string to avoid NaN issues
             if (e.target.value === '') { return; } 
@@ -9164,7 +9291,9 @@ async function saveMarksobject(examId, classId, division, subjectId) {
         const academicYear = activeFinancialYear; // Get the current academic year
 
         for (const row of markRows) {
+            
             const studentId = row.dataset.studentId;
+            const studentAdnumber = row.dataset.studentName;
             const teInput = row.querySelector('input[name="te"]');
             const ceInput = row.querySelector('input[name="ce"]');
 
@@ -9181,9 +9310,9 @@ async function saveMarksobject(examId, classId, division, subjectId) {
                     continue;
                 }
 
+                
                 changesFound++;
 
-                
                 const te = currentTE.toUpperCase() === 'AB' ? 'AB' : currentTE.toUpperCase() === '0'? '0':(parseInt(currentTE)||"");
                 const ce = currentCE.toUpperCase() === 'AB' ? 'AB' : currentCE.toUpperCase() === '0' ? '0' :(parseInt(currentCE)||"");
                 
@@ -9194,7 +9323,6 @@ async function saveMarksobject(examId, classId, division, subjectId) {
                     saveButton.innerHTML = originalButtonHtml;
                     return
                 }
-
                 
                 // 1. The collection name is now dynamic, based on the active year.
                 const marksCollectionName = `marks-${academicYear}`;
@@ -10482,12 +10610,12 @@ async function loadAttendanceSheet(date, classId, division) {
     const classKey = `${classId}-${division}`;
 
     const attendanceDoc = await getDoc(getDocRef('attendance', attendanceYearMonth));
-    
+    const attendancedata =attendanceDoc.data()?.[day]?.[classKey];
     // Get the exceptions for this specific class on this day, or an empty object if none exist
-    const todaysExceptions = attendanceDoc.data()?.[day]?.[classKey]?.exceptions || {};
-
+    const todaysExceptions = attendancedata?.exceptions || {};
+    const takenby = teachers.find(tc => tc.id === attendancedata?.takenby);
     let tableHTML = `<div class="d-flex justify-content-between align-items-center mb-3">
-        <h6 class="mb-0">${studentsInClass.length} Students</h6>
+        <h6 class="mb-0">${studentsInClass.length} Students attendance taken by${takenby?.name||"unknown"} </h6>
         <div>
             <button id="invert-selection" class="btn btn-sm btn-outline-secondary me-2">Invert Selection</button>
             <button id="mark-all-present" class="btn btn-sm btn-outline-success">Mark All Present</button>
@@ -10604,6 +10732,8 @@ async function saveAttendance(date, classId, division) {
     }
 
     const attendanceDataForClass = {
+        takenby:selectedUser.id,
+        date: date,
         status: 'SUBMITTED',
         exceptions: exceptions
     };
@@ -10631,9 +10761,16 @@ async function saveAttendance(date, classId, division) {
 
         function renderClassAttendanceReportTab(){ 
             const container = document.getElementById('class-report-att');
+            let classOptions = '';
+            const teacherAllocations = teacherAssignedClasses.filter(cs => cs.classId);
+        const uniqueClassIds = [...new Set(teacherAssignedClasses.map(a => a.classId))];
+        classOptions = uniqueClassIds.map(classId => {
+            const c = classes.find(cls => cls.id === classId);
+            return c ? `<option value="${c.id}">${c.name}</option>` : '';
+        }).join('');
             container.innerHTML = `<div class="row g-3 align-items-end border-bottom pb-3 mb-3">
                     <div class="col-md-4"><label class="form-label">Month</label><input type="month" id="report-month" value="${new Date().toISOString().slice(0,7)}" class="form-control"></div>
-                    <div class="col-md-4"><label class="form-label">Class</label><select id="report-class" class="form-select">${classes.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}</select></div>
+                    <div class="col-md-4"><label class="form-label">Class</label><select id="report-class" class="form-select">${classOptions}</select></div>
                     <div class="col-md-4"><label class="form-label">Division</label><select id="report-division" class="form-select"></select></div>
                 </div>
                 <div id="class-report-container" class="table-responsive"></div>`;
@@ -10643,8 +10780,17 @@ async function saveAttendance(date, classId, division) {
             const generateReport = () => generateClassAttendanceReport(monthSelect.value, classSelect.value, divisionSelect.value);
             
             classSelect.addEventListener('change', () => {
-                const cls = classes.find(c => c.id === classSelect.value);
-                divisionSelect.innerHTML = cls ? cls.divisions.map(d=>`<option>${d}</option>`).join('') : '';
+
+                const uniqueDivisions = [...new Set(teacherAssignedClasses.map(a => a.classId === classSelect.value&&a.division))];
+        divisionSelect.innerHTML = '<option value="">-- All Divisions --</option>';
+        if (uniqueDivisions) {
+            divisionSelect.disabled = false;
+            divisionSelect.innerHTML += uniqueDivisions.map(d => `<option value="${d}">${d}</option>`).join('');
+        } else {
+            divisionSelect.disabled = true;
+        }
+                // const cls = classes.find(c => c.id === classSelect.value);
+                // divisionSelect.innerHTML = cls ? cls.divisions.map(d=>`<option>${d}</option>`).join('') : '';
                 generateReport();
             });
             monthSelect.addEventListener('change', generateReport);
