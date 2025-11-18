@@ -9232,7 +9232,7 @@ async function loadMarkEntrySheetobject(examId, classId, division, subjectId) {
         
         tableHTML += `<tr data-student-id="${student.id}"data-student-name="${student.name}">
             <td class="fw-bold">${student.name}<br>(${student.admissionNumber})</td>
-            <td><input type="${teValue.toUpperCase()==="AB"?"text":"number"}"name="te" class="form-control form-control-sm" value="${teValue}" data-max="${maxTE}" data-original-value="${teValue}"></td>
+            <td><input type="${String(teValue).toUpperCase()==="AB"?"text":"number"}"name="te" class="form-control form-control-sm" value="${teValue}" data-max="${maxTE}" data-original-value="${teValue}"></td>
             <td><input type="${parseInt(ceValue)?"number":"number"}" name="ce" class="form-control form-control-sm" value="${ceValue}" data-max="${maxCE}" data-original-value="${ceValue}"></td>
         </tr>`;
     });
