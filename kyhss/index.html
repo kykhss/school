@@ -18322,12 +18322,14 @@ function createReportTable(headers, data) {
     }).join('')}</tr></thead>`;
     
     tableHTML += '<tbody>';
+    let index = 0;
     data.forEach(row => {
+        index++
         tableHTML += '<tr>';
         headers.forEach(header => {
             const style = header.styles || {};
             // --- UPDATED: Use the original 'name' as the key to get the value ---
-            const value = getNestedValue(row, header.name); 
+            const value = header.name.toLowerCase() === "sl"?index: getNestedValue(row, header.name); 
             tableHTML += `<td style="text-align: ${style.textAlign || 'left'}; color: ${style.color || '#000'}; font-weight: ${style.fontWeight || 'normal'};">${value}</td>`;
         });
         tableHTML += '</tr>';
