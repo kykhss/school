@@ -1983,29 +1983,61 @@ function triggerRender(config) {
         }
     }
 }
+// ======================================================
+// GLOBAL READ STATS
+// ======================================================
+const readStats = {}; 
+function trackRead(col, count = 1, from = "unknown") {
+    if (!readStats[col]) {
+        readStats[col] = { total: 0, smart: 0, listener: 0 };
+    }
+    readStats[col].total += count;
+    readStats[col][from] += count;
+}
+
+async function trackedGetCount(colName, queryRef) {
+    const snap = await getCountFromServer(queryRef);
+    trackRead(colName, 1, "smart");
+    console.log(`[SMART READ] ${colName} → +1 (Count Query)`);
+    return snap;
+}
+
+async function trackedGetDocs(colName, queryRef) {
+    const snap = await getDocs(queryRef);
+    trackRead(colName, 1, "smart");
+    console.log(`[SMART READ] ${colName} → +1 (Doc Batch Fetch)`);
+    return snap;
+}
+
+// ======================================================
+// MAIN FUNCTION
+// ======================================================
+
 async function attachDataListeners(collectionsToWatch) {
+
     if (!collectionsToWatch || collectionsToWatch.length === 0) return;
 
-    // Identify collections that support 'lastUpdated' for Smart Sync
+    // Identify Smart-Sync compatible collections
     const smartSyncCollections = new Set();
     for (const tableName in collectionMap) {
         if (appDb[tableName] && appDb[tableName].schema.idxByName.lastUpdated) {
             smartSyncCollections.add(tableName);
+        } else {
+            console.warn(`⚠ No lastUpdated index for ${tableName}. Smart Sync disabled.`);
         }
     }
 
     for (const name of collectionsToWatch) {
-        // 1. Skip if already loaded (and not forced refresh)
+
         if (activeListeners[name] && dataLoadStatus[name]) continue;
 
         const config = collectionMap[name];
         if (!config) {
-            console.warn(`Configuration for ${name} not found in collectionMap.`);
+            console.warn(`Configuration for ${name} not found.`);
             resolvePromiseFor(name);
             continue;
         }
 
-        // 2. Cleanup old listener if exists
         if (activeListeners[name]) {
             activeListeners[name]();
             delete activeListeners[name];
@@ -2013,88 +2045,91 @@ async function attachDataListeners(collectionsToWatch) {
 
         let needsFullSync = true;
         let localCount = 0;
-        let collectedData = {}; // In-memory cache for this session
+        let collectedData = {};
 
         // ============================================================
-        // PHASE 1: SMART SYNC (Offline/Delta Check)
+        // PHASE 1: SMART SYNC
         // ============================================================
         if (smartSyncCollections.has(name) && navigator.onLine) {
             try {
+                console.log(`\n======================`);
+                console.log(`SMART SYNC: ${name}`);
+                console.log(`======================`);
+
                 localCount = await appDb[name].count();
                 const metadata = await appDb.lastSynced.get(name);
                 const lastLocalSyncTime = metadata?.timestamp || new Date(0);
 
                 if (localCount > 0) {
-                    const generatedQueries = getQueriesForCollection(name);
 
+                    const generatedQueries = getQueriesForCollection(name);
                     if (generatedQueries.length > 0) {
-                        // A. Get Server Counts
-                        const countPromises = generatedQueries.map(qInfo => getCountFromServer(qInfo.query));
-                        const countSnapshots = await Promise.all(countPromises);
+
+                        // A. GET SERVER COUNTS
+                        const countSnapshots = await Promise.all(
+                            generatedQueries.map(qInfo => trackedGetCount(name, qInfo.query))
+                        );
+
                         let totalServerCount = 0;
                         countSnapshots.forEach(snap => totalServerCount += snap.data().count);
 
-                        // Special Case: Rules are arrays inside docs, so Doc Count != Rule Count
                         const skipCountCheck = (name === 'examRoomAllocationRules');
+                        console.log(`[Smart Sync Count] Local: ${localCount}, Server: ${totalServerCount}`);
 
-                        // B. Compare Counts or Skip Check
+                        // B. COMPARE COUNTS
                         if (localCount === totalServerCount || skipCountCheck) {
-                            
-                            // Fetch ONLY updated documents
-                            const updatePromises = generatedQueries.map(qInfo =>
-                                getDocs(query(qInfo.query, where('lastUpdated', '>', lastLocalSyncTime)))
+
+                            // Only fetch docs changed after last sync
+                            const updateSnapshots = await Promise.all(
+                                generatedQueries.map(qInfo =>
+                                    trackedGetDocs(name, query(qInfo.query, where('lastUpdated', '>', lastLocalSyncTime)))
+                                )
                             );
-                            const allSnapshots = await Promise.all(updatePromises);
 
                             let docsToSave = [];
-                            allSnapshots.forEach(snapshot => {
-                                if (!snapshot.empty) {
-                                    docsToSave.push(...snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+                            updateSnapshots.forEach(snap => {
+                                if (!snap.empty) {
+                                    docsToSave.push(...snap.docs.map(d => ({ id: d.id, ...d.data() })));
                                 }
                             });
 
-                            // C. Apply Updates to Local DB
+                            console.log(`[Smart Sync Result] Found ${docsToSave.length} updated docs.`);
+
                             if (docsToSave.length > 0) {
-                                console.log(`[Smart Sync] Applying ${docsToSave.length} updates to ${name}.`);
-                                
                                 if (name === 'examRoomAllocationRules') {
-                                    // Special Handler for Map/Array Pattern
-                                    await handleExamRulesSync(docsToSave, [], config); 
+                                    await handleExamRulesSync(docsToSave, [], config);
                                 } else {
-                                    // Standard Handler
                                     await appDb[name].bulkPut(docsToSave);
                                 }
                             }
 
-                            // D. Load Data to Memory
-                            const dataFromDB = await appDb[name].toArray();
-                            // Re-build cache
-                            dataFromDB.forEach(doc => collectedData[doc.id] = doc); 
-                            config.setter(dataFromDB);
+                            const allLocal = await appDb[name].toArray();
+                            allLocal.forEach(doc => collectedData[doc.id] = doc);
+                            config.setter(allLocal);
 
-                            // E. Mark as Loaded & Unlock
                             dataLoadStatus[name] = true;
                             resolvePromiseFor(name);
                             await recordLastSyncTime(name, new Date());
-
-                            // F. Render
                             triggerRender(config);
-                            
-                            needsFullSync = false; // Skip full sync in listener
-                        } else {
-                            console.log(`[Smart Sync] Count mismatch for ${name} (Local: ${localCount}, Server: ${totalServerCount}). Forcing full sync.`);
+
+                            needsFullSync = false;
+                            console.log(`[Smart Sync] Completed for ${name}`);
+                        } 
+                        else {
+                            console.warn(`[Smart Sync FAIL] ${name}: Count mismatch. Full sync required.`);
                         }
                     }
                 }
-            } catch (e) {
-                console.warn(`[Smart Sync] Failed for ${name}. Falling back to full listener.`, e);
+            } catch (err) {
+                console.warn(`[Smart Sync ERROR] ${name}:`, err);
                 needsFullSync = true;
             }
         }
 
         // ============================================================
-        // PHASE 2: REAL-TIME LISTENER
+        // PHASE 2: REAL-TIME Firestore Listener
         // ============================================================
+
         const queriesToExecute = getQueriesForCollection(name);
         if (queriesToExecute.length === 0) {
             dataLoadStatus[name] = true;
@@ -2105,33 +2140,38 @@ async function attachDataListeners(collectionsToWatch) {
         let queriesReceivedInitialSnapshot = 0;
         let queriesFinishedProcessing = 0;
         const expectedInitialSnapshots = queriesToExecute.length;
-        const currentCollectionUnsubs = [];
+        const currentUnsubs = [];
 
         queriesToExecute.forEach(qInfo => {
-            const unsub = onSnapshot(qInfo.query, async snapshot => {
-                try {
-                    let isInitialPhase = !dataLoadStatus[name];
 
-                    if (isInitialPhase) {
+            const unsub = onSnapshot(qInfo.query, async snapshot => {
+
+                const isInitial = !dataLoadStatus[name];
+                const changes = snapshot.docChanges();
+
+                // track listener read count
+                trackRead(name, changes.length, "listener");
+                if (changes.length > 0)
+                    console.log(`[LISTENER READ] ${name} → +${changes.length} (doc changes)`);
+
+                try {
+                    if (isInitial) {
                         queriesReceivedInitialSnapshot++;
-                        // On first load, if Smart Sync failed or wasn't possible, clear DB to ensure consistency
+
                         if (needsFullSync && localCount > 0 && queriesReceivedInitialSnapshot === 1) {
-                            console.log(`[Sync] performing full reset for ${name}`);
+                            console.log(`⚠ FULL RESET triggered for ${name}`);
                             await appDb[name].clear();
                             collectedData = {};
                         }
                     }
 
-                    const changes = snapshot.docChanges();
-
                     if (changes.length > 0) {
+
                         const { toAddOrUpdate, toDelete } = processFirestoreChanges(changes);
 
-                        // --- SPECIAL HANDLER: Exam Rules ---
                         if (name === 'examRoomAllocationRules') {
                             await handleExamRulesSync(toAddOrUpdate, toDelete, config);
                         } 
-                        // --- STANDARD HANDLER ---
                         else {
                             const store = appDb[name];
                             await appDb.transaction('rw', store, async () => {
@@ -2139,15 +2179,13 @@ async function attachDataListeners(collectionsToWatch) {
                                 if (toAddOrUpdate.length > 0) await store.bulkPut(toAddOrUpdate);
                             });
 
-                            // Update Memory & Cache
                             toDelete.forEach(id => delete collectedData[id]);
                             toAddOrUpdate.forEach(doc => collectedData[doc.id] = doc);
                             config.setter(Object.values(collectedData));
                         }
                     }
 
-                    // Resolve Initial Promise
-                    if (isInitialPhase) {
+                    if (isInitial) {
                         queriesFinishedProcessing++;
                         if (queriesFinishedProcessing >= expectedInitialSnapshots) {
                             dataLoadStatus[name] = true;
@@ -2156,30 +2194,43 @@ async function attachDataListeners(collectionsToWatch) {
                         }
                     }
 
-                    // Trigger UI Updates
                     triggerRender(config);
 
-                } catch (error) {
-                    console.error(`[Firestore Listener Error] Collection: ${name}`, error);
-                    // Prevent app hang on error
+                } catch (err) {
+                    console.error(`[Listener ERROR] ${name}:`, err);
                     if (!dataLoadStatus[name]) {
                         dataLoadStatus[name] = true;
                         resolvePromiseFor(name);
                     }
                 }
-            }, error => {
-                console.error(`[Firestore Connection Error] ${name}:`, error);
-                if (!dataLoadStatus[name]) {
-                    resolvePromiseFor(name); // Ensure app unblocks
-                }
+            },
+            error => {
+                console.error(`[Connection ERROR] ${name}:`, error);
+                if (!dataLoadStatus[name]) resolvePromiseFor(name);
             });
 
-            currentCollectionUnsubs.push(unsub);
+            currentUnsubs.push(unsub);
         });
 
-        activeListeners[name] = () => currentCollectionUnsubs.forEach(unsub => unsub());
+        activeListeners[name] = () => currentUnsubs.forEach(u => u());
     }
 }
+
+// ======================================================
+// PRINT READ SUMMARY ANYTIME YOU WANT
+// ======================================================
+
+function printReadStats() {
+    console.log("\n📊 =================== Firestore Read Summary ===================");
+    for (const col in readStats) {
+        const s = readStats[col];
+        console.log(
+            `${col.padEnd(25)} → total: ${String(s.total).padStart(3)} | smart: ${String(s.smart).padStart(3)} | listener: ${String(s.listener).padStart(3)}`
+        );
+    }
+    console.log("================================================================");
+}
+
 
 async function attachDataListenersold1(collectionsToWatch) {
     if (!collectionsToWatch || collectionsToWatch.length === 0) return;
@@ -32264,7 +32315,7 @@ function getInterleavedSeating(students, examId) {
 function generateSeatingArrangementReport(examId, date, session) {
     if (!examId || !date || !session) return showAlert('Select Exam, Date & Session.', 'danger');
 
-    // 1. Get Allocation Rules & Duty Data
+    // 1. Get Data
     const rules = examRoomAllocationRules.filter(r => r.examId === examId && r.date === date && r.session === session);
     const duties = examDuties.filter(d => d.examId === examId && d.date === date && d.session === session);
 
@@ -32278,16 +32329,10 @@ function generateSeatingArrangementReport(examId, date, session) {
             const rule = rules.find(r => doesRegNoMatchRule(regNo, r.regNoRangeText));
             if (rule) {
                 if (!studentsByRoom[rule.roomId]) {
-                    studentsByRoom[rule.roomId] = {
-                        students: [],
-                        rules: new Set(),
-                        classNames: new Set()
-                    };
+                    studentsByRoom[rule.roomId] = { students: [], rules: new Set(), classNames: new Set() };
                 }
                 studentsByRoom[rule.roomId].students.push(s);
                 studentsByRoom[rule.roomId].rules.add(rule.regNoRangeText);
-                
-                // Add Class + Gender info
                 const className = classes.find(c => c.id === s.classId)?.name || s.classId;
                 const gender = s.gender === 'M' ? 'Boys' : 'Girls';
                 studentsByRoom[rule.roomId].classNames.add(`${className} (${gender})`);
@@ -32302,54 +32347,82 @@ function generateSeatingArrangementReport(examId, date, session) {
         const roomData = studentsByRoom[roomId];
         const room = examRooms.find(r => r.id === roomId);
         
-        // --- A. Get Metadata ---
+        // --- Metadata ---
         const ruleSummary = Array.from(roomData.rules).join(', ');
         const classSummary = Array.from(roomData.classNames).join(', ');
         const dutyTeacher = duties.find(d => d.roomId === roomId)?.dutyTeacherName || "Not Assigned";
 
-        // --- B. Mix Students (Interleave) ---
-        // Pass examId to ensure sorting by Reg No
+        // --- Mix Students ---
         let roomStudents = getInterleavedSeating(roomData.students, examId);
-
-        const seatsPerBench = parseInt(room.seatsPerBench) || (room.capacity > 36 ? 3 : 2); 
-        const columns = parseInt(room.columns) || 2; 
         
-        // --- C. Generate Grid ---
+        // --- CALCULATION LOGIC ---
+        const totalStudents = roomStudents.length;
+        const totalBenches = parseInt(room.totalBenches) || 10; // Default 10 benches
+        const columns = parseInt(room.columns) || 2;            // Default 2 columns
+        const rows = Math.ceil(totalBenches / columns);         // Usually 5 rows
+        
+        const standardSeats = 3; 
+        const expandedSeats = 4;
+        const standardCapacity = totalBenches * standardSeats;
+
+        // Calculate how many benches need 4 seats
+        let benchesWithFour = 0;
+        if (totalStudents > standardCapacity) {
+            // Excess students need to be absorbed by upgrading benches from 3 to 4.
+            // Each upgrade adds 1 seat. So excess count = benches to upgrade.
+            benchesWithFour = totalStudents - standardCapacity;
+            
+            // Safety cap: Can't have more expanded benches than total benches
+            if (benchesWithFour > totalBenches) benchesWithFour = totalBenches;
+        }
+
+        // --- Generate Grid ---
         let benchesHtml = '';
         let currentStudentIdx = 0;
-        
-        const totalBenchesNeeded = Math.ceil(roomStudents.length / seatsPerBench);
-        const rowsNeeded = Math.ceil(totalBenchesNeeded / columns);
+        let benchCounter = 0; // To track which bench we are drawing (0 to 9)
 
-        for (let r = 0; r < rowsNeeded; r++) {
+        for (let r = 0; r < rows; r++) {
             benchesHtml += '<tr>';
             for (let c = 0; c < columns; c++) {
-                // Build ONE Bench
+                
+                // Determine seats for THIS specific bench
+                // If current bench index < benchesWithFour, use 4. Else use 3.
+                const seatsForThisBench = (benchCounter < benchesWithFour) ? expandedSeats : standardSeats;
+                
+                // Calculate dynamic width for CSS (100% / seats)
+                const seatWidthPct = 100 / seatsForThisBench;
+                const seatStyle = `width: calc(${seatWidthPct}% - 6px);`; 
+
                 let benchContent = '';
-                for (let s = 0; s < seatsPerBench; s++) {
+                
+                for (let s = 0; s < seatsForThisBench; s++) {
                     const student = roomStudents[currentStudentIdx];
                     if (student) {
                         const regNo = student.examRegNumbers[examId];
                         const className = classes.find(cl => cl.id === student.classId)?.name || 'N/A';
                         
                         benchContent += `
-                            <div class="seat-box">
+                            <div class="seat-box" style="${seatStyle}">
                                 <span class="reg-no">${regNo}</span><br>
-                                <span class="class-name small text-muted" style="font-size:0.7em;">${className}</span>
+                                <span class="class-name small text-muted" style="font-size:0.65em;">${className}</span>
                             </div>
                         `;
                         currentStudentIdx++;
                     } else {
-                        // Empty Seat
-                         benchContent += `<div class="seat-box empty">&nbsp;</div>`;
+                         // Empty Seat
+                         benchContent += `<div class="seat-box empty" style="${seatStyle}">&nbsp;</div>`;
                     }
                 }
-                benchesHtml += `<td class="bench-cell"><div class="bench">${benchContent}</div></td>`;
+                
+                // Column Width (e.g. 50% for 2 cols)
+                const colWidthStyle = `width: ${100/columns}%;`;
+                benchesHtml += `<td class="bench-cell" style="${colWidthStyle}"><div class="bench">${benchContent}</div></td>`;
+                
+                benchCounter++;
             }
             benchesHtml += '</tr>';
         }
 
-        // --- D. Build Page HTML ---
         reportHtml += `
             <div class="printable-page">
                 <div class="header-box mb-3">
@@ -32360,7 +32433,7 @@ function generateSeatingArrangementReport(examId, date, session) {
                         <div><strong>Date:</strong> ${new Date(date).toLocaleDateString('en-GB')} (${session})</div>
                         <div><strong>Duty Teacher:</strong> ${dutyTeacher}</div>
                         <div><strong>Classes:</strong> ${classSummary}</div>
-                        <div><strong>Allocated Range:</strong> ${ruleSummary}</div>
+                        <div><strong>Allocated:</strong> ${ruleSummary}</div>
                     </div>
                 </div>
 
@@ -32370,7 +32443,7 @@ function generateSeatingArrangementReport(examId, date, session) {
                 
                 <div class="footer mt-3 pt-2 border-top">
                     <div class="d-flex justify-content-between">
-                        <span><strong>Total Students:</strong> ${roomStudents.length}</span>
+                        <span><strong>Total Students:</strong> ${totalStudents}</span>
                         <span><strong>Invigilator Sign:</strong> ___________________</span>
                     </div>
                 </div>
@@ -32383,37 +32456,22 @@ function generateSeatingArrangementReport(examId, date, session) {
         .printable-page { page-break-after: always; margin-bottom: 20px; font-family: sans-serif; }
         .header-box { border-bottom: 2px solid #333; padding-bottom: 10px; }
         .info-grid { 
-            display: grid; 
-            grid-template-columns: 1fr 1fr; 
-            gap: 5px; 
-            font-size: 0.9em; 
-            background: #f8f9fa; 
-            padding: 8px; 
-            border-radius: 4px; 
+            display: grid; grid-template-columns: 1fr 1fr; gap: 5px; 
+            font-size: 0.9em; background: #f8f9fa; padding: 8px; border-radius: 4px; 
         }
-        .seating-grid { width: 100%; border-collapse: separate; border-spacing: 15px; margin-top: 15px; }
-        .bench-cell { vertical-align: top; width: ${100/2}%; } /* Default 2 cols */
+        .seating-grid { width: 100%; border-collapse: separate; border-spacing: 10px; margin-top: 15px; }
+        .bench-cell { vertical-align: top; } 
         .bench { 
-            border: 2px solid #000; 
-            padding: 5px; 
-            display: flex; 
-            justify-content: space-around; 
-            background: #fff;
-            min-height: 60px;
+            border: 2px solid #000; padding: 4px; display: flex; 
+            justify-content: space-around; background: #fff; min-height: 55px; 
             box-shadow: 2px 2px 0px #ccc;
         }
         .seat-box { 
-            border: 1px dashed #999; 
-            padding: 4px; 
-            text-align: center; 
-            flex: 1; /* Grow to fill bench */
-            margin: 0 2px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
+            border: 1px dashed #999; padding: 2px; text-align: center; margin: 0 2px; 
+            display: flex; flex-direction: column; justify-content: center; overflow: hidden;
         }
         .seat-box.empty { background: #eee; border: none; }
-        .reg-no { font-weight: bold; font-size: 1.1em; }
+        .reg-no { font-weight: bold; font-size: 0.95em; white-space: nowrap; }
     `;
 
     printReport({
@@ -34865,7 +34923,7 @@ function renderAllocationMatrixTable(examId, sessionKeys, roomIds) {
         if (finalRoomIds.has(rule.roomId)) {
             students.forEach(student => {
                 const regNo = student.examRegNumbers?.[examId];
-                if (regNo && doesRegNoMatchRule(regNo, rule.regNoRangeText)) {
+                if (regNo && doesRegNoMatchRule(regNo, rule.regNoRangeText) &&student.status ==="Active") {
                     const groupKey = `${student.classId}$${student.gender}`;
                     if (!savedAllocationCounts[groupKey]) savedAllocationCounts[groupKey] = {};
                     if (!savedAllocationCounts[groupKey][rule.roomId]) savedAllocationCounts[groupKey][rule.roomId] = 0;
