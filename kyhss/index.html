@@ -35340,6 +35340,7 @@ function generateSessionUpdates(existingData, rows, managedClassIds, meta) {
         session: meta.session,
         lastUpdated: serverTimestamp()
     };
+    //lastUpdated  
 
     // ============================================================
     // PHASE 1: THE CLEANUP (Handle the 0/Empty case)
@@ -36246,14 +36247,22 @@ function generateSingleHallTicketHTML(studentId, examId) {
 
     let examScheduleHtml = '';
     const relevantSchedules = examSchedules.filter(sch =>
-        sch.examId === examId &&
-        sch.classId === student.classId &&
-        sch.division === student.division
-    ).sort((a, b) => {
-        const dateDiff = new Date(a.date) - new Date(b.date);
-        if (dateDiff !== 0) return dateDiff;
-        return a.session.localeCompare(b.session); // 'AN' comes after 'FN'
-    });
+    sch.examId === examId &&
+    sch.classId === student.classId &&
+    sch.division === student.division
+).sort((a, b) => {
+    // 1. Sort by Date first
+    const dateDiff = new Date(a.date) - new Date(b.date);
+    if (dateDiff !== 0) return dateDiff;
+
+    // 2. Sort by Session (Force FN to come before AN)
+    // If 'FN' vs 'AN', return -1 (a comes first)
+    // If 'AN' vs 'FN', return 1 (b comes first)
+    if (a.session === 'FN' && b.session === 'AN') return -1;
+    if (a.session === 'AN' && b.session === 'FN') return 1;
+    
+    return 0;
+});
 
     relevantSchedules.forEach(schedule => {
         const subjectName = subjects.find(s => s.id === schedule.subjectId)?.name || schedule.subjectId;
@@ -36283,7 +36292,7 @@ function generateSingleHallTicketHTML(studentId, examId) {
                 <td>${subjectName}</td>
                 <td>${examDate} (${examDay})</td>
                 <td class="text-center">${session==="Forenoon"?'FN':'AN'}</td>
-                <td class="text-center">${roomName}</td>
+                <td class="text-center">${roomName || className ||""}</td>
                 <td class="text-center" style="width:120px;"></td>
             </tr>
         `;
@@ -38252,6 +38261,9 @@ window.renderMasterControlModule = () => {
         return;
     }
 
+    // Get list of collections for the dropdown
+    const collectionsOptions = masterControlCollections.root.map(c => `<option value="${c}">${c}</option>`).join('');
+
     mainContent.innerHTML = `
         <h1 class="h2 mb-4">Database Explorer & Tools</h1>
         <div class="row">
@@ -38261,23 +38273,55 @@ window.renderMasterControlModule = () => {
                     <div id="master-control-tree" class="list-group list-group-flush"></div>
                 </div>
                 
-                <!-- NEW: Data Integrity Tools Card -->
-                <div class="card shadow-sm">
-                    <div class="card-header fw-bold text-warning">Data Integrity Tools</div>
+                <div class="card shadow-sm border-warning">
+                    <div class="card-header fw-bold bg-warning-subtle text-dark">
+                        <i class="fas fa-wrench me-2"></i>Bulk Field Creator
+                    </div>
                     <div class="card-body">
-                        <h6 class="card-title">Set Missing Student Status</h6>
-                        <p class="card-text small text-muted">This will find all student records that are missing a 'status' field and set it to 'Active'. This is useful for ensuring dashboard counts are accurate.</p>
-                        <button id="set-active-status-btn" class="btn btn-warning">Run Status Update</button>
-                        <div id="status-update-progress" class="mt-2 small"></div>
+                        <p class="card-text small text-muted">
+                            Add missing fields to all documents in a collection.
+                            <br><em>(Updates only if field is empty/missing)</em>
+                        </p>
+                        
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold">1. Select Collection</label>
+                            <select id="bulk-update-collection" class="form-select form-select-sm">
+                                <option value="">-- Choose --</option>
+                                ${collectionsOptions}
+                            </select>
+                        </div>
+
+                        <label class="form-label small fw-bold">2. Fields to Add</label>
+                        <div id="bulk-fields-container">
+                            </div>
+                        <button class="btn btn-sm btn-outline-secondary w-100 mb-3" id="add-bulk-field-row-btn">
+                            <i class="fas fa-plus me-1"></i> Add Another Field
+                        </button>
+
+                        <button id="run-bulk-update-btn" class="btn btn-warning w-100">
+                            Run Bulk Update
+                        </button>
+                        
+                        <div id="bulk-update-progress" class="mt-2 small text-break"></div>
                     </div>
                 </div>
             </div>
+
             <div class="col-md-8 col-lg-9">
                 <div class="card shadow-sm">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <span id="master-control-header-text" class="fw-bold">Select a collection</span>
                         <div id="master-control-actions" class="d-none align-items-center flex-grow-1 justify-content-end">
-                            <!-- ... all your existing filter/action buttons ... -->
+                             <input type="text" id="master-control-search" class="form-control form-control-sm me-2" style="max-width: 200px;" placeholder="Search docs...">
+                             <div class="btn-group">
+                                <button id="expand-all-btn" class="btn btn-sm btn-outline-secondary" title="Expand All"><i class="fas fa-expand-alt"></i></button>
+                                <button id="collapse-all-btn" class="btn btn-sm btn-outline-secondary" title="Collapse All"><i class="fas fa-compress-alt"></i></button>
+                             </div>
+                             <div class="ms-2 border-start ps-2">
+                                <input class="form-check-input" type="checkbox" id="master-control-select-all">
+                                <span id="selected-doc-count" class="badge bg-secondary ms-1">0</span>
+                                <button id="delete-selected-docs-btn" class="btn btn-sm btn-danger ms-1" disabled><i class="fas fa-trash"></i></button>
+                             </div>
                         </div>
                     </div>
                     <div id="master-control-content" class="card-body">
@@ -38290,7 +38334,177 @@ window.renderMasterControlModule = () => {
     
     renderNavigationTree();
     attachMasterControlListeners();
+    attachBulkUpdateListeners(); // Attach new listeners
 };
+
+/**
+ * Attaches listeners specifically for the new Bulk Update UI.
+ */
+function attachBulkUpdateListeners() {
+    const container = document.getElementById('bulk-fields-container');
+    const addRowBtn = document.getElementById('add-bulk-field-row-btn');
+    const runBtn = document.getElementById('run-bulk-update-btn');
+
+    // Helper to add a new input row
+    const addRow = () => {
+        const div = document.createElement('div');
+        div.className = 'row g-1 mb-2 bulk-field-row';
+        div.innerHTML = `
+            <div class="col-5">
+                <input type="text" class="form-control form-control-sm field-key" placeholder="Field Name" required>
+            </div>
+            <div class="col-5">
+                <input type="text" class="form-control form-control-sm field-value" placeholder="Value" required>
+            </div>
+            <div class="col-2">
+                <button class="btn btn-sm btn-outline-danger w-100 remove-row-btn">&times;</button>
+            </div>
+        `;
+        container.appendChild(div);
+        
+        div.querySelector('.remove-row-btn').addEventListener('click', () => div.remove());
+    };
+
+    // Add first row by default
+    addRow();
+
+    addRowBtn.addEventListener('click', addRow);
+    
+    runBtn.addEventListener('click', runGenericBulkUpdate);
+}
+
+/**
+ * Generic function to bulk update/add fields to any collection.
+ * It checks if the field is missing (undefined/null/empty) before updating.
+ */
+/**
+ * Generic function to bulk update/add fields to any collection.
+ * Supports: Strings, Numbers, Booleans, and serverTimestamp().
+ */
+async function runGenericBulkUpdate() {
+    const progressDiv = document.getElementById('bulk-update-progress');
+    const updateBtn = document.getElementById('run-bulk-update-btn');
+    const collectionName = document.getElementById('bulk-update-collection').value;
+    
+    // 1. Gather Fields to Update
+    const updatesToApply = {};
+    document.querySelectorAll('.bulk-field-row').forEach(row => {
+        const key = row.querySelector('.field-key').value.trim();
+        const val = row.querySelector('.field-value').value.trim();
+        
+        if (key) {
+            // --- UPDATED LOGIC HERE ---
+            if (val === 'true') {
+                updatesToApply[key] = true;
+            } else if (val === 'false') {
+                updatesToApply[key] = false;
+            } else if (val === 'serverTimestamp()') {
+                // Convert string "serverTimestamp()" to the actual Firestore function
+                updatesToApply[key] = serverTimestamp(); 
+            } else if (!isNaN(val) && val !== '') {
+                updatesToApply[key] = Number(val);
+            } else {
+                updatesToApply[key] = val;
+            }
+        }
+    });
+
+    // 2. Validation
+    if (!collectionName) {
+        return showAlert('Please select a collection.', 'warning');
+    }
+    if (Object.keys(updatesToApply).length === 0) {
+        return showAlert('Please add at least one field to update.', 'warning');
+    }
+
+    // 3. Start Process
+    if (!progressDiv || !updateBtn) return;
+    updateBtn.disabled = true;
+    updateBtn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Working...`;
+    
+    try {
+        progressDiv.innerHTML = `<em>Step 1/3: Fetching ${collectionName}...</em>`;
+        
+        // Fetch all documents
+        const snapshot = await getDocs(getCollectionRef(collectionName));
+        const allDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        progressDiv.innerHTML = `<em>Step 2/3: Analyzing ${allDocs.length} records...</em>`;
+
+        // Filter documents that actually NEED updating (missing or empty field)
+        const docsToUpdate = allDocs.filter(doc => {
+            return Object.keys(updatesToApply).some(key => 
+                doc[key] === undefined || doc[key] === null || doc[key] === ''
+            );
+        });
+
+        if (docsToUpdate.length === 0) {
+            progressDiv.innerHTML = '<div class="alert alert-info py-2 mb-0"><strong>All Clear!</strong> No documents found with missing fields.</div>';
+            return;
+        }
+
+        // Convert the updates object to a string for the confirm message, 
+        // handling the symbol object of serverTimestamp gracefully
+        const displayUpdates = { ...updatesToApply };
+        if (Object.values(displayUpdates).some(v => typeof v === 'object')) {
+            // Replace the complex Firestore object with a readable string for the alert
+             Object.keys(displayUpdates).forEach(k => {
+                 if (typeof displayUpdates[k] === 'object') displayUpdates[k] = 'SERVER_TIMESTAMP';
+             });
+        }
+
+        if (!confirm(`Found ${docsToUpdate.length} documents in '${collectionName}' with missing fields.\n\nFields to add: ${JSON.stringify(displayUpdates)}\n\nProceed with update?`)) {
+            progressDiv.innerHTML = 'Cancelled.';
+            return;
+        }
+
+        // 4. Batch Update
+        progressDiv.innerHTML = `<em>Step 3/3: Updating ${docsToUpdate.length} records...</em>`;
+        
+        const BATCH_SIZE = 450; 
+        const chunks = [];
+        
+        for (let i = 0; i < docsToUpdate.length; i += BATCH_SIZE) {
+            chunks.push(docsToUpdate.slice(i, i + BATCH_SIZE));
+        }
+
+        let processedCount = 0;
+
+        for (const chunk of chunks) {
+            const batch = writeBatch(db);
+            chunk.forEach(docData => {
+                let docRef;
+                // Handle special Fee Data paths if necessary, otherwise standard getDocRef
+                if (collectionName === 'feeStructures' || collectionName === 'receipts') {
+                     docRef = getFeeDocRef(activeFinancialYear, collectionName, docData.id);
+                } else {
+                     docRef = getDocRef(collectionName, docData.id);
+                }
+                
+                batch.update(docRef, updatesToApply);
+            });
+            await batch.commit();
+            processedCount += chunk.length;
+            progressDiv.innerHTML = `<em>Progress: ${processedCount} / ${docsToUpdate.length} updated...</em>`;
+        }
+
+        progressDiv.innerHTML = `<div class="alert alert-success py-2 mb-0"><strong>Success!</strong> Updated ${processedCount} documents in ${collectionName}.</div>`;
+        
+        // Refresh list if visible
+        const currentPath = document.getElementById('master-control-header-text')?.textContent;
+        if (currentPath && currentPath.includes(collectionName)) {
+            displayDocumentList(collectionName);
+        }
+
+    } catch (error) {
+        console.error("Bulk Update Error:", error);
+        progressDiv.innerHTML = `<div class="text-danger small">Error: ${error.message}</div>`;
+        showAlert('Update failed.', 'danger');
+    } finally {
+        updateBtn.disabled = false;
+        updateBtn.innerHTML = 'Run Bulk Update';
+    }
+}
 /**
  * Renders the collapsible navigation tree on the left.
  */
@@ -38714,7 +38928,7 @@ async function setMissingStudentStatusToActive() {
 
         // --- THIS IS THE FIX ---
         // 4. Update the stats counter using the correct modular 'increment' function.
-        const statsRef = getDocRef('school_stats', 'main');
+        //const statsRef = getDocRef('school_stats', 'main');
         //batch.update(statsRef, { studentCount: increment(studentsToUpdate.length) });
         // --- END OF FIX ---
 
