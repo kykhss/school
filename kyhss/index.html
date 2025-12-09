@@ -36246,57 +36246,79 @@ function generateSingleHallTicketHTML(studentId, examId) {
     const studentRegNo = student.examRegNumbers?.[examId];
 
     let examScheduleHtml = '';
-    const relevantSchedules = examSchedules.filter(sch =>
+    // 1. FILTER & SORT (Ensure FN comes before AN)
+const rawSchedules = examSchedules.filter(sch =>
     sch.examId === examId &&
     sch.classId === student.classId &&
     sch.division === student.division
 ).sort((a, b) => {
-    // 1. Sort by Date first
     const dateDiff = new Date(a.date) - new Date(b.date);
     if (dateDiff !== 0) return dateDiff;
-
-    // 2. Sort by Session (Force FN to come before AN)
-    // If 'FN' vs 'AN', return -1 (a comes first)
-    // If 'AN' vs 'FN', return 1 (b comes first)
+    
+    // Sort Session: FN (-1) comes before AN (1)
     if (a.session === 'FN' && b.session === 'AN') return -1;
     if (a.session === 'AN' && b.session === 'FN') return 1;
-    
     return 0;
 });
 
-    relevantSchedules.forEach(schedule => {
-        const subjectName = subjects.find(s => s.id === schedule.subjectId)?.name || schedule.subjectId;
-        const examDate = new Date(schedule.date).toLocaleDateString('en-GB');
-        const examDay = new Date(schedule.date).toLocaleString('en-GB', { weekday: 'long' });
-        const session = schedule.session === 'FN' ? 'Forenoon' : 'Afternoon';
-        
-        // --- NEW RULE-BASED LOGIC ---
-        let roomName = 'N/A';
-        if (studentRegNo) {
-            // Find the *specific rule* for this exam, date, and session that the student matches
-            const matchingRule = examRoomAllocationRules.find(rule =>
-                rule.examId === examId &&
-                rule.date === schedule.date &&
-                rule.session === schedule.session &&
-                doesRegNoMatchRule(studentRegNo, rule.regNoRangeText)
-            );
-            
-            if (matchingRule) {
-                roomName = examRooms.find(r => r.id === matchingRule.roomId)?.name || matchingRule.roomId;
-            }
+// 2. GROUPING LOGIC (Combine exams in the same session)
+const groupedSchedules = [];
+
+rawSchedules.forEach(sch => {
+    const lastGroup = groupedSchedules[groupedSchedules.length - 1];
+    const isSameSlot = lastGroup && lastGroup.date === sch.date && lastGroup.session === sch.session;
+
+    if (isSameSlot) {
+        // If same slot, add subject ID to the existing group
+        lastGroup.subjectIds.push(sch.subjectId);
+    } else {
+        // Create new group
+        groupedSchedules.push({
+            date: sch.date,
+            session: sch.session,
+            subjectIds: [sch.subjectId]
+        });
+    }
+});
+
+// 3. GENERATE HTML
+groupedSchedules.forEach(group => {
+    // A. Resolve Subject Names (Join with ' & ')
+    const subjectNames = group.subjectIds.map(subId => {
+        return subjects.find(s => s.id === subId)?.name || subId;
+    }).join(' & ');
+
+    // B. Format Date & Session
+    const examDate = new Date(group.date).toLocaleDateString('en-GB');
+    const examDay = new Date(group.date).toLocaleString('en-GB', { weekday: 'long' });
+    const sessionLabel = group.session === 'FN' ? 'FN' : 'AN';
+
+    // C. Find Room Allocation (Rule-Based)
+    let roomName = ''; 
+    
+    if (studentRegNo) {
+        const matchingRule = examRoomAllocationRules.find(rule =>
+            rule.examId === examId &&
+            rule.date === group.date &&
+            rule.session === group.session &&
+            doesRegNoMatchRule(studentRegNo, rule.regNoRangeText)
+        );
+
+        if (matchingRule) {
+            roomName = examRooms.find(r => r.id === matchingRule.roomId)?.name || matchingRule.roomId;
         }
-        // --- END NEW LOGIC ---
-        
-        examScheduleHtml += `
-            <tr>
-                <td>${subjectName}</td>
-                <td>${examDate} (${examDay})</td>
-                <td class="text-center">${session==="Forenoon"?'FN':'AN'}</td>
-                <td class="text-center">${roomName || className ||""}</td>
-                <td class="text-center" style="width:120px;"></td>
-            </tr>
-        `;
-    });
+    }
+
+    // D. Build Table Row
+    examScheduleHtml += `
+        <tr>
+            <td>${subjectNames}</td>
+            <td>${examDate} (${examDay})</td>
+            <td class="text-center">${sessionLabel}</td>
+            <td class="text-center fw-bold">${roomName || '-'}</td>
+            <td class="text-center" style="width:120px;"></td> </tr>
+    `;
+});
     
     const classTeacher = teachers.find(t => t.classCharge?.classId === student.classId && t.classCharge?.division === student.division)?.name || 'Not Assigned';
     const studentPhotoSrc = student.photoDriveId ? `https://drive.google.com/thumbnail?id=${student.photoDriveId}&sz=400` : 'https://placehold.co/100x120?text=Photo';
