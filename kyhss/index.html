@@ -1231,7 +1231,7 @@ if(IS_DEMO_MODE){
 
         // 1. Start the data listener/sync process if online.
         if (navigator.onLine) {
-        attachDataListeners([storeName]);
+       attachDataListeners([storeName]);
             // 3. Now that we've waited, read the fresh data from Dexie.
         // if (isById) {
         //     const docId = idOrQueryObj;
@@ -2014,7 +2014,6 @@ async function trackedGetDocs(colName, queryRef) {
 // ======================================================
 
 async function attachDataListeners(collectionsToWatch) {
-
     if (!collectionsToWatch || collectionsToWatch.length === 0) return;
 
     // Identify Smart-Sync compatible collections
@@ -2022,13 +2021,12 @@ async function attachDataListeners(collectionsToWatch) {
     for (const tableName in collectionMap) {
         if (appDb[tableName] && appDb[tableName].schema.idxByName.lastUpdated) {
             smartSyncCollections.add(tableName);
-        } else {
-            console.warn(`⚠ No lastUpdated index for ${tableName}. Smart Sync disabled.`);
         }
     }
 
     for (const name of collectionsToWatch) {
-
+        
+        // Skip if already loaded and active
         if (activeListeners[name] && dataLoadStatus[name]) continue;
 
         const config = collectionMap[name];
@@ -2038,98 +2036,125 @@ async function attachDataListeners(collectionsToWatch) {
             continue;
         }
 
+        // Cleanup old listeners
         if (activeListeners[name]) {
             activeListeners[name]();
             delete activeListeners[name];
         }
 
-        let needsFullSync = true;
-        let localCount = 0;
         let collectedData = {};
 
         // ============================================================
-        // PHASE 1: SMART SYNC
+        // PHASE 0: IMMEDIATE LOAD FROM INDEXEDDB (Offline First)
         // ============================================================
-        if (smartSyncCollections.has(name) && navigator.onLine) {
-            try {
-                console.log(`\n======================`);
-                console.log(`SMART SYNC: ${name}`);
-                console.log(`======================`);
+        // We ALWAYS load from local DB first to show UI immediately.
+        try {
+            const localData = await appDb[name].toArray();
+            
+            if (localData.length > 0) {
+                console.log(`[Cache Load] Loaded ${localData.length} records for ${name} from IndexedDB.`);
+                
+                // Populate Memory
+                localData.forEach(doc => collectedData[doc.id] = doc);
+                config.setter(localData);
+                
+                // Render immediately with cached data
+                triggerRender(config);
+            }
+        } catch (e) {
+            console.warn(`[Cache Load Error] Could not load ${name} from Dexie:`, e);
+        }
 
+        // ============================================================
+        // PHASE 1: OFFLINE MODE CHECK
+        // ============================================================
+        if (!navigator.onLine || 1=== 1) {
+            console.log(`[Offline] Skipping network sync for ${name}. Using cached data.`);
+            dataLoadStatus[name] = true;
+            resolvePromiseFor(name);
+            continue; // Stop here if offline
+        }
+
+        // ============================================================
+        // PHASE 2: SMART SYNC (Delta Fetch)
+        // ============================================================
+        let needsFullSync = true;
+        let localCount = 0;
+
+        if (smartSyncCollections.has(name)) {
+            try {
                 localCount = await appDb[name].count();
                 const metadata = await appDb.lastSynced.get(name);
                 const lastLocalSyncTime = metadata?.timestamp || new Date(0);
 
                 if (localCount > 0) {
-
                     const generatedQueries = getQueriesForCollection(name);
+                    
                     if (generatedQueries.length > 0) {
-
-                        // A. GET SERVER COUNTS
-                        const countSnapshots = await Promise.all(
-                            generatedQueries.map(qInfo => trackedGetCount(name, qInfo.query))
-                        );
-
+                        // A. Check Server Counts
+                        const countPromises = generatedQueries.map(qInfo => getCountFromServer(qInfo.query));
+                        const countSnapshots = await Promise.all(countPromises);
+                        
                         let totalServerCount = 0;
                         countSnapshots.forEach(snap => totalServerCount += snap.data().count);
 
+                        // Special case for Rule Arrays (Doc Count != Item Count)
                         const skipCountCheck = (name === 'examRoomAllocationRules');
-                        console.log(`[Smart Sync Count] Local: ${localCount}, Server: ${totalServerCount}`);
 
-                        // B. COMPARE COUNTS
+                        // B. Compare
                         if (localCount === totalServerCount || skipCountCheck) {
-
-                            // Only fetch docs changed after last sync
-                            const updateSnapshots = await Promise.all(
-                                generatedQueries.map(qInfo =>
-                                    trackedGetDocs(name, query(qInfo.query, where('lastUpdated', '>', lastLocalSyncTime)))
-                                )
+                            
+                            // Fetch only NEW/UPDATED docs
+                            const updatePromises = generatedQueries.map(qInfo => 
+                                getDocs(query(qInfo.query, where('lastUpdated', '>', lastLocalSyncTime)))
                             );
-
+                            const allSnapshots = await Promise.all(updatePromises);
+                            
                             let docsToSave = [];
-                            updateSnapshots.forEach(snap => {
+                            allSnapshots.forEach(snap => {
                                 if (!snap.empty) {
-                                    docsToSave.push(...snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                                    docsToSave.push(...snap.docs.map(d => ({id: d.id, ...d.data()})));
                                 }
                             });
 
-                            console.log(`[Smart Sync Result] Found ${docsToSave.length} updated docs.`);
-
+                            // C. Apply Updates
                             if (docsToSave.length > 0) {
+                                console.log(`[Smart Sync] Applying ${docsToSave.length} updates to ${name}.`);
+                                
                                 if (name === 'examRoomAllocationRules') {
                                     await handleExamRulesSync(docsToSave, [], config);
                                 } else {
                                     await appDb[name].bulkPut(docsToSave);
                                 }
+                                
+                                // Refresh Memory from DB after update
+                                const updatedLocalData = await appDb[name].toArray();
+                                config.setter(updatedLocalData);
+                                triggerRender(config);
                             }
 
-                            const allLocal = await appDb[name].toArray();
-                            allLocal.forEach(doc => collectedData[doc.id] = doc);
-                            config.setter(allLocal);
-
-                            dataLoadStatus[name] = true;
+                            // D. Mark Sync Complete
+                            dataLoadStatus[name] = true; 
                             resolvePromiseFor(name);
                             await recordLastSyncTime(name, new Date());
-                            triggerRender(config);
-
-                            needsFullSync = false;
-                            console.log(`[Smart Sync] Completed for ${name}`);
-                        } 
-                        else {
-                            console.warn(`[Smart Sync FAIL] ${name}: Count mismatch. Full sync required.`);
+                            
+                            needsFullSync = false; // We are up to date!
+                            console.log(`[Smart Sync] Success for ${name}`);
+                        } else {
+                            console.log(`[Smart Sync] Count mismatch for ${name}. Full sync required.`);
                         }
                     }
                 }
-            } catch (err) {
-                console.warn(`[Smart Sync ERROR] ${name}:`, err);
+            } catch (e) {
+                console.warn(`[Smart Sync] Failed for ${name}, falling back.`, e);
                 needsFullSync = true;
             }
         }
 
         // ============================================================
-        // PHASE 2: REAL-TIME Firestore Listener
+        // PHASE 3: REAL-TIME LISTENER (Fallback & Live Updates)
         // ============================================================
-
+        
         const queriesToExecute = getQueriesForCollection(name);
         if (queriesToExecute.length === 0) {
             dataLoadStatus[name] = true;
@@ -2143,75 +2168,71 @@ async function attachDataListeners(collectionsToWatch) {
         const currentUnsubs = [];
 
         queriesToExecute.forEach(qInfo => {
-
             const unsub = onSnapshot(qInfo.query, async snapshot => {
-
-                const isInitial = !dataLoadStatus[name];
-                const changes = snapshot.docChanges();
-
-                // track listener read count
-                trackRead(name, changes.length, "listener");
-                if (changes.length > 0)
-                    console.log(`[LISTENER READ] ${name} → +${changes.length} (doc changes)`);
-
                 try {
-                    if (isInitial) {
-                        queriesReceivedInitialSnapshot++;
+                    let isInitialPhase = !dataLoadStatus[name];
 
+                    // 1. Full Reset Check (Only on first load if Smart Sync failed)
+                    if (isInitialPhase) {
+                        queriesReceivedInitialSnapshot++;
                         if (needsFullSync && localCount > 0 && queriesReceivedInitialSnapshot === 1) {
-                            console.log(`⚠ FULL RESET triggered for ${name}`);
-                            await appDb[name].clear();
-                            collectedData = {};
+                             console.log(`[Sync] Performing full reset for ${name}`);
+                             await appDb[name].clear();
+                             collectedData = {}; 
                         }
                     }
 
+                    const changes = snapshot.docChanges();
+                    
+                    // 2. Process Changes
                     if (changes.length > 0) {
-
                         const { toAddOrUpdate, toDelete } = processFirestoreChanges(changes);
-
+                        
                         if (name === 'examRoomAllocationRules') {
                             await handleExamRulesSync(toAddOrUpdate, toDelete, config);
-                        } 
-                        else {
+                        } else {
                             const store = appDb[name];
                             await appDb.transaction('rw', store, async () => {
                                 if (toDelete.length > 0) await store.bulkDelete(toDelete);
                                 if (toAddOrUpdate.length > 0) await store.bulkPut(toAddOrUpdate);
                             });
 
+                            // Update Memory Cache
                             toDelete.forEach(id => delete collectedData[id]);
                             toAddOrUpdate.forEach(doc => collectedData[doc.id] = doc);
                             config.setter(Object.values(collectedData));
                         }
                     }
 
-                    if (isInitial) {
+                    // 3. Resolve Promise (App Ready)
+                    if (isInitialPhase) {
                         queriesFinishedProcessing++;
                         if (queriesFinishedProcessing >= expectedInitialSnapshots) {
                             dataLoadStatus[name] = true;
                             resolvePromiseFor(name);
-                            await recordLastSyncTime(name, new Date());
+                            await recordLastSyncTime(name, new Date()); 
                         }
                     }
 
+                    // 4. Render Updates
                     triggerRender(config);
 
-                } catch (err) {
-                    console.error(`[Listener ERROR] ${name}:`, err);
+                } catch (error) {
+                    console.error(`[Listener Error] ${name}:`, error);
+                    // Ensure app doesn't hang on error
                     if (!dataLoadStatus[name]) {
                         dataLoadStatus[name] = true;
                         resolvePromiseFor(name);
                     }
                 }
-            },
-            error => {
-                console.error(`[Connection ERROR] ${name}:`, error);
+            }, error => {
+                console.error(`[Connection Error] ${name}:`, error);
                 if (!dataLoadStatus[name]) resolvePromiseFor(name);
             });
-
+            
             currentUnsubs.push(unsub);
         });
-
+        
         activeListeners[name] = () => currentUnsubs.forEach(u => u());
     }
 }
@@ -3352,7 +3373,8 @@ window.saveJudgeResults = async (festData, eventData, participants, groups) => {
         id: resultId, festId: festData.id, eventId: eventData.id,
         results: resultsToSave.sort((a,b) => a.position - b.position),
         judgedBy: judge.code,
-        judgedAt: serverTimestamp()
+        judgedAt: serverTimestamp(),
+        lastUpdated: serverTimestamp()
     };
 
     try {
@@ -3909,7 +3931,9 @@ function attachSchoolDetailsListeners() {
             // UPI Fields Added Here
             upiId: document.getElementById('school-upi-id').value,
             upiPayeeName: document.getElementById('school-upi-payee-name').value,
-            logoUrl: schoolDetails.logoUrl || '' // Start with the existing URL
+            logoUrl: schoolDetails.logoUrl || '',// Start with the existing URL
+            lastUpdated: serverTimestamp()
+
         };
 
         try {
@@ -4211,7 +4235,8 @@ window.renderClassManagement = () => {
             name: nameInput.value.toUpperCase(),
             order: parseInt(orderInput.value, 10) || 0, // New
             alias: aliasInput.value.toUpperCase(),
-            divisions: divInput.value.split(',').map(d => d.trim().toUpperCase()).filter(Boolean)
+            divisions: divInput.value.split(',').map(d => d.trim().toUpperCase()).filter(Boolean),
+            lastUpdated: serverTimestamp()
         };
         await setDoc(getDocRef('classes', docId), data);
         showAlert(`Class '${data.name}' ${isEditMode ? 'updated' : 'saved'}.`, 'success');
@@ -4478,7 +4503,7 @@ window.handleEditTeacher = (teacherId) => {
 window.handleReactivateTeacher = async (teacherId) => {
     // This function is unchanged
     if (!confirm('Are you sure you want to re-activate this teacher?')) return;
-    await updateDoc(getDocRef('teachers', teacherId), { status: 'Active', resignationDate: null, resignationReason: null, roles: ['teacher'] });
+    await updateDoc(getDocRef('teachers', teacherId), { status: 'Active', resignationDate: null, resignationReason: null, roles: ['teacher'], lastUpdated:serverTimestamp()});
     showAlert('Teacher has been re-activated.', 'success');
 };
 
@@ -4780,7 +4805,8 @@ async function handleConfirmResignation() {
                 id: id,
                 name: name,
                 subjectId: id, // Keep subjectId field for consistency if needed elsewhere
-                sector: finalSector // Use finalSector
+                sector: finalSector, // Use finalSector
+                lastUpdated: serverTimestamp()
             };
 
             await setDoc(getDocRef('subjects', id), subjectData);
@@ -4985,12 +5011,13 @@ function renderClassWiseAllocationView() {
         const subjectId = document.getElementById('alloc-subject').value;
         const teacherId = document.getElementById('alloc-teacher').value;
         const weeklyHour = parseInt(document.getElementById('alloc-weekly-hour').value, 10) || 0;
+        
 
         if (!classId || !division || !subjectId || !teacherId || weeklyHour <= 0) {
             return showAlert('All fields are required.', 'danger');
         }
         const docId = isEditMode ? allocationToEdit.id : `${classId}_${division}_${subjectId}_${teacherId}`;
-        const data = { id: docId, classId, division, subjectId, teacherId, weeklyHour };
+        const data = { id: docId, classId, division, subjectId, teacherId, weeklyHour, lastUpdated: serverTimestamp() };
 
         await setDoc(getDocRef('classroomSubjects', docId), data);
         showAlert(`Allocation ${isEditMode ? 'updated' : 'saved'}.`, 'success');
@@ -7060,6 +7087,7 @@ window.issueTransferCertificate = async (studentId) => {
         // First, update the student's status in the database
         await updateDoc(studentRef, {
             status: 'TC Issued',
+            lastUpdated : serverTimestamp(), 
             lastDay: new Date().toISOString().slice(0, 10) // Record the date of TC issuance
         });
         
@@ -9521,7 +9549,8 @@ function renderExamAddTab() {
                 name: examName,
                 sector: sector,
                 isActive: isActive,
-                isPublished: isPublished
+                isPublished: isPublished,
+                lastUpdated: serverTimestamp()
             };
 
             await setDoc(getDocRef('exams', examId), examData, { merge: true });
@@ -11509,7 +11538,7 @@ async function loadAttendanceSheet(date, classId, division) {
                 records[id][c.dataset.session] = c.checked;
             });
             try {
-                await setDoc(getDocRef('attendance', attendanceYearMonth), { [day]: records }, { merge: true });
+                await setDoc(getDocRef('attendance', attendanceYearMonth), { [day]: records, lastUpdated: serverTimestamp() }, { merge: true });
                 showAlert('Attendance saved successfully!', 'success');
             } catch (error) { console.error("Error saving attendance: ", error); showAlert("Could not save attendance.", "danger");}
         }
@@ -11555,7 +11584,8 @@ async function saveAttendance(date, classId, division) {
         const dataToSave = {
             [day]: { // The day is the top-level key
                 [classKey]: attendanceDataForClass // The class is nested inside the day
-            }
+            },
+            lastUpdated: serverTimestamp()
         };
 
         // setDoc with merge:true will correctly create or update this nested structure.
@@ -11961,7 +11991,7 @@ async function generateStudentCalendar(studentId, monthYear, containerId, isDash
                 const date = document.getElementById('holiday-date').value;
                 const narration = document.getElementById('holiday-narration').value;
                 if(date && narration){
-                    await setDoc(getDocRef('holidays', date), {narration});
+                    await setDoc(getDocRef('holidays', date), {narration,lastUpdated: serverTimestamp()});
                     showAlert('Holiday saved successfully', 'success');
                     e.target.reset();
                 } else {
@@ -12113,7 +12143,8 @@ window.renderSyllabusTracker = () => {
                     periods: parseInt(periods),
                     remarks,
                     teacherId: selectedUser.id,
-                    teacherName: selectedUser.name
+                    teacherName: selectedUser.name,
+                    lastUpdated: serverTimestamp()
                 });
                 showAlert('Completion status saved!', 'success');
                 completionModalInstance.hide();
@@ -12302,7 +12333,8 @@ function renderAddChapterTab() {
                 classId,
                 subjectId,
                 chapters: currentChapters,
-                appliesToDivisions: selectedDivisions
+                appliesToDivisions: selectedDivisions,
+                lastUpdated: serverTimestamp()
             }, { merge: true });
             showAlert('Chapter added/updated successfully!', 'success');
             document.getElementById('chapter-no').value = '';
@@ -12539,7 +12571,7 @@ function renderCreateSyllabusTab() {
 
         const syllabusId = `${classId}_${subjectId}_${chapterNo}`;
         await setDoc(getDocRef('syllabuses', syllabusId), {
-            id: syllabusId, classId, subjectId, chapterNo, portions, appliesToDivisions: selectedDivisions
+            id: syllabusId, classId, subjectId, chapterNo, portions, appliesToDivisions: selectedDivisions,lastUpdated: serverTimestamp()
         });
         showAlert('Syllabus saved successfully!', 'success');
         //await loadSyllabusData();
@@ -13306,6 +13338,7 @@ document.getElementById('confirm-payment-btn')?.addEventListener('click', async 
         transactionId: transactionId,
         submissionDate: new Date().toISOString(),
         financialYear: activeFinancialYear,
+        lastUpdated: serverTimestamp(),
         status: 'pending' // Initial status
     };
 
@@ -14919,7 +14952,8 @@ async function saveFeeStructure(studentId, financialYear, feeData) {
             totalAmount: totalAmount,
             paymentMode: document.getElementById('payment-mode').value,
             isCancelled: receiptToEdit?.isCancelled || false,
-            timestamp: serverTimestamp()
+            timestamp: serverTimestamp(),
+            lastUpdated: serverTimestamp()
         };
 
         try {
@@ -16378,7 +16412,7 @@ window.toggleFormStatus = async (id) => {
     const form = forms.find(f => f.id === id);
     if (form) {
         try {
-            await setDoc(getDocRef('forms', id), { ...form, isActive: !form.isActive });
+            await setDoc(getDocRef('forms', id), { ...form, isActive: !form.isActive, lastUpdated: serverTimestamp() });
             showAlert(`Form ${form.isActive ? 'deactivated' : 'activated'} successfully.`, 'success');
             // The UI is expected to update via real-time listeners.
             // If not, you would call renderFormManagement() here.
@@ -16420,6 +16454,7 @@ async function handleFormSave(e) {
         division: formDivisionEl ? formDivisionEl.value.trim() : '',
         fields: formToEdit.fields,
         isActive: formToEdit.isActive,
+        lastUpdated: serverTimestamp()
     };
 
     try {
@@ -17497,7 +17532,7 @@ window.updateTeacherComment = async (formId, studentId, comment) => {
     const response = formResponses.find(r => r.formId === formId && r.userId === studentId);
     if (response) {
         try {
-            await setDoc(getDocRef('formResponses', response.id), { ...response, teacherComment: comment });
+            await setDoc(getDocRef('formResponses', response.id), { ...response, teacherComment: comment, lastUpdated: serverTimestamp() }, { merge: true });
             showAlert('Comment saved.', 'success');
         } catch (error) {
             console.error('Failed to update teacher comment:', error);
@@ -17523,7 +17558,7 @@ window.finalizeForm = async (formId) => {
     }
 
     const updatePromises = responsesToFinalize.map(r => 
-        setDoc(getDocRef('formResponses', r.id), { ...r, status: 'finalized' })
+        setDoc(getDocRef('formResponses', r.id), { ...r, status: 'finalized', lastUpdated: serverTimestamp() })
     );
 
     try {
@@ -17884,7 +17919,7 @@ window.editMyForm = (formId) => {
             const el = document.getElementById(name);
             values[name] = f.type === 'checkbox' ? el?.checked || false : el?.value?.trim() || '';
         }
-        await setDoc(getDocRef('formResponses', response.id), { ...response, values });
+        await setDoc(getDocRef('formResponses', response.id), { ...response, values, lastUpdated: serverTimestamp() }, { merge: true });
         showAlert('Form updated successfully', 'success');
         renderMyForms();
     });
@@ -17976,6 +18011,7 @@ async function handleFormSubmission(event, formConfig) {
             values: values,
             status: 'submitted', // Or 'draft' if you have a save draft feature
             timestamp: new Date().toISOString(),
+            lastUpdated: serverTimestamp()
         };
 
         // Assumes 'setDoc' and 'getDocRef' are Firebase functions available globally
@@ -19131,19 +19167,23 @@ function createReportTable(headers, data) {
     tableHTML += `<thead><tr>${headers.map(h => {
         const style = h.styles || {};
         // --- UPDATED: Use displayName for the header text ---
-        return `<th style="width: ${style.width}; text-align: ${style.textAlign || 'left'};">${h.displayName}</th>`;
+        return `<th style="width: ${style.width}; text-align: ${style.textAlign || 'center'};">${h.displayName}</th>`;
     }).join('')}</tr></thead>`;
     
     tableHTML += '<tbody>';
+        let index = 1;
     data.forEach(row => {
         tableHTML += '<tr>';
         headers.forEach(header => {
             const style = header.styles || {};
             // --- UPDATED: Use the original 'name' as the key to get the value ---
-            const value = getNestedValue(row, header.name); 
+            console.log(header.name);
+            const value = header.name==="Sl"? index : getNestedValue(row, header.name); 
             tableHTML += `<td style="text-align: ${style.textAlign || 'left'}; color: ${style.color || '#000'}; font-weight: ${style.fontWeight || 'normal'};">${value}</td>`;
         });
+       
         tableHTML += '</tr>';
+         index++;
     });
     tableHTML += '</tbody></table>';
     return tableHTML;
@@ -19428,8 +19468,9 @@ function getReportConfiguration() {
         }
     };
 }
+let loadedReport = null; // Tracks the currently loaded report for Save/Update logic
 function loadReportSettings(report) {
-    currentLoadedReport = getReportConfiguration();
+    loadedReport = report || null;
     
     document.getElementById('report-name').value = report.name;
     const collectionSelect = document.getElementById('report-collection-select');
@@ -19474,8 +19515,13 @@ async function saveReportConfiguration(isUpdate = false) {
     if (!config || !config.name) {
         return showAlert('Please enter a report name before saving.', 'warning');
     }
-
-    if (isUpdate && currentLoadedReport) {
+    //loadedReport
+    currentLoadedReport.id = loadedReport.id; // Reset loaded report to avoid confusion
+    if (isUpdate ) {{
+        if (!currentLoadedReport || !currentLoadedReport.id) {
+            return showAlert('No existing report loaded to update.', 'warning');
+        }
+    }
         config.id = currentLoadedReport.id;
     } else {
         config.id = config.name.replace(/\s+/g, '_').toLowerCase();
@@ -20468,6 +20514,7 @@ function attachVehicleFormListeners() {
             fitnessExpiry: document.getElementById('vehicle-fitness').value,
             pollutionExpiry: document.getElementById('vehicle-pollution').value,
             gpsExpiry: document.getElementById('vehicle-gps').value,
+            lastUpdated: serverTimestamp()
         };
 
         try {
@@ -21187,6 +21234,7 @@ function attachInventoryFormListeners() {
             publishYear: parseInt(document.getElementById('book-publishYear').value, 10) || null,
             allottedClassId: classSelect.value || null,
             allottedDivision: classSelect.value ? divisionSelect.value : null,
+            lastUpdated: serverTimestamp(),
             status: bookToEdit?.status || 'Available' // Preserve status on edit, default to 'Available' on add
         };
 
@@ -23470,7 +23518,7 @@ async function saveGroupFromBuilderOLD(groupId, festId, houseId, modal) {
     }));
     
     const newGroupId = isEditMode ? groupId : `GRP_${Date.now()}`;
-    const groupData = { id: newGroupId, name: groupName, festId, houseId, members };
+    const groupData = { id: newGroupId, name: groupName, festId, houseId, members,lastUpdated: serverTimestamp() };
 
     try {
         await setDoc(getDocRef('festGroups', newGroupId), groupData);
@@ -23637,7 +23685,8 @@ document.addEventListener('click', async (e) => {
             name: name,
             eventType: eventType,
             registrationOpen: isEditing ? state.festToEdit.registrationOpen : true, 
-            settings: settings
+            settings: settings,
+            lastUpdated: serverTimestamp()
         };
 
         try {
@@ -24058,7 +24107,7 @@ function attachSetupTabListeners() {
         if (!id || !name) { return showAlert('House ID and Name are required.', 'danger'); }
 
         try {
-            await setDoc(getDocRef('festHouses', id), { id, name, color }, { merge: true });
+            await setDoc(getDocRef('festHouses', id), { id, name, color, lastUpdated: serverTimestamp() }, { merge: true });
             showAlert(`House '${name}' saved successfully.`, 'success');
             clearHouseEdit();
         } catch (error) {
@@ -27926,7 +27975,7 @@ window.saveEventScores = async (festId, eventId, isGroupEvent) => {
     });
 
     const resultId = `${festId}_${eventId}`;
-    const resultData = { id: resultId, festId, eventId, results: finalResults };
+    const resultData = { id: resultId, festId, eventId, results: finalResults, lastUpdated: serverTimestamp() };
 
     try {
         await setDoc(getDocRef('festResults', resultId), resultData);
@@ -29842,7 +29891,7 @@ document.getElementById('save-timetable-btn')?.addEventListener('click', async (
     });
 
     try {
-        await setDoc(getDocRef('timetables', timetableId), { schedule });
+        await setDoc(getDocRef('timetables', timetableId), { schedule,lastUpdated: serverTimestamp() });
         showAlert('Timetable saved successfully!', 'success');
     } catch (error) {
         showAlert('Failed to save timetable.', 'danger');
@@ -30501,7 +30550,7 @@ function renderExamControlRoomManagementTab() {
         }
 
         try {
-            await setDoc(getDocRef('examRooms', id), { id, name, capacity, isLab, description,roomNumber }, { merge: true });
+            await setDoc(getDocRef('examRooms', id), { id, name, capacity, isLab, description,roomNumber, lastUpdated: serverTimestamp() }, { merge: true });
             showAlert('Exam room saved successfully!', 'success');
             roomToEdit = null; // Clear edit state
             renderExamControlRoomManagementTab(); // Re-render the tab
@@ -30774,26 +30823,39 @@ function displayDutyConsolidation(examId) {
  */
 function displayTeacherAvailabilityRoster(examId, date) {
     const container = document.getElementById('teacher-availability-container');
-    const eligibleTeachers = teachers.filter(t => t.role !== 'admin').sort((a, b) => a.name.localeCompare(b.name));
-    
-    // Load saved availability or default to all checked
+    const eligibleTeachers = teachers.filter(t => {
+        const isExcluded =t.role === 'admin' || (t.roles && t.roles.includes('exam_controller','admin'));
+        if (isExcluded) return false;
+
+        const isClassTeacher = t.classCharge && t.classCharge.classId;
+        const hasSubjectAllocations = classroomSubjects.some(alloc => alloc.teacherId === t.id);
+
+        return hasSubjectAllocations;
+    }).sort((a, b) => a.name.localeCompare(b.name));
     const availKey = `duty_avail_${examId}_${date}`;
     let savedAvail = JSON.parse(localStorage.getItem(availKey)) || {};
 
     container.innerHTML = `
-        <h5 class="section-header">Teacher Availability</h5>
-        <div class="d-flex justify-content-between mb-2 small text-muted">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h5 class="section-header mb-0">Availability</h5>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="apply-avail-all-days">
+                <label class="form-check-label small" for="apply-avail-all-days">Save for ALL Days</label>
+            </div>
+        </div>
+        
+        <div class="d-flex justify-content-between mb-1 small text-muted px-2">
             <span>Teacher Name</span>
             <span>FN &nbsp; AN</span>
         </div>
         <div class="list-group list-group-flush border rounded" style="max-height: 500px; overflow-y: auto;">
             ${eligibleTeachers.map(t => {
-                const isFN = savedAvail[t.id]?.FN !== false; // Default true
-                const isAN = savedAvail[t.id]?.AN !== false; // Default true
+                const isFN = savedAvail[t.id]?.FN !== false;
+                const isAN = savedAvail[t.id]?.AN !== false;
                 
                 return `
                 <div class="list-group-item d-flex justify-content-between align-items-center py-1">
-                    <span class="text-truncate" style="max-width: 180px;" title="${t.name}">${t.name}</span>
+                    <span class="text-truncate">${t.name}</span>
                     <div>
                         <input class="form-check-input teacher-avail-check me-2" type="checkbox" 
                                data-teacher-id="${t.id}" data-session="FN" ${isFN ? 'checked' : ''}>
@@ -30803,36 +30865,75 @@ function displayTeacherAvailabilityRoster(examId, date) {
                 </div>`;
             }).join('')}
         </div>
-        <div class="mt-2 text-end">
-             <small class="text-muted">Uncheck to mark unavailable.</small>
-        </div>
     `;
 
-    // Save on change and refresh grid dropdowns
     container.addEventListener('change', (e) => {
         if (e.target.classList.contains('teacher-avail-check')) {
             const tId = e.target.dataset.teacherId;
             const sess = e.target.dataset.session;
-            if (!savedAvail[tId]) savedAvail[tId] = { FN: true, AN: true };
-            savedAvail[tId][sess] = e.target.checked;
-            
-// Inside the change listener:
-localStorage.setItem(availKey, JSON.stringify(savedAvail));
+            const isChecked = e.target.checked;
+            const applyAll = document.getElementById('apply-avail-all-days').checked;
 
-// Trigger refresh ONLY for the relevant columns in the big grid
-const gridTable = document.getElementById('duty-grid-table');
-if (gridTable) {
-    // Re-fetch rules just for context (or pass globally if cached)
-    const allRules = examRoomAllocationRules.filter(r => r.examId === examId);
-    refreshTeacherDropdownsMulti(examId, [date], allRules);
-}
+            const updateStorageForDate = (targetDate) => {
+                const key = `duty_avail_${examId}_${targetDate}`;
+                let data = JSON.parse(localStorage.getItem(key)) || {};
+                if (!data[tId]) data[tId] = { FN: true, AN: true };
+                data[tId][sess] = isChecked;
+                localStorage.setItem(key, JSON.stringify(data));
+            };
+
+            if (applyAll) {
+                // Find all dates associated with this exam
+                const allDates = [...new Set(examSchedules.filter(s => s.examId === examId).map(s => s.date))];
+                allDates.forEach(d => updateStorageForDate(d));
+                showAlert(`Updated availability for ${tId} across ${allDates.length} days.`, 'success');
+            } else {
+                updateStorageForDate(date);
+            }
             
-            // Trigger refresh of the Suggestion Dropdowns in the grid
-            refreshTeacherDropdowns(examId, date); 
+            // Refresh Grid
+            const gridTable = document.getElementById('duty-grid-table');
+            if (gridTable) {
+                const allRules = examRoomAllocationRules.filter(r => r.examId === examId);
+                // We pass all dates currently in the select box
+                const selectedDates = Array.from(document.getElementById('duty-date-select').selectedOptions).map(o=>o.value);
+                refreshTeacherDropdownsMulti(examId, selectedDates, allRules);
+            }
         }
     });
 }
+/**
+ * Returns the actual Teacher Objects who are marked as "Available" for a specific date/session.
+ * Usage: 
+ * getTeachersByAvailability(examId, '2025-10-10') -> Returns all available for either session
+ * getTeachersByAvailability(examId, '2025-10-10', 'FN') -> Returns only those available for FN
+ */
+function getTeachersByAvailability(examId, date, session = null) {
+    // 1. Get the Saved Availability Settings (Using your key)
+    const availKey = `duty_avail_${examId}_${date}`;
+    const savedAvail = JSON.parse(localStorage.getItem(availKey)) || {};
 
+    // 2. Get the Master List of Eligible Humans (Excluding Admins/Staff)
+    // We use the helper we created earlier to ensure consistency
+    const allEligibleTeachers = getEligibleDutyTeachers();
+
+    // 3. Filter based on the settings
+    return allEligibleTeachers.filter(t => {
+        const teacherSettings = savedAvail[t.id];
+
+        // Scenario A: No settings saved yet? Default is AVAILABLE.
+        if (!teacherSettings) return true;
+
+        // Scenario B: Specific Session Requested (e.g., 'FN')
+        if (session) {
+            return teacherSettings[session] !== false; // Returns true unless explicitly false
+        }
+
+        // Scenario C: No session specified (Any availability)
+        // Returns true if they are available for at least one session that day
+        return teacherSettings.FN !== false || teacherSettings.AN !== false;
+    });
+}
 /**
  * Intelligently SUGGESTS duties for a SINGLE session using the multi-pass system.
  * This is the final, corrected version with advanced logic.
@@ -30978,10 +31079,6 @@ function displayDutyAssignmentGrid(examId, dates) {
     }
 
     // --- Build Header Rows ---
-    // Row 1: Room | Date 1 | Date 2 ...
-    // Row 2:      | FN | AN | FN | AN ...
-    // Row 3:      | Act|Tch| Act|Tch ...
-    
     let headerRow1 = `<th rowspan="3" class="align-middle" style="min-width: 150px; position: sticky; left: 0; z-index: 5; background: #fff;">Room</th>`;
     let headerRow2 = ``;
     let headerRow3 = ``;
@@ -30991,10 +31088,10 @@ function displayDutyAssignmentGrid(examId, dates) {
         headerRow1 += `<th colspan="4" class="text-center bg-light border-start border-3">${dateLabel}</th>`;
         headerRow2 += `<th colspan="2" class="text-center border-start border-3">FN</th><th colspan="2" class="text-center">AN</th>`;
         headerRow3 += `
-            <th style="width: 40px;" class="border-start border-3" title="Active?">Act</th>
-            <th style="min-width: 120px;">Teacher</th>
-            <th style="width: 40px;" title="Active?">Act</th>
-            <th style="min-width: 120px;">Teacher</th>
+            <th style="width: 30px;" class="border-start border-3">✔</th>
+            <th style="min-width: 160px;">Teacher</th>
+            <th style="width: 30px;">✔</th>
+            <th style="min-width: 160px;">Teacher</th>
         `;
     });
 
@@ -31011,8 +31108,8 @@ function displayDutyAssignmentGrid(examId, dates) {
             </div>
         </div>
 
-        <div class="table-responsive" style="max-height: 70vh;">
-            <table class="table table-bordered table-sm align-middle mb-0" id="duty-grid-table">
+        <div class="table-responsive" style="max-height: 60vh;">
+            <table class="table table-bordered table-sm align-middle mb-0" id="duty-grid-table" style="font-size:0.85rem;">
                 <thead class="table-light text-center sticky-top" style="z-index: 4;">
                     <tr>${headerRow1}</tr>
                     <tr>${headerRow2}</tr>
@@ -31021,13 +31118,15 @@ function displayDutyAssignmentGrid(examId, dates) {
                 <tbody id="duty-grid-tbody"></tbody>
             </table>
         </div>
+        
+        <div id="duty-available-footer" class="mt-3 p-3 bg-light border rounded small">
+            <div class="text-muted text-center">Loading availability...</div>
+        </div>
     `;
 
     const tbody = document.getElementById('duty-grid-tbody');
     
-    // Pre-fetch Data for ALL dates to avoid loop queries
-    // 1. Rules (to determine Active state)
-    // 2. Saved Duties (to pre-fill)
+    // Pre-fetch Data
     const allRules = examRoomAllocationRules.filter(r => r.examId === examId && dates.includes(r.date));
     const allDuties = examDuties.filter(d => d.examId === examId && dates.includes(d.date));
 
@@ -31035,57 +31134,61 @@ function displayDutyAssignmentGrid(examId, dates) {
         let cellsHtml = '';
 
         dates.forEach(date => {
-            const rulesFN = allRules.some(r => r.date === date && r.roomId === room.id && r.session === 'FN');
-            const rulesAN = allRules.some(r => r.date === date && r.roomId === room.id && r.session === 'AN');
-            
-            const dutyFN = allDuties.find(d => d.date === date && d.roomId === room.id && d.session === 'FN')?.dutyTeacherId || "";
-            const dutyAN = allDuties.find(d => d.date === date && d.roomId === room.id && d.session === 'AN')?.dutyTeacherId || "";
+            const processSession = (session) => {
+                const specificRules = allRules.filter(r => r.date === date && r.roomId === room.id && r.session === session);
+                const hasAllocation = specificRules.length > 0;
+                
+                let ruleInfoHtml = '';
+                if (hasAllocation) {
+                    const ranges = specificRules.map(r => r.regNoRangeText).join(', ');
+                    ruleInfoHtml = `<div class="mb-1 text-truncate text-muted" style="max-width:150px; font-size:0.7em;" title="${ranges}">${ranges}</div>`;
+                }
 
-            // Cells for FN (Active Checkbox + Select)
-            cellsHtml += `
-                <td class="text-center border-start border-3">
-                    <input class="form-check-input session-active-check" type="checkbox" 
-                           data-date="${date}" data-session="FN" ${rulesFN ? 'checked' : ''} 
-                           onchange="toggleSelect(this)">
-                </td>
-                <td>
-                    <select class="form-select form-select-sm teacher-select" 
-                            data-date="${date}" data-session="FN" 
-                            ${!rulesFN ? 'disabled' : ''} data-saved="${dutyFN}">
-                    </select>
-                </td>
-            `;
+                const dutyTeacherId = allDuties.find(d => d.date === date && d.roomId === room.id && d.session === session)?.dutyTeacherId || "";
+                const isActive = hasAllocation || !!dutyTeacherId;
+                const cellBgClass = hasAllocation ? 'bg-warning-subtle' : '';
 
-            // Cells for AN
-            cellsHtml += `
-                <td class="text-center">
-                    <input class="form-check-input session-active-check" type="checkbox" 
-                           data-date="${date}" data-session="AN" ${rulesAN ? 'checked' : ''} 
-                           onchange="toggleSelect(this)">
-                </td>
-                <td>
-                    <select class="form-select form-select-sm teacher-select" 
-                            data-date="${date}" data-session="AN" 
-                            ${!rulesAN ? 'disabled' : ''} data-saved="${dutyAN}">
-                    </select>
-                </td>
-            `;
+                return `
+                    <td class="text-center border-start border-3 ${cellBgClass}">
+                        <input class="form-check-input session-active-check" type="checkbox" 
+                               data-date="${date}" data-session="${session}" 
+                               ${isActive ? 'checked' : ''} 
+                               onchange="toggleSelect(this); updateLiveDropdownStates('${examId}')"> 
+                               </td>
+                    <td class="${cellBgClass} p-1">
+                        ${ruleInfoHtml}
+                        <select class="form-select form-select-sm teacher-select" 
+                                data-date="${date}" data-session="${session}" 
+                                ${!isActive ? 'disabled' : ''} 
+                                data-saved="${dutyTeacherId}">
+                        </select>
+                    </td>
+                `;
+            };
+
+            cellsHtml += processSession('FN');
+            cellsHtml += processSession('AN');
         });
 
         return `
             <tr data-room-id="${room.id}">
-                <td class="fw-bold bg-light" style="position: sticky; left: 0; z-index: 1;">
-                    ${room.name} <span class="text-muted small">(${room.capacity})</span>
-                </td>
+                <td class="fw-bold bg-light" style="position: sticky; left: 0; z-index: 1;">${room.name}</td>
                 ${cellsHtml}
             </tr>
         `;
     }).join('');
 
-    // Populate dropdowns for ALL cells
+    // 1. Initial Populate
     refreshTeacherDropdownsMulti(examId, dates, allRules);
-    displayDutyConsolidation(examId);
-}
+    
+    // 2. Add Live Listener for Dropdown Changes
+    document.getElementById('duty-grid-table').addEventListener('change', (e) => {
+        if (e.target.classList.contains('teacher-select')) {
+            updateLiveDropdownStates(examId);
+        }
+    });
+};
+
 /**
  * Automatically fills all empty, active duty slots in the grid.
  * It picks the first available teacher from the dropdown, prioritizing 
@@ -31157,8 +31260,6 @@ window.autoSuggestAllMulti = (examId) => {
 
 function refreshTeacherDropdownsMulti(examId, dates, preFetchedRules) {
     const useMotherTeacher = document.getElementById('mother-teacher-priority-toggle').checked;
-
-    // Pre-load availabilities for all dates
     const availabilities = {};
     dates.forEach(date => {
         availabilities[date] = JSON.parse(localStorage.getItem(`duty_avail_${examId}_${date}`)) || {};
@@ -31170,16 +31271,21 @@ function refreshTeacherDropdownsMulti(examId, dates, preFetchedRules) {
         const roomId = select.closest('tr').dataset.roomId;
         const currentValue = select.value || select.dataset.saved;
 
-        // 1. Get Available Teachers for this specific Date/Session
+        // Filter Available
         const availableTeachers = teachers.filter(t => {
+            const isExcluded = t.role === 'admin' || (t.roles && t.roles.includes('exam_controller'));
+        if (isExcluded) return false;
+
+        // 2. Include only if they have teaching responsibilities
+        // (This filters out non-teaching staff like Accountants/Drivers)
+        const isClassTeacher = t.classCharge && t.classCharge.classId;
+        const hasSubjectAllocations = classroomSubjects.some(alloc => alloc.teacherId === t.id);
             const userAvail = availabilities[date][t.id];
-            return !userAvail || userAvail[session] !== false; 
+            return hasSubjectAllocations&&( !userAvail || userAvail[session] !== false); 
         });
 
-        // 2. Logic: Find Mother Teachers
+        // Smart Sort: Mother Teachers
         let priorityMatches = [];
-        let label = "Available Teachers";
-        
         const roomRules = preFetchedRules.filter(r => r.date === date && r.roomId === roomId && r.session === session);
         
         if (roomRules.length > 0 && useMotherTeacher) {
@@ -31187,32 +31293,144 @@ function refreshTeacherDropdownsMulti(examId, dates, preFetchedRules) {
             const classTeachers = availableTeachers.filter(t => 
                 t.classCharge && classIdsInRoom.has(t.classCharge.classId)
             );
-            if (classTeachers.length > 0) {
-                priorityMatches = classTeachers;
-                label = "Suggested (Class Teachers)";
-            }
+            priorityMatches = classTeachers;
         }
 
-        // 3. Build Options
         const priorityIds = new Set(priorityMatches.map(t => t.id));
         const generalTeachers = availableTeachers.filter(t => !priorityIds.has(t.id));
 
         let html = `<option value="">-- Select --</option>`;
-        
         if (priorityMatches.length > 0) {
-            html += `<optgroup label="${label}">
-                        ${priorityMatches.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
-                     </optgroup>`;
+            html += `<optgroup label="Suggested">${priorityMatches.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}</optgroup>`;
         }
-        
-        html += `<optgroup label="Other Available">
-                    ${generalTeachers.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
-                 </optgroup>`;
+        html += `<optgroup label="Others">${generalTeachers.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}</optgroup>`;
 
         select.innerHTML = html;
         select.value = currentValue; 
     });
+
+    // 3. Trigger initial state update (Colors/Disabling)
+    updateLiveDropdownStates(examId);
 }
+
+function updateLiveDropdownStates(examId) {
+    const allSelects = Array.from(document.querySelectorAll('.teacher-select'));
+    const footer = document.getElementById('duty-available-footer');
+    
+    // 1. Snapshot current assignments from UI
+    const assignedMap = {};
+    
+    allSelects.forEach(select => {
+        if (select.value) {
+            const key = `${select.dataset.date}_${select.dataset.session}`;
+            const teacherId = select.value;
+            const roomName = select.closest('tr').querySelector('td:first-child').innerText.trim();
+            
+            if (!assignedMap[key]) assignedMap[key] = {};
+            assignedMap[key][teacherId] = roomName;
+        }
+    });
+
+    // 2. Define Base Pool of Teachers
+    // (This matches the list shown in the Availability Manager)
+    const validDutyTeachers = teachers.filter(t => {
+        // A. Basic Role Exclusion
+        const isExcluded = t.role === 'admin' || (t.roles && t.roles.includes('exam_controller'));
+        if (isExcluded) return false;
+
+        // B. Check for Active Allocations
+        //const isClassTeacher = t.classCharge && t.classCharge.classId;
+        const hasSubjectAllocations = classroomSubjects.some(alloc => alloc.teacherId === t.id);
+
+        // Include only if they have at least one teaching responsibility
+        return  hasSubjectAllocations;
+    });
+    
+
+    // 3. Update Dropdowns (Visuals)
+    allSelects.forEach(select => {
+        const date = select.dataset.date;
+        const session = select.dataset.session;
+        const currentVal = select.value;
+        const assignmentsThisSlot = assignedMap[`${date}_${session}`] || {};
+
+        Array.from(select.options).forEach(option => {
+            if (!option.value) return; 
+
+            const teacherId = option.value;
+            const assignedRoom = assignmentsThisSlot[teacherId];
+
+            // Disable if assigned elsewhere in SAME session
+            if (assignedRoom && teacherId !== currentVal) {
+                option.disabled = true;
+                option.text = `🚫 ${teachers.find(t=>t.id===teacherId)?.name} (in ${assignedRoom})`;
+            } else {
+                option.disabled = false;
+                const originalName = teachers.find(t=>t.id===teacherId)?.name;
+                option.text = originalName;
+            }
+
+            // Red Color if Busy in Other Session
+            const otherSession = session === 'FN' ? 'AN' : 'FN';
+            const otherKey = `${date}_${otherSession}`;
+            const busyInOther = assignedMap[otherKey]?.[teacherId];
+
+            if (busyInOther) {
+                option.style.color = "red";
+                option.style.fontWeight = "bold";
+                option.text += " ⚠️ (Busy in " + otherSession + ")";
+            } else {
+                option.style.color = "";
+                option.style.fontWeight = "";
+            }
+        });
+    });
+
+    // 4. Update Footer (Available Teachers List)
+    let footerHtml = `<h6 class="mb-2">Available Teachers (Unassigned & Checked Active)</h6><div class="row g-2">`;
+    
+    const dates = [...new Set(allSelects.map(s => s.dataset.date))].sort();
+
+    dates.forEach(date => {
+        const dateLabel = new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+        
+        // Get availability setting from LocalStorage for this specific date
+        const savedAvail = JSON.parse(localStorage.getItem(`duty_avail_${examId}_${date}`)) || {};
+
+        ['FN', 'AN'].forEach(session => {
+            const key = `${date}_${session}`;
+            const assignedIds = new Set(Object.keys(assignedMap[key] || {}));
+            
+            // FILTER LOGIC:
+            const availableNames = validDutyTeachers
+                .filter(t => {
+                    // Rule 1: Must NOT be currently assigned
+                    if (assignedIds.has(t.id)) return false;
+
+                    // Rule 2: Must be checked as "Available" in the Manager
+                    // If no record exists, default to true. If record exists, must be !== false.
+                    const isCheckedInManager = !savedAvail[t.id] || savedAvail[t.id][session] !== false;
+                    
+                    return isCheckedInManager;
+                })
+                .map(t => t.name)
+                .sort()
+                .join(', ');
+
+            footerHtml += `
+                <div class="col-md-6">
+                    <div class="border rounded p-2 bg-white h-100 shadow-sm">
+                        <strong>${dateLabel} ${session}:</strong><br>
+                        <span class="text-success small">${availableNames || '<span class="text-muted">- None -</span>'}</span>
+                    </div>
+                </div>
+            `;
+        });
+    });
+    footerHtml += `</div>`;
+    footer.innerHTML = footerHtml;
+}
+
 window.saveDutyRosterMulti = async function(examId) {
     if (!confirm('Save all assignments visible in the grid? This will overwrite previous duties for these dates.')) return;
 
@@ -34169,13 +34387,13 @@ function renderExamControlRegNoAssignmentTab() {
         const examId = examSelect.value;
         const classId = classSelect.value;
         generateBtn.disabled = !(examId && classId);
-        if (examRegistrationSettings && examRegistrationSettings[`${classId}_M`]) {
-            maleStartInput.value = examRegistrationSettings[`${classId}_M`];
+        if (examRegistrationSettings && examRegistrationSettings[`${examId}_${classId}_M`]) {
+            maleStartInput.value = examRegistrationSettings[`${examId}_${classId}_M`];
         } else {
             maleStartInput.value = '101';
         }
-        if (examRegistrationSettings && examRegistrationSettings[`${classId}_F`]) {
-            femaleStartInput.value = examRegistrationSettings[`${classId}_F`];
+        if (examRegistrationSettings && examRegistrationSettings[`${examId}_${classId}_F`]) {
+            femaleStartInput.value = examRegistrationSettings[`${examId}_${classId}_F`];
         } else {
             femaleStartInput.value = '101';
         }
@@ -34319,8 +34537,8 @@ function displayRegNoStatus(examId, classId) {
             // --- NEW: Reset starting sequence in examRegistrationSettings ---
             const settingsRef = getDocRef('examRegistrationSettings', 'main');
             batch.update(settingsRef, {
-                [`${classId}_M`]: 101, // Reset male starting sequence to 101
-                [`${classId}_F`]: 101  // Reset female starting sequence to 101
+                [`${examId}_${classId}_M`]: 101, // Reset male starting sequence to 101
+                [`${examId}_${classId}_F`]: 101  // Reset female starting sequence to 101
             });
 
             try {
@@ -34480,7 +34698,7 @@ function displayRegNoStatus2(examId, classId, division) {
  * @param {string} division
  */
 async function generateAndSaveExamRegNumbers(examId, classId, division) {
-    const studentsInClass = students.filter(s => s.classId === classId &&(s.division === "A"||s.division === "B"||s.division === "C"));
+    const studentsInClass = students.filter(s => s.classId === classId ); //&&(s.division === "D"||s.division === "E"||s.division === "F")
     if (studentsInClass.length === 0) {
         showAlert('No students found to generate numbers for.', 'info');
         return;
@@ -34489,9 +34707,10 @@ async function generateAndSaveExamRegNumbers(examId, classId, division) {
     // Get current registration settings for the class
     const regSettingsId = `CLASS_${classId}`;
     let currentSettings = examRegistrationSettings || {}; // Ensure it's initialized
-
-    let nextMaleSeq = currentSettings[`${classId}_M`] || 101; // Start from 101 by default
-    let nextFemaleSeq =currentSettings[`${classId}_F`] || 101;
+    const maleStartInput = document.getElementById('reg-male-start');
+    const femaleStartInput = document.getElementById('reg-female-start');
+    let nextMaleSeq = maleStartInput.value||currentSettings[`${examId}_${classId}_M`] || 101; // Start from 101 by default
+    let nextFemaleSeq = femaleStartInput.value || currentSettings[`${examId}_${classId}_F`] || 101;
 
     const maleStudents = studentsInClass.filter(s =>  s.gender === 'M' && s.status==="Active").sort((a, b) => a.name.localeCompare(b.name));
     const femaleStudents = studentsInClass.filter(s =>  s.gender === 'F' && s.status==="Active").sort((a, b) => a.name.localeCompare(b.name));
@@ -34502,7 +34721,7 @@ async function generateAndSaveExamRegNumbers(examId, classId, division) {
 
     maleStudents.forEach(student => {
         if (!student.examRegNumbers?.[examId]|| student.examRegNumbers?.[examId]) { // Only assign if not already assigned for this exam
-            const regNo = `M${classNameAbbr}_${nextMaleSeq.toString().padStart(3, '0')}`;
+            const regNo = `M_${nextMaleSeq.toString().padStart(3, '0')}`;
             const studentRef = getDocRef('students', student.id);
             let updatedRegNumbers = { ...student.examRegNumbers, [examId]: regNo };
             batch.update(studentRef, { examRegNumbers: updatedRegNumbers });
@@ -34513,7 +34732,7 @@ async function generateAndSaveExamRegNumbers(examId, classId, division) {
 
     femaleStudents.forEach(student => {
         if (!student.examRegNumbers?.[examId]|| student.examRegNumbers?.[examId]) { // Only assign if not already assigned for this exam
-            const regNo = `F${classNameAbbr}_${nextFemaleSeq.toString().padStart(3, '0')}`;
+            const regNo = `F_${nextFemaleSeq.toString().padStart(3, '0')}`;
             const studentRef = getDocRef('students', student.id);
             let updatedRegNumbers = { ...student.examRegNumbers, [examId]: regNo };
             batch.update(studentRef, { examRegNumbers: updatedRegNumbers });
@@ -34525,8 +34744,8 @@ async function generateAndSaveExamRegNumbers(examId, classId, division) {
     // Update the next sequence numbers in examRegistrationSettings
     const settingsRef = getDocRef('examRegistrationSettings', 'main'); // Assuming 'main' is the single settings doc
     batch.set(settingsRef, {
-        [`${classId}_M`]: nextMaleSeq,
-        [`${classId}_F`]: nextFemaleSeq
+        [`${examId}_${classId}_M`]: nextMaleSeq,
+        [`${examId}_${classId}_F`]: nextFemaleSeq
     }, { merge: true });
 
     if (updatedCount > 0) {
@@ -34696,23 +34915,19 @@ function attachMatrixListeners() {
 /**
  * Renders a simple table of existing database rules for the selected sessions.
  */
+// Global variable to track sort state
+let currentSortConfig = { column: 'date', direction: 'asc' };
+
 function renderExistingRulesTable(examId, sessionKeys) {
     const container = document.getElementById('existing-rules-container');
     const wrapper = document.getElementById('existing-rules-table-wrapper');
     
     if (!container || !wrapper) return;
 
-    // 1. Filter flattened rules
-    // (activeListeners flattens the Map, so we receive an array of objects here)
-    const rules = examRoomAllocationRules.filter(r => {
+    // 1. Filter Rules
+    let rules = examRoomAllocationRules.filter(r => {
         const key = `${r.date}_${r.session}`;
         return r.examId === examId && sessionKeys.includes(key);
-    }).sort((a, b) => {
-        if (a.date !== b.date) return a.date.localeCompare(b.date);
-        if (a.session !== b.session) return a.session.localeCompare(b.session);
-        const roomA = examRooms.find(room => room.id === a.roomId)?.name || '';
-        const roomB = examRooms.find(room => room.id === b.roomId)?.name || '';
-        return roomA.localeCompare(roomB);
     });
 
     if (rules.length === 0) {
@@ -34721,23 +34936,70 @@ function renderExistingRulesTable(examId, sessionKeys) {
         return;
     }
 
-    // 2. Build Table
+    // 2. Sorting Logic
+    const sortRules = (col, dir) => {
+        rules.sort((a, b) => {
+            let valA, valB;
+
+            switch (col) {
+                case 'date':
+                    // Composite sort: Date -> Session
+                    if (a.date !== b.date) return a.date.localeCompare(b.date);
+                    return a.session.localeCompare(b.session);
+                case 'room':
+                    const roomA = examRooms.find(r => r.id === a.roomId)?.name || '';
+                    const roomB = examRooms.find(r => r.id === b.roomId)?.name || '';
+                    // Numeric sort for room names if possible (e.g. "101" vs "102")
+                    return roomA.localeCompare(roomB, undefined, { numeric: true });
+                case 'class':
+                    const classA = classes.find(c => c.id === a.classId)?.name || '';
+                    const classB = classes.find(c => c.id === b.classId)?.name || '';
+                    return classA.localeCompare(classB);
+                case 'updated':
+                    // Handle Firestore Timestamp or Date string
+                    const timeA = a.allocatedAt?.seconds ? a.allocatedAt.seconds * 1000 : new Date(a.allocatedAt || 0).getTime();
+                    const timeB = b.allocatedAt?.seconds ? b.allocatedAt.seconds * 1000 : new Date(b.allocatedAt || 0).getTime();
+                    return timeA - timeB;
+                default:
+                    return 0;
+            }
+        });
+
+        if (dir === 'desc') rules.reverse();
+    };
+
+    // Apply current sort
+    sortRules(currentSortConfig.column, currentSortConfig.direction);
+
+    // Helper to generate Sort Header HTML
+    const getSortHeader = (label, colKey) => {
+        let icon = '<i class="fas fa-sort text-muted small ms-1"></i>';
+        if (currentSortConfig.column === colKey) {
+            icon = currentSortConfig.direction === 'asc' 
+                ? '<i class="fas fa-sort-up ms-1"></i>' 
+                : '<i class="fas fa-sort-down ms-1"></i>';
+        }
+        return `<th style="cursor: pointer;" onclick="toggleSort('${colKey}', '${examId}', ['${sessionKeys.join("','")}'])">${label} ${icon}</th>`;
+    };
+
+    // 3. Build Table
     let html = `
         <div class="d-flex justify-content-between align-items-center mb-2">
-            <span class="text-muted small">${rules.length} rules found</span>
+            <span class="text-muted small">${rules.length} rules found. <span class="text-primary">Click row for details.</span></span>
             <button id="delete-selected-saved-rules-btn" class="btn btn-sm btn-danger" disabled>
                 <i class="fas fa-trash-alt me-1"></i> Delete Selected
             </button>
         </div>
-        <div class="table-responsive">
-            <table class="table table-sm table-hover table-striped align-middle" style="font-size: 0.85rem;">
-                <thead class="table-dark">
+        <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+            <table class="table table-sm table-hover table-striped align-middle mb-0" style="font-size: 0.85rem;">
+                <thead class="table-dark sticky-top">
                     <tr>
                         <th style="width: 30px;"><input class="form-check-input" type="checkbox" id="select-all-saved-rules"></th>
-                        <th>Date (Session)</th>
-                        <th>Room</th>
-                        <th>Class Batch</th>
-                        <th>Reg No. Range</th>
+                        ${getSortHeader('Date (Session)', 'date')}
+                        ${getSortHeader('Room', 'room')}
+                        ${getSortHeader('Batch', 'class')}
+                        <th>Range</th>
+                        ${getSortHeader('Updated', 'updated')}
                         <th class="text-end">Action</th>
                     </tr>
                 </thead>
@@ -34748,14 +35010,20 @@ function renderExistingRulesTable(examId, sessionKeys) {
         const roomName = examRooms.find(r => r.id === rule.roomId)?.name || rule.roomId;
         const classObj = classes.find(c => c.id === rule.classId);
         const className = classObj ? classObj.name : rule.classId;
-        const genderLabel = rule.gender === 'M' ? '(M)' : (rule.gender === 'F' ? '(F)' : '');
-        const dateDisplay = `${new Date(rule.date).toLocaleDateString('en-GB')} (${rule.session})`;
+        const genderLabel = rule.gender === 'M' ? '<span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill" style="font-size:0.7em">M</span>' : '<span class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill" style="font-size:0.7em">F</span>';
+        
+        const dateDisplay = `${new Date(rule.date).toLocaleDateString('en-GB')} <span class="text-muted small">(${rule.session})</span>`;
+        
+        // Format Timestamp
+        let updatedTime = '-';
+        if (rule.allocatedAt) {
+            const dateObj = rule.allocatedAt.seconds ? new Date(rule.allocatedAt.seconds * 1000) : new Date(rule.allocatedAt);
+            updatedTime = dateObj.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+        }
 
-        // rule.id IS the Map Key (e.g. RULE_Exam_Date_...)
-        // rule._sessionId IS the Document ID (e.g. ALLOC_Exam_Date...)
         return `
-            <tr>
-                <td>
+            <tr onclick="viewAllocationRuleDetails('${rule.id}', event)" style="cursor: pointer;" title="Click to view students">
+                <td onclick="event.stopPropagation()">
                     <input class="form-check-input saved-rule-checkbox" type="checkbox" 
                            value="${rule.id}" 
                            data-session-id="${rule._sessionId}">
@@ -34763,8 +35031,9 @@ function renderExistingRulesTable(examId, sessionKeys) {
                 <td>${dateDisplay}</td>
                 <td class="fw-bold text-primary">${roomName}</td>
                 <td>${className} ${genderLabel}</td>
-                <td class="font-monospace">${rule.regNoRangeText}</td>
-                <td class="text-end">
+                <td class="font-monospace small">${rule.regNoRangeText}</td>
+                <td class="small text-muted">${updatedTime}</td>
+                <td class="text-end" onclick="event.stopPropagation()">
                     <button class="btn btn-xs btn-outline-danger" onclick="deleteSingleSavedRule('${rule.id}', '${rule._sessionId}')" title="Delete Rule">
                         <i class="fas fa-times"></i>
                     </button>
@@ -34779,6 +35048,20 @@ function renderExistingRulesTable(examId, sessionKeys) {
     
     attachSavedRulesListeners(); 
 }
+
+// 4. Global Sort Handler
+window.toggleSort = (colKey, examId, sessionKeys) => {
+    if (currentSortConfig.column === colKey) {
+        // Toggle direction
+        currentSortConfig.direction = currentSortConfig.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+        // New column, default asc
+        currentSortConfig.column = colKey;
+        currentSortConfig.direction = 'asc';
+    }
+    // Re-render
+    renderExistingRulesTable(examId, sessionKeys);
+};
 
 function attachSavedRulesListeners() {
     const selectAll = document.getElementById('select-all-saved-rules');
@@ -36709,10 +36992,12 @@ async function renderExamReportsToppersTab() { // Renamed from renderExamControl
                 alert("No template draft found in browser storage to save.");
                 return;
             }
+            postersettingsJSON.lastUpdated = serverTimestamp(); 
+
 
             try {
                 const examDocRef = getDocRef('exams', currentEditingExamId);
-                await setDoc(examDocRef, { posterSettings: JSON.parse(posterSettingsJSON) }, { merge: true });
+                await setDoc(examDocRef, { posterSettings: JSON.parse(posterSettingsJSON ) }, { merge: true });
                 alert(`Template for exam '${currentEditingExamId}' was saved to the database!`);
             } catch (error) {
                 console.error("Error saving template to Firestore: ", error);
