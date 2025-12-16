@@ -37635,13 +37635,17 @@ async function saveMatrixAllocations() {
 
     if (dirtyRows.length === 0) return showAlert('No changes detected. Edit a cell first.', 'info');
 
-    // 2. Identify which classes are being edited (for Safe Cleanup)
-    // We expect group ID format: "CLASSID$GENDER" or just "CLASSID" depending on your setup
-    const managedClassIds = new Set();
+    // 2. IDENTIFY GROUPS (FIX: Track Class ID + Gender specific pairs)
+    // We use a unique signature "CLASSID|GENDER" to ensure we only delete exactly what we are editing.
+    const managedGroups = new Set();
+    
     dirtyRows.forEach(row => {
         const rawId = row.dataset.groupId; 
-        const classId = rawId.includes('$') ? rawId.split('$')[0] : rawId.split('_')[0]; 
-        managedClassIds.add(classId);
+        const parts = rawId.includes('$') ? rawId.split('$') : rawId.split('_');
+        const classId = parts[0];
+        const gender = parts[1] || 'ALL'; // Default to ALL if no gender suffix
+        
+        managedGroups.add(`${classId}|${gender}`);
     });
 
     const saveBtn = document.getElementById('save-matrix-allocation-btn');
@@ -37653,17 +37657,14 @@ async function saveMatrixAllocations() {
     let hasUpdates = false;
 
     try {
-        // 3. Loop through every selected session
         for (const sessionKey of selectedSessionKeys) {
             const [date, session] = sessionKey.split('_');
             const docId = `ALLOC_${examId}_${date}_${session}`;
             const docRef = doc(db, `artifacts/${appId}/public/data/examRoomAllocationRules`, docId);
 
-            // Fetch current data (Required for the Cleanup Phase)
             const docSnap = await getDoc(docRef);
             const existingData = docSnap.exists() ? docSnap.data() : {};
 
-            // Initialize Updates Object with Metadata
             const updates = {
                 id: docId,
                 examId: examId,
@@ -37673,67 +37674,64 @@ async function saveMatrixAllocations() {
             };
 
             // ============================================================
-            // PHASE 1: THE CLEANUP (Delete old rules for edited classes)
+            // PHASE 1: PRECISE CLEANUP (The Fix)
             // ============================================================
             if (existingData) {
                 Object.keys(existingData).forEach(key => {
-                    // Check if this key is a Rule Object (starts with RULE_)
                     if (key.startsWith('RULE_')) {
                         const rule = existingData[key];
-                        // CRITICAL: Only delete if this rule belongs to a class we are currently editing
-                        if (rule && rule.classId && managedClassIds.has(rule.classId)) {
-                            updates[key] = deleteField();
+                        if (rule && rule.classId) {
+                            // Construct the signature of the rule in DB
+                            const ruleGender = rule.gender || 'ALL';
+                            const signature = `${rule.classId}|${ruleGender}`;
+
+                            // CRITICAL: Only delete if this specific Class+Gender combo is in our edit list
+                            if (managedGroups.has(signature)) {
+                                updates[key] = deleteField();
+                            }
                         }
                     }
                 });
             }
 
             // ============================================================
-            // PHASE 2: THE ASSIGNMENT (Calculate Ranges)
+            // PHASE 2: THE ASSIGNMENT
             // ============================================================
-            
-            // We iterate through dirty rows to recalculate their ranges
             for (const row of dirtyRows) {
                 const groupId = row.dataset.groupId;
-                // Robust split: handle both '$' (from your snippet) or '_' (common convention)
                 const parts = groupId.includes('$') ? groupId.split('$') : groupId.split('_');
                 const classId = parts[0];
-                const gender = parts[1] || 'ALL'; // Fallback if no gender specified
+                const gender = parts[1] || 'ALL';
 
-                // A. Get Students & Sort (Crucial for ranges)
-                // Ensure 'students' global array is available
+                // Get Students & Sort
                 const studentsInGroup = students.filter(s => 
                     s.classId === classId && 
                     (s.gender === gender || gender === 'ALL') &&
-                    s.examRegNumbers?.[examId] && // Must have reg number for this exam
-                    s.status !== 'TC Issued'
+                    s.examRegNumbers?.[examId] && 
+                    s.status === 'Active'
                 ).sort((a, b) => {
                     const regA = a.examRegNumbers[examId];
                     const regB = b.examRegNumbers[examId];
-                    // Natural sort for numbers (e.g., 10, 11, 100)
                     return regA.localeCompare(regB, undefined, { numeric: true });
                 });
 
                 let currentIndex = 0;
                 const inputs = row.querySelectorAll('.alloc-input');
 
-                // B. Iterate Inputs (Rooms) in this Row
                 inputs.forEach(input => {
                     const count = parseInt(input.value) || 0;
                     const roomId = input.dataset.roomId;
 
                     if (count > 0) {
-                        // Logic: Slice the sorted array to get the next batch of students
                         const allocatedSlice = studentsInGroup.slice(currentIndex, currentIndex + count);
                         
                         if (allocatedSlice.length > 0) {
                             const startReg = allocatedSlice[0].examRegNumbers[examId];
                             const endReg = allocatedSlice[allocatedSlice.length - 1].examRegNumbers[examId];
-
-                            // Unique Rule Key
+                            
+                            // Ensure key is unique per Gender too
                             const ruleKey = `RULE_${examId}_${date}_${session}_${roomId}_${classId}_${gender}`;
 
-                            // Create the Rule Object
                             updates[ruleKey] = {
                                 id: ruleKey,
                                 examId: examId,
@@ -37743,30 +37741,24 @@ async function saveMatrixAllocations() {
                                 classId: classId,
                                 gender: gender,
                                 count: count,
-                                // The Magic: Saving the specific range
                                 regNoRangeText: `${startReg} - ${endReg}`, 
                                 allocatedBy: typeof selectedUser !== 'undefined' ? selectedUser.id : 'admin',
                                 allocatedAt: new Date().toISOString()
                             };
 
-                            // Move index forward for the next room
                             currentIndex += count;
                         }
                     }
                 });
             }
 
-            // Add to batch
             batch.set(docRef, updates, { merge: true });
             hasUpdates = true;
         }
 
-        // 4. Commit Changes
         if (hasUpdates) {
             await batch.commit();
-            showAlert(`Saved allocations with Reg No ranges for ${dirtyRows.length} classes.`, 'success');
-
-            // Cleanup
+            showAlert(`Saved allocations for ${dirtyRows.length} rows successfully.`, 'success');
             dirtyRows.forEach(row => delete row.dataset.dirty);
             if (typeof calculateMatrixTotals === 'function') calculateMatrixTotals();
         } else {
