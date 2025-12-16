@@ -1420,7 +1420,8 @@ function waitForCollectionLoad(collectionName) {
 { id: 'master-control', icon: 'fa-cogs', text: 'Master Control' },
 { id: 'data-migration', icon: 'fa-database', text: 'Data Migration Tool' }, // <-- ADD THIS LINE
   { id: 'settings', icon: 'fa-cog', text: 'Settings' },
-  {id: 'notification-mgt', icon: 'fa-bullhorn', text: 'Notification Manager'}
+  {id: 'notification-mgt', icon: 'fa-bullhorn', text: 'Notification Manager'},
+  { id: 'bulk-manager', icon: 'fa-database', text: 'Bulk Manager' },
 
  
 ];
@@ -2153,7 +2154,7 @@ async function attachDataListeners(collectionsToWatch) {
             console.log(`[Offline] Skipping network sync for ${name}. Using cached data.`);
             dataLoadStatus[name] = true;
             resolvePromiseFor(name);
-            continue; // Stop here if offline
+            continue; // Stop here if offlin
         }
 
         // ============================================================
@@ -4485,45 +4486,58 @@ window.renderTeacherManagement = () => {
                     </div>
                     <div class="card-body">
                         <form id="teacher-form">
-                            <div class="mb-3">
-                                <label class="form-label">Teacher ID</label>
-                                <input type="text" id="teacher-id" class="form-control" ${isEditMode ? 'readonly' : ''}>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Full Name</label>
-                                <input type="text" id="teacher-name" class="form-control" required>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Mobile</label>
-                                <input type="tel" id="teacher-mobile" class="form-control" required>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Roles</label>
-                                <input type="text" id="teacher-roles" class="form-control" placeholder="e.g., librarian, hod, admin">
-                                <small class="form-text text-muted">Separate multiple roles with a comma.</small>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Email</label>
-                                <input type="email" id="teacher-email" class="form-control" style="text-transform: lowercase;">
-                            </div>
-                            <div class="row mb-3">
-                                <div class="col">
-                                    <label class="form-label">Class Charge</label>
-                                    <select id="teacher-class-charge" class="form-select">
-                                        <option value="">NONE</option>
-                                        ${classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
-                                    </select>
-                                </div>
-                                <div class="col">
-                                    <label class="form-label">Division</label>
-                                    <select id="teacher-division-charge" class="form-select" disabled></select>
-                                </div>
-                            </div>
-                            <div class="d-flex justify-content-end gap-2">
-                                <button type="button" id="cancel-edit-btn" class="btn btn-secondary ${!isEditMode ? 'd-none' : ''}">Cancel</button>
-                                <button type="submit" class="btn btn-primary">${isEditMode ? "Update" : "Add"}</button>
-                            </div>
-                        </form>
+    <div class="mb-3">
+        <label class="form-label">Teacher ID</label>
+        <input type="text" id="teacher-id" class="form-control" ${isEditMode ? 'readonly' : ''}>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Full Name</label>
+        <input type="text" id="teacher-name" class="form-control" required>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <label class="form-label">Gender</label>
+            <select id="teacher-gender" class="form-select" required>
+                <option value="">Select Gender</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+            </select>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label">Mobile</label>
+            <input type="tel" id="teacher-mobile" class="form-control" required>
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Roles</label>
+        <input type="text" id="teacher-roles" class="form-control" placeholder="e.g., librarian, hod, admin">
+        <small class="form-text text-muted">Separate multiple roles with a comma.</small>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Email</label>
+        <input type="email" id="teacher-email" class="form-control" style="text-transform: lowercase;">
+    </div>
+    <div class="row mb-3">
+        <div class="col">
+            <label class="form-label">Class Charge</label>
+            <select id="teacher-class-charge" class="form-select">
+                <option value="">NONE</option>
+                ${classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+            </select>
+        </div>
+        <div class="col">
+            <label class="form-label">Division</label>
+            <select id="teacher-division-charge" class="form-select" disabled></select>
+        </div>
+    </div>
+    <div class="d-flex justify-content-end gap-2">
+        <button type="button" id="cancel-edit-btn" class="btn btn-secondary ${!isEditMode ? 'd-none' : ''}">Cancel</button>
+        <button type="submit" class="btn btn-primary">${isEditMode ? "Update" : "Add"}</button>
+    </div>
+</form>
                     </div>
                 </div>
             </div>
@@ -4597,8 +4611,11 @@ function renderInactiveTeachersList() {
 function attachTeacherFormListeners() {
     const isEditMode = teacherToEdit !== null;
     const form = document.getElementById('teacher-form');
+    
+    // Selectors
     const idInput = document.getElementById('teacher-id');
     const nameInput = document.getElementById('teacher-name');
+    const genderInput = document.getElementById('teacher-gender'); // [NEW]
     const mobileInput = document.getElementById('teacher-mobile');
     const emailInput = document.getElementById('teacher-email');
     const rolesInput = document.getElementById('teacher-roles');
@@ -4617,19 +4634,24 @@ function attachTeacherFormListeners() {
     };
 
     if (isEditMode) {
+        // Populate existing data
         idInput.value = teacherToEdit.id;
         nameInput.value = teacherToEdit.name;
+        genderInput.value = teacherToEdit.gender || ''; // [NEW] Populate Gender
         mobileInput.value = teacherToEdit.mobile;
         emailInput.value = teacherToEdit.email;
+        
         if (teacherToEdit.roles && Array.isArray(teacherToEdit.roles)) {
             rolesInput.value = teacherToEdit.roles.join(', ');
         }
+        
         if (teacherToEdit.classCharge?.classId) {
             classDropdown.value = teacherToEdit.classCharge.classId;
             updateDivisionDropdown(teacherToEdit.classCharge.classId);
             divisionDropdown.value = teacherToEdit.classCharge.division;
         }
     } else {
+        // Generate new ID
         const latestIdNum = teachers.reduce((max, t) => {
             const num = parseInt((t.id || "").split('-')[1] || 0);
             return num > max ? num : max;
@@ -4644,16 +4666,17 @@ function attachTeacherFormListeners() {
         e.preventDefault();
         
         const rolesArray = rolesInput.value.split(',').map(role => role.trim().toLowerCase()).filter(Boolean);
+        
         const teacherData = {
             id: idInput.value,
             name: nameInput.value,
+            gender: genderInput.value, // [NEW] Save Gender
             mobile: mobileInput.value,
             email: emailInput.value.toLowerCase(),
             roles: rolesArray,
             classCharge: classDropdown.value ? { classId: classDropdown.value, division: divisionDropdown.value } : null,
             status: teacherToEdit?.status || 'Active',
-            lastUpdated: serverTimestamp() // <-- ADD THIS LINE
-
+            lastUpdated: serverTimestamp() 
         };
 
         if (!isEditMode) {
@@ -31477,7 +31500,280 @@ function displayDutyAssignmentGrid(examId, dates) {
     displayDutyConsolidation(examId);
 }
 
+function generateFreeTeachersReport(examId) {
+    if (!examId) return showAlert('Please select an exam first.', 'danger');
 
+    const exam = exams.find(e => e.id === examId);
+    if (!exam) return;
+
+    // 1. Get Dates
+    const involvedDates = new Set();
+    examDuties.filter(d => d.examId === examId).forEach(d => involvedDates.add(d.date));
+    examRoomAllocationRules.filter(r => r.examId === examId).forEach(r => involvedDates.add(r.date));
+    const sortedDates = Array.from(involvedDates).sort();
+
+    if (sortedDates.length === 0) return showAlert('No dates found.', 'info');
+
+    // 2. Calculate Total Duties per Teacher (For Load Balancing)
+    const dutyCounts = {};
+    teachers.forEach(t => dutyCounts[t.id] = 0); // Init 0
+    
+    examDuties.filter(d => d.examId === examId).forEach(d => {
+        if (dutyCounts[d.dutyTeacherId] !== undefined) {
+            dutyCounts[d.dutyTeacherId]++;
+        }
+    });
+
+    // 3. Get Eligible Staff
+    const allTeachers = teachers.filter(t => 
+        t.role !== 'admin' && !(t.roles && t.roles.includes('exam_controller'))
+    );
+
+    // 4. Generate Rows
+    let rowsHtml = sortedDates.map(date => {
+        const dateLabel = new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', weekday: 'short' });
+
+        // Load Availability for this Date (from LocalStorage or Memory)
+        // Structure: { teacherId: { FN: true/false, AN: true/false } }
+        const availKey = `duty_avail_${examId}_${date}`;
+        const savedAvail = JSON.parse(localStorage.getItem(availKey)) || {};
+
+        // Helper to get Free Staff for a Session
+        const getFreeStaff = (session) => {
+            // A. Find who is BUSY (Already assigned)
+            const busyIds = new Set(
+                examDuties.filter(d => d.examId === examId && d.date === date && d.session === session)
+                          .map(d => d.dutyTeacherId)
+            );
+
+            // B. Filter List
+            return allTeachers.filter(t => {
+                // Exclude if Busy
+                if (busyIds.has(t.id)) return false;
+
+                // Exclude if Marked Unavailable (Leave/etc)
+                // If savedAvail[t.id] exists, check the specific session. 
+                // If it is strictly === false, they are unavailable.
+                if (savedAvail[t.id] && savedAvail[t.id][session] === false) return false;
+
+                return true;
+            }).sort((a, b) => {
+                // C. Sort by Total Duty Count (Low to High)
+                // This puts teachers with FEWER duties at the top!
+                const countA = dutyCounts[a.id] || 0;
+                const countB = dutyCounts[b.id] || 0;
+                return countA - countB || a.name.localeCompare(b.name);
+            });
+        };
+
+        const freeFN = getFreeStaff('FN');
+        const freeAN = getFreeStaff('AN');
+
+        // Format Helper
+        const formatList = (list) => {
+            if (list.length === 0) return '<span class="text-muted small">- None -</span>';
+            
+            return list.map(t => {
+                const count = dutyCounts[t.id] || 0;
+                // Color code the count: Green (Low), Yellow (Med), Red (High)
+                let badgeClass = "bg-success-subtle text-success-emphasis"; 
+                if (count > 3) badgeClass = "bg-warning-subtle text-warning-emphasis";
+                if (count > 6) badgeClass = "bg-danger-subtle text-danger-emphasis";
+
+                return `
+                    <div class="d-inline-block border rounded px-2 py-1 m-1 bg-white shadow-sm" style="font-size: 0.8rem;">
+                        ${t.name} <span class="badge ${badgeClass} border ms-1 rounded-pill">${count}</span>
+                    </div>
+                `;
+            }).join('');
+        };
+
+        return `
+            <tr>
+                <td class="fw-bold text-center align-middle bg-light">${dateLabel}</td>
+                
+                <td class="align-middle bg-light-subtle">
+                    <div class="d-flex justify-content-between border-bottom pb-1 mb-2">
+                        <strong class="text-primary">Forenoon</strong>
+                        <span class="badge bg-secondary">${freeFN.length} Ready</span>
+                    </div>
+                    <div>${formatList(freeFN)}</div>
+                </td>
+
+                <td class="align-middle">
+                    <div class="d-flex justify-content-between border-bottom pb-1 mb-2">
+                        <strong class="text-danger">Afternoon</strong>
+                        <span class="badge bg-secondary">${freeAN.length} Ready</span>
+                    </div>
+                    <div>${formatList(freeAN)}</div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    const reportHtml = `
+        <div class="text-center mb-4">
+            <h4 class="mb-0 fw-bold">${schoolDetails.name}</h4>
+            <h6 class="text-uppercase text-muted mt-1">Reserve Staff List (Sorted by Workload)</h6>
+            <p class="small text-muted">Teachers shown are Available (Not on Leave) and Free (No Duty).</p>
+        </div>
+
+        <table class="table table-bordered table-sm" style="font-size: 0.85rem;">
+            <thead class="table-dark text-center">
+                <tr>
+                    <th style="width: 100px;">Date</th>
+                    <th style="width: 45%;">Free Staff (FN)</th>
+                    <th style="width: 45%;">Free Staff (AN)</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${rowsHtml}
+            </tbody>
+        </table>
+    `;
+
+    printReport({
+        contentHtml: reportHtml,
+        title: `Reserve_Staff_${exam.name}`,
+        extraCss: `@page { size: A4 landscape; margin: 10mm; }`,
+        pageSize: 'A4 landscape'
+    });
+}
+
+function generateTeacherWiseDutyReport(examId) {
+    if (!examId) return showAlert('Please select an exam first.', 'danger');
+
+    const exam = exams.find(e => e.id === examId);
+    if (!exam) return;
+
+    // 1. Get All Relevant Dates (From Duties & Rules)
+    // We want to show the full exam schedule, even days a teacher is free.
+    const involvedDates = new Set();
+    
+    // Check duties
+    examDuties.filter(d => d.examId === examId).forEach(d => involvedDates.add(d.date));
+    
+    // Check rules (in case there are days with exams but no duties assigned yet)
+    examRoomAllocationRules.filter(r => r.examId === examId).forEach(r => involvedDates.add(r.date));
+
+    const sortedDates = Array.from(involvedDates).sort();
+
+    if (sortedDates.length === 0) return showAlert('No dates found for this exam.', 'info');
+
+    // 2. Group Duties by Teacher
+    const teacherMap = {};
+    const teachersWithDuties = new Set();
+
+    examDuties.filter(d => d.examId === examId).forEach(d => {
+        const key = `${d.dutyTeacherId}_${d.date}_${d.session}`;
+        
+        // Find Room Name
+        const roomName = examRooms.find(r => r.id === d.roomId)?.name || 'Unknown Room';
+        teacherMap[key] = roomName;
+        
+        teachersWithDuties.add(d.dutyTeacherId);
+    });
+
+    // 3. Filter Teachers (Only those who have at least one duty)
+    const activeTeachers = teachers
+        .filter(t => teachersWithDuties.has(t.id))
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+    if (activeTeachers.length === 0) return showAlert('No duties assigned to any teacher.', 'info');
+
+
+    // --- HTML GENERATION ---
+    let reportContent = ``;
+
+    activeTeachers.forEach(teacher => {
+        let tableRows = ``;
+        let dutyCount = 0;
+
+        sortedDates.forEach(date => {
+            const dateLabel = new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', weekday: 'short' });
+            
+            // Get Duty for FN
+            const fnRoom = teacherMap[`${teacher.id}_${date}_FN`];
+            // Get Duty for AN
+            const anRoom = teacherMap[`${teacher.id}_${date}_AN`];
+
+            if (fnRoom) dutyCount++;
+            if (anRoom) dutyCount++;
+
+            // Styling for cells
+            const fnCell = fnRoom 
+                ? `<td class="fw-bold text-primary bg-light">${fnRoom}</td>` 
+                : `<td class="text-muted text-center">-</td>`;
+            
+            const anCell = anRoom 
+                ? `<td class="fw-bold text-danger bg-light">${anRoom}</td>` 
+                : `<td class="text-muted text-center">-</td>`;
+
+            tableRows += `
+                <tr>
+                    <td class="fw-bold text-secondary" style="font-size:0.85rem;">${dateLabel}</td>
+                    ${fnCell}
+                    ${anCell}
+                </tr>
+            `;
+        });
+
+        // Individual Teacher Block
+        reportContent += `
+            <div class="teacher-block mb-4 p-2 border rounded break-inside-avoid">
+                <div class="d-flex justify-content-between align-items-center mb-2 border-bottom pb-1">
+                    <h5 class="m-0 fw-bold text-dark">${teacher.name}</h5>
+                    <span class="badge bg-dark">Total Duties: ${dutyCount}</span>
+                </div>
+                
+                <table class="table table-bordered table-sm text-center mb-0" style="font-size: 0.85rem;">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 120px;">Date</th>
+                            <th>FN (Forenoon)</th>
+                            <th>AN (Afternoon)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${tableRows}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    });
+
+    // 4. Final Report Template
+    const reportHtml = `
+        <div class="text-center mb-4">
+            <h4 class="mb-0 fw-bold">${schoolDetails.name}</h4>
+            <h6 class="text-uppercase text-muted mt-1">Individual Duty Slips: ${exam.name}</h6>
+        </div>
+
+        <div class="d-flex flex-wrap gap-3 justify-content-center">
+            ${reportContent}
+        </div>
+        
+        <div class="mt-4 text-center text-muted small">
+            Generated on: ${new Date().toLocaleString()}
+        </div>
+    `;
+
+    // 5. Print with Portrait Mode
+    printReport({
+        contentHtml: reportHtml,
+        title: `Teacher_Duty_Slips_${exam.name}`,
+        extraCss: `
+            @page { size: A4 portrait; margin: 10mm; }
+            .teacher-block { 
+                width: 100%; 
+                margin-bottom: 20px; 
+                page-break-inside: avoid; /* Keeps table together */
+            }
+            .break-inside-avoid { page-break-inside: avoid; }
+        `,
+        pageSize: 'A4'
+    });
+}
 function generateTeacherDutySummaryReport(examId) {
     if (!examId) return showAlert('Please select an exam first.', 'danger');
 
@@ -31488,12 +31784,11 @@ function generateTeacherDutySummaryReport(examId) {
     const duties = examDuties.filter(d => d.examId === examId);
     if (duties.length === 0) return showAlert('No duties assigned yet.', 'info');
 
-    // 2. Identify Unique Time Slots (Columns)
-    // We need every unique combination of Date + Session present in the schedule
+    // 2. Identify Unique Time Slots & Group by Date
     const timeSlotSet = new Set();
     duties.forEach(d => timeSlotSet.add(`${d.date}_${d.session}`));
 
-    // Sort slots chronologically: Date -> Session (FN before AN)
+    // Sort slots chronologically
     const sortedSlots = Array.from(timeSlotSet).sort((a, b) => {
         const [dateA, sessA] = a.split('_');
         const [dateB, sessB] = b.split('_');
@@ -31501,57 +31796,111 @@ function generateTeacherDutySummaryReport(examId) {
         return sessA.localeCompare(sessB);
     });
 
-    // 3. Build Data Map (Teacher -> Slot -> Room)
+    // 3. Build Data Maps
     const teacherMap = {}; // { teacherId: { "2023-10-12_FN": "Room 101" } }
     const teacherCounts = {};
 
     duties.forEach(d => {
         const slotKey = `${d.date}_${d.session}`;
-        
         if (!teacherMap[d.dutyTeacherId]) teacherMap[d.dutyTeacherId] = {};
         
         // Get Room Name
         const roomName = examRooms.find(r => r.id === d.roomId)?.name || 'Unknown';
         teacherMap[d.dutyTeacherId][slotKey] = roomName;
-
-        // Count
+        
+        // Count total duties
         teacherCounts[d.dutyTeacherId] = (teacherCounts[d.dutyTeacherId] || 0) + 1;
     });
 
     // 4. Get Active Teachers List
     const activeTeachers = teachers
-        .filter(t => teacherMap[t.id]) // Only those with duties
+        .filter(t => teacherMap[t.id])
         .sort((a, b) => a.name.localeCompare(b.name));
 
-    // --- HTML GENERATION ---
 
-    // A. Table Header (Dynamic Columns)
-    let headerHtml = `<th style="width: 50px;">#</th><th style="text-align:left; min-width: 200px;">Teacher Name</th>`;
+    // --- NEW: Calculate UNASSIGNED Rooms Per Slot ---
+    const unassignedRoomsPerSlot = {};
     
     sortedSlots.forEach(slotKey => {
         const [date, session] = slotKey.split('_');
-        const dateLabel = new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
-        // Style FN/AN differently for quick visual scanning
-        const sessColor = session === 'FN' ? '#e3f2fd' : '#fff3cd'; // Light Blue / Light Yellow
         
-        headerHtml += `
-            <th class="text-center" style="min-width: 100px; font-size:0.85em; background-color:${sessColor} !important; color:#000;">
-                ${dateLabel}<br><span class="badge bg-dark text-white">${session}</span>
-            </th>`;
+        // A. Find Required Rooms (from Allocation Rules)
+        const activeRules = examRoomAllocationRules.filter(r => 
+            r.examId === examId && r.date === date && r.session === session
+        );
+        // Get unique room IDs that HAVE students
+        const requiredRoomIds = [...new Set(activeRules.map(r => r.roomId))];
+
+        // B. Find Covered Rooms (from Duties)
+        const coveredDuties = duties.filter(d => d.date === date && d.session === session);
+        const coveredRoomIds = coveredDuties.map(d => d.roomId);
+
+        // C. Find Difference (Required - Covered)
+        const missingIds = requiredRoomIds.filter(rid => !coveredRoomIds.includes(rid));
+
+        // D. Convert to Names
+        if (missingIds.length > 0) {
+            const missingNames = missingIds.map(rid => {
+                return examRooms.find(er => er.id === rid)?.name || rid;
+            }).sort();
+            unassignedRoomsPerSlot[slotKey] = missingNames.join(', ');
+        } else {
+            unassignedRoomsPerSlot[slotKey] = ""; // All covered
+        }
     });
-    
-    headerHtml += `<th style="width: 60px;">Total</th>`;
+
+
+    // --- HTML GENERATION ---
+
+    // A. Build Header Rows (Grouped by Date)
+    let dateHeaderHtml = `<th rowspan="2" style="width: 30px; vertical-align: middle;">#</th><th rowspan="2" style="text-align:left; width: 150px; vertical-align: middle;">Teacher Name</th>`;
+    let sessionHeaderHtml = ``;
+
+    let currentDate = null;
+    let colspanCounter = 0;
+
+    // We need to iterate carefully to group dates
+    for (let i = 0; i < sortedSlots.length; i++) {
+        const [date, session] = sortedSlots[i].split('_');
+        const dateLabel = new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+        
+        // Session Header (Row 2)
+        const sessColor = session === 'FN' ? '#e3f2fd' : '#fff3cd'; 
+        sessionHeaderHtml += `
+            <th class="text-center" style="font-size:0.7rem; background-color:${sessColor} !important; color:#000; padding: 2px;">
+                ${session}
+            </th>`;
+
+        // Date Header Logic (Row 1)
+        if (date !== currentDate) {
+            // Check how many times this date appears consecutively
+            let span = 1;
+            if (i + 1 < sortedSlots.length && sortedSlots[i+1].startsWith(date)) {
+                span = 2;
+            }
+            
+            dateHeaderHtml += `<th colspan="${span}" class="text-center" style="font-size:0.75rem; border-bottom: 1px solid #aaa;">${dateLabel}</th>`;
+            
+            currentDate = date;
+            // If span is 2, skip the next loop iteration logic for date header (but we still need session header)
+            if (span === 2) {
+                // We handle the next session in the next loop, but we don't add a new date header
+                // The loop continues naturally, just need to ensure we don't double add date header
+            }
+        }
+    }
+
+    dateHeaderHtml += `<th rowspan="2" style="width: 40px; vertical-align: middle;">Tot</th>`;
 
     // B. Table Body (Rows)
     const rowsHtml = activeTeachers.map((teacher, index) => {
         let cells = ``;
-        
         sortedSlots.forEach(slotKey => {
             const assignedRoom = teacherMap[teacher.id][slotKey];
             if (assignedRoom) {
                 cells += `<td class="text-center fw-bold text-primary" style="background-color:#f8f9fa;">${assignedRoom}</td>`;
             } else {
-                cells += `<td class="text-center text-muted">-</td>`;
+                cells += `<td class="text-center text-muted" style="color:#eee !important;">-</td>`;
             }
         });
 
@@ -31560,50 +31909,71 @@ function generateTeacherDutySummaryReport(examId) {
         return `
             <tr>
                 <td class="text-center">${index + 1}</td>
-                <td class="fw-bold">${teacher.name}</td>
+                <td class="fw-bold text-nowrap">${teacher.name}</td>
                 ${cells}
-                <td class="text-center fw-bold fs-6 bg-light">${total}</td>
+                <td class="text-center fw-bold bg-light">${total}</td>
             </tr>
         `;
     }).join('');
 
-    // C. Report Template
+    // C. Table Footer (Unassigned Rooms)
+    let footerHtml = `
+        <tr style="border-top: 2px solid #000; background-color: #ffe6e6;">
+            <td colspan="2" class="text-end fw-bold p-1 text-danger">Unassigned Rooms:</td>
+            ${sortedSlots.map(slotKey => `
+                <td class="text-center text-danger" style="font-size: 0.6rem; vertical-align: top; padding: 2px; font-weight:bold;">
+                    ${unassignedRoomsPerSlot[slotKey] || '<span class="text-success">✔</span>'}
+                </td>
+            `).join('')}
+            <td></td>
+        </tr>
+    `;
+
+    // D. Report Template
     const reportHtml = `
-        <div class="text-center mb-4">
-            <h4 class="mb-1">${schoolDetails.name}</h4>
-            <h5 class="text-primary text-uppercase">Exam Duty Matrix</h5>
-            <h6 class="text-muted">${exam.name}</h6>
+        <div class="text-center mb-2">
+            <h5 class="mb-0 fw-bold">${schoolDetails.name}</h5>
+            <h6 class="text-uppercase my-1" style="font-size: 0.9rem;">Exam Duty Matrix: ${exam.name}</h6>
         </div>
 
-        <div class="table-responsive">
-            <table class="table table-bordered table-sm align-middle">
-                <thead class="align-middle">
-                    <tr>${headerHtml}</tr>
-                </thead>
-                <tbody>
-                    ${rowsHtml}
-                </tbody>
-            </table>
-        </div>
+        <table class="table table-bordered table-sm align-middle compact-table">
+            <thead>
+                <tr>${dateHeaderHtml}</tr>
+                <tr>${sessionHeaderHtml}</tr>
+            </thead>
+            <tbody>
+                ${rowsHtml}
+            </tbody>
+            <tfoot>
+                ${footerHtml}
+            </tfoot>
+        </table>
         
-        <div class="mt-4 d-flex justify-content-between text-muted small">
-            <span>Generated on: ${new Date().toLocaleString()}</span>
-            <span>Principal Signature: ______________________</span>
+        <div class="mt-3 d-flex justify-content-between text-muted" style="font-size: 0.7rem;">
+            <span>Generated: ${new Date().toLocaleString()}</span>
+            <span>Principal / Chief Sup.</span>
         </div>
     `;
 
-    // D. Custom CSS for Print (Landscape is better for matrix)
+    // E. Compact CSS
     const extraCss = `
-        @page { size: A4 landscape; margin: 10mm; }
-        .table th, .table td { padding: 1px; vertical-align: middle; }
-        .badge { font-size: 0.7em; }
+        @page { size: A4 landscape; margin: 5mm; }
+        body { font-family: sans-serif; }
+        .compact-table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
+        .compact-table th, .compact-table td { 
+            padding: 2px 3px !important; 
+            border: 1px solid #ccc;
+            height: 20px;
+        }
+        .compact-table thead th { vertical-align: middle; }
+        .text-nowrap { white-space: nowrap; }
     `;
 
     printReport({
         contentHtml: reportHtml,
         title: `Duty_Matrix_${exam.name}`,
         extraCss: extraCss,
-        pageSize: 'A4 landscape' // Important for wide tables
+        pageSize: 'A4 landscape'
     });
 }
 
@@ -31749,42 +32119,60 @@ window.autoSuggestAllMulti = (examId) => {
     const allSelects = Array.from(document.querySelectorAll('.teacher-select'));
     
     // 1. GLOBAL STATE TRACKING
-    // We need to map the entire grid to make smart decisions.
-    
-    // Map: "YYYY-MM-DD_FN" -> Set(TeacherID) (Who is busy right now?)
     const sessionOccupancy = {}; 
-    
-    // Map: "YYYY-MM-DD_TeacherID" -> Boolean (Who is working at all today?)
     const dailyOccupancy = {}; 
-    
-    // Map: TeacherID -> Integer (Total count of duties assigned across all days)
     const totalDutyCounts = {}; 
-    
-    // Map: TeacherID -> Set(RoomID) (Rooms they have already monitored)
     const teacherRoomHistory = {}; 
+    
+    // [NEW] 1b. Create Fast Lookup for Teacher Genders
+    const teacherGenderMap = {};
+    if (typeof teachers !== 'undefined') {
+        teachers.forEach(t => teacherGenderMap[t.id] = t.gender); // e.g., 'Male', 'Female'
+    }
 
-    // Helper to register an assignment into our tracking maps
+    // Helper: Determine Gender of Students in a Room
+    const getRoomStudentGender = (date, session, roomId) => {
+        if (typeof examRoomAllocationRules === 'undefined') return 'Mixed';
+
+        // Find rules for this specific room & time
+        const rules = examRoomAllocationRules.filter(r => 
+            r.examId === examId && 
+            r.date === date && 
+            r.session === session && 
+            r.roomId === roomId
+        );
+
+        let hasMale = false;
+        let hasFemale = false;
+
+        // Check Reg No Prefixes (M- vs F-)
+        rules.forEach(r => {
+            const text = (r.regNoRangeText || "").toUpperCase();
+            if (text.includes('M-')) hasMale = true;
+            if (text.includes('F-')) hasFemale = true;
+        });
+
+        if (hasMale && !hasFemale) return 'Male';
+        if (!hasMale && hasFemale) return 'Female';
+        return 'Mixed'; // Both or Unknown
+    };
+
+    // Helper: Register Assignments
     const recordAssignment = (date, session, teacherId, roomId) => {
         const sessKey = `${date}_${session}`;
         const dayKey = `${date}_${teacherId}`;
         
-        // Track Session Occupancy
         if (!sessionOccupancy[sessKey]) sessionOccupancy[sessKey] = new Set();
         sessionOccupancy[sessKey].add(teacherId);
 
-        // Track Daily Presence (for Double Duty check)
         dailyOccupancy[dayKey] = true;
-
-        // Track Total Load (for Load Balancing)
         totalDutyCounts[teacherId] = (totalDutyCounts[teacherId] || 0) + 1;
 
-        // Track Room History (for Rotation)
         if (!teacherRoomHistory[teacherId]) teacherRoomHistory[teacherId] = new Set();
         teacherRoomHistory[teacherId].add(roomId);
     };
 
-    // 2. PRE-SCAN: Register existing manual assignments first
-    // This ensures auto-fill respects what you have already manually picked.
+    // 2. PRE-SCAN: Register existing manual assignments
     allSelects.forEach(select => {
         if (select.value) {
             const row = select.closest('tr');
@@ -31795,7 +32183,7 @@ window.autoSuggestAllMulti = (examId) => {
 
     let filledCount = 0;
 
-    // 3. AUTO-FILL: Process only empty, enabled slots
+    // 3. AUTO-FILL: Process empty slots
     const activeEmptySelects = allSelects.filter(s => !s.disabled && !s.value);
     
     activeEmptySelects.forEach(select => {
@@ -31805,10 +32193,12 @@ window.autoSuggestAllMulti = (examId) => {
         const roomId = row.dataset.roomId;
         const sessKey = `${date}_${session}`;
         
-        // Get valid candidates from the dropdown options
+        // [NEW] Determine Gender Requirement for this Room
+        const roomGenderReq = getRoomStudentGender(date, session, roomId);
+
         const options = Array.from(select.options).filter(opt => opt.value !== "");
 
-        // 4. SCORING SYSTEM (The Core Logic)
+        // 4. SCORING SYSTEM
         let bestTeacherId = null;
         let lowestScore = Infinity;
 
@@ -31816,51 +32206,52 @@ window.autoSuggestAllMulti = (examId) => {
             const tId = opt.value;
             let score = 0;
 
-            // --- CONSTRAINT A: HARD CONFLICT ---
-            // Teacher is already in THIS session (e.g. Room 101 FN). Cannot be in Room 102 FN.
-            if (sessionOccupancy[sessKey] && sessionOccupancy[sessKey].has(tId)) {
-                return; // SKIP completely
-            }
+            // A. HARD CONFLICT (Busy)
+            if (sessionOccupancy[sessKey] && sessionOccupancy[sessKey].has(tId)) return;
 
-            // --- CONSTRAINT B: DOUBLE DUTY (Avoid Same Day) ---
-            // Teacher is working AN. We want to avoid giving them FN unless necessary.
+            // B. DOUBLE DUTY
             const dayKey = `${date}_${tId}`;
-            if (dailyOccupancy[dayKey]) {
-                score += 1000; // Huge penalty. Only picked if `lowestScore` stays high (no one else free).
-            }
+            if (dailyOccupancy[dayKey]) score += 1000;
 
-            // --- CONSTRAINT C: SPREAD THE LOAD ---
-            // Prefer teachers with fewer total duties.
+            // C. LOAD BALANCING
             const currentTotal = totalDutyCounts[tId] || 0;
-            score += (currentTotal * 10); // +10 points per duty. 
+            score += (currentTotal * 10);
 
-            // --- CONSTRAINT D: AVOID SAME ROOM ---
-            // If they monitored this room before, try to rotate them.
-            if (teacherRoomHistory[tId] && teacherRoomHistory[tId].has(roomId)) {
-                score += 50; // Medium penalty.
+            // D. ROOM ROTATION
+            if (teacherRoomHistory[tId] && teacherRoomHistory[tId].has(roomId)) score += 50;
+
+            // [NEW] E. GENDER PREFERENCE (The "Magic" Part)
+            const tGender = teacherGenderMap[tId]; // Get teacher's gender
+            
+            if (tGender && roomGenderReq !== 'Mixed') {
+                if (tGender === roomGenderReq) {
+                    // MATCH! Give a HUGE bonus (negative score reduces total)
+                    // -500 is strong enough to beat "Load Balancing" but weaker than "Double Duty"
+                    score -= 500; 
+                } else {
+                    // MISMATCH! Slight penalty to prefer a gender match if available
+                    score += 50;
+                }
             }
 
-            // Check if this candidate is better than the current best
+            // Check Winner
             if (score < lowestScore) {
                 lowestScore = score;
                 bestTeacherId = tId;
             }
         });
 
-        // 5. ASSIGN THE WINNER
+        // 5. ASSIGN WINNER
         if (bestTeacherId) {
             select.value = bestTeacherId;
-            // Record immediately so next loop considers this assignment
             recordAssignment(date, session, bestTeacherId, roomId);
             filledCount++;
         }
     });
 
     if (filledCount > 0) {
-        // Trigger visual update (colors/footer)
         if (window.updateLiveDropdownStates) window.updateLiveDropdownStates(examId);
-        
-        showAlert(`Auto-suggest complete! Assigned ${filledCount} slots based on load balancing and conflicts.`, 'success');
+        showAlert(`Auto-suggest complete! Assigned ${filledCount} slots with Gender Preference applied.`, 'success');
     } else {
         showAlert('No empty slots available or no valid teachers found.', 'info');
     }
@@ -33236,7 +33627,14 @@ function renderExamControlReportsTab() {
     <div class="d-flex w-100 justify-content-between">
         <h6 class="mb-1">Teacher Duty Summary</h6>
         <button id="full-day-duty-report" class="btn btn-sm btn-outline-dark">
-            Generate
+            Generate Duty Summary
+            
+        </button>
+        <button id="full-day-duty-report-teacherwise" class="btn btn-sm btn-outline-dark">
+            Generate Duty teacherwise
+        </button>
+         <button id="full-day-duty-report-free" class="btn btn-sm btn-outline-dark">
+            Generate Duty free Summary
         </button>
     </div>
     <p class="mb-1 small text-muted">Consolidated schedule for all teachers showing dates, sessions, and room assignments.</p>
@@ -33365,6 +33763,20 @@ function attachReportsTabListeners() {
     document.getElementById('full-day-duty-report').addEventListener('click', () => {
         const session = document.getElementById('report-session-select').value;
         generateTeacherDutySummaryReport(examSelect.value);
+        
+        
+    });
+    document.getElementById('full-day-duty-report-teacherwise').addEventListener('click', () => {
+        const session = document.getElementById('report-session-select').value;
+        
+        generateTeacherWiseDutyReport(examSelect.value);
+        
+    });
+    document.getElementById('full-day-duty-report-free').addEventListener('click', () => {
+        const session = document.getElementById('report-session-select').value;
+        
+        generateFreeTeachersReport(examSelect.value);
+        
     });
     document.getElementById('print-seating-layout-btn').addEventListener('click', () => {
     const examId = document.getElementById('report-exam-select').value;
@@ -33816,128 +34228,206 @@ function generateClassSeatingSummary(examId, date, classIds, session) {
         return showAlert('Please select an Exam, Date, Session, and at least one Class.', 'danger');
     }
 
-    let combinedHtml = '';
+    // 1. Context Data
+    const examName = exams.find(e => e.id === examId)?.name || 'Exam';
+    const dateLabel = new Date(date).toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+    
+    // 2. Reusable Header
+    const getHeader = () => `
+        <div class="report-header text-center mb-4 pb-2 border-bottom">
+            <h3 class="fw-bold text-uppercase m-0">${schoolDetails.name}</h3>
+            <h5 class="fw-bold text-primary m-0 mt-2">${examName}</h5>
+            <div class="mt-2 d-flex justify-content-center gap-3 align-items-center">
+                <span class="fw-bold fs-5"><i class="fas fa-calendar-alt me-2 text-muted"></i>${dateLabel}</span>
+                <span class="text-muted">|</span>
+                <span class="fw-bold fs-5"><i class="fas fa-clock me-2 text-muted"></i>Session: <span class="badge bg-dark">${session}</span></span>
+            </div>
+        </div>
+    `;
 
-    // 1. Find all rules for this specific session
-    const rulesForSession = examRoomAllocationRules.filter(rule => 
+    // 3. Find Rules
+    const rulesForSession = examRoomAllocationRules.filter(rule =>
         rule.examId === examId && rule.date === date && rule.session === session
     );
 
-    if (rulesForSession.length === 0) {
-        return showAlert('No allocation rules have been saved for this session.', 'info');
-    }
+    if (rulesForSession.length === 0) return showAlert('No allocation rules found for this session.', 'info');
 
-    // 2. Iterate through each class the user wants to report on
-    classIds.forEach(classId => {
-        const className = classes.find(c => c.id === classId)?.name || classId;
-        
-        // 3. Find all students in this class who are taking the exam (have a reg no)
-        const studentsInClass = students.filter(s => 
-            s.classId === classId && 
-            s.examRegNumbers?.[examId] &&
-            s.status !== 'TC Issued' && s.status !== 'Graduated' // Ignore inactive students
-        );
-
-        if (studentsInClass.length === 0) {
-            combinedHtml += `<h4 class="class-title">${className}</h4><p class="text-muted">No students from this class are registered for this exam.</p>`;
-            return; // Go to the next classId
-        }
-
-        const genderGroups = { M: [], F: [] }; // To hold {range, room, count}
-
-        // --- NEW LOGIC ---
-        // 4. Group students by the allocation rule they match
-        const studentsByRule = {};
-        studentsInClass.forEach(student => {
-            const regNo = student.examRegNumbers[examId];
-            const matchingRule = rulesForSession.find(rule => doesRegNoMatchRule(regNo, rule.regNoRangeText));
-            
-            if (matchingRule) {
-                if (!studentsByRule[matchingRule.id]) {
-                    studentsByRule[matchingRule.id] = {
-                        rule: matchingRule,
-                        students: [],
-                        // Infer gender from the registration number prefix
-                        gender: (regNo.startsWith('M') ? 'M' : 'F') 
-                    };
-                }
-                studentsByRule[matchingRule.id].students.push(student);
-            }
-        });
-        
-        // 5. Process the grouped students into the final report format
-        Object.values(studentsByRule).forEach(group => {
-            const { rule, students, gender } = group;
-            if (students.length > 0) {
-                // Get all reg numbers for this group and compact them (e.g., "M-X_101 - M-X_105")
-                const studentRegNos = students.map(s => s.examRegNumbers[examId]);
-                
-                genderGroups[gender].push({
-                    range: generateCompactRegNoRanges(studentRegNos), // Use the compacting function
-                    room: examRooms.find(r => r.id === rule.roomId)?.name || rule.roomId,
-                    count: students.length
-                });
-            }
-        });
-        // --- END NEW LOGIC ---
-
-        // 6. Helper to build the final HTML tables (no change)
-        const buildGenderTable = (gender, rules) => {
-            if (rules.length === 0) return '';
-            rules.sort((a, b) => a.range.localeCompare(b.range, undefined, { numeric: true }));
-            return `
-                <h6 class="mt-3">${gender === 'M' ? 'Boys' : 'Girls'}</h6>
-                <table class="table table-sm table-bordered" style="font-size: 0.85em;">
-                    <thead class="table-light"><tr><th>Reg. No. Range(s)</th><th>Exam Room</th><th class="text-center">Count</th></tr></thead>
-                    <tbody>${rules.map(r => `<tr><td>${r.range}</td><td>${r.room}</td><td class="text-center">${r.count}</td></tr>`).join('')}</tbody>
-                </table>`;
-        };
-        
-        const boysTable = buildGenderTable('M', genderGroups.M);
-        const girlsTable = buildGenderTable('F', genderGroups.F);
-
-        // 7. Assemble the HTML for this class (no change)
-        if (boysTable || girlsTable) {
-            combinedHtml += `
-                <div class="class-summary-section">
-                    <h4 class="class-title">${className}</h4>
-                    <div class="row">
-                        <div class="col-6 border-end pe-4">${boysTable || '<p class="text-muted">No boys allocated.</p>'}</div>
-                        <div class="col-6 ps-4">${girlsTable || '<p class="text-muted">No girls allocated.</p>'}</div>
-                    </div>
-                </div>`;
-        }
-    });
-
-    if (combinedHtml === '') {
-        return showAlert('No students from the selected class(es) matched any allocation rules.', 'info');
-    }
-
-    // 8. Prepare and call the print function (no change)
-    const reportTitle = `Seating Arrangement Summary`;
-    const subTitle = `Exam: ${exams.find(e => e.id === examId).name} | Date: ${new Date(date).toLocaleDateString('en-GB')} | Session: ${session}`;
-    const customHeaderHtml = `
-        <div class='text-center'>
-            <h3>${schoolDetails.name || 'School Name'}</h3>
-            <h4>${reportTitle}</h4>
-            <p class="text-muted">${subTitle}</p>
-        </div>`;
-    const extraCss = `
-        .class-summary-section { margin-top: 20px; page-break-inside: avoid; } 
-        .class-title { 
-            text-align: center; 
-            margin-bottom: 15px; 
-            padding-bottom: 10px; 
-            border-bottom: 2px solid #eee; 
-        }
-        .row { display: flex; flex-direction: row; }
-        .col-6 { width: 50%; }
-        .border-end { border-right: 1px solid #dee2e6; }
-        .pe-4 { padding-right: 1.5rem; }
-        .ps-4 { padding-left: 1.5rem; }
+    // --- HELPER: Generate Table HTML ---
+    const buildTableHtml = (rows) => `
+        <table class="table table-bordered table-striped mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th style="font-size: 1rem;">Reg. Range</th>
+                    <th style="font-size: 1rem;">Room</th>
+                    <th class="text-center" style="font-size: 1rem;">Qty</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${rows.map(r => `
+                    <tr>
+                        <td style="font-size: 1.1rem; letter-spacing: 0.5px;">${r.range}</td>
+                        <td class="fw-bold" style="font-size: 1.1rem;">${r.room}</td>
+                        <td class="text-center fw-bold" style="font-size: 1.1rem;">${r.count}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
     `;
 
-    printReport({ contentHtml: combinedHtml, title: reportTitle, customHeaderHtml, extraCss });
+    // --- HELPER: Generate Section for Gender ---
+    const generateGenderSection = (genderCode, genderLabel) => {
+        let sectionHtml = '';
+        let hasData = false;
+
+        classIds.forEach(classId => {
+            const className = classes.find(c => c.id === classId)?.name || classId;
+
+            const studentsInClass = students.filter(s =>
+                s.classId === classId &&
+                s.examRegNumbers?.[examId] &&
+                (s.gender === genderCode || (s.gender && s.gender.startsWith(genderCode))) &&
+                s.status !== 'TC Issued' && s.status !== 'Graduated'
+            );
+
+            if (studentsInClass.length === 0) return;
+
+            // Group by Rule
+            const studentsByRule = {};
+            studentsInClass.forEach(student => {
+                const regNo = student.examRegNumbers[examId];
+                const matchingRule = rulesForSession.find(rule => doesRegNoMatchRule(regNo, rule.regNoRangeText));
+                if (matchingRule) {
+                    if (!studentsByRule[matchingRule.id]) {
+                        studentsByRule[matchingRule.id] = {
+                            room: examRooms.find(r => r.id === matchingRule.roomId)?.name || matchingRule.roomId,
+                            students: []
+                        };
+                    }
+                    studentsByRule[matchingRule.id].students.push(student);
+                }
+            });
+
+            // Create Rows
+            const rows = [];
+            Object.values(studentsByRule).forEach(group => {
+                const studentRegNos = group.students.map(s => s.examRegNumbers[examId]);
+                rows.push({
+                    range: generateCompactRegNoRanges(studentRegNos),
+                    room: group.room,
+                    count: group.students.length
+                });
+            });
+
+            if (rows.length > 0) {
+                hasData = true;
+                // Sort by Room Name (A -> Z)
+                rows.sort((a, b) => a.room.localeCompare(b.room, undefined, { numeric: true }));
+
+                // --- SMART SPLIT LOGIC (Inside Full Width Box) ---
+                let contentHtml = '';
+                const totalStudents = rows.reduce((sum, r) => sum + r.count, 0);
+
+                if (rows.length > 4) {
+                    // Split into two columns side-by-side within the full-width container
+                    const mid = Math.ceil(rows.length / 2);
+                    const leftRows = rows.slice(0, mid);
+                    const rightRows = rows.slice(mid);
+
+                    contentHtml = `
+                        <div class="d-flex gap-3">
+                            <div class="w-50">${buildTableHtml(leftRows)}</div>
+                            <div class="w-50">${buildTableHtml(rightRows)}</div>
+                        </div>
+                    `;
+                } else {
+                    // Standard Single Column
+                    contentHtml = buildTableHtml(rows);
+                }
+
+                sectionHtml += `
+                    <div class="class-block mb-4 avoid-break shadow-sm">
+                        <div class="class-header p-2 border-bottom">
+                            <h4 class="m-0 fw-bold">${className}</h4> 
+                            <span class="badge bg-dark fs-6">${totalStudents} Students</span>
+                        </div>
+                        <div class="p-2">
+                            ${contentHtml}
+                        </div>
+                    </div>
+                `;
+            }
+        });
+
+        if (!hasData) return null;
+
+        return `
+            ${getHeader()}
+            <div class="gender-section mb-4">
+                <h4 class="section-title text-uppercase mb-4 pb-2 border-bottom border-3 border-dark fw-bold text-dark">
+                    <i class="fas fa-${genderCode === 'M' ? 'mars text-primary' : 'venus text-danger'} me-2"></i>
+                    ${genderLabel} Seating Arrangement
+                </h4>
+                <div class="d-flex flex-column gap-3">
+                    ${sectionHtml}
+                </div>
+            </div>
+            <div class="mt-auto pt-3 border-top">
+                <p class="text-muted text-center fs-6">Generated on ${new Date().toLocaleString()}</p>
+            </div>
+        `;
+    };
+
+    // 4. Generate Pages
+    const boysPage = generateGenderSection('M', 'Boys');
+    const girlsPage = generateGenderSection('F', 'Girls');
+
+    if (!boysPage && !girlsPage) return showAlert('No matching data found.', 'warning');
+
+    // 5. Combine
+    let combinedHtml = '';
+    if (boysPage) combinedHtml += `<div class="print-page">${boysPage}</div>`;
+    if (girlsPage) {
+        const breakClass = boysPage ? 'page-break' : ''; 
+        combinedHtml += `<div class="print-page ${breakClass}">${girlsPage}</div>`;
+    }
+
+    // 6. CSS (Large Fonts & Full Width)
+    const extraCss = `
+        @page { size: A4; margin: 15mm; }
+        body { font-family: 'Segoe UI', sans-serif; color: #000; }
+        
+        .print-page { min-height: 95vh; display: flex; flex-direction: column; }
+        
+        /* Full Width Class Block */
+        .class-block { 
+            width: 100%; 
+            border: 2px solid #666; 
+            border-radius: 6px; 
+            overflow: hidden; 
+            background: #fff;
+        }
+        
+        .class-header {
+            background-color: #eee;
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+        }
+
+        /* Large Table Fonts */
+        .table th { background-color: #f8f9fa !important; text-transform: uppercase; letter-spacing: 1px; }
+        .table td, .table th { vertical-align: middle; padding: 8px 12px !important; }
+        
+        /* Print Utils */
+        .page-break { page-break-before: always; }
+        .avoid-break { page-break-inside: avoid; }
+    `;
+
+    printReport({ 
+        contentHtml: combinedHtml, 
+        title: `Seating_${date}_${session}`, 
+        extraCss: extraCss 
+    });
 }
 /**
  * REPORT 3: Generates printable labels for exam room doors (4 per page).
@@ -34038,7 +34528,6 @@ function generateSeatingArrangementReport(examId, date, session) {
         const dutyTeacher = duties.find(d => d.roomId === roomId)?.dutyTeacherName || "Not Assigned";
 
         // --- A. PREPARE STUDENTS ---
-        // (Same sorting logic as before)
         const classGroups = {};
         roomData.students.forEach(s => {
             if(!classGroups[s.classId]) classGroups[s.classId] = [];
@@ -34053,45 +34542,30 @@ function generateSeatingArrangementReport(examId, date, session) {
 
         // --- B. SMART CAPACITY LOGIC ---
         const totalStudents = studentsQueue.length;
-        
-        // Defaults
         const defaultBenches = parseInt(room.totalBenches) || 10; 
         const columns = parseInt(room.columns) || 2;            
-        
         const stdSeats = 3; 
         const maxSeats = 4;
-        
-        const capacityAtStd = defaultBenches * stdSeats; // 30
-        const capacityAtMax = defaultBenches * maxSeats; // 40
+        const capacityAtStd = defaultBenches * stdSeats; 
+        const capacityAtMax = defaultBenches * maxSeats; 
 
         let finalBenchesCount = defaultBenches;
         let benchesWithFour = 0;
 
         if (totalStudents > capacityAtMax) {
-            // CASE 1: OVERFLOW (>40 students) -> ADD NEW ROW
-            // We need more than 10 benches.
-            // Calculate how many benches needed if we fill them with 4 students each.
             finalBenchesCount = Math.ceil(totalStudents / maxSeats);
-            
-            // In this mode, ALL benches (old and new) are treated as 4-seaters to fit everyone efficiently
             benchesWithFour = finalBenchesCount;
-        } 
-        else if (totalStudents > capacityAtStd) {
-            // CASE 2: DENSE PACK (31-40 students) -> NO NEW ROW
-            // We stay at 10 benches, but convert some to 4-seaters.
+        } else if (totalStudents > capacityAtStd) {
             finalBenchesCount = defaultBenches;
             benchesWithFour = totalStudents - capacityAtStd; 
-        } 
-        else {
-            // CASE 3: STANDARD (<=30 students) -> STANDARD
+        } else {
             finalBenchesCount = defaultBenches;
             benchesWithFour = 0;
         }
 
-        // Initialize Map
         const benchMap = Array.from({ length: finalBenchesCount }, () => []);
 
-        // --- C. FILL LOGIC (Standard Slots 0,1,2) ---
+        // --- C. FILL LOGIC ---
         const standardSeatOrder = [0, 2, 1]; 
         standardSeatOrder.forEach(seatIdx => {
             for (let b = 0; b < finalBenchesCount; b++) {
@@ -34099,18 +34573,13 @@ function generateSeatingArrangementReport(examId, date, session) {
             }
         });
 
-        // --- D. FILL LOGIC (4th Slot) ---
-        // Only fill the 4th slot for available benches
-        // If > 40, 'benchesWithFour' equals 'finalBenchesCount', so loop covers all.
         while (studentsQueue.length > 0) {
             const student = studentsQueue.shift();
-            
             let bestBenchIndex = -1;
             let lowestConflict = 999; 
 
-            // Only look at benches allowed to have 4 seats
             for (let b = 0; b < benchesWithFour; b++) {
-                if (benchMap[b][3]) continue; // Full
+                if (benchMap[b][3]) continue; 
 
                 let conflict = 0;
                 const s0 = benchMap[b][0]; const s1 = benchMap[b][1]; const s2 = benchMap[b][2]; 
@@ -34127,25 +34596,20 @@ function generateSeatingArrangementReport(examId, date, session) {
             if (bestBenchIndex !== -1) {
                 benchMap[bestBenchIndex][3] = student;
             } else {
-                // Fallback (Should not happen if math above is correct, but safe to have)
                 for(let b=0; b<finalBenchesCount; b++) {
                     if(!benchMap[b][3]) { benchMap[b][3] = student; break; }
                 }
             }
         }
 
-        // --- E. DRAW GRID ---
-        // Calculate rows needed based on the potentially INCREASED bench count
+        // --- D. DRAW GRID ---
         const rowsRenderCount = Math.ceil(finalBenchesCount / columns);
-        
         let benchesHtml = '';
         let benchCounter = 0;
 
         for (let r = 0; r < rowsRenderCount; r++) {
             benchesHtml += '<tr>';
             for (let c = 0; c < columns; c++) {
-                
-                // Don't draw benches if we exceeded the need
                 if (benchCounter >= finalBenchesCount) {
                     benchesHtml += `<td></td>`;
                     continue;
@@ -34153,9 +34617,8 @@ function generateSeatingArrangementReport(examId, date, session) {
 
                 const assignedStudents = benchMap[benchCounter] || [];
                 const actualSeatsUsed = assignedStudents[3] ? 4 : 3;
-                
                 const seatWidthPct = 100 / actualSeatsUsed;
-                const seatStyle = `width: calc(${seatWidthPct}% - 6px);`; 
+                const seatStyle = `width: calc(${seatWidthPct}% - 4px);`; 
 
                 let benchContent = '';
                 
@@ -34164,10 +34627,13 @@ function generateSeatingArrangementReport(examId, date, session) {
                     if (student) {
                         const regNo = student.examRegNumbers[examId];
                         const className = classes.find(cl => cl.id === student.classId)?.name || 'N/A';
+                        
+                        // NEW: Name div does NOT have 'text-truncate' anymore
                         benchContent += `
                             <div class="seat-box" style="${seatStyle}">
-                                <span class="reg-no">${regNo}</span><br>
-                                <span class="class-name small text-muted" style="font-size:0.65em;">${className}</span>
+                                <div class="reg-no">${regNo}</div>
+                                <div class="student-name">${student.name}</div>
+                                <div class="class-name">${className}</div>
                             </div>
                         `;
                     } else {
@@ -34185,7 +34651,7 @@ function generateSeatingArrangementReport(examId, date, session) {
         reportHtml += `
             <div class="printable-page">
                 <div class="header-box mb-3">
-                    <h4 class="text-center mb-1">${schoolDetails.name}</h4>
+                    <h4 class="text-center mb-1 fw-bold">${schoolDetails.name}</h4>
                     <h5 class="text-center mb-2">Seating Arrangement - Room: ${room.name}</h5>
                     <div class="info-grid">
                         <div><strong>Date:</strong> ${new Date(date).toLocaleDateString('en-GB')} (${session})</div>
@@ -34198,7 +34664,7 @@ function generateSeatingArrangementReport(examId, date, session) {
                     ${benchesHtml}
                 </table>
                 <div class="footer mt-3 pt-2 border-top">
-                    <div class="d-flex justify-content-between">
+                    <div class="d-flex justify-content-between small text-muted">
                         <span><strong>Total Students:</strong> ${roomData.students.length}</span>
                         <span><strong>Invigilator Sign:</strong> ___________________</span>
                     </div>
@@ -34208,15 +34674,55 @@ function generateSeatingArrangementReport(examId, date, session) {
     });
 
     const extraCss = `
-        .printable-page { page-break-after: always; margin-bottom: 20px; font-family: sans-serif; }
+        @page { size: A4 portrait; margin: 10mm; }
+        .printable-page { page-break-after: always; margin-bottom: 20px; font-family: 'Segoe UI', sans-serif; }
         .header-box { border-bottom: 2px solid #333; padding-bottom: 10px; }
-        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; font-size: 0.9em; background: #f8f9fa; padding: 8px; border-radius: 4px; }
-        .seating-grid { width: 100%; border-collapse: separate; border-spacing: 10px; margin-top: 15px; }
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 0.85em; background: #f8f9fa; padding: 8px; border-radius: 4px; }
+        
+        .seating-grid { width: 100%; border-collapse: separate; border-spacing: 8px; margin-top: 10px; }
         .bench-cell { vertical-align: top; } 
-        .bench { border: 2px solid #000; padding: 4px; display: flex; justify-content: space-around; background: #fff; min-height: 55px; box-shadow: 2px 2px 0px #ccc; }
-        .seat-box { border: 1px dashed #999; padding: 2px; text-align: center; margin: 0 2px; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
-        .seat-box.empty { background: #eee; border: none; }
-        .reg-no { font-weight: bold; font-size: 0.95em; white-space: nowrap; }
+        
+        /* Bench Container */
+        .bench { 
+            border: 2px solid #444; 
+            padding: 3px; 
+            display: flex; 
+            justify-content: space-around; 
+            background: #fff; 
+            /* Flexible height to accommodate long names */
+            min-height: 65px; 
+            box-shadow: 2px 2px 0px #ddd; 
+            border-radius: 4px;
+        }
+
+        /* Individual Seat */
+        .seat-box { 
+            border: 1px dashed #bbb; 
+            padding: 2px; 
+            text-align: center; 
+            margin: 0 1px; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: center; /* Center Vertically */
+            overflow: hidden; 
+            height: 100%;
+        }
+        .seat-box.empty { background: #f9f9f9; border: none; }
+        
+        /* Text Styles */
+        .reg-no { font-weight: bold; font-size: 0.9em; line-height: 1.1; margin-bottom: 1px;}
+        
+        /* NEW NAME STYLE: Allows wrapping */
+        .student-name { 
+            font-size: 0.7em; 
+            line-height: 1.1; 
+            font-weight: 500; 
+            white-space: normal;  /* Allows text to break down */
+            word-wrap: break-word; /* Breaks very long words */
+            margin-bottom: 1px;
+        }
+
+        .class-name { font-size: 0.65em; color: #666; line-height: 1.1; font-style: italic; }
     `;
 
     printReport({ contentHtml: reportHtml, title: `Seating_Plan_${date}_${session}`, extraCss: extraCss, pageSize: 'A4 portrait' });
@@ -37115,103 +37621,161 @@ function calculateMatrixTotals() {
  * Uses the "Map Pattern": Saves 1 document per session, with rules as keys (RULE_...).
  */
 async function saveMatrixAllocations() {
+    console.log("🚀 Starting Intelligent Allocation Save...");
+
     const examId = document.getElementById('alloc-exam-select').value;
-    const selectedSessionKeys = Array.from(document.getElementById('alloc-session-select').selectedOptions).map(opt => opt.value);
-    
+    const sessionSelect = document.getElementById('alloc-session-select');
+    const selectedSessionKeys = Array.from(sessionSelect.selectedOptions).map(opt => opt.value);
+
     if (selectedSessionKeys.length === 0) return showAlert('No sessions selected', 'danger');
 
-    // 1. OPTIMIZATION: Get ONLY "Dirty" Rows (Rows that were edited)
+    // 1. Filter for "Dirty" (Edited) Rows
     const allRows = document.querySelectorAll('#allocation-matrix-tbody tr');
-    // We filter rows that have the data-dirty attribute set
     const dirtyRows = Array.from(allRows).filter(row => row.dataset.dirty === "true");
 
-    if (dirtyRows.length === 0) return showAlert('No changes detected to save.', 'info');
+    if (dirtyRows.length === 0) return showAlert('No changes detected. Edit a cell first.', 'info');
 
-    // 2. Identify managed classes (for context, though largely handled by row logic now)
+    // 2. Identify which classes are being edited (for Safe Cleanup)
+    // We expect group ID format: "CLASSID$GENDER" or just "CLASSID" depending on your setup
     const managedClassIds = new Set();
-    dirtyRows.forEach(row => managedClassIds.add(row.dataset.groupId.split('_')[0]));
+    dirtyRows.forEach(row => {
+        const rawId = row.dataset.groupId; 
+        const classId = rawId.includes('$') ? rawId.split('$')[0] : rawId.split('_')[0]; 
+        managedClassIds.add(classId);
+    });
 
     const saveBtn = document.getElementById('save-matrix-allocation-btn');
-    const originalButtonHtml = saveBtn.innerHTML; 
-    
+    const originalButtonHtml = saveBtn.innerHTML;
     saveBtn.disabled = true;
-    saveBtn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Processing ${dirtyRows.length} updates...`;
+    saveBtn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Processing ranges...`;
 
     const batch = writeBatch(db);
     let hasUpdates = false;
 
     try {
-        // 3. Loop through selected sessions
+        // 3. Loop through every selected session
         for (const sessionKey of selectedSessionKeys) {
             const [date, session] = sessionKey.split('_');
             const docId = `ALLOC_${examId}_${date}_${session}`;
             const docRef = doc(db, `artifacts/${appId}/public/data/examRoomAllocationRules`, docId);
 
-            // Fetch current data to know what exists (crucial for deletion logic)
+            // Fetch current data (Required for the Cleanup Phase)
             const docSnap = await getDoc(docRef);
             const existingData = docSnap.exists() ? docSnap.data() : {};
 
-            // 4. Generate Updates Logic
-            const updates = {};
-            
-            dirtyRows.forEach(row => {
-                const classId = row.dataset.groupId.split('_')[0]; // Extract Class ID
-                const inputs = row.querySelectorAll('input.alloc-input');
+            // Initialize Updates Object with Metadata
+            const updates = {
+                id: docId,
+                examId: examId,
+                date: date,
+                session: session,
+                lastUpdated: serverTimestamp()
+            };
 
-                inputs.forEach(input => {
-                    const roomId = input.dataset.roomId;
-                    const val = parseInt(input.value) || 0;
-                    
-                    // Construct your unique field key (e.g., "ClassID_RoomID")
-                    // This MUST match how you stored it in existingData
-                    const fieldKey = `${classId}_${roomId}`; 
-
-                    // --- LOGIC: Zero = Delete, >0 = Save ---
-                    if (val > 0) {
-                        // SAVE/UPDATE
-                        updates[fieldKey] = {
-                            id: fieldKey,
-                            classId: classId,
-                            roomId: roomId,
-                            count: val,
-                            examId: examId,
-                            date: date,
-                            session: session
-                        };
-                    } else {
-                        // DELETE
-                        // Only delete if it actually exists in the DB to save write costs
-                        if (existingData[fieldKey]) {
-                            updates[fieldKey] = deleteField(); 
+            // ============================================================
+            // PHASE 1: THE CLEANUP (Delete old rules for edited classes)
+            // ============================================================
+            if (existingData) {
+                Object.keys(existingData).forEach(key => {
+                    // Check if this key is a Rule Object (starts with RULE_)
+                    if (key.startsWith('RULE_')) {
+                        const rule = existingData[key];
+                        // CRITICAL: Only delete if this rule belongs to a class we are currently editing
+                        if (rule && rule.classId && managedClassIds.has(rule.classId)) {
+                            updates[key] = deleteField();
                         }
                     }
                 });
-            });
-            
-            // Only add to batch if there are actual changes for this session
-            if (Object.keys(updates).length > 0) {
-                batch.set(docRef, updates, { merge: true });
-                hasUpdates = true;
             }
+
+            // ============================================================
+            // PHASE 2: THE ASSIGNMENT (Calculate Ranges)
+            // ============================================================
+            
+            // We iterate through dirty rows to recalculate their ranges
+            for (const row of dirtyRows) {
+                const groupId = row.dataset.groupId;
+                // Robust split: handle both '$' (from your snippet) or '_' (common convention)
+                const parts = groupId.includes('$') ? groupId.split('$') : groupId.split('_');
+                const classId = parts[0];
+                const gender = parts[1] || 'ALL'; // Fallback if no gender specified
+
+                // A. Get Students & Sort (Crucial for ranges)
+                // Ensure 'students' global array is available
+                const studentsInGroup = students.filter(s => 
+                    s.classId === classId && 
+                    (s.gender === gender || gender === 'ALL') &&
+                    s.examRegNumbers?.[examId] && // Must have reg number for this exam
+                    s.status !== 'TC Issued'
+                ).sort((a, b) => {
+                    const regA = a.examRegNumbers[examId];
+                    const regB = b.examRegNumbers[examId];
+                    // Natural sort for numbers (e.g., 10, 11, 100)
+                    return regA.localeCompare(regB, undefined, { numeric: true });
+                });
+
+                let currentIndex = 0;
+                const inputs = row.querySelectorAll('.alloc-input');
+
+                // B. Iterate Inputs (Rooms) in this Row
+                inputs.forEach(input => {
+                    const count = parseInt(input.value) || 0;
+                    const roomId = input.dataset.roomId;
+
+                    if (count > 0) {
+                        // Logic: Slice the sorted array to get the next batch of students
+                        const allocatedSlice = studentsInGroup.slice(currentIndex, currentIndex + count);
+                        
+                        if (allocatedSlice.length > 0) {
+                            const startReg = allocatedSlice[0].examRegNumbers[examId];
+                            const endReg = allocatedSlice[allocatedSlice.length - 1].examRegNumbers[examId];
+
+                            // Unique Rule Key
+                            const ruleKey = `RULE_${examId}_${date}_${session}_${roomId}_${classId}_${gender}`;
+
+                            // Create the Rule Object
+                            updates[ruleKey] = {
+                                id: ruleKey,
+                                examId: examId,
+                                date: date,
+                                session: session,
+                                roomId: roomId,
+                                classId: classId,
+                                gender: gender,
+                                count: count,
+                                // The Magic: Saving the specific range
+                                regNoRangeText: `${startReg} - ${endReg}`, 
+                                allocatedBy: typeof selectedUser !== 'undefined' ? selectedUser.id : 'admin',
+                                allocatedAt: new Date().toISOString()
+                            };
+
+                            // Move index forward for the next room
+                            currentIndex += count;
+                        }
+                    }
+                });
+            }
+
+            // Add to batch
+            batch.set(docRef, updates, { merge: true });
+            hasUpdates = true;
         }
 
-        // 5. Commit
+        // 4. Commit Changes
         if (hasUpdates) {
             await batch.commit();
-            showAlert(`Saved changes for ${dirtyRows.length} row(s) successfully.`, 'success');
-            
-            // CLEANUP: Remove dirty flags since data is now synced
+            showAlert(`Saved allocations with Reg No ranges for ${dirtyRows.length} classes.`, 'success');
+
+            // Cleanup
             dirtyRows.forEach(row => delete row.dataset.dirty);
-            
-            // Recalculate totals
-            calculateMatrixTotals();
+            if (typeof calculateMatrixTotals === 'function') calculateMatrixTotals();
         } else {
-            showAlert('No actual data changes needed saving.', 'info');
+            showAlert('No changes needed saving.', 'info');
         }
 
     } catch (e) {
         console.error("Save Error:", e);
-        showAlert('Error saving allocations.', 'danger');
+        showAlert(`Error saving: ${e.message}`, 'danger');
     } finally {
         saveBtn.disabled = false;
         saveBtn.innerHTML = originalButtonHtml;
@@ -38029,7 +38593,7 @@ function displayHallTicketStudentList(examId, classId, division) {
     const container = document.getElementById('hall-ticket-student-list-container');
     if (!container || !examId || !classId || !division) {
         container.innerHTML = `<p class="text-muted text-center p-4">Select an exam, class and division to load students.</p>`;
-        return []; // Return empty array if filters are incomplete
+        return [];
     }
 
     const studentsForHT = students.filter(s =>
@@ -38050,48 +38614,69 @@ function displayHallTicketStudentList(examId, classId, division) {
     let tableHtml = `
         <h5>Students in ${classes.find(c => c.id === classId)?.name || ''} - ${division} for Exam: ${exams.find(e=>e.id===examId)?.name || examId}</h5>
         <div class="table-responsive">
-            <table class="table table-bordered table-sm">
-                <thead><tr><th>Student Name</th><th>Admn No.</th><th>Exam Reg. No.</th><th>Assigned Room(s)</th><th>Actions</th></tr></thead>
+            <table class="table table-bordered table-sm align-middle">
+                <thead class="table-light"><tr><th>Student Name</th><th>Admn No.</th><th>Exam Reg. No.</th><th>Assigned Room(s)</th><th>Actions</th></tr></thead>
                 <tbody>
                     ${studentsForHT.map(student => {
                         const examRegNoDisplay = student.examRegNumbers?.[examId] || 'N/A';
                         
-                        // --- NEW RULE-BASED LOGIC ---
+                        // --- UPDATED RULE-BASED LOGIC ---
                         const studentRegNo = student.examRegNumbers?.[examId];
-                        let roomAllocDisplay = 'N/A';
+                        let roomAllocDisplay = '<span class="text-muted small">Not Allocated</span>';
 
                         if (studentRegNo) {
-                            // Find all rules this student's Reg No. matches for this exam
+                            // 1. Find Matching Rules
                             const matchingRules = examRoomAllocationRules.filter(rule => 
                                 rule.examId === examId && 
                                 doesRegNoMatchRule(studentRegNo, rule.regNoRangeText)
                             );
                             
                             if (matchingRules.length > 0) {
-                                // Sort by date, then session to display chronologically
+                                // 2. Sort Chronologically
                                 matchingRules.sort((a, b) => {
                                     const dateDiff = a.date.localeCompare(b.date);
                                     if (dateDiff !== 0) return dateDiff;
                                     return a.session.localeCompare(b.session);
                                 });
                                 
+                                // 3. Build Display String with Teacher Info
                                 roomAllocDisplay = matchingRules.map(rule => {
                                     const roomName = examRooms.find(r => r.id === rule.roomId)?.name || rule.roomId;
-                                    const formattedDate = new Date(rule.date).toLocaleDateString('en-GB');
-                                    return `${formattedDate} (${rule.session}): ${roomName}`;
-                                }).join('<br>');
-                            } else {
-                                roomAllocDisplay = 'Not Allocated';
+                                    const formattedDate = new Date(rule.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+                                    
+                                    // A. Find Duty Teacher for this specific slot
+                                    const duty = examDuties.find(d => 
+                                        d.examId === examId && 
+                                        d.date === rule.date && 
+                                        d.session === rule.session && 
+                                        d.roomId === rule.roomId
+                                    );
+
+                                    let teacherHtml = '';
+                                    if (duty) {
+                                        // Use name from duty or lookup in teachers list
+                                        const tName = duty.dutyTeacherName || teachers.find(t => t.id === duty.dutyTeacherId)?.name;
+                                        if (tName) {
+                                            teacherHtml = `<div class="text-muted" style="font-size: 0.75em;"><i class="fas fa-user-tie me-1"></i>${tName}</div>`;
+                                        }
+                                    }
+
+                                    return `
+                                        <div class="mb-1 pb-1 border-bottom border-light">
+                                            <div><strong>${formattedDate} (${rule.session})</strong>: ${roomName}${teacherHtml}</div>
+                                            
+                                        </div>`;
+                                }).join('');
                             }
                         }
-                        // --- END NEW LOGIC ---
+                        // --- END UPDATED LOGIC ---
 
                         return `
                             <tr>
                                 <td>${student.name}</td>
                                 <td>${student.admissionNumber}</td>
                                 <td>${examRegNoDisplay}</td>
-                                <td>${roomAllocDisplay}</td>
+                                <td style="font-size: 0.9em;">${roomAllocDisplay}</td>
                                 <td class="text-end">
                                     <button class="btn btn-sm btn-info" onclick="window.showSingleHallTicketModal('${student.id}', '${examId}')">View/Print</button>
                                 </td>
@@ -41082,7 +41667,458 @@ async function handleStudentPromotion() {
         showAlert('An error occurred during promotion. See console for details.', 'danger');
     }
 }
+// --- 2. Global State for this Module ---
+let bulkDocs = [];       // Loaded documents
+let addedColumns = [];   // Tracks custom columns: { key, type, options }
 
+/**
+ * Main Entry Point: Renders the UI
+ */
+window.renderBulkFieldManager = () => {
+    const mainContent = document.getElementById('main-content');
+    
+    // Define HTML Structure
+    const html = `
+    <div id="bulk-manager-container" class="container-fluid mt-4">
+        <div class="card shadow-sm">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-table me-2"></i>Bulk Data Editor</h5>
+                <button class="btn btn-sm btn-outline-light" onclick="renderBulkFieldManager()">Reset / Reload</button>
+            </div>
+            <div class="card-body">
+                
+                <div class="row mb-3 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">1. Collection</label>
+                        <select id="bulk-collection-select" class="form-select">
+                            <option value="">-- Select --</option>
+                            <option value="students">Students</option>
+                            <option value="teachers">Teachers</option>
+                            <option value="classes">Classes</option>
+                            <option value="exams">Exams</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-primary w-100" onclick="handleBulkLoad()">Load Data</button>
+                    </div>
+                    <div class="col-md-7 text-end">
+                         <span id="record-count-badge" class="badge bg-secondary">0 Records</span>
+                    </div>
+                </div>
+
+                <div id="editor-area" class="d-none">
+                    <hr>
+                    
+                    <div class="d-flex justify-content-between mb-3 align-items-center bg-light p-2 rounded border">
+                        <div>
+                            <button class="btn btn-success btn-sm" onclick="openAddColumnModal()">
+                                <i class="fas fa-plus-circle"></i> Add Editable Column
+                            </button>
+                            <small class="text-muted ms-2">Add columns to edit specific fields</small>
+                        </div>
+                        <div>
+                            <button class="btn btn-danger" onclick="saveBulkChanges()">
+                                <i class="fas fa-save"></i> SAVE ALL CHANGES
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive" style="max-height: 60vh; overflow-y: auto;">
+                        <table class="table table-bordered table-hover table-sm align-middle" id="bulk-editor-table">
+                            <thead class="table-light sticky-top" style="top:0; z-index:5;">
+                                <tr id="table-header-row">
+                                    <th style="width: 50px;">#</th>
+                                    <th>ID</th>
+                                    <th>Name</th>
+                                    </tr>
+                            </thead>
+                            <tbody id="table-body">
+                                </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="addColumnModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add New Field Column</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Field Name (Key)</label>
+                        <input type="text" id="new-col-key" class="form-control" placeholder="e.g. gender">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Input Type</label>
+                        <select id="new-col-type" class="form-select" onchange="toggleOptionsInput()">
+                            <option value="text">Text Box</option>
+                            <option value="number">Number</option>
+                            <option value="select">Dropdown (Select)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3 d-none" id="col-options-div">
+                        <label class="form-label">Options (Comma separated)</label>
+                        <input type="text" id="new-col-options" class="form-control" placeholder="Male,Female,Other">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" onclick="confirmAddColumn()">Add Column</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    `;
+
+    // Inject HTML
+    mainContent.innerHTML = html;
+
+    // Reset State
+    bulkDocs = [];
+    addedColumns = [];
+}
+
+/* ---------------------------------------------------------
+   LOGIC FUNCTIONS
+   --------------------------------------------------------- */
+
+window.handleBulkLoad = async () => {
+    const colName = document.getElementById('bulk-collection-select').value;
+    if (!colName) return showAlert('Please select a collection', 'warning');
+
+    if(typeof showLoading === 'function') showLoading(true, 'Fetching live data from Server...');
+    
+    try {
+        // 1. FETCH FROM FIREBASE SERVER (Not IDB)
+        // Assuming 'db' is your Firestore instance
+        const q = query(getCollectionRef(colName));
+        const querySnapshot = await getDocs(q);
+        
+        // Convert to array
+        bulkDocs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        // 2. Setup UI
+        renderEditorTable();
+        
+        document.getElementById('editor-area').classList.remove('d-none');
+        document.getElementById('filter-controls').classList.remove('d-none');
+        document.getElementById('record-count-badge').innerText = `${bulkDocs.length} Live Records`;
+
+        // Populate Filter Dropdown
+        if(bulkDocs.length > 0) {
+            const keys = Object.keys(bulkDocs[0]).sort();
+            document.getElementById('quick-filter-field').innerHTML = keys.map(k => `<option value="${k}">${k}</option>`).join('');
+        }
+
+    } catch (e) {
+        console.error(e);
+        showAlert('Server Error: ' + e.message, 'danger');
+    } finally {
+        if(typeof showLoading === 'function') showLoading(false);
+    }
+}
+
+window.saveBulkChanges = async () => {
+    if (addedColumns.length === 0) return showAlert('No columns added to save.', 'warning');
+    if (!confirm(`Are you sure? This will update ${bulkDocs.length} records on the SERVER.`)) return;
+
+    if(typeof showLoading === 'function') showLoading(true, 'Pushing updates to Server...');
+    
+    const colName = document.getElementById('bulk-collection-select').value;
+    
+    try {
+        const rows = document.querySelectorAll('#table-body tr');
+        const updates = [];
+
+        // 1. Collect Changes
+        rows.forEach(row => {
+            const docId = row.getAttribute('data-id');
+            const originalDoc = bulkDocs.find(d => d.id === docId);
+            
+            if (originalDoc) {
+                // We only need the ID and the fields we are changing
+                const updateData = { id: docId }; 
+                let hasChange = false;
+
+                const inputs = row.querySelectorAll('.custom-input');
+                inputs.forEach(input => {
+                    const key = input.getAttribute('data-key');
+                    let val = input.value;
+                    
+                    // Convert numbers
+                    const colDef = addedColumns.find(c => c.key === key);
+                    if (colDef && colDef.type === 'number') val = Number(val);
+                    
+                    // Only add if value is different (Optional optimization)
+                    if (originalDoc[key] !== val) {
+                        updateData[key] = val;
+                        hasChange = true;
+                    }
+                });
+
+                if (hasChange) updates.push(updateData);
+            }
+        });
+
+        if (updates.length === 0) {
+            return showAlert("No changes detected.", "info");
+        }
+
+        // 2. Batch Update to Firebase (Chunked by 450)
+        const chunkSize = 450;
+        for (let i = 0; i < updates.length; i += chunkSize) {
+            const chunk = updates.slice(i, i + chunkSize);
+            const batch = writeBatch(db); // Firebase Batch
+
+            chunk.forEach(data => {
+                const docRef = getDocRef(colName, data.id);
+                // Remove ID from data object before passing to update
+                const { id, ...fieldsToUpdate } = data; 
+                batch.update(docRef, fieldsToUpdate);
+            });
+
+            await batch.commit();
+        }
+
+        // 3. SUCCESS - Now Sync Local IndexedDB
+        // We update our local IDB so the app feels fast when we leave this page
+        if (typeof bulkUpdateIDB === 'function') {
+            // We need to merge these updates into our local cache
+            // Since we only have partial data in 'updates', we need to merge it with current bulkDocs
+            const fullDocsForLocal = updates.map(u => {
+                const oldDoc = bulkDocs.find(d => d.id === u.id);
+                return { ...oldDoc, ...u }; // Merge old data with new changes
+            });
+            
+            await bulkUpdateIDB(colName, fullDocsForLocal);
+            console.log("Local IndexedDB synced successfully.");
+        }
+        
+        showAlert('✅ Server Updated & Local Data Synced!', 'success');
+        
+        // Reload data to verify
+        handleBulkLoad();
+
+    } catch (e) {
+        console.error(e);
+        showAlert('Save Failed: ' + e.message, 'danger');
+    } finally {
+        if(typeof showLoading === 'function') showLoading(false);
+    }
+}
+window.handleBulkLoadold = async () => {
+    const colName = document.getElementById('bulk-collection-select').value;
+    if (!colName) return showAlert('Select a collection', 'warning');
+
+    if(typeof showLoading === 'function') showLoading(true, 'Loading Data...');
+    
+    try {
+        // Fetch from IndexedDB
+        const rawData = await getAllFromIDB(colName);
+        bulkDocs = rawData.map(d => d); // Clone array
+        
+        renderEditorTable();
+        
+        document.getElementById('editor-area').classList.remove('d-none');
+        document.getElementById('record-count-badge').innerText = `${bulkDocs.length} Records Loaded`;
+
+    } catch (e) {
+        console.error(e);
+        showAlert('Error: ' + e, 'danger');
+    } finally {
+        if(typeof showLoading === 'function') showLoading(false);
+    }
+}
+
+window.renderEditorTable = () => {
+    const thead = document.getElementById('table-header-row');
+    const tbody = document.getElementById('table-body');
+    
+    // 1. Reset Headers
+    thead.innerHTML = `<th style="width:50px">#</th><th style="width:150px">ID</th><th>Name</th>`;
+    
+    // 2. Add Dynamic Headers
+    addedColumns.forEach(col => {
+        thead.insertAdjacentHTML('beforeend', `<th class="bg-warning bg-opacity-10">${col.key} <i class="fas fa-pen small text-muted"></i></th>`);
+    });
+
+    // 3. Render Rows
+    tbody.innerHTML = bulkDocs.map((doc, index) => {
+        let rowHtml = `
+            <tr data-id="${doc.id}">
+                <td>${index + 1}</td>
+                <td class="text-muted small">${doc.id}</td>
+                <td class="fw-bold">${doc.name || doc.title || '-'}</td>
+        `;
+
+        // Dynamic Input Cells
+        addedColumns.forEach(col => {
+            let inputHtml = '';
+            const currentVal = doc[col.key] || '';
+
+            if (col.type === 'select') {
+                const opts = col.options.map(opt => 
+                    `<option value="${opt}" ${opt === currentVal ? 'selected' : ''}>${opt}</option>`
+                ).join('');
+                inputHtml = `<select class="form-select form-select-sm custom-input" data-key="${col.key}">
+                                <option value="">--</option>${opts}
+                             </select>`;
+            } 
+            else if (col.type === 'number') {
+                inputHtml = `<input type="number" class="form-control form-control-sm custom-input" data-key="${col.key}" value="${currentVal}">`;
+            } 
+            else {
+                inputHtml = `<input type="text" class="form-control form-control-sm custom-input" data-key="${col.key}" value="${currentVal}">`;
+            }
+
+            rowHtml += `<td>${inputHtml}</td>`;
+        });
+
+        rowHtml += `</tr>`;
+        return rowHtml;
+    }).join('');
+}
+
+// --- Modal Logic ---
+
+window.openAddColumnModal = () => {
+    const modal = new bootstrap.Modal(document.getElementById('addColumnModal'));
+    modal.show();
+}
+
+window.toggleOptionsInput = () => {
+    const type = document.getElementById('new-col-type').value;
+    document.getElementById('col-options-div').classList.toggle('d-none', type !== 'select');
+}
+
+window.confirmAddColumn = () => {
+    const key = document.getElementById('new-col-key').value.trim();
+    const type = document.getElementById('new-col-type').value;
+    
+    if (!key) return alert("Field Key is required");
+    
+    let options = [];
+    if (type === 'select') {
+        const rawOpts = document.getElementById('new-col-options').value;
+        options = rawOpts.split(',').map(s => s.trim()).filter(Boolean);
+        if (options.length === 0) return alert("Add at least one option");
+    }
+
+    // Add to state and re-render
+    addedColumns.push({ key, type, options });
+    renderEditorTable();
+
+    // Close Modal
+    const modalEl = document.getElementById('addColumnModal');
+    const modal = bootstrap.Modal.getInstance(modalEl);
+    modal.hide();
+}
+
+// --- Save Logic ---
+
+window.saveBulkChangesold = async () => {
+    if (addedColumns.length === 0) return showAlert('No columns added to save.', 'warning');
+    if (!confirm(`Save changes for ${bulkDocs.length} records?`)) return;
+
+    if(typeof showLoading === 'function') showLoading(true, 'Saving...');
+    
+    try {
+        const colName = document.getElementById('bulk-collection-select').value;
+        const rows = document.querySelectorAll('#table-body tr');
+        
+        const updates = [];
+
+        rows.forEach(row => {
+            const docId = row.getAttribute('data-id');
+            const originalDoc = bulkDocs.find(d => d.id === docId);
+            
+            if (originalDoc) {
+                // Clone doc
+                const updatedDoc = { ...originalDoc };
+                
+                // Get values from inputs
+                const inputs = row.querySelectorAll('.custom-input');
+                inputs.forEach(input => {
+                    const key = input.getAttribute('data-key');
+                    let val = input.value;
+                    
+                    // Number conversion
+                    const colDef = addedColumns.find(c => c.key === key);
+                    if (colDef && colDef.type === 'number') val = Number(val);
+                    
+                    updatedDoc[key] = val;
+                });
+                updates.push(updatedDoc);
+            }
+        });
+
+        // IndexedDB Update
+        await bulkUpdateIDB(colName, updates);
+        
+        showAlert('✅ Data Saved Successfully!', 'success');
+
+    } catch (e) {
+        console.error(e);
+        showAlert('Save Failed: ' + e, 'danger');
+    } finally {
+        if(typeof showLoading === 'function') showLoading(false);
+    }
+}
+
+
+
+function getAllFromIDB(storeName) {
+    return new Promise((resolve, reject) => {
+        try {
+            // 1. SAFETY CHECK: Is the DB variable actually set?
+            if (!appDb) {
+                return reject("Database connection (appDb) is missing. Please refresh the page.");
+            }
+
+            // 2. SAFETY CHECK: Is it a valid IndexedDB object?
+            // If appDb is {} or null, objectStoreNames will be undefined
+            if (!appDb.objectStoreNames) {
+                return reject("Database is not fully initialized yet. Try again in a moment.");
+            }
+
+            const db = appDb;
+
+            // 3. Check if the Collection (Store) exists
+            if (!db.objectStoreNames.contains(storeName)) {
+                return reject(`Collection '${storeName}' not found in Database.`);
+            }
+
+            // 4. Perform the Fetch
+            const tx = db.transaction(storeName, "readonly");
+            const store = tx.objectStore(storeName);
+            const request = store.getAll();
+
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+
+        } catch (e) { 
+            console.error("IDB Error:", e);
+            reject(e); 
+        }
+    });
+}
+function bulkUpdateIDB(storeName, docsToUpdate) {
+    return new Promise(async (resolve, reject) => {
+        try {
+            const db = await openIDB();
+            const tx = db.transaction(storeName, "readwrite");
+            const store = tx.objectStore(storeName);
+            docsToUpdate.forEach(doc => store.put(doc));
+            tx.oncomplete = () => resolve("Success");
+            tx.onerror = () => reject(tx.error);
+        } catch (e) { reject(e); }
+    });
+}
 
 // =========================================================================
 // --- ⚙️ DATA MIGRATION MODULE (TEMPORARY) ---
@@ -41603,7 +42639,8 @@ async function startMigration() {
     'progression-mgt': window.renderProgressionModule, // <-- ADD THIS LINE
     'data-migration': window.renderMigrationTool, // <-- ADD THIS LINE
     'notification-mgt': window.renderNotificationManager,
-    'student-360-profile': window.renderStudent360Profile
+    'student-360-profile': window.renderStudent360Profile,
+    'bulk-manager' : window.renderBulkFieldManager
 
 };      
 // --- In your <script type="module"> block ---
