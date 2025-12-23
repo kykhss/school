@@ -1,0 +1,104 @@
+/* Sidebar Base */
+#sidebar {
+    width: 260px;
+    background: linear-gradient(180deg, #1e293b, #0f172a);
+    color: #e5e7eb;
+    position: fixed;
+    height: 100vh;
+    left: 0;
+    top: 0;
+    transition: transform .35s ease, width .35s ease;
+    z-index: 1040;
+    box-shadow: 0 10px 30px rgba(0,0,0,.35);
+}
+
+/* Mobile Off-canvas */
+#sidebar {
+    transform: translateX(-100%);
+}
+#sidebar.show {
+    transform: translateX(0);
+}
+
+/* Overlay */
+#sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.45);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .3s ease;
+    z-index: 1039;
+}
+#sidebar-overlay.show {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Desktop collapsed */
+body.sidebar-collapsed #sidebar {
+    width: 78px;
+}
+body.sidebar-collapsed .nav-text {
+    opacity: 0;
+    width: 0;
+    overflow: hidden;
+}
+
+/* Navigation */
+#sidebar-nav {
+    padding: 1rem;
+}
+
+.nav-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: .7rem .9rem;
+    margin-bottom: .4rem;
+    border-radius: 10px;
+    color: #cbd5f5;
+    text-decoration: none;
+    transition: background .25s ease, transform .15s ease;
+}
+
+.nav-link i {
+    min-width: 22px;
+    font-size: 1.05rem;
+}
+
+.nav-link:hover {
+    background: rgba(99,102,241,.18);
+    transform: translateX(4px);
+    color: #fff;
+}
+
+.nav-link.active {
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    color: #fff;
+    box-shadow: 0 6px 18px rgba(79,70,229,.45);
+}
+.nav-link.active:hover {
+    background: linear-gradient(135deg, #4f46e5, #6366f1);
+    box-shadow: 0 8px 22px rgba(99,102,241,.55);
+}
+/* Sidebar Footer */
+#sidebar-footer {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    padding: 1rem;
+    border-top: 1px solid rgba(203,213,245,.1);
+    text-align: center;
+}
+#sidebar-footer small {
+    color: #94a3b8;
+}
+#sidebar-footer a {
+    color: #cbd5f5;
+    text-decoration: none;
+}
+#sidebar-footer a:hover {
+    text-decoration: underline;
+}
+/* END OF FILE */

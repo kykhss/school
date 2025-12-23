@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pro Poster Editor v2.0</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=Roboto:wght@400;700&family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --sidebar-width: 280px;
+            --props-width: 300px;
+            --bg-color: #1e1e1e;
+            --canvas-bg: #333333;
+            --panel-bg: #2a2a2a;
+            --text-color: #e0e0e0;
+            --accent: #0c66ff;
+            --accent-hover: #0052cc;
+            --border: #444;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* --- LAYOUT --- */
+        .app-container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+
+        .sidebar, .properties-panel {
+            background-color: var(--panel-bg);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            padding: 1rem;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .sidebar { width: var(--sidebar-width); border-right: 1px solid var(--border); border-left: none; }
+        .properties-panel { width: var(--props-width); border-left: 1px solid var(--border); border-right: none; }
+
+        .workspace {
+            flex-grow: 1;
+            background-color: var(--canvas-bg);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: auto;
+        }
+
+        /* --- UI COMPONENTS --- */
+        h3 { margin-top: 0; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; color: #888; border-bottom: 1px solid var(--border); padding-bottom: 5px; }
+        
+        button {
+            background-color: #444;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 5px;
+            transition: 0.2s;
+            font-size: 0.9rem;
+        }
+        button:hover { background-color: #555; }
+        button.primary { background-color: var(--accent); }
+        button.primary:hover { background-color: var(--accent-hover); }
+        button.w-100 { width: 100%; }
+        
+        .control-group { margin-bottom: 15px; }
+        label { display: block; font-size: 0.8rem; margin-bottom: 4px; color: #aaa; }
+        input, select {
+            background-color: #111;
+            border: 1px solid #444;
+            color: white;
+            padding: 6px;
+            border-radius: 4px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        input[type="color"] { height: 35px; padding: 0; cursor: pointer; }
+        .row { display: flex; gap: 5px; }
+
+        /* --- CANVAS --- */
+        #poster-canvas {
+            width: 540px;
+            height: 675px;
+            background-color: white;
+            position: relative;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            overflow: hidden;
+            transition: transform 0.2s;
+        }
+
+        .element {
+            position: absolute;
+            user-select: none;
+            box-sizing: border-box;
+        }
+        .element:hover { outline: 1px solid var(--accent); }
+        .element.selected { 
+            outline: 2px solid var(--accent); 
+            z-index: 1000;
+        }
+        
+        /* Resize Handles */
+        .resize-handle {
+            width: 10px; height: 10px;
+            background: var(--accent);
+            position: absolute;
+            border-radius: 50%;
+            display: none;
+        }
+        .element.selected .resize-handle { display: block; }
+        .rh-se { bottom: -5px; right: -5px; cursor: se-resize; }
+
+        /* --- DATA & TEMPLATE LISTS --- */
+        .list-item {
+            background: #333;
+            padding: 10px;
+            margin-bottom: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .list-item:hover { background: #3a3a3a; }
+        .list-item.active { border-color: var(--accent); background: #334; }
+        .tag { font-size: 0.7rem; background: #222; padding: 2px 5px; border-radius: 3px; }
+
+        /* Dynamic Field Tags */
+        .field-tag {
+            display: inline-block;
+            background: #2d4663;
+            color: #8ab4f8;
+            padding: 5px 10px;
+            border-radius: 15px;
+            margin: 2px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            border: 1px solid #0c66ff;
+        }
+        .field-tag:hover { background: #0c66ff; color: white; }
+
+        .toolbar-top {
+            position: absolute;
+            top: 10px;
+            background: rgba(0,0,0,0.8);
+            padding: 5px 15px;
+            border-radius: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 2000;
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <div class="sidebar">
+        <h2>PosterView</h2>
+        
+        <h3>1. Select Data Source</h3>
+        <div id="data-list-container">
+            </div>
+        <button class="w-100" onclick="addNewDataEntry()">+ Add New Student</button>
+        <br><br>
+
+        <h3>2. Choose Template</h3>
+        <div id="template-list">
+            <div class="list-item" onclick="loadTemplate('topper')">
+                <span>🏆 Topper</span>
+            </div>
+            <div class="list-item" onclick="loadTemplate('welcome')">
+                <span>👋 Welcome</span>
+            </div>
+            <div class="list-item" onclick="loadTemplate('event')">
+                <span>📅 Event</span>
+            </div>
+             <div class="list-item" onclick="loadTemplate('blank')">
+                <span>⬜ Blank</span>
+            </div>
+        </div>
+        <br>
+
+        <h3>3. Add Elements</h3>
+        <button class="w-100" onclick="addElement('text')">Add Text</button>
+        <button class="w-100" onclick="document.getElementById('img-upload-global').click()">Add Image</button>
+        <input type="file" id="img-upload-global" hidden accept="image/*">
+        
+        <br>
+        <h3>Dynamic Fields (Click to Add)</h3>
+        <p style="font-size:0.7rem; color:#888;">These update automatically based on selected data.</p>
+        <div id="dynamic-fields-container">
+            </div>
+    </div>
+
+    <div class="workspace">
+        <div class="toolbar-top">
+            <button onclick="downloadPoster()">Download PNG</button>
+            <button onclick="saveCurrentTemplate()">Save as Template</button>
+            <button class="btn-danger" onclick="deleteSelected()">Delete Selected</button>
+        </div>
+        <div id="poster-canvas">
+            </div>
+    </div>
+
+    <div class="properties-panel">
+        <h3>Properties</h3>
+        <div id="no-selection">Select an element to edit</div>
+        
+        <div id="properties-form" style="display:none;">
+            
+            <div class="control-group">
+                <label>Position</label>
+                <div class="row">
+                    <input type="number" id="prop-x" placeholder="X">
+                    <input type="number" id="prop-y" placeholder="Y">
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>Size</label>
+                <div class="row">
+                    <input type="number" id="prop-w" placeholder="W">
+                    <input type="number" id="prop-h" placeholder="H">
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>Layering</label>
+                <div class="row">
+                    <button class="w-100" onclick="changeZ(1)">Up</button>
+                    <button class="w-100" onclick="changeZ(-1)">Down</button>
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <label>Opacity (%)</label>
+                <input type="range" id="prop-opacity" min="0" max="100">
+            </div>
+
+            <div id="text-props" style="display:none;">
+                <hr>
+                <label>Content / Binding</label>
+                <input type="text" id="prop-content">
+                <small style="color:#666">Use {key} for binding (e.g. {name})</small>
+                
+                <div class="row" style="margin-top:5px;">
+                    <input type="color" id="prop-color">
+                    <input type="number" id="prop-size" placeholder="Size">
+                </div>
+                <select id="prop-font" style="margin-top:5px;">
+                    <option value="Inter">Inter</option>
+                    <option value="Roboto">Roboto</option>
+                    <option value="Montserrat">Montserrat</option>
+                    <option value="serif">Serif</option>
+                    <option value="cursive">Script</option>
+                </select>
+                <div class="row" style="margin-top:5px;">
+                    <button class="w-100" onclick="toggleStyle('fontWeight', 'bold')"><b>B</b></button>
+                    <button class="w-100" onclick="toggleStyle('fontStyle', 'italic')"><i>I</i></button>
+                </div>
+                <label style="margin-top:10px;">Shadow</label>
+                <input type="text" id="prop-shadow" placeholder="2px 2px 4px #000">
+            </div>
+
+            <div id="image-props" style="display:none;">
+                <hr>
+                <label>Image Fit</label>
+                <select id="prop-fit">
+                    <option value="cover">Cover</option>
+                    <option value="contain">Contain</option>
+                    <option value="100% 100%">Stretch</option>
+                </select>
+                <label>Border Radius (%)</label>
+                <input type="range" id="prop-radius" min="0" max="50">
+                <label>Border</label>
+                <div class="row">
+                    <input type="number" id="prop-border-width" placeholder="px">
+                    <input type="color" id="prop-border-color">
+                </div>
+                <button class="w-100" style="margin-top:10px;" onclick="document.getElementById('img-replace').click()">Replace Image</button>
+                <input type="file" id="img-replace" hidden accept="image/*">
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+    // --- STATE MANAGEMENT ---
+    
+    const DB_KEY  = urlParams.get('selectId');
+    let appState = {
+        selectedDataId: null,
+        elements: [], // The current elements on canvas
+        selectedElId: null
+    };
+
+    // Default Templates
+    const templates = {
+        blank: [],
+        topper: [
+            { id: 'bg', type: 'image', x: 0, y: 0, w: 540, h: 675, src: 'tr-1t{rank}.png', z: 0, fit: 'cover' },
+            { id: 't1', type: 'text', x: 0, y: 50, w: 540, h: 60, content: 'CONGRATULATIONS', color: '#FFD700', fontSize: 40, fontFamily: 'Montserrat', align: 'center', weight: '900', z: 2 },
+            { id: 'photo', type: 'image', x: 170, y: 150, w: 200, h: 200, src: '{photo}', z: 1, radius: 50, border: 5, borderColor: '#FFD700', fit: 'cover', bindSrc: 'photo' },
+            { id: 't2', type: 'text', x: 0, y: 370, w: 540, h: 50, content: '{name}', color: '#FFFFFF', fontSize: 32, fontFamily: 'Inter', align: 'center', weight: 'bold', z: 2 },
+            { id: 't3', type: 'text', x: 0, y: 420, w: 540, h: 40, content: 'Class: {class}', color: '#CCCCCC', fontSize: 24, fontFamily: 'Inter', align: 'center', z: 2 },
+            { id: 't4', type: 'text', x: 0, y: 550, w: 540, h: 80, content: 'RANK {rank}', color: '#FF4444', fontSize: 60, fontFamily: 'Montserrat', align: 'center', weight: '900', z: 2 },
+        ],
+        welcome: [
+            { id: 'bg', type: 'image', x: 0, y: 0, w: 540, h: 675, src: 'https://placehold.co/540x675/e0f7fa/006064', z: 0, fit: 'cover' },
+            { id: 't1', type: 'text', x: 20, y: 100, w: 500, h: 60, content: 'WELCOME', color: '#006064', fontSize: 50, fontFamily: 'Montserrat', align: 'left', weight: '900', z: 2 },
+            { id: 't2', type: 'text', x: 20, y: 160, w: 500, h: 40, content: 'TO OUR SCHOOL', color: '#00838f', fontSize: 30, fontFamily: 'Montserrat', align: 'left', z: 2 },
+            { id: 'photo', type: 'image', x: 20, y: 250, w: 500, h: 300, src: '', z: 1, radius: 2, border: 0, fit: 'cover', bindSrc: 'photo' },
+            { id: 't3', type: 'text', x: 20, y: 580, w: 500, h: 50, content: '{name}', color: '#333', fontSize: 28, fontFamily: 'Inter', align: 'left', weight: 'bold', z: 2 }
+        ],
+        event: [
+            { id: 'bg', type: 'image', x: 0, y: 0, w: 540, h: 675, src: 'https://placehold.co/540x675/333/111', z: 0, fit: 'cover' },
+            { id: 't1', type: 'text', x: 50, y: 250, w: 440, h: 175, content: 'ANNUAL\nDAY', color: '#FFFFFF', fontSize: 80, fontFamily: 'Montserrat', align: 'center', weight: '900', z: 2, border: 5, borderColor: '#fff' },
+             { id: 't2', type: 'text', x: 0, y: 500, w: 540, h: 40, content: 'Chief Guest: {name}', color: '#FFD700', fontSize: 20, fontFamily: 'Inter', align: 'center', z: 2 }
+        ]
+    };
+
+    // --- DATA HANDLING ---
+
+    function getLocalData() {
+        const stored = localStorage.getItem(DB_KEY);
+        if (stored) return JSON.parse(stored);
+        
+        // Initialize dummy data if empty
+        const dummy = [
+            { id: 1, name: "Aarav Patel", class: "10-A", rank: "1", photo: "https://placehold.co/400x400/png?text=Aarav" },
+            { id: 2, name: "Sara Smith", class: "12-B", rank: "2", photo: "https://placehold.co/400x400/png?text=Sara" },
+            { id: 3, name: "John Doe", class: "9-C", rank: "3", photo: "https://placehold.co/400x400/png?text=John" }
+        ];
+        localStorage.setItem(DB_KEY, JSON.stringify(dummy));
+        return dummy;
+    }
+
+    function renderDataList() {
+        const data = getLocalData();
+        const container = document.getElementById('data-list-container');
+        const fieldContainer = document.getElementById('dynamic-fields-container');
+        
+        container.innerHTML = '';
+        fieldContainer.innerHTML = '';
+
+        // 1. Render Student List
+        data.forEach((item, index) => {
+            const div = document.createElement('div');
+            div.className = `list-item ${appState.selectedDataId === item.id ? 'active' : ''}`;
+            div.innerHTML = `<span>${item.name}</span> <span class="tag">${item.class}</span>`;
+            div.onclick = () => selectData(item.id);
+            container.appendChild(div);
+            
+            // On first load, select first
+            if (index === 0 && !appState.selectedDataId) selectData(item.id);
+        });
+
+        // 2. Render Available Fields (based on keys of first item)
+        if(data.length > 0) {
+            Object.keys(data[0]).forEach(key => {
+                if(key !== 'id') {
+                    const tag = document.createElement('span');
+                    tag.className = 'field-tag';
+                    tag.innerText = `+ ${key.toUpperCase()}`;
+                    tag.onclick = () => addBoundText(key);
+                    fieldContainer.appendChild(tag);
+                }
+            });
+        }
+    }
+
+    function selectData(id) {
+        appState.selectedDataId = id;
+        renderDataList(); // update active class
+        renderCanvas(); // re-render canvas with new data binding
+    }
+
+    function addNewDataEntry() {
+        const name = prompt("Enter Name:");
+        if(!name) return;
+        const data = getLocalData();
+        const newId = Date.now();
+        data.push({
+            id: newId,
+            name: name,
+            class: "New Class",
+            rank: "N/A",
+            photo: "https://placehold.co/400?text=Photo"
+        });
+        localStorage.setItem(DB_KEY, JSON.stringify(data));
+        renderDataList();
+        selectData(newId);
+    }
+
+    // --- CANVAS ENGINE ---
+
+    function loadTemplate(name) {
+        if(confirm("Load new template? Unsaved changes will be lost.")) {
+            // Deep copy to avoid modifying template reference
+            appState.elements = JSON.parse(JSON.stringify(templates[name]));
+            appState.selectedElId = null;
+            renderCanvas();
+        }
+    }
+
+    function getDataContext() {
+        const data = getLocalData();
+        return data.find(d => d.id === appState.selectedDataId) || {};
+    }
+
+    function processContent(content, context) {
+        if(!content) return "";
+        // Replace {key} with context[key]
+        return content.replace(/\{(\w+)\}/g, (match, key) => {
+            return context[key] || match;
+        });
+    }
+
+    function renderCanvas() {
+        const canvas = document.getElementById('poster-canvas');
+        const context = getDataContext();
+        canvas.innerHTML = '';
+
+        // Sort by Z-Index
+        appState.elements.sort((a, b) => (a.z || 0) - (b.z || 0));
+
+        appState.elements.forEach(el => {
+            const div = document.createElement('div');
+            div.className = `element ${appState.selectedElId === el.id ? 'selected' : ''}`;
+            div.style.left = `${el.x}px`;
+            div.style.top = `${el.y}px`;
+            div.style.width = `${el.w}px`;
+            div.style.height = `${el.h}px`;
+            div.style.zIndex = el.z || 0;
+            div.style.opacity = (el.opacity !== undefined ? el.opacity : 100) / 100;
+            div.style.transform = `rotate(${el.rotation || 0}deg)`;
+
+            if(el.type === 'text') {
+                div.style.display = 'flex';
+                div.style.alignItems = 'center';
+                div.style.justifyContent = el.align === 'center' ? 'center' : (el.align === 'right' ? 'flex-end' : 'flex-start');
+                div.innerText = processContent(el.content, context);
+                div.style.color = el.color;
+                div.style.fontSize = `${el.fontSize}px`;
+                div.style.fontFamily = el.fontFamily;
+                div.style.fontWeight = el.weight || 'normal';
+                div.style.fontStyle = el.fontStyle || 'normal';
+                if(el.shadow) div.style.textShadow = el.shadow;
+                if(el.borderColor) div.style.border = `${el.border || 0}px solid ${el.borderColor}`;
+            } 
+            else if (el.type === 'image') {
+                // Check if image is bound to data (like photo)
+                let src = el.src;
+                if(el.bindSrc && context[el.bindSrc]) {
+                    src = context[el.bindSrc];
+                }
+                
+                div.style.backgroundImage = `url('${src}')`;
+                div.style.backgroundSize = el.fit || 'cover';
+                div.style.backgroundPosition = 'center';
+                div.style.backgroundRepeat = 'no-repeat';
+                div.style.borderRadius = `${el.radius || 0}%`;
+                if(el.border) {
+                    div.style.border = `${el.border}px solid ${el.borderColor || '#000'}`;
+                }
+            }
+
+            // Interaction Handlers
+            div.onmousedown = (e) => {
+                e.stopPropagation();
+                selectElement(el.id);
+                initDrag(e, el.id);
+            };
+
+            // Resize Handle
+            if(appState.selectedElId === el.id) {
+                const handle = document.createElement('div');
+                handle.className = 'resize-handle rh-se';
+                handle.onmousedown = (e) => {
+                    e.stopPropagation();
+                    initResize(e, el.id);
+                };
+                div.appendChild(handle);
+            }
+
+            canvas.appendChild(div);
+        });
+    }
+
+    // --- INTERACTION ---
+
+    function selectElement(id) {
+        appState.selectedElId = id;
+        renderCanvas();
+        updatePropertiesPanel();
+    }
+
+    function initDrag(e, id) {
+        const el = appState.elements.find(x => x.id === id);
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const startLeft = el.x;
+        const startTop = el.y;
+
+        const moveHandler = (ev) => {
+            el.x = startLeft + (ev.clientX - startX);
+            el.y = startTop + (ev.clientY - startY);
+            // Simple snap to grid (optional)
+            // el.x = Math.round(el.x / 10) * 10;
+            // el.y = Math.round(el.y / 10) * 10;
+            renderCanvas();
+            updatePropertiesPanel(); // Live update coordinates
+        };
+
+        const upHandler = () => {
+            document.removeEventListener('mousemove', moveHandler);
+            document.removeEventListener('mouseup', upHandler);
+        };
+
+        document.addEventListener('mousemove', moveHandler);
+        document.addEventListener('mouseup', upHandler);
+    }
+
+    function initResize(e, id) {
+        const el = appState.elements.find(x => x.id === id);
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const startW = el.w;
+        const startH = el.h;
+
+        const moveHandler = (ev) => {
+            el.w = Math.max(10, startW + (ev.clientX - startX));
+            el.h = Math.max(10, startH + (ev.clientY - startY));
+            renderCanvas();
+            updatePropertiesPanel();
+        };
+
+        const upHandler = () => {
+            document.removeEventListener('mousemove', moveHandler);
+            document.removeEventListener('mouseup', upHandler);
+        };
+
+        document.addEventListener('mousemove', moveHandler);
+        document.addEventListener('mouseup', upHandler);
+    }
+
+    document.getElementById('poster-canvas').addEventListener('mousedown', (e) => {
+        if(e.target.id === 'poster-canvas') {
+            appState.selectedElId = null;
+            renderCanvas();
+            updatePropertiesPanel();
+        }
+    });
+
+    // --- PROPERTIES PANEL & EDITING ---
+
+    const props = {
+        panel: document.getElementById('properties-form'),
+        none: document.getElementById('no-selection'),
+        text: document.getElementById('text-props'),
+        image: document.getElementById('image-props'),
+        inputs: {
+            x: document.getElementById('prop-x'),
+            y: document.getElementById('prop-y'),
+            w: document.getElementById('prop-w'),
+            h: document.getElementById('prop-h'),
+            content: document.getElementById('prop-content'),
+            color: document.getElementById('prop-color'),
+            size: document.getElementById('prop-size'),
+            font: document.getElementById('prop-font'),
+            shadow: document.getElementById('prop-shadow'),
+            opacity: document.getElementById('prop-opacity'),
+            fit: document.getElementById('prop-fit'),
+            radius: document.getElementById('prop-radius'),
+            borderWidth: document.getElementById('prop-border-width'),
+            borderColor: document.getElementById('prop-border-color'),
+        }
+    };
+
+    function updatePropertiesPanel() {
+        const el = appState.elements.find(x => x.id === appState.selectedElId);
+        
+        if(!el) {
+            props.panel.style.display = 'none';
+            props.none.style.display = 'block';
+            return;
+        }
+
+        props.none.style.display = 'none';
+        props.panel.style.display = 'block';
+
+        // Common
+        props.inputs.x.value = el.x;
+        props.inputs.y.value = el.y;
+        props.inputs.w.value = el.w;
+        props.inputs.h.value = el.h;
+        props.inputs.opacity.value = el.opacity !== undefined ? el.opacity : 100;
+
+        // Type specific
+        if(el.type === 'text') {
+            props.text.style.display = 'block';
+            props.image.style.display = 'none';
+            props.inputs.content.value = el.content;
+            props.inputs.color.value = el.color;
+            props.inputs.size.value = el.fontSize;
+            props.inputs.font.value = el.fontFamily;
+            props.inputs.shadow.value = el.shadow || '';
+        } else {
+            props.text.style.display = 'none';
+            props.image.style.display = 'block';
+            props.inputs.fit.value = el.fit || 'cover';
+            props.inputs.radius.value = el.radius || 0;
+            props.inputs.borderWidth.value = el.border || 0;
+            props.inputs.borderColor.value = el.borderColor || '#000000';
+        }
+    }
+
+    // Attach listeners to all inputs to update state
+    Object.keys(props.inputs).forEach(key => {
+        props.inputs[key].addEventListener('input', (e) => {
+            const el = appState.elements.find(x => x.id === appState.selectedElId);
+            if(!el) return;
+            
+            const val = e.target.value;
+            
+            switch(key) {
+                case 'x': el.x = parseInt(val); break;
+                case 'y': el.y = parseInt(val); break;
+                case 'w': el.w = parseInt(val); break;
+                case 'h': el.h = parseInt(val); break;
+                case 'opacity': el.opacity = parseInt(val); break;
+                case 'content': el.content = val; break;
+                case 'color': el.color = val; break;
+                case 'size': el.fontSize = parseInt(val); break;
+                case 'font': el.fontFamily = val; break;
+                case 'shadow': el.shadow = val; break;
+                case 'fit': el.fit = val; break;
+                case 'radius': el.radius = parseInt(val); break;
+                case 'borderWidth': el.border = parseInt(val); break;
+                case 'borderColor': el.borderColor = val; break;
+            }
+            renderCanvas();
+        });
+    });
+
+    function toggleStyle(prop, val) {
+        const el = appState.elements.find(x => x.id === appState.selectedElId);
+        if(!el) return;
+        el[prop] = el[prop] === val ? 'normal' : val;
+        renderCanvas();
+    }
+
+    function changeZ(dir) {
+        const el = appState.elements.find(x => x.id === appState.selectedElId);
+        if(!el) return;
+        el.z = (el.z || 0) + dir;
+        renderCanvas();
+    }
+
+    function deleteSelected() {
+        if(appState.selectedElId) {
+            appState.elements = appState.elements.filter(x => x.id !== appState.selectedElId);
+            appState.selectedElId = null;
+            renderCanvas();
+            updatePropertiesPanel();
+        }
+    }
+
+    // --- ADDING NEW ELEMENTS ---
+
+    function addElement(type) {
+        const id = 'el_' + Date.now();
+        if(type === 'text') {
+            appState.elements.push({
+                id: id, type: 'text', x: 50, y: 50, w: 200, h: 40, 
+                content: 'New Text', color: '#000000', fontSize: 24, 
+                fontFamily: 'Inter', align: 'left', z: 10
+            });
+        }
+        selectElement(id);
+    }
+
+    function addBoundText(key) {
+        const id = 'el_' + Date.now();
+        appState.elements.push({
+            id: id, type: 'text', x: 50, y: 100, w: 300, h: 50,
+            content: `{${key}}`, color: '#FFFFFF', fontSize: 32,
+            fontFamily: 'Roboto', align: 'left', weight: 'bold', z: 10,
+            shadow: '2px 2px 4px rgba(0,0,0,0.5)'
+        });
+        selectElement(id);
+    }
+
+    // Image Upload Handling
+    document.getElementById('img-upload-global').addEventListener('change', handleImageUpload);
+    document.getElementById('img-replace').addEventListener('change', handleImageUpload);
+
+    function handleImageUpload(e) {
+        if(e.target.files && e.target.files[0]) {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const src = ev.target.result;
+                
+                // If replacing existing
+                if(e.target.id === 'img-replace' && appState.selectedElId) {
+                    const el = appState.elements.find(x => x.id === appState.selectedElId);
+                    if(el) { 
+                        el.src = src; 
+                        el.bindSrc = null; // Unbind if manual upload
+                        renderCanvas(); 
+                    }
+                } 
+                // If adding new
+                else {
+                    const id = 'img_' + Date.now();
+                    appState.elements.push({
+                        id: id, type: 'image', x: 50, y: 50, w: 200, h: 200,
+                        src: src, fit: 'cover', z: 5
+                    });
+                    selectElement(id);
+                }
+            };
+            reader.readAsDataURL(e.target.files[0]);
+        }
+        // Reset input
+        e.target.value = '';
+    }
+
+    // --- UTILS ---
+
+    function downloadPoster() {
+        appState.selectedElId = null; // Deselect to hide handles
+        renderCanvas();
+        
+        const canvasEl = document.getElementById('poster-canvas');
+        html2canvas(canvasEl, { useCORS: true, allowTaint: true }).then(canvas => {
+            const link = document.createElement('a');
+            const context = getDataContext();
+            link.download = `${context.name || 'poster'}.png`;
+            link.href = canvas.toDataURL();
+            link.click();
+        });
+    }
+
+    function saveCurrentTemplate() {
+        const name = "hloo";//prompt("Name this template:");
+        if(name) {
+            localStorage.setItem(dbId, JSON.stringify(appState.elements));
+            
+            alert("Template saved to session memory! (Add persistence logic if needed)");
+        }
+    }
+
+    // --- INITIALIZATION ---
+    // --- INITIALIZATION ---
+// --- INITIALIZATION ---
+let dbId = '';
+window.onload = () => {
+    renderDataList();
+
+    // Check URL parameters for auto-selection
+    const urlParams = new URLSearchParams(window.location.search);
+    const autoSelectId = urlParams.get('selectId');
+    const templateName = urlParams.get('template') || 'topper';
+    dbId = urlParams.get('dbId') || autoSelectId;
+    // Load the requested template
+    loadTemplate(templateName);
+
+    // If an ID was passed, select that student immediately
+    if (autoSelectId) {
+        // Ensure type consistency (IDs might be strings in URL but numbers in DB)
+        // We try to find a loose match
+        const data = getLocalData();
+        const found = data.find(d => d.id == autoSelectId);
+        
+        if (found) {
+            selectData(found.id);
+        }
+    }
+};
+
+
+</script>
+</body>
+</html>
