@@ -2986,7 +2986,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            const localTeacher = await window.appDb.teachers.where('email').equalsIgnoreCase(email).first();
+            // Safety Check: Ensure DB is ready
+            let localTeacher = null;
+    if (window.appDb) {
+        localTeacher = await window.appDb.teachers.where('email').equalsIgnoreCase(email).first();
+    }
+            
             
             if (localTeacher && password === (localTeacher.mobile || '').slice(-5)) {
                 showAlert('Logged in from local cache.', 'success');
