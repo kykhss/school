@@ -37699,6 +37699,35 @@ if (IS_DEMO_MODE) {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
 
+        // 1. Unsubscribe from all active Firestore listeners
+    unsubscribeAllListeners();
+
+    // 2. Destroy any active charts
+    if(window.attendanceChart) { 
+        window.attendanceChart.destroy(); 
+        window.attendanceChart = null; 
+    }
+
+    try {
+        // 3. Close the active connection to the database.
+        console.log('Closing IndexedDB connection...');
+        window.appDb.close();
+
+        // 4. Delete the entire 'SchoolAppDB' database.
+        console.log('Deleting IndexedDB database...');
+        await Dexie.delete('SchoolAppDB'); 
+        console.log('IndexedDB database has been deleted successfully.');
+
+        // --- THIS IS THE NEW PART ---
+        // 5. Clear the saved session data from localStorage
+        localStorage.removeItem('schoolAppUserSession');
+        localStorage.removeItem('schoolAppLastState');
+        // --- END NEW PART ---
+
+        // 6. After deletion is successful, update the UI and reload
+        document.getElementById('main-app').classList.remove('active');
+        document.getElementById('login-screen').classList.add('active');
+        window.location.reload();
 
 </body>
 </html>
