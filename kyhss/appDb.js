@@ -1,0 +1,46 @@
+
+window.appDb = new Dexie("SchoolAppDB");
+// IMPORTANT: Version number is incremented to apply the new indexes
+appDb.version(5.3).stores({
+    classes: "&id, name, lastUpdated",
+    subjects: "&id, name, lastUpdated",
+    students: "&id, classId, division, admissionNumber, name, lastUpdated",
+    teachers: "&id, email, name, lastUpdated",
+    exams: "&id, name, lastUpdated",
+    examSchedules :'&id, lastUpdated', 
+    examRooms :'&id, lastUpdated',
+    examRoomAllocationRules :'&id, lastUpdated',
+    examRegistrationSettings :'&id, lastUpdated',
+    examAbsentees :'&id, lastUpdated',
+    examDuties :'&id, lastUpdated',
+    marks: "&id, [classId+division], lastUpdated",
+    classroomSubjects: "&id, classId, division, subjectId, teacherId, lastUpdated",
+    holidays: "&id, lastUpdated",
+    attendance:"&id, lastUpdated",
+    books: "&id, title, lastUpdated",
+    bookIssuances: "&id, studentId, bookId, status, lastUpdated",
+    feeStructures: "&id, financialYear, feeHead, classId, stage, lastUpdated",
+    studentFeeSetups: "&id, financialYear, classId, division, lastUpdated",
+    pendingPayments:"&id, lastUpdated",
+    receipts:"&id, lastUpdated",
+    fests:"&id, lastUpdated",
+    festHouses:"&id, lastUpdated",
+    festEvents:"&id, lastUpdated",
+    festSettings:"&id, lastUpdated",
+    festRegistrations:"&id, lastUpdated",
+    festResults:"&id, lastUpdated",
+    festGroups:"&id, lastUpdated",
+    vehicles:"&id, lastUpdated",
+    timetables:"&id, lastUpdated",
+    syllabuses:"&id, lastUpdated",
+    chapters:"&id, lastUpdated",
+    syllabusCompletion:"&id, lastUpdated",
+    schoolDetails:"&id", // No lastUpdated needed for this singleton
+    forms :"&id, lastUpdated",
+    formResponses :"&id, lastUpdated",
+    reports :"&id, lastUpdated",
+    customNotifications: "++id, targetView, expiryDate, isDismissed",
+    systemConfig: "++id",
+    lastSynced: "&id, timestamp"
+});
+console.log("IndexedDB 'SchoolAppDB' initialized with version 5.2");
