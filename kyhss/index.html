@@ -2986,7 +2986,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             let localTeacher = null;
-            if (!window.appDb) {
+            if (window.appDb) {
              localTeacher = await window.appDb.teachers.where('email').equalsIgnoreCase(email).first();
             }
             if (localTeacher && password === (localTeacher.mobile || '').slice(-5)) {
@@ -3079,7 +3079,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             let localAdmin = null;
-            if (!window.appDb) {
+            if (window.appDb) {
              localAdmin = await window.appDb.teachers.where('email').equalsIgnoreCase(email).first();
             }
             if (localAdmin && localAdmin.role === 'admin' && pass === (localAdmin.mobile || '').slice(-5)) {
