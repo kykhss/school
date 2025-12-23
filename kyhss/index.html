@@ -3082,8 +3082,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 showAlert('Please enter admin email and password.', 'danger');
                 return;
             }
-
-            const localAdmin = await window.appDb.teachers.where('email').equalsIgnoreCase(email).first();
+            let localAdmin = null;
+            if (window.appDb) {
+                localAdmin = await window.appDb.teachers.where('email').equalsIgnoreCase(email).first();
+            }
+            
             
             if (localAdmin && localAdmin.role === 'admin' && pass === (localAdmin.mobile || '').slice(-5)) {
                 showAlert('Logged in as Admin (cache).', 'success');
