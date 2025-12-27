@@ -6,7 +6,19 @@
     <title>KYHSSS</title>
     <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.js"></script>
     <script src="variables.js"></script>
-    <script src="appDb.js"></script>
+    <script src="applDb.js"></script>
+    <script type="module" src="results/report-card.js"></script>
+    <script src="results/exam-results.js"></script>
+    <script type="module" src="exams/mark-entry.js"></script>
+    <script type="module" src="exams/exam-schedule.js"></script>
+    <script type="module"  src="exams/time-table.js"></script>
+    <script type="module"  src="exams/addexam.js"></script>
+    <script type="module"  src="exams/exam-mgt.js"></script>
+    <script type="module"  src="exams/addexam.js"></script>
+    <script type="module" src="exams/entry-report.js"></script>
+
+
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -2023,7 +2035,7 @@ function resolvePromiseFor(name) {
     }
 
     // Attach listeners without examId (null)
-    attachMarksListener(examId, classDataArray);
+    window.attachMarksListener(examId, classDataArray);
 }
 
 // --- In your <script type="module"> block ---
@@ -2113,296 +2125,6 @@ function syncDataForUser() {
  * @param {Array<{classId: string, division: string}>} classDataArray - Array of class/division pairs.
  * @param {boolean} [refresh=false] - If true, a new listener is created even if one exists.
  */
-/**
- * Processes Firestore document changes from the student-centric marks collection,
- * flattens the data for local storage, and includes the parent document's timestamp.
- * @param {Array} changes - Array of document changes from a snapshot.
- * @returns {{toAddOrUpdate: Array<Object>, toDelete: Array<string>}} - Objects for IndexedDB operations.
- */
-function processMarksChanges(changes) {
-    const toAddOrUpdate = [];
-    const studentIdsToProcess = new Set();
-    const studentDocsToRemove = new Set();
-
-    changes.forEach(change => {
-        const studentId = change.doc.id;
-        if (change.type === "removed") {
-            studentDocsToRemove.add(studentId);
-        } else { // 'added' or 'modified'
-            studentIdsToProcess.add(studentId);
-            const studentMarksDoc = { id: studentId, ...change.doc.data() };
-            const lastUpdated = studentMarksDoc.lastUpdated; // Get the top-level timestamp
-
-            for (const key in studentMarksDoc) {
-                if (key.startsWith('marks.')) {
-                    const [, examId, subjectId] = key.split('.');
-                    const markData = studentMarksDoc[key];
-                    
-                    const flatMarkId = `${examId}_${studentId}_${subjectId}`;
-                    const flatMarkData = {
-                        id: flatMarkId,
-                        examId, subjectId, studentId,
-                        classId: studentMarksDoc.classId,
-                        division: studentMarksDoc.division,
-                        te: markData.te,
-                        ce: markData.ce,
-                        lastUpdated: lastUpdated // Add the timestamp to each flattened record
-                    };
-                    
-                    marks[flatMarkId] = flatMarkData;
-                    toAddOrUpdate.push(flatMarkData);
-                }
-            }
-        }
-    });
-    
-    // Determine which flat mark records need to be deleted
-    const toDelete = [];
-    Object.keys(marks).forEach(key => {
-        const studentIdInKey = key.split('_')[1];
-        // Delete if the student's doc was removed OR if it was modified (to clear out old marks before adding new ones)
-        if (studentDocsToRemove.has(studentIdInKey) || studentIdsToProcess.has(studentIdInKey)) {
-             // We need to find all marks for the student that are no longer in the toAddOrUpdate list
-            if (!toAddOrUpdate.some(item => item.id === key)) {
-                delete marks[key];
-                toDelete.push(key);
-            }
-        }
-    });
-
-    return { toAddOrUpdate, toDelete };
-}
-
-/**
- * Attaches real-time listeners for marks data with an intelligent sync strategy.
- * This version correctly loads local data into memory if a network sync is skipped.
- * @param {Array<object>} classDataArray - An array of objects, e.g., [{ classId: 'C1', division: 'A' }]
- * @param {boolean} [refresh=false] - If true, a new listener is created even if one exists.
- */
-/**
- * (OPTIMIZED) Attaches real-time listeners for marks with Delta Sync.
- * 1. Fetches only changed data (Delta) based on lastUpdated.
- * 2. Updates local DB.
- * 3. Loads data to memory and Resolves Promise (UI Unblocks).
- * 4. Attaches background listener for full consistency.
- */
-/**
- * (FINAL ROBUST VERSION) Attaches listeners and WAITS for data to load.
- * This version returns a Promise that only resolves when all marks are
- * loaded into memory, ensuring 'await' works perfectly.
- */
-async function attachMarksListener(classDataArray, refresh = false) {
-    if (!Array.isArray(classDataArray) || classDataArray.length === 0) {
-        console.warn("attachMarksListener was called with an invalid or empty classDataArray.");
-        return;
-    }
-
-    const academicYear = activeFinancialYear;
-    const marksCollectionName = `marks-${academicYear}`;
-    
-    // 1. Create an array of promises (one for each class/division)
-    const loadingPromises = classDataArray.map(async ({ classId, division }) => {
-        return new Promise(async (resolve) => {
-            if (!classId || !division) {
-                resolve(); // Skip invalid items
-                return;
-            }
-
-            const listenerKey = `${classId}_${division}`;
-            
-            // If already listening and not refreshing, we assume data is ready.
-            if (activeMarksListeners[listenerKey] && !refresh) {
-                resolve();
-                return;
-            }
-
-            let dataLoadedViaDelta = false;
-
-            // --- STEP 1: TRY SMART DELTA SYNC ---
-            try {
-                const lastLocalMark = await appDb.marks
-                    .where({ classId, division })
-                    .reverse()
-                    .sortBy('lastUpdated');
-                
-                const lastLocalSyncTime = (lastLocalMark.length > 0 && lastLocalMark[0].lastUpdated) 
-                    ? lastLocalMark[0].lastUpdated 
-                    : new Date(0);
-
-                const updatesQuery = query(
-                    getCollectionRef(marksCollectionName),
-                    where('classId', '==', classId),
-                    where('division', '==', division),
-                    where('lastUpdated', '>', lastLocalSyncTime)
-                );
-
-                const updatesSnapshot = await getDocs(updatesQuery);
-
-                if (!updatesSnapshot.empty) {
-                    // Convert docs for processing
-                    const changesMock = updatesSnapshot.docs.map(doc => ({ type: 'modified', doc: doc }));
-                    const { toAddOrUpdate, toDelete } = processMarksChanges(changesMock);
-
-                    if (toAddOrUpdate.length > 0) await appDb.marks.bulkPut(toAddOrUpdate);
-                    // (Deletes are handled by background listener later)
-                }
-
-                // LOAD DATA INTO MEMORY
-                const allLocalMarks = await appDb.marks.where({ classId, division }).toArray();
-                allLocalMarks.forEach(mark => { marks[mark.id] = mark; });
-
-                dataLoadedViaDelta = true;
-                
-                // *** SUCCESS! Resolve the promise now. ***
-                resolve(); 
-
-            } catch (error) {
-                console.warn(`[Marks Sync] Delta sync failed for ${listenerKey}, falling back to listener.`, error);
-                // Do NOT resolve yet. We will resolve inside the listener.
-            }
-
-            // --- STEP 2: ATTACH BACKGROUND LISTENER ---
-            // We still attach this to catch future updates or if Delta Sync failed.
-            if (activeMarksListeners[listenerKey]) {
-                 // If we resolved via Delta, we are done. 
-                 // If Delta failed, but a listener exists (rare edge case), we resolve to be safe.
-                 if(!dataLoadedViaDelta) resolve(); 
-                 return;
-            }
-
-            const fullQuery = query(
-                getCollectionRef(marksCollectionName),
-                where('classId', '==', classId),
-                where('division', '==', division)
-            );
-
-            const unsubscribe = onSnapshot(fullQuery, async (snapshot) => {
-                const changes = snapshot.docChanges();
-                
-                // If this is the first snapshot and Delta Sync failed, we process and resolve here
-                if (!dataLoadedViaDelta) {
-                    if (changes.length > 0) {
-                        const { toAddOrUpdate, toDelete } = processMarksChanges(changes);
-                        try {
-                            if (toAddOrUpdate.length > 0) {
-                                await appDb.marks.bulkPut(toAddOrUpdate);
-                                toAddOrUpdate.forEach(m => marks[m.id] = m);
-                            }
-                            if (toDelete.length > 0) {
-                                await appDb.marks.bulkDelete([...new Set(toDelete)]);
-                                toDelete.forEach(id => delete marks[id]);
-                            }
-                        } catch (error) {
-                            console.error('Error syncing marks stream:', error);
-                        }
-                    }
-                    
-                    dataLoadedViaDelta = true; // Mark as loaded so we don't resolve again
-                    resolve(); // *** RESOLVE PROMISE HERE (Fallback Path) ***
-                } else {
-                    // Normal background update
-                    if (changes.length === 0) return;
-                    const { toAddOrUpdate, toDelete } = processMarksChanges(changes);
-                    try {
-                        if (toAddOrUpdate.length > 0) await appDb.marks.bulkPut(toAddOrUpdate);
-                        if (toDelete.length > 0) await appDb.marks.bulkDelete([...new Set(toDelete)]);
-                        // Update memory too
-                        toAddOrUpdate.forEach(m => marks[m.id] = m);
-                        toDelete.forEach(id => delete marks[id]);
-                    } catch(e) { console.error(e); }
-                }
-            }, (error) => {
-                console.error(`[Firestore] Error listening to marks: `, error);
-                resolve(); // Resolve on error so app doesn't hang
-            });
-
-            activeMarksListeners[listenerKey] = unsubscribe;
-        });
-    });
-
-    // 2. Wait for ALL class promises to finish before letting the code continue
-    await Promise.all(loadingPromises);
-    console.log("All marks loaded into memory.");
-}
-
-
-function attachMarksListenerarray(examId, classDataArray = []) {
-    // If no classDataArray is provided, fallback to selected class/division
-    if (!Array.isArray(classDataArray) || classDataArray.length === 0) {
-        const classId = selectedUser?.classId || null;
-        const division = selectedUser?.division || null;
-        if (classId && division) {
-            classDataArray = [{ classId, division }];
-        } else {
-            console.warn('attachMarksListener: No valid class/division available.');
-            return;
-        }
-    }
-
-    classDataArray.forEach(({ classId, division }) => {
-        const listenerKey = `${classId}_${division}`;
-
-        if (activeMarksListeners[listenerKey]) {
-            // Already listening for this combination, re-render if needed
-            generateExamWiseResultsTable(examId,classId, division);
-            return;
-        }
-
-        // Create Firestore query
-        let marksQuery;
-        if (examId) {
-            marksQuery = query(
-                getCollectionRef('marks'),
-                where('examId', '==', examId),
-                where('classId', '==', classId),
-                where('division', '==', division)
-            );
-        } else {
-            marksQuery = query(
-                getCollectionRef('marks'),
-                where('classId', '==', classId),
-                where('division', '==', division)
-            );
-        }
-
-        const unsubscribe = onSnapshot(marksQuery, (snapshot) => {
-            snapshot.docChanges().forEach(change => {
-                if (change.type === "removed") {
-                    delete marks[change.doc.id];
-                } else {
-                    marks[change.doc.id] = { id: change.doc.id, ...change.doc.data() };
-                }
-            });
-
-            generateExamWiseResultsTable(examId, classId, division);
-        }, (error) => {
-            console.error(`[Firestore] Error listening to marks for ${listenerKey}:`, error);
-        });
-
-        activeMarksListeners[listenerKey] = unsubscribe;
-    });
-}
-
-
-
-function unsubscribeAllListeners() {
-    // Unsubscribe from general listeners
-    for (const key in activeListeners) {
-        if (typeof activeListeners[key] === 'function') {
-            activeListeners[key]();
-        }
-    }
-    activeListeners = {};
-
-    // --- NEW: Also unsubscribe from all active marks listeners ---
-    for (const key in activeMarksListeners) {
-        if (typeof activeMarksListeners[key] === 'function') {
-            activeMarksListeners[key]();
-        }
-    }
-    activeMarksListeners = {};
-}
-
 function attachFeeDataListeners(financialYear, role, user) {
     if (unsubscribeFeeListeners.length > 0) {
         unsubscribeFeeListeners.forEach(unsub => unsub());
@@ -2575,7 +2297,7 @@ async function showMainApp() {
                         lastViewId = restoredState.viewId || 'dashboard';
                         
                         // Restore global state variables
-                        selectedExamForControl = restoredState.selectedExamForControl || null;
+                        window.selectedExamForControl = restoredState.selectedExamForControl || null;
                         // We must find the fest object from the 'fests' array
                         if (restoredState.managingFestId) {
                             const festData = await window.appDb.fests.get(restoredState.managingFestId);
@@ -2985,10 +2707,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 showAlert('Please enter email and password.', 'danger');
                 return;
             }
-            let localTeacher = null;
-            if (window.appDb) {
-             localTeacher = await window.appDb.teachers.where('email').equalsIgnoreCase(email).first();
-            }
+
+            const localTeacher = await window.appDb.teachers.where('email').equalsIgnoreCase(email).first();
+            
             if (localTeacher && password === (localTeacher.mobile || '').slice(-5)) {
                 showAlert('Logged in from local cache.', 'success');
                 onLoginSuccess('teacher', localTeacher);
@@ -3078,10 +2799,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 showAlert('Please enter admin email and password.', 'danger');
                 return;
             }
-            let localAdmin = null;
-            if (window.appDb) {
-             localAdmin = await window.appDb.teachers.where('email').equalsIgnoreCase(email).first();
-            }
+            
+            const localAdmin = await window.appDb.teachers.where('email').equalsIgnoreCase(email).first();
+            
             if (localAdmin && localAdmin.role === 'admin' && pass === (localAdmin.mobile || '').slice(-5)) {
                 showAlert('Logged in as Admin (cache).', 'success');
                 onLoginSuccess('admin', localAdmin);
@@ -24711,7 +24431,7 @@ window.clearExamEdit = () => {
  * @param {string} examId The ID of the exam to manage.
  */
 window.selectExamToManage = (examId) => {
-    selectedExamForControl = examId;
+    window.selectedExamForControl = examId;
     renderExamControlModule(); // This will now render the dashboard
 };
 
@@ -24719,7 +24439,7 @@ window.selectExamToManage = (examId) => {
  * Helper function to clear the global state and return to the selection screen.
  */
 window.unselectExam = () => {
-    selectedExamForControl = null;
+    window.selectedExamForControl = null;
     renderExamControlModule(); // This will now render the selection screen
 };
        function renderExamControlOverviewTab() {
@@ -24734,8 +24454,8 @@ window.unselectExam = () => {
         </div>
     `;
 
-    if (selectedExamForControl) {
-        displayExamOverviewDetails(selectedExamForControl);
+    if (window.selectedExamForControl) {
+        displayExamOverviewDetails(window.selectedExamForControl);
     } else {
         document.getElementById('exam-overview-details-container').innerHTML = 
             `<p class="text-muted text-center p-4">No exam selected.</p>`;
@@ -25046,7 +24766,7 @@ function renderExamControlDutyAssignmentTab() {
     const availDateSelect = document.getElementById('availability-context-date');
     
     // Initialize
-    if (selectedExamForControl) examSelect.value = selectedExamForControl;
+    if (window.selectedExamForControl) examSelect.value = window.selectedExamForControl;
 
     // Populate Dates
     examSelect.addEventListener('change', () => {
@@ -27621,8 +27341,8 @@ function renderExamControlHallTicketTab() {
     const generateAllBtn = document.getElementById('generate-all-hall-tickets-btn');
     const studentListContainer = document.getElementById('hall-ticket-student-list-container');
 // --- THIS IS THE NEW LOGIC ---
-    if (selectedExamForControl) {
-        examSelect.value = selectedExamForControl;
+    if (window.selectedExamForControl) {
+        examSelect.value = window.selectedExamForControl;
     }
     // --- NEW LOCAL VARIABLE TO STORE THE CURRENTLY DISPLAYED STUDENTS ---
     let currentStudentsForHallTicket = [];
@@ -27821,8 +27541,8 @@ function renderExamControlReportsTab() {
     
     // --- THIS IS THE NEW LOGIC ---
     const examSelect = document.getElementById('report-exam-select');
-    if (selectedExamForControl) {
-        examSelect.value = selectedExamForControl;
+    if (window.selectedExamForControl) {
+        examSelect.value = window.selectedExamForControl;
     }
     // --- END NEW LOGIC ---
     
@@ -30097,8 +29817,8 @@ function renderExamControlAbsenteeReportingTab() {
     
     // --- THIS IS THE NEW LOGIC ---
     const examSelect = document.getElementById('absentee-exam-select');
-    if (selectedExamForControl) {
-        examSelect.value = selectedExamForControl;
+    if (window.selectedExamForControl) {
+        examSelect.value = window.selectedExamForControl;
     }
     // --- END NEW LOGIC ---
     
@@ -30550,8 +30270,8 @@ function renderExamControlRegNoAssignmentTab() {
     const generateBtn = document.getElementById('generate-reg-nos-btn');
 
     // --- THIS IS THE NEW LOGIC ---
-    if (selectedExamForControl) {
-        examSelect.value = selectedExamForControl;
+    if (window.selectedExamForControl) {
+        examSelect.value = window.selectedExamForControl;
     }
     // --- END NEW LOGIC ---
 
@@ -31019,7 +30739,7 @@ let currentAllocationSession = null;
 
     // Initialize
     const examSelect = document.getElementById('alloc-exam-select');
-    if (selectedExamForControl) examSelect.value = selectedExamForControl;
+    if (window.selectedExamForControl) examSelect.value = window.selectedExamForControl;
     
     attachMatrixListeners();
     examSelect.dispatchEvent(new Event('change'));
@@ -32059,8 +31779,8 @@ function renderExamControlRoomAllocationTab_old() {
 
     // --- THIS IS THE NEW LOGIC ---
     const examSelect = document.getElementById('alloc-exam-select');
-    if (selectedExamForControl) {
-        examSelect.value = selectedExamForControl;
+    if (window.selectedExamForControl) {
+        examSelect.value = window.selectedExamForControl;
     }
     // --- END NEW LOGIC ---
     
@@ -33133,7 +32853,7 @@ async function displaySubjectWiseToppers(examId) {
     }
 
     container.innerHTML = `<div class="text-center p-4"><div class="spinner-border"></div><p>Calculating subject toppers...</p></div>`;
-    await attachMarksListener(teacherAssignedClasses);
+    await window.attachMarksListener(teacherAssignedClasses);
     const schedulesForExam = examSchedules.filter(s => s.examId === examId);
     const uniqueSubjectIds = [...new Set(schedulesForExam.map(s => s.subjectId))];
 
@@ -33261,7 +32981,7 @@ async function renderExamReportsToppersTab() { // Renamed from renderExamControl
      
     // --- MODIFIED: This function is now async ---
     const generateToppers = async () => {
-        await attachMarksListener(teacherAssignedClasses);
+        await window.attachMarksListener(teacherAssignedClasses);
         const examId = examSelect.value;
         const gradingSystem = gradingSystemSelect.value;
         
@@ -33612,7 +33332,7 @@ async function renderExamReportsGradeDistributionTab() {
 
                 // 3. AWAIT the smart-sync function. This is the crucial step.
                 // It will either load from local DB or fetch from Firestore if needed.
-                attachMarksListener(classDataArray);
+                window. attachMarksListener(classDataArray);
             }
                 displayGradeDistribution(examSelect.value, selectedClassId, gradingSystemSelect.value);
             }
@@ -33705,7 +33425,7 @@ function renderAdvancedFailureAnalysisTab() {
 
     document.getElementById('run-analysis-btn').addEventListener('click', () => {
         // Ensure marks data is loaded for all involved classes
-        attachMarksListener(teacherAssignedClasses); 
+        window.attachMarksListener(teacherAssignedClasses); 
         runAdvancedFailureAnalysis();
     });
 }
@@ -36951,7 +36671,7 @@ window.addEventListener('beforeunload', (event) => {
         // We now save the *full application state*
         const appState = {
             viewId: activeNavId || 'dashboard',
-            selectedExamForControl: selectedExamForControl, // Save the selected exam
+            selectedExamForControl: window.selectedExamForControl, // Save the selected exam
             managingFestId: state.managingFest ? state.managingFest.id : null // Save the selected fest ID
         };
         localStorage.setItem('schoolAppLastState', JSON.stringify(appState));
