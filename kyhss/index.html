@@ -6,7 +6,8 @@
     <title>KYHSSS</title>
     <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.js"></script>
     <script src="variables.js"></script>
-    <script src="applDb.js"></script>
+    <script src="appDb.js"></script>
+    <script src="login.js"></script>
     <script type="module" src="results/report-card.js"></script>
     <script src="results/exam-results.js"></script>
     <script type="module" src="exams/mark-entry.js"></script>
@@ -16,6 +17,7 @@
     <script type="module"  src="exams/exam-mgt.js"></script>
     <script type="module"  src="exams/addexam.js"></script>
     <script type="module" src="exams/entry-report.js"></script>
+    <script type="module" src="login.js"></script>
 
 
 
@@ -765,7 +767,6 @@
 <script type="module" src="addstudent.js"></script>
 <script type="module" src="dashboard.js"></script>
 
-<script type="module" src="results/examManagement.js"></script>
 <script type="module" src="exams/addexam.js"></script>
 <script type="module" src="classmgt.js"></script>
 
@@ -1013,23 +1014,8 @@ async function updateTeacherAssignedClasses() {
 
     //console.log('Final teacherAssignedClasses:', teacherAssignedClasses);
 }
-// --- MODIFY your onLoginSuccess function ---
-
-// --- In your <script type="module"> block ---
-// REPLACE your entire onLoginSuccess function with this one
-
-        async function onLoginSuccess(role, user) { 
-    window.currentUserRole = role;
-    window.selectedUser = user;
-    unsubscribeAllListeners();
-
-    showMainApp(); // Render the main app layout
-    getData ('customNotifications');
-}
-
-
 /**
- * Renders the main UI for the Notification Manager (form and list).
+ * Renders the Notification Manager view.
  */
 window.renderNotificationManager = () => {
     const mainContent = document.getElementById('main-content');
@@ -2266,7 +2252,7 @@ window.navigateTo = async (viewId, pushState = true) => {
  * (REVISED) Renders the main app, automatically restoring the
  * user's session and last-viewed page if it exists.
  */
-async function showMainApp() {
+window.showMainApp = async () =>{
     let sessionRole = window.currentUserRole;
     let sessionUser = window.selectedUser;
     let lastViewId = 'dashboard';
@@ -2682,209 +2668,7 @@ document.addEventListener('DOMContentLoaded', () => {
         roleSelect.addEventListener('change', updateLoginView);
     }
 });
- document.getElementById('login-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
 
-    // --- ✅ FIX: Define roleSelect before using it ---
-    const roleSelect = document.getElementById('role-select');
-
-    const submitButton = e.target.querySelector('button[type="submit"]');
-    if (!submitButton) return;
-
-    const originalButtonHtml = submitButton.innerHTML;
-    submitButton.disabled = true;
-    submitButton.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Signing In...`;
-
-    try {
-        // Now this line will work correctly
-        const activeRole = roleSelect.value.replace('-login-view', '');
-
-        if (activeRole === 'teacher') {
-            const email = document.getElementById('teacher-useremail').value.toLowerCase();
-            const password = document.getElementById('teacher-password').value;
-            
-            if (!email || !password) {
-                showAlert('Please enter email and password.', 'danger');
-                return;
-            }
-
-            const localTeacher = await window.appDb.teachers.where('email').equalsIgnoreCase(email).first();
-            
-            if (localTeacher && password === (localTeacher.mobile || '').slice(-5)) {
-                showAlert('Logged in from local cache.', 'success');
-                onLoginSuccess('teacher', localTeacher);
-                return;
-            }
-
-            if (!navigator.onLine) {
-                showAlert('Offline login failed.', 'danger');
-                return;
-            }
-
-            const q = query(getCollectionRef('teachers'), where('email', '==', email));
-            const qs = await getDocs(q);
-
-            if (qs.empty) {
-                showAlert('Teacher email not found.', 'danger');
-            } else {
-                const docSnap = qs.docs[0];
-                const t = { id: docSnap.id, ...docSnap.data() };
-                
-                if (password === (t.mobile || '').slice(-5)) {
-                    await window.appDb.teachers.put(t);
-                    showAlert('Logged in from server.', 'success');
-                    
-                    // Session saving
-                    const session = { role: 'teacher', userId: t.id, timestamp: Date.now() };
-                    localStorage.setItem('schoolAppUserSession', JSON.stringify(session));
-                    
-                    onLoginSuccess('teacher', t);
-                } else {
-                    showAlert('Incorrect password.', 'danger');
-                }
-            }
-        } 
-        
-        else if (activeRole === 'student') {
-            const admn = document.getElementById('student-admn').value.toUpperCase();
-            const dob = document.getElementById('student-dob').value;
-            
-            if (!admn || !dob) {
-                showAlert('Please enter Admission No. and Year.', 'danger');
-                return;
-            }
-
-            const local = await window.appDb.students.where('admissionNumber').endsWithIgnoreCase(admn).first();
-            
-            if (local && dob === (local.dob || '').split('-')[0]) {
-                showAlert('Logged in from local cache.', 'success');
-                onLoginSuccess('student', local);
-                return;
-            }
-
-            if (!navigator.onLine) {
-                showAlert('Offline login failed.', 'danger');
-                return;
-            }
-
-            const all = await getDocs(getCollectionRef('students'));
-            let found = null;
-            
-            // Note: This loop might be slow for large databases. 
-            // Consider storing a dedicated 'searchableAdmission' field in Firestore.
-            all.forEach(doc => {
-                const s = doc.data();
-                if (s.admissionNumber && s.admissionNumber.toUpperCase().endsWith(admn))
-                    found = { id: doc.id, ...s };
-            });
-
-            if (found) {
-                if (dob === (found.dob || '').split('-')[0]) {
-                    await window.appDb.students.put(found);
-                    showAlert('Logged in from server.', 'success');
-                    onLoginSuccess('student', found);
-                } else {
-                    showAlert('Incorrect year of birth.', 'danger');
-                }
-            } else {
-                showAlert('Student not found.', 'danger');
-            }
-        } 
-        
-        else if (activeRole === 'admin') {
-            const email = document.getElementById('admin-user').value.toLowerCase();
-            const pass = document.getElementById('admin-pass').value;
-            
-            if (!email || !pass) {
-                showAlert('Please enter admin email and password.', 'danger');
-                return;
-            }
-            
-            const localAdmin = await window.appDb.teachers.where('email').equalsIgnoreCase(email).first();
-            
-            if (localAdmin && localAdmin.role === 'admin' && pass === (localAdmin.mobile || '').slice(-5)) {
-                showAlert('Logged in as Admin (cache).', 'success');
-                onLoginSuccess('admin', localAdmin);
-                return;
-            }
-
-            if (!navigator.onLine) {
-                showAlert('Offline admin login failed.', 'danger');
-                return;
-            }
-
-            showAlert('Checking server...', 'info');
-            const q = query(window.getCollectionRef('teachers'), where('email', '==', email));
-            const qs = await getDocs(q);
-
-            if (qs.empty) {
-                showAlert('Admin not found.', 'danger');
-            } else {
-                const d = qs.docs[0];
-                const a = { id: d.id, ...d.data() };
-                
-                if (a.role === 'admin') {
-                    if (pass === (a.mobile || '').slice(-5)) {
-                        onLoginSuccess('admin', a);
-                    } else {
-                        showAlert('Incorrect admin password.', 'danger');
-                    }
-                } else {
-                    showAlert('No admin privilege.', 'danger');
-                }
-            }
-        }
-    } catch (e) {
-        console.error("Login Error:", e);
-        showAlert('An error occurred during login.', 'danger');
-    } finally {
-        submitButton.disabled = false;
-        submitButton.innerHTML = originalButtonHtml;
-        document.getElementById('login-screen').classList.remove('active');
-        document.getElementById('login-screen').classList.add('d-none');
-    }
-});
-
-document.getElementById('logout-btn').addEventListener('click', async () => {
-    // 1. Unsubscribe from all active Firestore listeners
-    unsubscribeAllListeners();
-
-    // 2. Destroy any active charts
-    if(window.attendanceChart) { 
-        window.attendanceChart.destroy(); 
-        window.attendanceChart = null; 
-    }
-
-    try {
-        // 3. Close the active connection to the database.
-        console.log('Closing IndexedDB connection...');
-        window.appDb.close();
-
-        // 4. Delete the entire 'SchoolAppDB' database.
-        console.log('Deleting IndexedDB database...');
-        await Dexie.delete('SchoolAppDB'); 
-        console.log('IndexedDB database has been deleted successfully.');
-
-        // --- THIS IS THE NEW PART ---
-        // 5. Clear the saved session data from localStorage
-        localStorage.removeItem('schoolAppUserSession');
-        localStorage.removeItem('schoolAppLastState');
-        // --- END NEW PART ---
-
-        // 6. After deletion is successful, update the UI and reload
-        document.getElementById('main-app').classList.remove('active');
-        document.getElementById('login-screen').classList.add('active');
-        window.location.reload();
-
-    } catch (error) {
-        console.error('Failed to delete IndexedDB or clear session:', error);
-        showAlert('Error during logout. You may need to clear your browser cache manually.', 'danger');
-        
-        // As a fallback, still try to log the user out visually
-        document.getElementById('main-app').classList.remove('active');
-        document.getElementById('login-screen').classList.add('active');
-    }
-});
 /**
  * Renders the admin dashboard. It fetches data only on the first load and uses
  * a cached version for subsequent views for instant rendering.
@@ -2900,6 +2684,7 @@ document.getElementById('logout-btn').addEventListener('click', async () => {
  * Renders the form for managing the school's core details, now including UPI fields.
  * This is the entry point for the "School Details" navigation item.
  */
+const mainContent = document.getElementById('main-content');
 window.renderSchoolDetailsModule = () => {
     const mainContent = document.getElementById('main-content');
     if (!mainContent) {
