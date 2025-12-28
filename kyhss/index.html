@@ -24216,7 +24216,7 @@ window.clearExamEdit = () => {
  * @param {string} examId The ID of the exam to manage.
  */
 window.selectExamToManage = (examId) => {
-    window.selectedExamForControl = examId;
+    selectedExamForControl = examId;
     renderExamControlModule(); // This will now render the dashboard
 };
 
@@ -24224,7 +24224,7 @@ window.selectExamToManage = (examId) => {
  * Helper function to clear the global state and return to the selection screen.
  */
 window.unselectExam = () => {
-    window.selectedExamForControl = null;
+    selectedExamForControl = null;
     renderExamControlModule(); // This will now render the selection screen
 };
        function renderExamControlOverviewTab() {
@@ -32669,7 +32669,7 @@ async function displaySubjectWiseToppers(examId) {
                 if (schedule) {
                     const total = (mark.te === 'AB' || mark.ce === 'AB') ? -1 : (Number(mark.te) || 0) + (Number(mark.ce) || 0);
                     const maxTotal = (schedule.maxTE || 0) + (schedule.maxCE || 0);
-                    const grade = calculateGrade(total, maxTotal);
+                    const grade = window.calculateGrade(total, maxTotal);
 
                     // Add to list only if they did not fail this specific subject
                     if (grade !== 'E' && grade !== 'F' && total !== -1) {
@@ -33258,7 +33258,7 @@ function runAdvancedFailureAnalysis() {
 
                 if (mark && maxTotal > 0) {
                     const total = (mark.te === 'AB' || mark.ce === 'AB') ? 'AB' : (Number(mark.te) || 0) + (Number(mark.ce) || 0);
-                    const grade = (total === 'AB') ? 'AB' : calculateGrade(total, maxTotal);
+                    const grade = (total === 'AB') ? 'AB' : window.calculateGrade(total, maxTotal);
 
                     // Add to total failure count (Filter 3: Min. Fails)
                     // CRUCIAL: ONLY count failures if the subject is in the set of relevant subjects for the primary exam.
@@ -33454,7 +33454,7 @@ window.showStudentProgressionModal = (studentId) => {
                 const total = (mark.te === 'AB' || mark.ce === 'AB') ? 'AB' : (Number(mark.te) || 0) + (Number(mark.ce) || 0);
                 
                 // Calculate grade using the correct maxTotal
-                const grade = (maxTotal > 0 && total !== 'AB') ? calculateGrade(total, maxTotal) : (total === 'AB' ? 'AB' : '-'); 
+                const grade = (maxTotal > 0 && total !== 'AB') ? window.calculateGrade(total, maxTotal) : (total === 'AB' ? 'AB' : '-'); 
                 const isFail = grade === 'E' || grade === 'F';
                 
                 tableHtml += `<td class="${isFail ? 'bg-danger text-white' : ''}" title="Score: ${total} / ${maxTotal}">
@@ -33626,7 +33626,7 @@ function generateGradeSummaryData(examId, subjectId, gender, gradingSystem) {
             let grade = 'N/A';
             if (mark) {
                 const total = (mark.te === 'AB' || mark.ce === 'AB') ? 'AB' : (Number(mark.te) || 0) + (Number(mark.ce) || 0);
-                grade = (total === 'AB') ? 'AB' : (maxTotal > 0 ? calculateGrade(total, maxTotal) : 'N/A');
+                grade = (total === 'AB') ? 'AB' : (maxTotal > 0 ? window.calculateGrade(total, maxTotal) : 'N/A');
             }
 
             // Initialize structures if they don't exist
@@ -33684,7 +33684,7 @@ function generateFailureListData(examId, subjectId, gender, classIds, gradingSys
 
             if (mark) {
                 total = (mark.te === 'AB' || mark.ce === 'AB') ? 'AB' : (Number(mark.te) || 0) + (Number(mark.ce) || 0);
-                grade = (total === 'AB') ? 'AB' : (maxTotal > 0 ? calculateGrade(total, maxTotal) : 'N/A');
+                grade = (total === 'AB') ? 'AB' : (maxTotal > 0 ? window.calculateGrade(total, maxTotal) : 'N/A');
             }
             
             // Store the mark regardless of pass/fail
@@ -33926,7 +33926,7 @@ function displayGradeDistribution(examId, classId, gradingSystem) {
             let grade = 'N/A';
             if (mark) {
                 const total = (mark.te === 'AB' || mark.ce === 'AB') ? 'AB' : (Number(mark.te) || 0) + (Number(mark.ce) || 0);
-                grade = (total === 'AB') ? 'AB' : (maxTotal > 0 ? (gradingSystem === 'type1' ? calculateGrade(total, maxTotal) : calculateGradeType2(total, maxTotal)) : 'N/A');
+                grade = (total === 'AB') ? 'AB' : (maxTotal > 0 ? (gradingSystem === 'type1' ? window.calculateGrade(total, maxTotal) : window.calculateGradeType2(total, maxTotal)) : 'N/A');
             }
             if (subjectGradeData[schedule.subjectId]?.[grade]?.[student.division]) {
                 subjectGradeData[schedule.subjectId][grade][student.division].push(student.id);
@@ -36022,7 +36022,7 @@ function generateAcademicPerformanceHtml(student) {
                 const total = (mark.te === 'AB' || mark.ce === 'AB') ? 'AB' : (Number(mark.te) || 0) + (Number(mark.ce) || 0);
                 
                 // Calculate grade using the correct maxTotal
-                const grade = (maxTotal > 0 && total !== 'AB') ? calculateGrade(total, maxTotal) : (total === 'AB' ? 'AB' : '-'); 
+                const grade = (maxTotal > 0 && total !== 'AB') ? window.calculateGrade(total, maxTotal) : (total === 'AB' ? 'AB' : '-'); 
                 const isFail = grade === 'E' || grade === 'F';
                 
                 tableHtml += `<td class="${isFail ? 'bg-danger text-white' : ''}" title="Score: ${total} / ${maxTotal}">
