@@ -1,4 +1,4 @@
-
+import {writeBatch, deleteDoc, query, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 /**
  * Renders the main UI for the "Schedule" tab with multi-division checkbox selection.
  */
