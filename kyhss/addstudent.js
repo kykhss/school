@@ -395,6 +395,7 @@ window.renderAddStudentForm = async () => {
                 </form>
             </div>
         </div>
+        </div>
          <div class="bg-white py-2 d-flex justify-content-between align-items-center" id="summary-div">
                 <h6 class="mb-0 text-secondary fw-bold">Summary: 
                     <span class="badge bg-info text-dark ms-2">Total: <span id="summary-total">0</span></span>
