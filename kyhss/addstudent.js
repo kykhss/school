@@ -141,7 +141,7 @@ window.renderAddStudentForm = async () => {
                             </div>
                             <div class="col-md-3">
                                 <label for="admissionId" class="form-label">System ID</label>
-                                <input id="admissionId" type="text" class="form-control bg-secondary text-white small" readonly value="${currentStudent.id || ''}"> 
+                                <input id="admissionId" type="text" class="form-control bg-secondary text-white small" value="${currentStudent.id || ''}"> 
                             </div>
                         </div>
                     </div>
@@ -365,7 +365,7 @@ window.renderAddStudentForm = async () => {
                                 <div class="position-relative">
                                     <div class="w-36 h-48 bg-white rounded shadow-sm border d-flex justify-content-center align-items-center overflow-hidden" style="width: 150px; height: 200px;">
                                         <img id="student-photo-display" class="w-100 h-100 object-fit-cover" 
-                                             src="${currentStudent.photoDriveId ? `https://drive.google.com/thumbnail?id=${currentStudent.photoDriveId}&sz=400` : 'https://via.placeholder.com/150x200?text=No+Photo'}" 
+                                             src="${currentStudent.photoDriveId ? `https://drive.google.com/thumbnail?id=${currentStudent.photoDriveId}&sz=400` : 'https://placehold.co/150x200?text=No+Photo'}" 
                                              alt="Student Photo">
                                     </div>
                                 </div>
@@ -395,23 +395,23 @@ window.renderAddStudentForm = async () => {
                 </form>
             </div>
         </div>
-
-        <div class="card shadow-sm border-0 mb-5">
-            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
-                <h5 class="mb-0 text-primary fw-bold"><i class="fas fa-list me-2"></i>Recently Admitted Students</h5>
-                <div>
-                     <input type="text" id="recent-search" class="form-control form-control-sm d-inline-block w-auto" placeholder="Search...">
-                     <button class="btn btn-outline-secondary btn-sm ms-2" onclick="downloadRecentPDF()"><i class="fas fa-file-pdf"></i> PDF</button>
-                </div>
-            </div>
-            // consolidated table for recent students gender wise and class wise division wise count 
-            <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center" id="summary-div">
+         <div class="bg-white py-2 d-flex justify-content-between align-items-center" id="summary-div">
                 <h6 class="mb-0 text-secondary fw-bold">Summary: 
                     <span class="badge bg-info text-dark ms-2">Total: <span id="summary-total">0</span></span>
                     <span class="badge bg-warning text-dark ms-2">Male: <span id="summary-male">0</span></span>
                     <span class="badge bg-danger text-dark ms-2">Female: <span id="summary-female">0</span></span>
                 </h6>
             </div>  
+
+        <div class="card shadow-sm border-0 mb-5">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 text-danger fw-bold"><i class="fas fa-list me-2"></i>Recently Admitted Students</h5>
+                <div>
+                     <input type="text" id="recent-search" class="form-control form-control-sm d-inline-block w-auto" placeholder="Search...">
+                     <button class="btn btn-outline-secondary btn-sm ms-2" onclick="downloadRecentPDF()"><i class="fas fa-file-pdf"></i> PDF</button>
+                </div>
+            </div>
+           
             <div class="card-body p-0">
                 <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0" id="recent-students-table">
@@ -826,6 +826,18 @@ window.renderAddStudentForm = async () => {
         generateAdmnNo();
     });
     classDropdown.addEventListener('change', updateDivisions);
+   
+    //update admissionfee based on class selection
+    classDropdown.addEventListener('change', () => {
+        const selectedClass = availableClasses.find(c => c.id === classDropdown.value);
+        const admissionFeeInput = document.getElementById('admissionFee');
+        if (selectedClass && selectedClass.admissionFee) {
+            admissionFeeInput.value = selectedClass.admissionFee;
+        } else {
+            admissionFeeInput.value = '';
+        }
+    });
+
     guardianTypeSelect.addEventListener('change', () => {
         localGuardianFieldsDiv.classList.toggle('d-none', guardianTypeSelect.value !== 'Local Guardian');
     });
@@ -875,7 +887,7 @@ window.renderAddStudentForm = async () => {
         if (!confirm("Remove current photo?")) return;
         croppedPhotoBlob = null;
         rawPhotoFile = null;
-        studentPhotoDisplay.src = 'https://via.placeholder.com/150x200?text=No+Photo';
+        studentPhotoDisplay.src = 'https://placehold.co/150x200?text=No+Photo';
         removePhotoBtn.classList.add('d-none');
     });
 
@@ -987,13 +999,13 @@ window.renderAddStudentForm = async () => {
                 //navigateTo('student-mgt');
                 form.reset();
                 form.classList.remove('was-validated');
-                studentPhotoDisplay.src = 'https://via.placeholder.com/150x200?text=No+Photo';
+                studentPhotoDisplay.src = 'https://placehold.co/150x200?text=No+Photo';
                 academicYearInput.value = initialAcademicYear; // Restore year
                 generateAdmnNo();
             } else {
                 form.reset();
                 form.classList.remove('was-validated');
-                studentPhotoDisplay.src = 'https://via.placeholder.com/150x200?text=No+Photo';
+                studentPhotoDisplay.src = 'https://placehold.co/150x200?text=No+Photo';
                 academicYearInput.value = initialAcademicYear; // Restore year
                 generateAdmnNo();
             }
@@ -1154,7 +1166,7 @@ window.renderAddStudentForm = async () => {
                     <td class="ps-3 fw-bold text-primary">${s.admissionNumber}</td>
                     <td>
                         <div class="d-flex align-items-center">
-                            <img src="${s.photoDriveId ? `https://drive.google.com/thumbnail?id=${s.photoDriveId}&sz=400` : 'https://via.placeholder.com/40'}" class="rounded-circle me-2" width="30" height="30" style="object-fit:cover;">
+                            <img src="${s.photoDriveId ? `https://drive.google.com/thumbnail?id=${s.photoDriveId}&sz=400` : 'https://placehold.co/40'}" class="rounded-circle me-2" width="30" height="30" style="object-fit:cover;">
                             <div>
                                 <div class="fw-bold text-dark">${s.name}</div>
                                 <div class="small text-muted">${s.fatherName || ''}</div>
