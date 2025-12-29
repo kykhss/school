@@ -120,7 +120,7 @@ window.renderClassManagement = () => {
 
     // Populate Form if Edit Mode
     if (isEditMode) {
-        yearInput.value = classToEdit.year;
+        yearInput.value = classToEdit.academicYear;
         nameInput.value = classToEdit.name;
         orderInput.value = classToEdit.order || '';
         aliasInput.value = classToEdit.alias;
@@ -139,7 +139,7 @@ window.renderClassManagement = () => {
         const docId = isEditMode ? classToEdit.id : `${yearInput.value}_${nameInput.value.toUpperCase().replace(/\s+/g, '_')}`;
         const data = {
             id: docId,
-            year: yearInput.value,
+            academicYear: yearInput.value,
             name: nameInput.value.toUpperCase(),
             order: parseInt(orderInput.value, 10) || 0,
             alias: aliasInput.value.toUpperCase(),
