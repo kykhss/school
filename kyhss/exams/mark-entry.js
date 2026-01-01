@@ -192,7 +192,7 @@ async function loadMarkEntrySheet(examId, classId, division, subjectId) {
     const notEnteredStudents = studentsInClass.filter(student => !marksForSheet[student.id]).map(s => s.name);
 
     const summaryHTML = `
-        <div class="card bg-light p-1 mb-2 border-0">
+        <div class="card bg-light p-0 mb-2 border-0">
             <h6 class="fw-bold">Entry Status</h6>
             <div class="d-flex justify-content-around text-center mt-2">
                 <div><h5 class="mb-0">${studentsInClass.length}</h5><small class="text-muted">Total Students</small></div>
@@ -916,4 +916,5 @@ function unsubscribeAllListeners() {
     }
     activeMarksListeners = {};
 }
+
 
