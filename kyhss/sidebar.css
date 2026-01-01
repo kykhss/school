@@ -5,7 +5,7 @@
 :root {
     --sidebar-width-large: 250px;
     --sidebar-width-small: 70px;
-    --header-height: 60px;
+    --header-height: 50px;
     --transition-speed: 0.3s;
 
     --primary-color: #4e73df;
@@ -33,7 +33,7 @@ body {
 #app-layout {
     display: flex;
     flex-direction: column;
-    flex-grow: 1;
+    flex-grow: 2;
     background-color: #f8f9fc;
     overflow: hidden;
     position: relative;
@@ -50,7 +50,7 @@ body {
     height: 100%;
     overflow-y: auto;
     overflow-x: hidden;
-    padding: 1.5rem;
+    padding: .25rem;
     transition: opacity .3s ease;
 }
 
@@ -61,7 +61,7 @@ body {
 }
 
 /* Scrollbar */
-.view::-webkit-scrollbar { width: 8px; }
+.view::-webkit-scrollbar { display: none; }
 .view::-webkit-scrollbar-thumb {
     background: #c1c1c1;
     border-radius: 4px;
@@ -90,7 +90,7 @@ body {
 .nav-links {
     display: flex;
     align-items: center;
-    padding: 12px 20px;
+    padding: 2px 2px;
     height: 50px;
     color: #0d6efd;
     text-decoration: none;
@@ -166,7 +166,7 @@ body {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 12px 18px;
+    padding: 2px 1px;
     font-size: 14px;
     font-weight: 500;
     color: #374151; /* Slate gray */
@@ -212,8 +212,8 @@ body.sidebar-collapsed .nav-links span {
 
 body.sidebar-collapsed .nav-links {
     justify-content: center;
-    padding: 12px 0;
-    margin: 6px 8px;
+    padding: 2px 0;
+    margin: 2px 5px;
 }
 
 /* Sidebar Footer */
@@ -306,7 +306,7 @@ body.sidebar-collapsed #logout-btn {
 .card,
 .ui-card {
     background: #fff;
-    padding: 1.5rem;
+    padding: .25rem;
     border-radius: .5rem;
     box-shadow: 0 2px 4px rgba(0,0,0,.05);
     margin-bottom: 1.5rem;
@@ -316,7 +316,7 @@ body.sidebar-collapsed #logout-btn {
     display: flex;
     align-items: center;
     gap: 16px;
-    padding: 18px;
+    padding: 1px;
     border-radius: 14px;
     background: #fff;
     box-shadow: 0 4px 6px rgba(0,0,0,.05);
@@ -360,7 +360,15 @@ body.sidebar-collapsed #logout-btn {
     }
 
     .stat-card-bs {
-        padding: 12px;
+        padding: 2px;
+    }
+    .h1,
+    .h2,
+    .h3,
+    .h4,
+    .h5,
+    .h6 {
+        font-size: .65rem;
     }
 }
 
@@ -527,7 +535,7 @@ body.sidebar-collapsed #logout-btn {
   border: none;
   border-radius: 12px;
   margin-bottom: 10px;
-  padding: 16px;
+  padding: 6px;
   box-shadow: 0 6px 18px rgba(0,0,0,.05);
   animation: fadeUp .35s ease both;
 }
@@ -540,7 +548,7 @@ body.sidebar-collapsed #logout-btn {
 /* ---------- Badges ---------- */
 .badge {
   font-size: .75rem;
-  padding: 6px 10px;
+  padding: 6px 4px;
   border-radius: 999px;
 }
 
@@ -554,6 +562,25 @@ body.sidebar-collapsed #logout-btn {
 .empty-state {
   text-align: center;
   color: #999;
-  padding: 40px 0;
+  padding: 4px 0;
   animation: fadeUp .3s ease;
 }
+
+body::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+body {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}   
