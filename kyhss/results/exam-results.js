@@ -610,7 +610,7 @@ function processExamResultsData(studentsInClass, schedulesForClass, marksObject,
                 pct = maxTotal > 0 ? (((Number(total)||0)/ maxTotal) * 100).toFixed(1) : 0;
                 
                 // Calculate all three grades
-                const gradeFunc = gradingSystem === 'type1' ? calculateGrade : calculateGradeType2;
+                const gradeFunc = gradingSystem === 'type1' ? window.calculateGrade : window.calculateGradeType2;
                 grade = gradeFunc(total, maxTotal);
                 teGrade = gradeFunc(te, maxTE);
                 ceGrade = gradeFunc(ce, maxCE);
@@ -632,7 +632,7 @@ function processExamResultsData(studentsInClass, schedulesForClass, marksObject,
         });
 
         const grandPct = grandMaxMarks > 0 ? ((grandTotalMarks / grandMaxMarks) * 100) : 0;
-        const gradeFunc = gradingSystem === 'type1' ? calculateGrade : calculateGradeType2;
+        const gradeFunc = gradingSystem === 'type1' ? window.calculateGrade : window.calculateGradeType2;
 
         return {
             studentId: student.id,
@@ -1144,7 +1144,7 @@ function processSubjectWiseResults(studentsInClass, selectedExams, subjectId, gr
                 const maxCE = schedule.maxCE || 0;
                 const maxTotal = maxTE + maxCE;
                 const percent = (total === 'AB' || maxTotal === 0) ? 'AB' : (total / maxTotal) * 100;
-                const gradeFunc = gradingSystem === 'type1' ? calculateGrade : calculateGradeType2;
+                const gradeFunc = gradingSystem === 'type1' ? window.calculateGrade : window.calculateGradeType2;
                 
                 markData[exam.id] = {
                     te, ce, total, percent, maxTE, maxCE, maxTotal,
@@ -1246,7 +1246,7 @@ function copySubjectWiseColumnData(columnType) {
         /**
          * New helper function to calculate an alternate grading scale.
          */
-        function calculateGradeType2(score, maxScore) {
+        window.calculateGradeType2 = (score, maxScore) => {
             if (String(score).toUpperCase() === 'AB') return 'AB';
             if (maxScore === 0) return '-';
             const percentage = (score / maxScore) * 100;
@@ -1650,4 +1650,16 @@ function renderRankListTab() {
             if (classSelect.options.length > 0) {
                  classSelect.dispatchEvent(new Event('change'));
             }
+        }
+
+        window.calculateGrade = (score, maxScore) =>{
+            if (String(score).toUpperCase() === 'AB') return 'AB';
+            //if (score === 'AB') return 'AB';
+            if (maxScore === 0) return '-';
+            const percentage = (score / maxScore) * 100;
+            if (percentage >= 90) return 'A+'; if (percentage >= 80) return 'A';
+            if (percentage >= 70) return 'B+'; if (percentage >= 60) return 'B';
+            if (percentage >= 50) return 'C+'; if (percentage >= 40) return 'C';
+            if (percentage >= 30) return 'D';
+            return 'E';
         }
