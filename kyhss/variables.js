@@ -1,5 +1,5 @@
 
-  // variables.js
+  
 
 window. mainContent = document.getElementById('main-content');
         window. sidebarNav = document.getElementById('sidebar-nav');
@@ -18,7 +18,7 @@ window. mainContent = document.getElementById('main-content');
 // 1. CONFIGURATION & SCHOOL DETAILS
 // ==========================================
 window.activeFinancialYear = '2025-2026';
-//window.activeFinancialYear = `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`;
+//window.activeAcademicYear = `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`;
 
 window.schoolDetails = {
     fullname: 'KATTILANGADI YATHEEMKHANA HIGHER SECONDARY SCHOOL',
@@ -246,6 +246,7 @@ window. studentNav = [
 // ==========================================
 window.systemConfig = {
     activeYear: '2025-2026',     // Default fallback
+    admissionYear:'2026-2027',
     isProgressionActive: false,  // Master switch for promotion
 };
 
