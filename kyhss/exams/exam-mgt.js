@@ -47,7 +47,7 @@ window.renderExamManagement = () => {
     `).join('');
 
     const tabPanesHTML = visibleTabs.map(tab => `
-        <div class="tab-pane fade p-2" id="${tab.id}" role="tabpanel"></div>
+        <div class="tab-pane fade p-0" id="${tab.id}" role="tabpanel"></div>
     `).join('');
 
     // 7. Render the main structure into the DOM
@@ -74,3 +74,4 @@ window.renderExamManagement = () => {
         new bootstrap.Tab(firstVisibleTab).show();
     }
 };
+
