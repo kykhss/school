@@ -17,7 +17,7 @@ import {writeBatch, serverTimestamp, query, where, getDocs, onSnapshot } from "h
     }
 
     container.innerHTML = `
-        <div class="row g-1 align-items-end border-bottom pb-3 mb-3">
+        <div class="row g-1 align-items-end border-bottom pb-1 mb-1">
     <div class="col-6 col-md-2"><label class="form-label">Exam</label><select id="mark-entry-exam" class="form-select">${exams.filter(e => e.isActive).map(ex => `<option value="${ex.id}">${ex.name}</option>`).join('')}</select></div>
     <div class="col-6 col-md-2"><label class="form-label">Class</label><select id="mark-entry-class" class="md form-select"><option value="">-- Select Class --</option>${classOptions}</select></div>
     <div class="col-6 col-md-2"><label class="form-label">Division</label><select id="mark-entry-division" class="form-select" disabled><option value="">-- Select Division --</option></select></div>
@@ -145,7 +145,7 @@ async function loadMarkEntrySheet(examId, classId, division, subjectId) {
         return;
     }
     
-    container.innerHTML = `<div class="text-center p-5"><div class="spinner-border text-primary"></div><p class="mt-2">Loading student marks...</p></div>`;
+    container.innerHTML = `<div class="text-center p-1"><div class="spinner-border text-primary"></div><p class="mt-2">Loading student marks...</p></div>`;
 
     const schedule = examSchedules.find(s => s.examId === examId && s.classId === classId && s.division === division && s.subjectId === subjectId);
     if (!schedule) {
@@ -192,7 +192,7 @@ async function loadMarkEntrySheet(examId, classId, division, subjectId) {
     const notEnteredStudents = studentsInClass.filter(student => !marksForSheet[student.id]).map(s => s.name);
 
     const summaryHTML = `
-        <div class="card bg-light p-3 mb-4 border-0">
+        <div class="card bg-light p-1 mb-2 border-0">
             <h6 class="fw-bold">Entry Status</h6>
             <div class="d-flex justify-content-around text-center mt-2">
                 <div><h5 class="mb-0">${studentsInClass.length}</h5><small class="text-muted">Total Students</small></div>
@@ -916,3 +916,4 @@ function unsubscribeAllListeners() {
     }
     activeMarksListeners = {};
 }
+
