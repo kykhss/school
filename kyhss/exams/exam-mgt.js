@@ -39,7 +39,7 @@ window.renderExamManagement = () => {
 
     // 6. Generate the HTML for tab buttons and content panes from the filtered list
     const tabLinksHTML = visibleTabs.map(tab => `
-        <li class="nav-item" role="presentation">
+        <li class="nav-item scroll-container" role="presentation">
             <button class="nav-link" data-bs-toggle="tab" data-bs-target="#${tab.id}" type="button">
                 ${tab.title}
             </button>
@@ -47,17 +47,17 @@ window.renderExamManagement = () => {
     `).join('');
 
     const tabPanesHTML = visibleTabs.map(tab => `
-        <div class="tab-pane fade p-4 overflow-auto" id="${tab.id}" role="tabpanel"></div>
+        <div class="tab-pane fade p-2" id="${tab.id}" role="tabpanel"></div>
     `).join('');
 
     // 7. Render the main structure into the DOM
     mainContent.innerHTML = `
-        <div class="tabs-container">
+        <div class="tabs-container scroll-container overflow-auto">
             <ul class="nav nav-tabs d-flex flex-nowrap" id="examTab" role="tablist">
                 ${tabLinksHTML}
             </ul>
         </div>
-        <div class="tab-content card overflow-auto" id="examTabContent">
+        <div class="tab-content card overflow-auto scroll-container" id="examTabContent">
             ${tabPanesHTML}
         </div>`;
 
