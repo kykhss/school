@@ -17,7 +17,8 @@ window. mainContent = document.getElementById('main-content');
 // ==========================================
 // 1. CONFIGURATION & SCHOOL DETAILS
 // ==========================================
-window.activeFinancialYear = `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`;
+window.activeFinancialYear = '2025-2026';
+//window.activeFinancialYear = `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`;
 
 window.schoolDetails = {
     fullname: 'KATTILANGADI YATHEEMKHANA HIGHER SECONDARY SCHOOL',
