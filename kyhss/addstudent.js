@@ -1140,7 +1140,7 @@ window.renderAddStudentForm = async () => {
             const allStudents = await appDb['students'].toArray();
             
             // Filter out drafts
-            const validStudents = allStudents.filter(s => s.academicYear === initialAcademicYear);
+            const validStudents = allStudents.filter(s => s.admittedYear === initialAcademicYear);
             renderRecentSummary(validStudents);
 
             // Sort Descending by CreatedAt (Handles Firestore Timestamp or Date strings)
@@ -1382,3 +1382,4 @@ window.generateTopperPoster = async (studentId, examId, rank) => {
     const editorUrl = `robust-editor.html?selectId=${student.id}&template=topper`;
     window.open(editorUrl, '_blank');
 };
+
