@@ -59,15 +59,15 @@ window.renderAddStudentForm = async () => {
     // 1. ACADEMIC YEAR LOGIC (Local Storage + Persistence)
     let initialAcademicYear = '';
     
-    if (isEditMode && currentStudent.academicYear) {
-        initialAcademicYear = currentStudent.academicYear;
+    if (isEditMode && currentStudent.admittedYear) {
+        initialAcademicYear = currentStudent.admittedYear||currentStudent.academicYear;
     } else {
         // Try to get from Local Storage first
         const savedYear = localStorage.getItem('system_activeYear');
         if (savedYear) {
             initialAcademicYear = savedYear;
-        } else if (typeof systemConfig !== 'undefined' && systemConfig.activeYear) {
-            initialAcademicYear = systemConfig.activeYear;
+        } else if (typeof systemConfig !== 'undefined' && systemConfig.admissionYear) {
+            initialAcademicYear = systemConfig.admissionYear;
         } else {
             const curYear = new Date().getFullYear();
             initialAcademicYear = `${curYear}-${curYear + 1}`;
@@ -418,6 +418,7 @@ window.renderAddStudentForm = async () => {
                     <table class="table table-hover align-middle mb-0" id="recent-students-table">
                         <thead class="bg-light text-secondary small text-uppercase">
                             <tr>
+                                <th>Sl</th>
                                 <th class="ps-3">ID</th>
                                 <th>Name</th>
                                 <th>Class</th>
@@ -915,7 +916,7 @@ window.renderAddStudentForm = async () => {
             // --- A. SYSTEM & IDENTITY ---
             id: isEditMode ? currentStudent.id : admnId.value, // Generate ID if new
             admissionNumber: document.getElementById('admissionNumber').value,
-            academicYear: document.getElementById('academicYear').value,
+            academicYear: isEditMode ? (currentStudent.academicYear || academicYearInput.value) :document.getElementById('academicYear').value,
             admittedYear: document.getElementById('academicYear').value,
              
             admissionSector: document.getElementById('admissionSector').value,
@@ -1151,7 +1152,7 @@ window.renderAddStudentForm = async () => {
             });
 
             // Take Top 10
-            const recent10 = validStudents.slice(0, 10);
+            const recent10 = validStudents;//.slice(0, 10);
             
             recentStudentsList = recent10; // Store for PDF export
             let html = '';
@@ -1160,10 +1161,13 @@ window.renderAddStudentForm = async () => {
                  tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">No recent admissions found locally.</td></tr>';
                  return;
             }
-
+            let index = 0;
             recent10.forEach(s => {
+                index++;
                 html += `
                 <tr class="student-row">
+                <td class="ps-3 fw-bold text-primary">${index}</td>
+
                     <td class="ps-3 fw-bold text-primary">${s.admissionNumber}</td>
                     <td>
                         <div class="d-flex align-items-center">
@@ -1298,17 +1302,21 @@ window.renderAddStudentForm = async () => {
         const doc = new jsPDF();
         
         doc.text("Recently Admitted Students", 14, 15);
-        
+        let index = 0;
+
         const tableData = recentStudentsList.map(s => [
             s.admissionNumber, 
             s.name, 
             `${s.classId} ${s.division}`, 
-            s.vehicle, 
-            s.mobile1
-        ]);
+            s.vehiclePoint|| s.busPoint || '-', 
+            s.mobile1,
+            s.mobile2
+
+        ]
+    );
 
         doc.autoTable({
-            head: [['Adm No', 'Name', 'Class', 'Vehicle', 'Mobile']],
+            head: [['sl','Adm No', 'Name', 'Class', 'Vehicle', 'Mobile']],
             body: tableData,
             startY: 20,
         });
@@ -1382,4 +1390,3 @@ window.generateTopperPoster = async (studentId, examId, rank) => {
     const editorUrl = `robust-editor.html?selectId=${student.id}&template=topper`;
     window.open(editorUrl, '_blank');
 };
-
