@@ -91,7 +91,7 @@ function generateReportCardHTML(studentId, examId, containerId) {
             <tbody>
                 ${subjectResults.map(res => {
                     const subjectName = subjects.find(s => s.id === res.subjectId)?.name || 'N/A'; // Use subjectId directly
-                    const totalGrade = gradingSystem === 'type1' ? calculateGrade(res.total, res.maxTE + res.maxCE) : calculateGradeType2(res.total, res.maxTE + res.maxCE);
+                    const totalGrade = gradingSystem === 'type1' ? window.calculateGrade(res.total, res.maxTE + res.maxCE) : window.calculateGradeType2(res.total, res.maxTE + res.maxCE);
                     
                     return `
                         <tr class="text-center">
@@ -130,8 +130,12 @@ function generateReportCardHTML(studentId, examId, containerId) {
  * @param {string[]} examIds - An array of exam IDs to compare.
  * @returns {string} The complete HTML string for the report card, or an error message.
  */
-function generateReportCardHTML_Comparison(studentId, examIds) {
-    const student = students.find(s => s.id === studentId);
+let marks = window.getmarks();
+
+window.generateReportCardHTML_Comparison = async (studentId, examIds) => {
+    
+
+    const student = window.students.find(s => s.id === studentId);
     if (!student) {
         console.error("Could not generate report card: Student not found for ID", studentId);
         return '<p class="alert alert-danger">Student data not found.</p>';
@@ -143,20 +147,65 @@ function generateReportCardHTML_Comparison(studentId, examIds) {
         ? `https://drive.google.com/thumbnail?id=${student.photoDriveId}&sz=400`
         : 'https://placehold.co/150x200?text=No+Photo&font=roboto';
 
-    const examsData = examIds.map(eId => {
-        const exam = exams.find(e => e.id === eId);
+        marks = await window.getmarks(student.classId, student.division);
+
+    const examPromises = examIds.map(async (eId) => {
+    try {
+        const exam = window.exams.find(e => e.id === eId);
         if (!exam) return null;
 
-        const schedules = examSchedules.filter(s => s.examId === eId && s.classId === student.classId && s.division === student.division);
-        const processedData = processExamResultsData([student], schedules, marks, eId, gradingSystem);
+        const schedules = window.examSchedules.filter(
+            s => s.examId === eId &&
+                 s.classId === student.classId &&
+                 s.division === student.division
+        );
+
+        const processedData = await processExamResultsData(
+            [student],
+            schedules,
+            marks,
+            eId,
+            gradingSystem
+        );
+
         const report = processedData[0] || {};
 
-        const allStudentsInClass = students.filter(s => s.classId === student.classId && s.division === student.division && s.status !== 'TC Issued' && s.status !== 'Graduated').sort((a, b) => a.name.localeCompare(b.name));
-        const allProcessed = processExamResultsData(allStudentsInClass, schedules, marks, eId, gradingSystem);
+        const allStudentsInClass = window.students
+            .filter(s =>
+                s.classId === student.classId &&
+                s.division === student.division &&
+                s.status !== 'TC Issued' &&
+                s.status !== 'Graduated'
+            )
+            .sort((a, b) => a.name.localeCompare(b.name));
+
+        let allProcessed = [];
+        try {
+            allProcessed = await processExamResultsData(
+                allStudentsInClass,
+                schedules,
+                marks,
+                eId,
+                gradingSystem
+            );
+        } catch (err) {
+            console.error('Process error:', err);
+        }
+
         allProcessed.sort((a, b) => b.grandTotalMarks - a.grandTotalMarks);
         const rank = allProcessed.findIndex(s => s.studentId === student.id) + 1;
+
         return { exam, report, rank };
-    }).filter(Boolean);
+
+    } catch (err) {
+        console.error('Exam processing failed:', err);
+        return null;
+    }
+});
+
+const examsData = (await Promise.all(examPromises)).filter(Boolean);
+console.log(examsData);
+
 
     const allSubjectIds = [...new Set(examsData.flatMap(e => e.report.subjectResults?.map(r => r.subjectId) || []))];
 
@@ -178,8 +227,8 @@ function generateReportCardHTML_Comparison(studentId, examIds) {
             if (res) {
                 const totalMax = res.maxTE + res.maxCE;
                 const totalGrade = gradingSystem === 'type1' 
-                    ? calculateGrade(res.total, totalMax) 
-                    : calculateGradeType2(res.total, totalMax);
+                    ? window.calculateGrade(res.total, totalMax) 
+                    : window.calculateGradeType2(res.total, totalMax);
                 rowHtml += `
                     <td class="text-center">${res.te}/${res.maxTE} (${res.teGrade})</td>
                     <td class="text-center">${res.ce}/${res.maxCE} (${res.ceGrade})</td>
@@ -215,13 +264,13 @@ const totalMaxCE = subjectResults.reduce((sum, res) => sum + (Number(res.maxCE) 
 
     // Calculate the grade for the TE total
     const teTotalGrade = gradingSystem === 'type1' 
-        ? calculateGrade(totalTE, totalMaxTE) 
-        : calculateGradeType2(totalTE, totalMaxTE);
+        ? window.calculateGrade(totalTE, totalMaxTE) 
+        : window.calculateGradeType2(totalTE, totalMaxTE);
 
     // Calculate the grade for the CE total
     const ceTotalGrade = gradingSystem === 'type1' 
-        ? calculateGrade(totalCE, totalMaxCE) 
-        : calculateGradeType2(totalCE, totalMaxCE);
+        ? window.calculateGrade(totalCE, totalMaxCE) 
+        : window.calculateGradeType2(totalCE, totalMaxCE);
 
     // Build the four distinct columns for the grand total row with the calculated data
     grandTotalRow += `
@@ -304,7 +353,7 @@ function generateReportCardHTML_Comparisonnew(studentId, examIds) {
 
     const studentClass = classes.find(c => c.id === student?.classId);
     const gradingSystem = document.getElementById('shared-grading-system')?.value || 'type1';
-    const gradeFunc = gradingSystem === 'type1' ? calculateGrade : calculateGradeType2;
+    const gradeFunc = gradingSystem === 'type1' ? window.calculateGrade : window.calculateGradeType2;
     const studentPhotoSrc = student.photoDriveId
         ? `https://drive.google.com/thumbnail?id=${student.photoDriveId}&sz=400`
         : 'https://placehold.co/150x200?text=No+Photo&font=roboto';
@@ -515,8 +564,8 @@ examsData.forEach(ed => {
 
         // The grade for the total marks of the subject
         const totalGrade = gradingSystem === 'type1' 
-            ? calculateGrade(res.total, totalMax) 
-            : calculateGradeType2(res.total, totalMax);
+            ? window.calculateGrade(res.total, totalMax) 
+            : window.calculateGradeType2(res.total, totalMax);
 
         // --- MODIFICATION IS HERE ---
         // The individual grades for TE and CE are now included in brackets
@@ -597,14 +646,4 @@ examsData.forEach(ed => {
     </div>`;
 }
 
-        function calculateGrade(score, maxScore) {
-            if (String(score).toUpperCase() === 'AB') return 'AB';
-            //if (score === 'AB') return 'AB';
-            if (maxScore === 0) return '-';
-            const percentage = (score / maxScore) * 100;
-            if (percentage >= 90) return 'A+'; if (percentage >= 80) return 'A';
-            if (percentage >= 70) return 'B+'; if (percentage >= 60) return 'B';
-            if (percentage >= 50) return 'C+'; if (percentage >= 40) return 'C';
-            if (percentage >= 30) return 'D';
-            return 'E';
-        }
+        
