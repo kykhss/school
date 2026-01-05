@@ -7,7 +7,7 @@
     <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.js"></script>
     <script src="variables.js"></script>
     <script src="appDb.js"></script>
-    <script src="login.js"></script>
+    <script type="module" src="login.js"></script>
     <script type="module" src="results/report-card.js"></script>
     <script src="results/exam-results.js"></script>
     <script type="module" src="exams/mark-entry.js"></script>
@@ -17,8 +17,7 @@
     <script type="module"  src="exams/exam-mgt.js"></script>
     <script type="module"  src="exams/addexam.js"></script>
     <script type="module" src="exams/entry-report.js"></script>
-    <script type="module" src="login.js"></script>
-
+   
 
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -122,88 +121,88 @@
 
         <nav id="sidebar" class="bg-white border-end d-flex flex-column">
 
-    <!-- HEADER -->
-    <div class="sidebar-header d-flex justify-content-between align-items-center border-bottom"
-         style="height: var(--header-height);">
-        <div class="d-flex align-items-center text-dark text-decoration-none overflow-hidden">
-            <i class="fas fa-school fa-2x text-primary flex-shrink-0"></i>
-            <span id="panel-title" class="fs-5 ms-3 fw-bold">School App</span>
-        </div>
-        <button id="sidebar-close-btn" class="btn btn-sm btn-outline-secondary d-lg-none ms-auto">
-            <i class="fas fa-times"></i>
-        </button>
-    </div>
-
-    <!-- NAV -->
-    <div id="sidebar-nav" class="nav nav-pills flex-column mb-auto flex-grow-1 overflow-auto py-2"></div>
-
-    <!-- FOOTER (LOGOUT + TOGGLE) -->
-    <div class="sidebar-footer d-flex align-items-center gap-2 p-3 border-top bg-light">
-
-        <button id="logout-btn"
-                class="btn btn-outline-danger flex-grow-1 d-flex align-items-center justify-content-center overflow-hidden">
-            <i class="fas fa-sign-out-alt"></i>
-            <span class="ms-2">Logout</span>
-        </button>
-
-        <button id="desktop-sidebar-toggle"
-                class="btn btn-outline-secondary d-none d-lg-flex align-items-center justify-content-center"
-                title="Toggle Sidebar">
-            <i class="fas fa-chevron-left"></i>
-        </button>
-
-    </div>
-
-</nav>
-
-
-        <div id="app-layout" class="d-flex flex-column w-100">
-
-            <div id="appbar" class="d-flex justify-content-between align-items-center border-bottom bg-white" style="height: var(--header-height); flex-shrink: 0;">
-                
-                <div class="d-flex gap-2 align-items-center">
-                    <button id="sidebar-toggle-btn" class="btn btn-primary btn-sm d-lg-none">
-                        <i class="fas fa-bars"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="history.back()" title="Back">
-                        <i class="fas fa-arrow-left"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="history.forward()" title="Forward">
-                        <i class="fas fa-arrow-right"></i>
-                    </button>
-                </div>
-
-                <h1 id="app-bar-title" class="h5 mb-0 text-primary fw-bold text-center text-truncate mx-2">
-                    Dashboard
-                </h1>
-
-                <div class="d-flex align-items-center gap-2">
-                    <div class="dropdown">
-                        <button class="btn btn-light btn-sm rounded-circle position-relative" type="button" id="notificationBell" data-bs-toggle="dropdown" aria-expanded="false">
-                            <i class="fas fa-bell text-secondary"></i>
-                            <span id="notification-badge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none">0</span>
+                    <!-- HEADER -->
+                    <div class="sidebar-header d-flex justify-content-between align-items-center border-bottom"
+                        style="height: var(--header-height);">
+                        <div class="d-flex align-items-center text-dark text-decoration-none overflow-hidden">
+                            <i class="fas fa-school fa-2x text-primary flex-shrink-0"></i>
+                            <span id="panel-title" class="fs-5 ms-3 fw-bold">School App</span>
+                        </div>
+                        <button id="sidebar-close-btn" class="btn btn-sm btn-outline-secondary d-lg-none ms-auto">
+                            <i class="fas fa-times"></i>
                         </button>
-                        <ul id="notification-list" class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="notificationBell" style="width: 300px; max-height: 400px; overflow-y: auto;">
-                            <li><h6 class="dropdown-header">Notifications</h6></li>
-                            <li><hr class="dropdown-divider"></li>
-                        </ul>
                     </div>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="navigateTo('dashboard')" title="Home">
-                        <i class="fas fa-home"></i>
-                    </button>
+
+                    <!-- NAV -->
+                    <div id="sidebar-nav" class="nav nav-pills flex-column mb-auto flex-grow-1 overflow-auto py-2"></div>
+
+                    <!-- FOOTER (LOGOUT + TOGGLE) -->
+                    <div class="sidebar-footer d-flex align-items-center gap-2 p-3 border-top bg-light">
+
+                        <button id="logout-btn"
+                                class="btn btn-outline-danger flex-grow-1 d-flex align-items-center justify-content-center overflow-hidden">
+                            <i class="fas fa-sign-out-alt"></i>
+                            <span class="ms-2">Logout</span>
+                        </button>
+
+                        <button id="desktop-sidebar-toggle"
+                                class="btn btn-outline-secondary d-none d-lg-flex align-items-center justify-content-center"
+                                title="Toggle Sidebar">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+
+                    </div>
+
+                </nav>
+
+
+                <div id="app-layout" class="d-flex flex-column w-100">
+
+                    <div id="appbar" class="d-flex justify-content-between align-items-center border-bottom bg-white" style="height: var(--header-height); flex-shrink: 0;">
+                        
+                        <div class="d-flex gap-2 align-items-center">
+                            <button id="sidebar-toggle-btn" class="btn btn-primary btn-sm d-lg-none">
+                                <i class="fas fa-bars"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="history.back()" title="Back">
+                                <i class="fas fa-arrow-left"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="history.forward()" title="Forward">
+                                <i class="fas fa-arrow-right"></i>
+                            </button>
+                        </div>
+
+                        <h1 id="app-bar-title" class="h5 mb-0 text-primary fw-bold text-center text-truncate mx-2">
+                            Dashboard
+                        </h1>
+
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="dropdown">
+                                <button class="btn btn-light btn-sm rounded-circle position-relative" type="button" id="notificationBell" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="fas fa-bell text-secondary"></i>
+                                    <span id="notification-badge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none">0</span>
+                                </button>
+                                <ul id="notification-list" class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="notificationBell" style="width: 300px; max-height: 400px; overflow-y: auto;">
+                                    <li><h6 class="dropdown-header">Notifications</h6></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                </ul>
+                            </div>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="navigateTo('dashboard')" title="Home">
+                                <i class="fas fa-home"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <main id="main-content-scrollable scroll-container" class="flex-grow-1 overflow-auto bg-light position-relative">
+                        
+                        <div id="dashboard" class="view"></div>
+                        <div id="exam-control-view" class="view"></div>
+                        <div id="master-control-view" class="view"></div>
+                        
+                        <div id="main-content"></div>
+
+                    </main>
                 </div>
-            </div>
-
-            <main id="main-content-scrollable" class="flex-grow-1 overflow-auto bg-light position-relative">
-                
-                <div id="dashboard" class="view"></div>
-                <div id="exam-control-view" class="view"></div>
-                <div id="master-control-view" class="view"></div>
-                
-                <div id="main-content"></div>
-
-            </main>
-        </div>
     </div>
 
     <div class="modal fade" id="studentDetailModal" tabindex="-1">
@@ -283,209 +282,6 @@
     </div>
 </div>
 
-    <div class="modal fade" id="paymentModal" tabindex="-1">
-        <div class="modal-dialog modal-lg modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Pay Fees via UPI</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="row">
-                        <div class="col-md-5 text-center">
-                            <h6>1. Scan this QR Code</h6>
-                            <div id="qr-code-container" class="p-3 border rounded bg-light" style="min-height: 250px;"></div>
-                            <p class="mt-2" id="upi-uri-display" style="word-break: break-all; font-size: 0.7rem;"></p>
-                        </div>
-                        <div class="col-md-7">
-                            <h6>2. Enter Amount & Pay</h6>
-                            <div class="mb-3">
-                                <label class="form-label">Amount to Pay (INR)</label>
-                                <input type="number" id="payment-amount" class="form-control form-control-lg">
-                            </div>
-                            <div class="alert alert-info">
-                                <p class="fw-bold">Balance: <span id="modal-balance-due">₹0.00</span></p>
-                            </div>
-                            <hr>
-                            <h6>3. Confirm Payment</h6>
-                            <p class="text-danger fw-bold small">Enter UPI Transaction ID (UTR) to confirm.</p>
-                            <div class="mb-3">
-                                <input type="text" id="upi-transaction-id" class="form-control" placeholder="Enter 12-digit UTR" required>
-                            </div>
-                            <div class="d-grid gap-2">
-                                <a href="#" id="pay-with-upi-app-btn" class="btn btn-success btn-lg d-lg-none">
-                                    <i class="fas fa-mobile-alt me-2"></i>Pay with App
-                                </a>
-                                <button id="confirm-payment-btn" class="btn btn-primary btn-lg">Confirm Payment</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal fade" id="poster-modal" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Topper Poster Preview</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body text-center">
-                    <img id="poster-image-display" src="" class="img-fluid" alt="Topper Poster">
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    <a id="save-poster-btn" href="#" class="btn btn-primary" download="topper-poster.png">
-                        <i class="fas fa-download me-2"></i>Save
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal fade" id="eventSelectionModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="event-modal-title">Select Events</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body" id="event-modal-body"></div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" id="event-modal-save-btn" class="btn btn-primary">Confirm Events</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal fade" id="editRegistrationModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Edit Registration</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body" id="edit-modal-body"></div>
-                <div class="modal-footer justify-content-between">
-                    <button type="button" class="btn btn-danger" id="edit-modal-delete-btn">Delete</button>
-                    <div>
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" id="edit-modal-save-btn" class="btn btn-success">Save Changes</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal fade" id="addFestModal" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Create New Fest / Sports Meet</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="add-fest-form">
-                        <div class="mb-3">
-                            <label for="new-fest-name" class="form-label">Name</label>
-                            <input type="text" id="new-fest-name" class="form-control" placeholder="e.g., Annual Sports Meet 2025" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="new-fest-type" class="form-label">Type</label>
-                            <select id="new-fest-type" class="form-select" required>
-                                <option value="Arts">Arts Fest</option>
-                                <option value="Sports">Sports Meet</option>
-                            </select>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" id="save-new-fest-btn" class="btn btn-primary">Create</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal fade" id="liabilityCheckModal" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Liability Check for TC</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body" id="liability-check-modal-body"></div>
-                <div class="modal-footer" id="liability-check-modal-footer"></div>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal fade" id="tcPrintModal" tabindex="-1">
-        <div class="modal-dialog modal-xl">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">TC Preview</h5>
-                    <button type="button" class="btn-close no-print" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body" id="tc-modal-body"></div>
-                <div class="modal-footer no-print">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    <button type="button" class="btn btn-primary" id="print-final-tc-btn">
-                        <i class="fas fa-print me-2"></i> Print TC
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal fade" id="resignTeacherModal" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Teacher Off-boarding Wizard</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <input type="hidden" id="resign-teacher-id">
-                    <p>Processing resignation for <strong id="resign-teacher-name"></strong>.</p>
-                    <ul class="nav nav-pills nav-fill" id="resign-wizard-tabs" role="tablist">
-                        <li class="nav-item"><button class="nav-link" id="step-tab-1" data-bs-toggle="pill" data-bs-target="#step-pane-1" type="button">1. Class Charge</button></li>
-                        <li class="nav-item"><button class="nav-link" id="step-tab-2" data-bs-toggle="pill" data-bs-target="#step-pane-2" type="button">2. Subjects</button></li>
-                        <li class="nav-item"><button class="nav-link" id="step-tab-3" data-bs-toggle="pill" data-bs-target="#step-pane-3" type="button">3. Roles</button></li>
-                        <li class="nav-item"><button class="nav-link" id="step-tab-4" data-bs-toggle="pill" data-bs-target="#step-pane-4" type="button">4. Finalize</button></li>
-                    </ul>
-                    <div class="tab-content pt-4" id="resign-wizard-content">
-                        <div class="tab-pane fade" id="step-pane-1"><select id="reassign-class-charge-select" class="form-select"></select></div>
-                        <div class="tab-pane fade" id="step-pane-2"><div id="subject-allocations-list"></div><select id="reassign-subjects-select" class="form-select"></select></div>
-                        <div class="tab-pane fade" id="step-pane-3"><select id="reassign-roles-select" class="form-select"></select></div>
-                        <div class="tab-pane fade" id="step-pane-4"><input type="date" class="form-control" id="resignation-date"><textarea id="resignation-reason" class="form-control"></textarea></div>
-                    </div>
-                </div>
-                <div class="modal-footer justify-content-between">
-                    <button type="button" class="btn btn-secondary" id="resign-wizard-prev-btn" style="display: none;">Previous</button>
-                    <div>
-                        <button type="button" class="btn btn-primary" id="resign-wizard-next-btn">Next</button>
-                        <button type="button" id="confirm-resignation-btn" class="btn btn-danger" style="display: none;">Confirm</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal fade" id="studentListModal" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="studentListModalLabel">Student List</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body" id="studentListModalBody"></div>
-            </div>
-        </div>
-    </div>
 <!-- ===================== ALL MODALS IN ONE FILE ===================== -->
 
 <!-- 1️⃣ paymentModal -->
@@ -593,172 +389,34 @@
   </div>
 </div>
 
-<!-- ================= END OF ALL 9 MODALS ================= -->
-<div class="modal fade" id="fullStudentDetailModal" tabindex="-1" aria-labelledby="fullStudentDetailModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
-        <div class="modal-content">
-            
-            <div class="modal-header bg-primary text-white">
-                <div>
-                    <h5 class="modal-title mb-0" id="fullStudentDetailModalLabel">Student 360° Profile</h5>
-                    <div class="small opacity-75">
-                        <span id="s360-name-header">Student Name</span> | 
-                        <span id="s360-admn-header">ADMN</span>
-                    </div>
+<div class="modal fade" id="changeMaxMarkModal" tabindex="-1">
+        <div class="modal-dialog modal-sm modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-light py-2">
+                    <h6 class="modal-title fw-bold">Update Max Marks</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-
-            <div class="modal-body p-0">
-                
-                <div class="p-3 bg-light border-bottom">
-                    <div class="d-flex align-items-center">
-                        <div class="flex-shrink-0">
-                            <img id="s360-photo" src="" class="rounded-circle border bg-white" style="width: 80px; height: 80px; object-fit: cover;" alt="Student">
-                        </div>
-                        <div class="flex-grow-1 ms-3">
-                            <h4 class="mb-0 fw-bold" id="s360-name">Student Name</h4>
-                            <div class="text-muted small mb-1">
-                                <span class="badge bg-secondary" id="s360-admn">ADMN001</span> • 
-                                <span id="s360-class-div">Class 10 - A</span> • 
-                                <span id="s360-roll">Roll: 12</span>
-                            </div>
-                            <div>
-                                <span class="badge bg-success" id="s360-status">Active</span>
-                                <span class="badge bg-info text-dark" id="s360-gender">Male</span>
-                            </div>
-                        </div>
-                        <div class="text-end d-none d-md-block">
-                            <button class="btn btn-sm btn-outline-primary" id="s360-edit-btn">
-                                <i class="fas fa-edit me-1"></i>Edit
-                            </button>
-                        </div>
+                <div class="modal-body">
+                    <input type="hidden" id="mm-schedule-id">
+                    <div class="mb-2">
+                        <label class="form-label small text-muted">Theory (TE) Max</label>
+                        <input type="number" id="mm-max-te" class="form-control" min="0">
                     </div>
-                </div>
-
-                <ul class="nav nav-tabs nav-fill bg-white border-bottom" id="s360-tabs" role="tablist">
-                    <li class="nav-item">
-                        <button class="nav-link active" id="tab-basic" data-bs-toggle="tab" data-bs-target="#pane-basic" type="button">
-                            <i class="fas fa-id-card me-2"></i>Personal
+                    <div class="mb-3">
+                        <label class="form-label small text-muted">Internal (CE) Max</label>
+                        <input type="number" id="mm-max-ce" class="form-control" min="0">
+                    </div>
+                    <div class="d-grid">
+                        <button type="button" id="save-max-mark-btn" class="btn btn-primary btn-sm">
+                            Save Changes
                         </button>
-                    </li>
-                    <li class="nav-item">
-                        <button class="nav-link" id="tab-fees" data-bs-toggle="tab" data-bs-target="#pane-fees" type="button">
-                            <i class="fas fa-rupee-sign me-2"></i>Fees
-                        </button>
-                    </li>
-                    <li class="nav-item">
-                        <button class="nav-link" id="tab-academics" data-bs-toggle="tab" data-bs-target="#pane-academics" type="button">
-                            <i class="fas fa-graduation-cap me-2"></i>Academics
-                        </button>
-                    </li>
-                    <li class="nav-item">
-                        <button class="nav-link" id="tab-library" data-bs-toggle="tab" data-bs-target="#pane-library" type="button">
-                            <i class="fas fa-book me-2"></i>Library
-                        </button>
-                    </li>
-                </ul>
-
-                <div class="tab-content p-3 bg-white" id="s360-tab-content">
-                    
-                    <div class="tab-pane fade show active" id="pane-basic" role="tabpanel">
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <h6 class="border-bottom pb-2 text-primary">Contact Details</h6>
-                                <table class="table table-sm table-borderless small">
-                                    <tr><td class="text-muted w-25">Parent:</td><td class="fw-bold" id="s360-parent"></td></tr>
-                                    <tr><td class="text-muted">Mobile 1:</td><td><a href="#" id="s360-mobile1-link" class="text-decoration-none fw-bold"></a></td></tr>
-                                    <tr><td class="text-muted">Mobile 2:</td><td id="s360-mobile2"></td></tr>
-                                    <tr><td class="text-muted">Address:</td><td id="s360-address"></td></tr>
-                                    <tr><td class="text-muted">Email:</td><td id="s360-email"></td></tr>
-                                </table>
-                            </div>
-                            <div class="col-md-6">
-                                <h6 class="border-bottom pb-2 text-primary">Other Info</h6>
-                                <table class="table table-sm table-borderless small">
-                                    <tr><td class="text-muted w-25">DOB:</td><td id="s360-dob"></td></tr>
-                                    <tr><td class="text-muted">Blood Group:</td><td id="s360-blood"></td></tr>
-                                    <tr><td class="text-muted">Admission Date:</td><td id="s360-admn-date"></td></tr>
-                                    <tr><td class="text-muted">Vehicle:</td><td id="s360-vehicle"></td></tr>
-                                    <tr><td class="text-muted">House:</td><td id="s360-house"></td></tr>
-                                </table>
-                            </div>
-                        </div>
                     </div>
-
-                    <div class="tab-pane fade" id="pane-fees" role="tabpanel">
-                        <div class="row g-3">
-                            <div class="col-md-4">
-                                <div class="card bg-light border-0 h-100 text-center">
-                                    <div class="card-body py-2">
-                                        <div class="small text-muted">Total Payable</div>
-                                        <div class="h4 text-primary mb-0" id="s360-fee-total">₹0</div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="card bg-success-subtle border-0 h-100 text-center">
-                                    <div class="card-body py-2">
-                                        <div class="small text-muted">Paid</div>
-                                        <div class="h4 text-success mb-0" id="s360-fee-paid">₹0</div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="card bg-danger-subtle border-0 h-100 text-center">
-                                    <div class="card-body py-2">
-                                        <div class="small text-muted">Balance</div>
-                                        <div class="h4 text-danger mb-0" id="s360-fee-balance">₹0</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="mt-3">
-                            <h6 class="small fw-bold">Recent Transactions</h6>
-                            <div id="s360-transaction-list" class="list-group list-group-flush border-top">
-                                <div class="text-center text-muted small py-2">No recent transactions.</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="tab-pane fade" id="pane-academics" role="tabpanel">
-                        <h6 class="small fw-bold mb-2">Exam Results Overview</h6>
-                        <div id="s360-exam-results-container">
-                            <p class="text-muted small text-center">No exam records found.</p>
-                        </div>
-                    </div>
-
-                    <div class="tab-pane fade" id="pane-library" role="tabpanel">
-                        <h6 class="small fw-bold mb-2">Book History</h6>
-                        <div class="table-responsive">
-                            <table class="table table-sm table-striped small mb-0">
-                                <thead class="table-light">
-                                    <tr><th>Book</th><th>Issue Date</th><th>Status</th></tr>
-                                </thead>
-                                <tbody id="s360-library-tbody">
-                                    </tbody>
-                            </table>
-                        </div>
-                    </div>
-
                 </div>
             </div>
-
-            <div class="modal-footer bg-light">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <div class="btn-group">
-                    <button type="button" class="btn btn-outline-dark" id="print-student-details-btn">
-                        <i class="fas fa-print me-2"></i>Print Profile
-                    </button>
-                    <button type="button" class="btn btn-outline-dark" id="print-student-extract-btn">
-                        <i class="fas fa-file-alt me-2"></i>Admission Form
-                    </button>
-                </div>
-            </div>
-
         </div>
     </div>
-</div>
+<!-- ================= END OF ALL 9 MODALS ================= -->
+
 </body>
  
 <script type="module" src="sidebar.js"></script>
@@ -23947,15 +23605,15 @@ function renderExamControlDashboard() {
     }
 
     mainContent.innerHTML = `
-        <div class="d-flex justify-content-between align-items-center mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-1">
             <h1 class="h2 mb-0">Managing: <span class="text-primary">${selectedExam.name}</span></h1>
             <button class="btn btn-sm btn-outline-secondary" onclick="window.unselectExam()">
                 <i class="fas fa-arrow-left me-2"></i>Back to Exam List
             </button>
         </div>
         
-        <div class="tabs-container">
-            <ul class="nav nav-tabs" id="examControlTab" role="tablist"style="max-width:900px;">
+        <div class="rows tabs-container overflow-auto">
+            <ul class="nav nav-tabs d-flex" id="examControlTab" role="tablist">
                 <li class="nav-item" role="presentation"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#exam-control-overview" type="button">Overview</button></li>
                 <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-reg-no" type="button">Reg. No.</button></li>
                 <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#exam-control-rooms" type="button">Rooms</button></li>
@@ -36597,6 +36255,66 @@ window.generateTopperPosterold = async (studentId, examId, rank)=> {
     }
 }
 
+
+function unsubscribeAllListeners() {
+    // Unsubscribe from general listeners
+    for (const key in activeListeners) {
+        if (typeof activeListeners[key] === 'function') {
+            activeListeners[key]();
+        }
+    }
+    activeListeners = {};
+
+    // --- NEW: Also unsubscribe from all active marks listeners ---
+    for (const key in activeMarksListeners) {
+        if (typeof activeMarksListeners[key] === 'function') {
+            activeMarksListeners[key]();
+        }
+    }
+    activeMarksListeners = {};
+}
+
+document.getElementById('logout-btn').addEventListener('click', async () => {
+    // 1. Unsubscribe from all active Firestore listeners
+    unsubscribeAllListeners();
+
+    // 2. Destroy any active charts
+    if(window.attendanceChart) { 
+        window.attendanceChart.destroy(); 
+        window.attendanceChart = null; 
+    }
+
+    try {
+        // 3. Close the active connection to the database.
+        console.log('Closing IndexedDB connection...');
+        window.appDb.close();
+
+        // 4. Delete the entire 'SchoolAppDB' database.
+        console.log('Deleting IndexedDB database...');
+        await Dexie.delete('SchoolAppDB'); 
+        console.log('IndexedDB database has been deleted successfully.');
+
+        // --- THIS IS THE NEW PART ---
+        // 5. Clear the saved session data from localStorage
+        localStorage.removeItem('schoolAppUserSession');
+        localStorage.removeItem('schoolAppLastState');
+        // --- END NEW PART ---
+
+        // 6. After deletion is successful, update the UI and reload
+        document.getElementById('main-app').classList.remove('active');
+        document.getElementById('login-screen').classList.add('active');
+        window.location.reload();
+
+    } catch (error) {
+        console.error('Failed to delete IndexedDB or clear session:', error);
+            window.showAlert('Error during logout. You may need to clear your browser cache manually.', 'danger');
+        
+        // As a fallback, still try to log the user out visually
+        document.getElementById('main-app').classList.remove('active');
+        document.getElementById('login-screen').classList.add('active');
+    }
+});
+
 window.generateTopperPoster = async (studentId, examId, rank) => {
     const student = window.students.find(s => s.id === studentId);
     const exam = window.exams.find(e => e.id === examId);
@@ -36762,7 +36480,7 @@ function loadImage(src) {
     });
 }
 
-function printContentOfDiv(divId, title = 'Report', options = {}) {
+window.printContentOfDiv = (divId, title = 'Report', options = {}) =>{
     const {
         customHeaderHtml = '',
         customFooterHtml = '',
