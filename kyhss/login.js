@@ -1,3 +1,4 @@
+import { query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
  document.getElementById('login-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -113,7 +114,7 @@
             const pass = document.getElementById('admin-pass').value;
             
             if (!email || !pass) {
-                showAlert('Please enter admin email and password.', 'danger');
+               window.showAlert('Please enter admin email and password.', 'danger');
                 return;
             }
             
@@ -161,46 +162,6 @@
     }
 });
 
-document.getElementById('logout-btn').addEventListener('click', async () => {
-    // 1. Unsubscribe from all active Firestore listeners
-    unsubscribeAllListeners();
-
-    // 2. Destroy any active charts
-    if(window.attendanceChart) { 
-        window.attendanceChart.destroy(); 
-        window.attendanceChart = null; 
-    }
-
-    try {
-        // 3. Close the active connection to the database.
-        console.log('Closing IndexedDB connection...');
-        window.appDb.close();
-
-        // 4. Delete the entire 'SchoolAppDB' database.
-        console.log('Deleting IndexedDB database...');
-        await Dexie.delete('SchoolAppDB'); 
-        console.log('IndexedDB database has been deleted successfully.');
-
-        // --- THIS IS THE NEW PART ---
-        // 5. Clear the saved session data from localStorage
-        localStorage.removeItem('schoolAppUserSession');
-        localStorage.removeItem('schoolAppLastState');
-        // --- END NEW PART ---
-
-        // 6. After deletion is successful, update the UI and reload
-        document.getElementById('main-app').classList.remove('active');
-        document.getElementById('login-screen').classList.add('active');
-        window.location.reload();
-
-    } catch (error) {
-        console.error('Failed to delete IndexedDB or clear session:', error);
-            window.showAlert('Error during logout. You may need to clear your browser cache manually.', 'danger');
-        
-        // As a fallback, still try to log the user out visually
-        document.getElementById('main-app').classList.remove('active');
-        document.getElementById('login-screen').classList.add('active');
-    }
-});
 
 async function onLoginSuccess(role, user) { 
             document.getElementById('login-screen').classList.remove('active');
@@ -212,3 +173,4 @@ async function onLoginSuccess(role, user) {
     window.showMainApp(); // Render the main app layout
     window.getData ('customNotifications');
 }
+
