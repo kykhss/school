@@ -179,7 +179,7 @@ window.renderResultsTab = async () => {
                 const studentId = studentLink.dataset.id; // Get student ID from data-id attribute
                 if (studentId) {
                    //  generateReportCardHTML(studentId, examSelect.value , 'rc-results-container');
-                    document.getElementById('rc-results-container').innerHTML = generateReportCardHTML_Comparison(studentId, examSelect.value, 'rc-results-container')
+                    document.getElementById('rc-results-container').innerHTML = window.generateReportCardHTML_Comparison(studentId, [examSelect.value], 'rc-results-container')
            
                     // populateAndShowFullStudentModal(studentId); // Call your existing modal function
                 }
@@ -344,15 +344,15 @@ async function generateExamWiseResultsTable(examId, classId, division) {
         document.getElementById('exam-wise-chart-container').innerHTML = '<canvas id="exam-wise-performance-canvas"></canvas>';
         return;
     }
-
+    
     // 1. Get configuration and filter data
     const gradingSystem = document.getElementById('shared-grading-system').value;
     const sortBy = document.getElementById('ew-sort-by').value;
     const studentsInClass = students.filter(s => s.classId === classId && s.division === division);
     const subjectHeaders = schedulesForClass.map(s => subjects.find(sub => sub.id === s.subjectId)).filter(Boolean);
-
+    let marksObject = await window.getmarks(classId, division, examId);
     // 2. Process the raw data to get calculated results
-    let resultsData = processExamResultsData(studentsInClass, schedulesForClass, marks, examId, gradingSystem);
+    let resultsData = await processExamResultsData(studentsInClass, schedulesForClass, marksObject,examId, gradingSystem);
 
     // --- NEW: Calculate Consolidated Metrics ---
     const consolidatedMetrics = calculateConsolidatedMetrics(resultsData, schedulesForClass, studentsInClass, examId, gradingSystem);
@@ -432,7 +432,7 @@ function calculateConsolidatedMetrics(resultsData, schedulesForClass, studentsIn
         let isfailed = false;
         // Count overall failures and grade distribution
         res.subjectResults.forEach(subRes => {
-            const grade = subRes.grade;
+            const grade = subRes.teGrade;
             if (grade === 'E' || grade === 'F'|| grade === "AB") {
                 metrics.totalFailures++;
                 isfailed === false? metrics.failurecount++:"";
@@ -443,11 +443,8 @@ function calculateConsolidatedMetrics(resultsData, schedulesForClass, studentsIn
                 isAbsentee = true;
             }
             // Count the grade for the overall grade distribution
-            if (metrics.gradeCounts[res.overallGrade] !== undefined) {
-                metrics.gradeCounts[res.overallGrade]++;
-            } else {
-                // For overall grade that isn't in the scale (like 'NC' or '-'), skip or put in a catch-all
-                metrics.gradeCounts['AB']++;
+            if (metrics.gradeCounts[grade] !== undefined) {
+                metrics.gradeCounts[grade]++;
             }
         }
     );
@@ -499,7 +496,7 @@ function renderConsolidatedMetricsTable(metrics) {
                 <div class="col-md-3">
                     <div class="p-1 border rounded bg-success text-white">
                         <h6 class="mb-1">Overall Pass %</h6>
-                        <h4 class="fw-bold mb-0">${totalStudents > 0 ? ((passingStudents / totalStudents) * 100).toFixed(1) : '0.0'}%</h4>
+                        <h4 class="fw-bold mb-0">${totalStudents > 0 ? ((passingStudents / totalGrades) * 100).toFixed(1) : '0.0'}%</h4>
                     </div>
                 </div>
             </div>
@@ -560,16 +557,6 @@ function renderExamWisePerformanceChartFromConsolidated(gradeCounts, gradeScale,
         }
     });
 }
-/**
- * Processes raw data to calculate marks, totals, and grades for each student.
- * This version now includes the studentId in the results for reliable lookups.
- * @param {Array} studentsInClass
- * @param {Array} schedules
- * @param {object} marksObject
- * @param {string} examId
- * @param {string} gradingSystem
- * @returns {Array} A new array with calculated results for each student.
- */
 
 /**
  * Processes raw data to calculate marks, totals, and individual grades for each student.
@@ -580,7 +567,18 @@ function renderExamWisePerformanceChartFromConsolidated(gradeCounts, gradeScale,
  * @param {string} gradingSystem
  * @returns {Array} A new array with calculated results for each student.
  */
-function processExamResultsData(studentsInClass, schedulesForClass, marksObject, examId, gradingSystem) {
+async function processExamResultsData(studentsInClass, schedulesForClass, marks, examId, gradingSystem) {
+
+    let marksObject = {};
+    
+    try{
+        marksObject = await marks;
+    }catch (e) {
+  console.error("Failed to load marks", e);
+}
+
+   
+
     const subjectHeaders = schedulesForClass.map(s => subjects.find(sub => sub.id === s.subjectId)).filter(Boolean);
 
     return studentsInClass.map(student => {
@@ -633,7 +631,6 @@ function processExamResultsData(studentsInClass, schedulesForClass, marksObject,
 
         const grandPct = grandMaxMarks > 0 ? ((grandTotalMarks / grandMaxMarks) * 100) : 0;
         const gradeFunc = gradingSystem === 'type1' ? window.calculateGrade : window.calculateGradeType2;
-
         return {
             studentId: student.id,
             studentName: student.name,
@@ -729,7 +726,7 @@ function renderExamResultsTable(resultsData, subjectHeaders, schedulesForClass, 
         // Subject Results Cells
         res.subjectResults.forEach(subRes => {
             const gradeColor = (subRes.grade === 'E' || subRes.grade === 'F') ? 'text-danger fw-bold' : '';
-            const NEColor = (subRes.grade === 'N/A') ? 'text-primary fw-bold' : '';
+            const NEColor = (subRes.grade === 'N/A') ? 'text-primary fw-bold' : (subRes.grade === 'AB')?'text-danger fw-bold':'';
             
             bodyHTML += `
                 <td class="text-center ${NEColor}">
@@ -1015,7 +1012,7 @@ generateSubjectWiseTable();
 /**
  * Main controller function that gathers filter values and orchestrates data processing and rendering.
  */
-function generateSubjectWiseTable() {
+async function generateSubjectWiseTable() {
     const container = document.getElementById('subject-wise-results-container');
     const chartContainer = document.getElementById('subject-wise-chart-container');
     if (!container || !chartContainer) return;
@@ -1035,10 +1032,10 @@ function generateSubjectWiseTable() {
         return;
     }
 
-    const studentsInClass = students.filter(s => s.classId === classId && s.division === division);
     const selectedExams = selectedExamIds.map(id => exams.find(e => e.id === id)).filter(Boolean);
-    const results = processSubjectWiseResults(studentsInClass, selectedExams, subjectId, gradingSystem);
+    const results = await processSubjectWiseResults(classId, division,selectedExams, subjectId, gradingSystem);
 
+    console.log(results);
     // --- THIS IS THE CORRECTED SORTING LOGIC ---
 
 if (sortBy === 'name') {
@@ -1118,7 +1115,13 @@ function renderSubjectWiseTableHTML(results, selectedExams, displayMode, subject
  * Processes raw data from marks and schedules into a structured format for the subject-wise table.
  * (Corrected version with specific schedule lookup)
  */
-function processSubjectWiseResults(studentsInClass, selectedExams, subjectId, gradingSystem) {
+async function processSubjectWiseResults(classId, division,selectedExams, subjectId, gradingSystem) {
+    
+    let marks = await window.getmarks(classId, division);
+    console.log(marks);
+    
+    const studentsInClass = students.filter(s => s.classId === classId && s.division === division);
+    
     return studentsInClass.map(student => {
         const markData = {};
         let totalSum = 0;
@@ -1132,7 +1135,7 @@ function processSubjectWiseResults(studentsInClass, selectedExams, subjectId, gr
                 s.classId === student.classId && 
                 s.division === student.division
             );
-
+            
             const markId = `${exam.id}_${student.id}_${subjectId}`;
             const mark = marks[markId];
 
@@ -1299,14 +1302,14 @@ async function generateResultsTable(container) {
     // This will automatically trigger the report to re-render when data arrives.
     await window.attachMarksListener([{ classId: classId, division: division }]);
     // Process and render the table with currently available data
-    const studentsInClass = students
+    const studentsInClass = students.filter(s => s.classId === classId && s.division === division && s.status === 'Active')
 
-    .filter(s => s.classId === classId && s.division === division && s.status !== 'TC Issued')
-
-    .sort((a, b) => a.name.localeCompare(b.name));
+.sort((a, b) => a.name.localeCompare(b.name));
 const schedulesForClass = examSchedules.filter(s => s.examId === examId && s.classId === classId && s.division === division);
     
     // The global 'marks' object will be used here
+    let marks = await window.getmarks();
+    
     let results = processRankListData(studentsInClass, schedulesForClass, marks, examId);
     
     // Sort results by total marks in descending order
@@ -1513,7 +1516,7 @@ function renderReportCardTab() {
 
     divisionSelect.addEventListener('change', updateStudentList);
 
-    studentListContainer.addEventListener('click', e => {
+    studentListContainer.addEventListener('click', async (e) => {
         e.preventDefault();
         const link = e.target.closest('.rc-student-link');
         if (link) {
@@ -1526,7 +1529,7 @@ function renderReportCardTab() {
                 showAlert('Please select at least one exam.', 'warning');
                 return;
             }
-            resultsContainer.innerHTML = generateReportCardHTML_Comparison(studentId, examIds);
+            resultsContainer.innerHTML = await window.generateReportCardHTML_Comparison(studentId, examIds);
             // Show the header and print button for the selected student
             rcStudentNameHeader.textContent = `Report for ${studentName}`;
             rcHeader.style.display = 'flex';
@@ -1556,7 +1559,7 @@ function renderReportCardTab() {
         divisionSelect.disabled = true;
         examSelect.value = exams[0]?.id || '';
         studentListContainer.innerHTML = `<a href="#" class="list-group-item list-group-item-action rc-student-link active" data-student-id="${selectedUser.id}">${selectedUser.name}</a>`;
-        generateReportCardHTML_Comparison(selectedUser.id, [examSelect.value], 'rc-results-container');
+        window.generateReportCardHTML_Comparison(selectedUser.id, [examSelect.value], 'rc-results-container');
         rcHeader.style.display = 'flex'; // Show print button for student
         printAllBtn.style.display = 'none'; // Hide print all button for student
     }
@@ -1565,8 +1568,8 @@ function renderReportCardTab() {
  * Generates a single, multi-page HTML document for all students in a class and prints it.
  * This version uses a temporary DOM element to ensure all images are loaded before printing.
  */
-function printAllReportCards(classId, division, examIds) {
-    showAlert('Preparing report cards for printing...', 'info');
+async function printAllReportCards(classId, division, examIds) {
+    window.showAlert('Preparing report cards for printing...', 'info');
 
     const studentsInClass = students.filter(s => s.classId === classId && s.division === division);
     if (studentsInClass.length === 0) {
@@ -1579,14 +1582,17 @@ function printAllReportCards(classId, division, examIds) {
     document.body.appendChild(tempPrintContainer);
 
     try {
-        let allCardsHtml = '';
-        studentsInClass.forEach(student => {
-            // --- MODIFIED: Directly get the HTML string from the function ---
-            const cardHtml = generateReportCardHTML_Comparison(student.id, examIds,tempPrintContainer);
-            allCardsHtml += `<div class="printable-card-page">${cardHtml}</div>`;
-        });
-        
-        tempPrintContainer.innerHTML = allCardsHtml;
+        const cardPromises = studentsInClass.map(async (student) => {
+    const cardHtml = await window.generateReportCardHTML_Comparison(
+        student.id,
+        examIds,
+        tempPrintContainer
+    );
+    return `<div class="printable-card-page">${cardHtml}</div>`;
+});
+
+const allCardsHtml = (await Promise.all(cardPromises)).join('');
+tempPrintContainer.innerHTML = allCardsHtml;
         const reportTitle = `Report Cards for ${classes.find(c=>c.id===classId).name} - ${division}`;
         
         printContentOfDiv('temp-report-card-container', reportTitle, {
