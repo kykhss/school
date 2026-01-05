@@ -16,21 +16,151 @@ import {writeBatch, serverTimestamp, query, where, getDocs, onSnapshot } from "h
         classOptions = classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
     }
 
-    container.innerHTML = `
-        <div class="row g-1 align-items-end border-bottom pb-0 mb-3">
-    <div class="col-6 col-md-2"><label class="form-label">Exam</label><select id="mark-entry-exam" class="form-select">${exams.filter(e => e.isActive).map(ex => `<option value="${ex.id}">${ex.name}</option>`).join('')}</select></div>
-    <div class="col-6 col-md-2"><label class="form-label">Class</label><select id="mark-entry-class" class="md form-select"><option value="">-- Select Class --</option>${classOptions}</select></div>
-    <div class="col-6 col-md-2"><label class="form-label">Division</label><select id="mark-entry-division" class="form-select" disabled><option value="">-- Select Division --</option></select></div>
-    <div class="col-6 col-md-2"><label class="form-label">Subject</label><select id="mark-entry-subject" class="form-select" disabled><option value="">-- Select Subject --</option></select></div>
-</div>
-        <div id="mark-entry-sheet"></div>
-        <div id="mark-entry-summary-container"></div>
-    `;
+    // Inside renderMarkEntryTab() function...
+
+container.innerHTML = `
+    <div class="row g-2 align-items-end border-bottom pb-3 mb-3">
+        <div class="col-6 col-md-3">
+            <label class="form-label fw-bold small">Exam</label>
+            <select id="mark-entry-exam" class="form-select form-select-sm">
+                <option value="">-- Select --</option>
+                ${exams.filter(e => e.isActive).map(ex => `<option value="${ex.id}">${ex.name}</option>`).join('')}
+            </select>
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label fw-bold small">Class</label>
+            <select id="mark-entry-class" class="form-select form-select-sm">
+                <option value="">-- Select --</option>
+                ${classOptions} </select>
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label fw-bold small">Division</label>
+            <select id="mark-entry-division" class="form-select form-select-sm" disabled>
+                <option value="">--</option>
+            </select>
+        </div>
+        <div class="col-6 col-md-3">
+            <label class="form-label fw-bold small">Subject</label>
+            <select id="mark-entry-subject" class="form-select form-select-sm" disabled>
+                <option value="">--</option>
+            </select>
+        </div>
+        
+        <div class="col-12 col-md-2">
+            <button id="change-max-mark-btn" class="btn btn-outline-primary btn-sm w-100" disabled>
+                <i class="fas fa-cog me-1"></i> Max Marks
+            </button>
+        </div>
+    </div>
+
+    <div id="mark-entry-sheet">
+        <p class="text-muted text-center py-5">Please select Exam, Class, and Subject to enter marks.</p>
+    </div>
+    <div id="mark-entry-summary-container"></div>
+
+`;
 
     const examSelect = document.getElementById('mark-entry-exam');
     const classSelect = document.getElementById('mark-entry-class');
     const divisionSelect = document.getElementById('mark-entry-division');
     const subjectSelect = document.getElementById('mark-entry-subject');
+    const btnChangeMax = document.getElementById('change-max-mark-btn');
+    
+    // --- JAVASCRIPT LOGIC FOR MAX MARK BUTTON ---
+
+
+// 1. Enable/Disable Button based on selection
+const checkSelection = () => {
+    const isReady = examSelect.value && classSelect.value && divisionSelect.value && subjectSelect.value;
+    btnChangeMax.disabled = !isReady;
+    
+    // Call your existing load function if ready (assuming you have one)
+    if(isReady && typeof loadMarkEntrySheet === 'function') {
+        loadMarkEntrySheet(); 
+    }
+};
+
+[examSelect, classSelect, divisionSelect, subjectSelect].forEach(el => el.addEventListener('change', checkSelection));
+
+// 2. Handle Button Click -> Open Modal
+btnChangeMax.addEventListener('click', () => {
+    const examId = examSelect.value;
+    const classId = classSelect.value;
+    const division = divisionSelect.value;
+    const subjectId = subjectSelect.value;
+
+    // Find the specific schedule from global 'examSchedules'
+    const schedule = examSchedules.find(s => 
+        s.examId === examId && 
+        s.classId === classId && 
+        s.division === division && 
+        s.subjectId === subjectId
+    );
+
+    if (!schedule) {
+        showAlert('No schedule found for this subject. Please check the Exam Schedule tab.', 'warning');
+        return;
+    }
+
+    // Populate Modal
+    document.getElementById('mm-schedule-id').value = schedule.id;
+    document.getElementById('mm-max-te').value = schedule.maxTE || 0;
+    document.getElementById('mm-max-ce').value = schedule.maxCE || 0;
+
+    // Show Modal
+    const modal = new bootstrap.Modal(document.getElementById('changeMaxMarkModal'));
+    modal.show();
+});
+
+// 3. Handle Save Click -> Update Database
+document.getElementById('save-max-mark-btn').addEventListener('click', async function() {
+    const btn = this;
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = 'Saving...';
+
+    const scheduleId = document.getElementById('mm-schedule-id').value;
+    const newMaxTE = parseInt(document.getElementById('mm-max-te').value) || 0;
+    const newMaxCE = parseInt(document.getElementById('mm-max-ce').value) || 0;
+
+    try {
+        // Update Firestore
+        // Assuming 'examSchedules' is your collection name
+        const scheduleRef = window.getDocRef("examSchedules", scheduleId);
+        
+        await updateDoc(scheduleRef, {
+            maxTE: newMaxTE,
+            maxCE: newMaxCE,
+            lastUpdated: serverTimestamp()
+        });
+
+        // Update local state immediately for UI responsiveness
+        const localSchedule = examSchedules.find(s => s.id === scheduleId);
+        if (localSchedule) {
+            localSchedule.maxTE = newMaxTE;
+            localSchedule.maxCE = newMaxCE;
+        }
+
+        showAlert('Max marks updated successfully!', 'success');
+        
+        // Close Modal
+        const modalEl = document.getElementById('changeMaxMarkModal');
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        modal.hide();
+
+        // Refresh the sheet to reflect new max marks (if your sheet uses them for validation)
+        if(typeof loadMarkEntrySheet === 'function') {
+            loadMarkEntrySheet(); 
+        }
+
+    } catch (error) {
+        console.error("Error updating max marks:", error);
+        showAlert('Failed to update max marks.', 'danger');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+});
 
     // --- NEW: Centralized controller for the view ---
     const updateMarkEntryView = () => {
@@ -327,6 +457,10 @@ async function saveMarks(examId, classId, division, subjectId) {
         return;
     }
 
+     if (navigator.onLine) {
+        return null;
+     }
+
     const academicYear = window.systemConfig.activeYear;
     const marksCollectionName = `marks-${academicYear}`;
     
@@ -377,10 +511,7 @@ async function saveMarks(examId, classId, division, subjectId) {
                     // (Deletes are handled by background listener later)
                 }
 
-                // LOAD DATA INTO MEMORY
-                const allLocalMarks = await appDb.marks.where({ classId, division }).toArray();
-                allLocalMarks.forEach(mark => { marks[mark.id] = mark; });
-
+                
                 dataLoadedViaDelta = true;
                 
                 // *** SUCCESS! Resolve the promise now. ***
