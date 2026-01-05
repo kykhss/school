@@ -457,7 +457,7 @@ async function saveMarks(examId, classId, division, subjectId) {
         return;
     }
 
-     if (navigator.onLine) {
+     if (!navigator.onLine) {
         return null;
      }
 
@@ -1051,3 +1051,4 @@ function unsubscribeAllListeners() {
     }
     activeMarksListeners = {};
 }
+
