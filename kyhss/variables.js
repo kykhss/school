@@ -41,6 +41,23 @@ window.selectedUser = null;
 // 3. CORE ENTITIES (People & Structure)
 // ==========================================
 window.students = [];
+window.getStudents = async (classId, division, examId) => {
+  let students = [];
+  if (classId && division && examId) {
+  const allLocalMarks = await appDb.marks.where({ classId, division, examId}).toArray();//where({ classId, division })
+                allLocalMarks.forEach(mark => { students[mark.id] = mark; });
+  }else if(classId && division){
+    const allLocalMarks = await appDb.marks.where({ classId, division }).toArray();//where({ classId, division })
+                allLocalMarks.forEach(mark => { students[mark.id] = mark; });
+  }else if(classId){
+    const allLocalMarks = await appDb.marks.where({ classId }).toArray();//where({ classId, division })
+                allLocalMarks.forEach(mark => { students[mark.id] = mark; });
+  }else{
+    const allLocalMarks = await appDb.marks.toArray();//where({ classId, division })
+                allLocalMarks.forEach(mark => { students[mark.id] = mark; });
+  }
+  return students;
+}
 window.teachers = [];
 window.classes = [];
 window.subjects = [];
@@ -65,9 +82,40 @@ window.examSchedules = [];
 window.examRooms = [];
 window.examDuties = [];
 window.examAbsentees = [];
+window.needRefreshedMarks = false;
 window.examRoomAllocationRules = [];
 window.examRegistrationSettings = {}; // Single document
-window.marks = {}; // Object for easier management
+window.getmarks = async (classId, division, examId) => {
+  
+  if(needRefreshedMarks){
+    await window.attachMarksListener([{classId:classId, division:division}]);
+  }
+  let markss = {};
+  let allLocalMarks = [];
+
+  if (classId && division && examId) {
+  allLocalMarks = await appDb.marks.where({ classId, division, examId}).toArray();//where({ classId, division })
+                
+  }else if(classId && division){
+    allLocalMarks = await appDb.marks.where({ classId, division }).toArray();//where({ classId, division })
+  }else if(classId){
+     allLocalMarks = await appDb.marks.where({ classId }).toArray();//where({ classId, division })
+               
+  }else{
+     allLocalMarks = await appDb.marks.toArray();//where({ classId, division })
+                
+  }
+  if(allLocalMarks.length>0){
+  allLocalMarks.forEach(mark => { markss[mark.id] = mark; });
+  window.needRefreshedMarks = false;
+  }else{
+    window.needRefreshedMarks = true;
+    getmarks(classId, division, examId);
+  }
+  
+  return markss;
+}
+
 window.activeMarksListeners = {}; // Store multiple listeners
 
 // ==========================================
