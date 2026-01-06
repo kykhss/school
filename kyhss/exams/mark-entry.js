@@ -457,24 +457,56 @@ async function saveMarks(examId, classId, division, subjectId) {
         return;
     }
 
-     if (!navigator.onLine) {
+    if (!navigator.onLine) {
         return null;
-     }
+    }
 
     const academicYear = window.systemConfig.activeYear;
     const marksCollectionName = `marks-${academicYear}`;
-    
-    // 1. Create an array of promises (one for each class/division)
+
+    // --- HELPER: Centralized DB Save Logic ---
+    // This prevents writing the same bulkPut/bulkDelete code 3 times
+    const handleDatabaseUpdate = async (docChanges, source) => {
+        try {
+            if (docChanges.length === 0) {
+                updateLoadMarksButton('noChanges');
+                return;
+            }
+
+            // Reuse your existing processing logic
+            const { toAddOrUpdate, toDelete } = processMarksChanges(docChanges);
+
+            if (toAddOrUpdate.length > 0) {
+                await appDb.marks.bulkPut(toAddOrUpdate);
+                updateLoadMarksButton('newData');
+            } else {
+                updateLoadMarksButton('noChanges');
+            }
+
+            if (toDelete.length > 0) {
+                await appDb.marks.bulkDelete([...new Set(toDelete)]);
+                updateLoadMarksButton('newData');
+            }
+
+
+        } catch (error) {
+            console.error(`[DB Update Error - ${source}]:`, error);
+        }
+    };
+
+    // 1. Create an array of promises
     const loadingPromises = classDataArray.map(async ({ classId, division }) => {
+        const loadMarksBtn = document.getElementById('loadmarks-btn');
+
         return new Promise(async (resolve) => {
             if (!classId || !division) {
-                resolve(); // Skip invalid items
+                resolve(); 
                 return;
             }
 
             const listenerKey = `${classId}_${division}`;
-            
-            // If already listening and not refreshing, we assume data is ready.
+
+            // If already listening and not refreshing, assume ready.
             if (activeMarksListeners[listenerKey] && !refresh) {
                 resolve();
                 return;
@@ -488,7 +520,7 @@ async function saveMarks(examId, classId, division, subjectId) {
                     .where({ classId, division })
                     .reverse()
                     .sortBy('lastUpdated');
-                
+
                 const lastLocalSyncTime = (lastLocalMark.length > 0 && lastLocalMark[0].lastUpdated) 
                     ? lastLocalMark[0].lastUpdated 
                     : new Date(0);
@@ -503,32 +535,30 @@ async function saveMarks(examId, classId, division, subjectId) {
                 const updatesSnapshot = await getDocs(updatesQuery);
 
                 if (!updatesSnapshot.empty) {
-                    // Convert docs for processing
-                    const changesMock = updatesSnapshot.docs.map(doc => ({ type: 'modified', doc: doc }));
-                    const { toAddOrUpdate, toDelete } = processMarksChanges(changesMock);
-
-                    if (toAddOrUpdate.length > 0) await appDb.marks.bulkPut(toAddOrUpdate);
-                    // (Deletes are handled by background listener later)
+                    // Create mock changes for the helper
+                    const changesMock = updatesSnapshot.docs.map(doc => ({ type: 'modified', doc }));
+                    await handleDatabaseUpdate(changesMock, 'DeltaSync');
+                } else {
+                    updateLoadMarksButton('noChanges');
                 }
 
-                
                 dataLoadedViaDelta = true;
-                
-                // *** SUCCESS! Resolve the promise now. ***
-                resolve(); 
+                resolve(); // Success via Delta
 
             } catch (error) {
                 console.warn(`[Marks Sync] Delta sync failed for ${listenerKey}, falling back to listener.`, error);
-                // Do NOT resolve yet. We will resolve inside the listener.
+                if(loadMarksBtn) {
+                     loadMarksBtn.innerHTML = `<span class="text-danger me-2"></span>Sync Error (Retrying...)`;
+                }
+                // Don't resolve yet; fallback to snapshot below
             }
 
             // --- STEP 2: ATTACH BACKGROUND LISTENER ---
-            // We still attach this to catch future updates or if Delta Sync failed.
             if (activeMarksListeners[listenerKey]) {
-                 // If we resolved via Delta, we are done. 
-                 // If Delta failed, but a listener exists (rare edge case), we resolve to be safe.
-                 if(!dataLoadedViaDelta) resolve(); 
-                 return;
+                // If Delta succeeded, we are done with the Promise. 
+                // But if Delta failed, we need to resolve here if the listener was ALREADY active.
+                if (!dataLoadedViaDelta) resolve();
+                return;
             }
 
             const fullQuery = query(
@@ -539,52 +569,91 @@ async function saveMarks(examId, classId, division, subjectId) {
 
             const unsubscribe = onSnapshot(fullQuery, async (snapshot) => {
                 const changes = snapshot.docChanges();
-                
-                // If this is the first snapshot and Delta Sync failed, we process and resolve here
+
+                // 2A. If this is the Initial Load (and Delta Sync failed or was skipped)
                 if (!dataLoadedViaDelta) {
-                    if (changes.length > 0) {
-                        const { toAddOrUpdate, toDelete } = processMarksChanges(changes);
-                        try {
-                            if (toAddOrUpdate.length > 0) {
-                                await appDb.marks.bulkPut(toAddOrUpdate);
-                                toAddOrUpdate.forEach(m => marks[m.id] = m);
-                            }
-                            if (toDelete.length > 0) {
-                                await appDb.marks.bulkDelete([...new Set(toDelete)]);
-                                toDelete.forEach(id => delete marks[id]);
-                            }
-                        } catch (error) {
-                            console.error('Error syncing marks stream:', error);
-                        }
-                    }
-                    
-                    dataLoadedViaDelta = true; // Mark as loaded so we don't resolve again
-                    resolve(); // *** RESOLVE PROMISE HERE (Fallback Path) ***
-                } else {
-                    // Normal background update
-                    if (changes.length === 0) return;
-                    const { toAddOrUpdate, toDelete } = processMarksChanges(changes);
-                    try {
-                        if (toAddOrUpdate.length > 0) await appDb.marks.bulkPut(toAddOrUpdate);
-                        if (toDelete.length > 0) await appDb.marks.bulkDelete([...new Set(toDelete)]);
-                        // Update memory too
-                        //toAddOrUpdate.forEach(m => marks[m.id] = m);
-                        //toDelete.forEach(id => delete marks[id]);
-                    } catch(e) { console.error(e); }
+                    await handleDatabaseUpdate(changes, 'Snapshot-Initial');
+                    dataLoadedViaDelta = true;
+                    resolve(); 
+                } 
+                // 2B. Normal background updates (Real-time)
+                else {
+                    await handleDatabaseUpdate(changes, 'Snapshot-Update');
                 }
+
             }, (error) => {
                 console.error(`[Firestore] Error listening to marks: `, error);
-                resolve(); // Resolve on error so app doesn't hang
+                resolve(); // Always resolve so Promise.all doesn't hang indefinitely
             });
 
             activeMarksListeners[listenerKey] = unsubscribe;
         });
     });
 
-    // 2. Wait for ALL class promises to finish before letting the code continue
+    // 2. Wait for ALL class promises to finish
     await Promise.all(loadingPromises);
-   // console.log("All marks loaded into memory.");
-}
+    console.log("All marks loaded into memory.");
+};
+
+window.updateLoadMarksButton = (state) => {
+    const btn = document.getElementById('loadmarks-btn');
+    if (!btn) return;
+
+    const states = {
+        loading: {
+            html: `<span class="spinner-border spinner-border-sm me-2"></span>SYNCING MARKS...`,
+            disabled: true,
+            className: 'btn btn-primary w-100'
+        },
+        newData: {
+            html: `✅ NEW MARKS ARRIVED`,
+            disabled: false,
+            className: 'btn btn-success w-100',
+            focus: true
+        },
+        noChanges: {
+            html: `ℹ️ NO NEW MARKS`,
+            disabled: true,
+            className: 'btn btn-secondary w-100'
+        },
+        error: {
+            html: `❌ SYNC FAILED – RELOAD`,
+            disabled: false,
+            className: 'btn btn-danger w-100'
+        }
+    };
+
+    const s = states[state];
+    if (!s) return;
+
+    btn.innerHTML = s.html;
+    btn.disabled = s.disabled;
+    btn.className = s.className;
+    // 🔥 Focus only when new marks arrive
+    if (s.focus) {
+        setTimeout(focusLoadMarksButton, 200);
+    }
+
+};
+window.focusLoadMarksButton = () => {
+    const btn = document.getElementById('loadmarks-btn');
+    if (!btn) return;
+
+    // Smooth scroll to button
+    btn.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+    });
+
+    // Accessibility focus
+    btn.focus({ preventScroll: true });
+
+    // Temporary highlight animation
+    btn.classList.add('pulse-highlight');
+    setTimeout(() => btn.classList.remove('pulse-highlight'), 2000);
+};
+
+
 /**
  * Loads the mark entry sheet by directly querying the database for all marks
  * matching the selected class and division for the current academic year.
@@ -1052,4 +1121,3 @@ function unsubscribeAllListeners() {
     }
     activeMarksListeners = {};
 }
-
