@@ -28,6 +28,7 @@ window.renderResultsTab = async () => {
                 <option value="type1">A+, A, B+, B...</option>
                 <option value="type2">O, A, B, C...</option>
             </select>
+            <button id="marksrefresh-btn" class="btn btn-primary ms-2">refresh marks</button>
         </div>
        
         <ul class="nav nav-pills mb-3" id="pills-tab" role="tablist">
@@ -42,7 +43,10 @@ window.renderResultsTab = async () => {
             <div class="tab-pane fade show active" id="pills-exam-wise" role="tabpanel"></div>
             <div class="tab-pane fade" id="pills-subject-wise" role="tabpanel"></div>
         </div>`;
-        
+    const marksrefresh = document.getElementById('marksrefresh-btn');
+        marksrefresh.addEventListener('click', async () => {
+           window.needRefreshedMarks = true;});
+
     renderExamWiseResultView();
     renderSubjectWiseResultView();
     renderRankListTab();
@@ -76,6 +80,9 @@ window.renderResultsTab = async () => {
         <div class="row g-3 align-items-end border-bottom pb-3 mb-3">
             <div class="col-md-3"><label class="form-label">Class</label><select id="res-class" class="form-select">${classOptions}</select></div>
             <div class="col-md-3"><label class="form-label">Division</label><select id="res-division" class="form-select"></select></div>
+
+            <div class="col-md-3"><label class="form-label"> </label><button id="loadmarks-btn" class="btn btn-secondary w-100">Load Marks</button></div>
+
             <div class="col-md-3">
                 <label class="form-label">Sort By</label>
                 <select id="ew-sort-by" class="form-select">
@@ -105,11 +112,15 @@ window.renderResultsTab = async () => {
     const examSelect = document.getElementById('res-exam');
     const classSelect = document.getElementById('res-class');
     const divisionSelect = document.getElementById('res-division');
+    const loadMarksBtn = document.getElementById('loadmarks-btn');
     const sortBySelect = document.getElementById('ew-sort-by');
     const printBtn = document.getElementById('print-exam-report-btn');
     const resultsContainer = document.getElementById('exam-wise-results-container'); // Get reference to the results container
 
     const generateTable = async () => {
+        loadMarksBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Loading...`;
+        loadMarksBtn.disabled = true;
+        printBtn.disabled = true;
         const examId = examSelect.value;
         const classId = classSelect.value;
         const division = divisionSelect.value;
@@ -118,17 +129,21 @@ window.renderResultsTab = async () => {
             // Create a unique key for this specific listener
     const listenerKey = `${classId}_${division}`;
 
-    // --- NEW: If a listener for this specific query is already active, do nothing ---
-    if (activeMarksListeners[listenerKey]) {
-        // The data is already being synced in real-time. We just need to re-render the table.
-        generateExamWiseResultsTable(examId, classId, division);
-         printBtn.disabled = false; 
-        return;
-    }
+    // // --- NEW: If a listener for this specific query is already active, do nothing ---
+    // if (activeMarksListeners[listenerKey]) {
+    //     // The data is already being synced in real-time. We just need to re-render the table.
+    //     generateExamWiseResultsTable(examId, classId, division);
+    //      printBtn.disabled = false; 
+    //     return;
+    // }
            //await window.attachMarksListener([{ classId: classId, division: division }]);
             generateExamWiseResultsTable(examId, classId, division);
+            loadMarksBtn.innerHTML = `<span class="btn btn-secondary w-100">Load Marks</span>`;
+            loadMarksBtn.disabled = false;
             printBtn.disabled = false; // Enable print button after report generates
         } else {
+            loadMarksBtn.innerHTML = `<span class="btn btn-secondary w-100">Load Marks</span>`;
+            loadMarksBtn.disabled = false;
             printBtn.disabled = false;
         }
     };
@@ -142,7 +157,12 @@ window.renderResultsTab = async () => {
         const divisionName = divisionSelect.value;
         const reportTitle = `${examName} - Results (Class: ${className} - ${divisionName} (${window.activeFinancialYear}))`;
         const reportSubtitle ="";
+
+        if(loadMarksBtn.disabled){
         printReportWithChart('exam-wise-results-container', 'exam-wise-performance-canvas', reportTitle, reportSubtitle);
+        }else{
+            window.showAlert('Please load marks before printing the report.','warning');
+        }
     });
 
 
@@ -159,11 +179,22 @@ window.renderResultsTab = async () => {
                     divisionOptionsHTML = cls ? cls.divisions.map(d => `<option value="${d}">${d}</option>`).join('') : '';
                 }
                 divisionSelect.innerHTML = divisionOptionsHTML;
-                generateTable();
+                resultsContainer.innerHTML = '<p class="text-muted p-5 text-center">Please load marks to view results.</p>';
+                //generateTable();
             });
 
-            examSelect.addEventListener('change', generateTable);
-            divisionSelect.addEventListener('change', generateTable);
+            examSelect.addEventListener('change', () => {
+                resultsContainer.innerHTML = '<p class="text-muted p-5 text-center">Please load marks to view results.</p>';
+                //generateTable();
+            });
+            divisionSelect.addEventListener('click', () => {
+                resultsContainer.innerHTML = '<p class="text-muted p-5 text-center">Please load marks to view results.</p>';
+                //generateTable();
+            });
+            loadMarksBtn.addEventListener('click', generateTable);
+    
+
+
             
             if (classSelect.options.length > 0) {
                 classSelect.dispatchEvent(new Event('change'));
@@ -187,6 +218,8 @@ window.renderResultsTab = async () => {
         });
     }
 }
+
+const loadMarksBtn = document.getElementById('loadmarks-btn');
 /**
  * Generates a printable report containing both a Chart.js canvas and HTML table content.
  * It converts the canvas to an image to ensure high-quality printing.
@@ -350,6 +383,8 @@ async function generateExamWiseResultsTable(examId, classId, division) {
     const sortBy = document.getElementById('ew-sort-by').value;
     const studentsInClass = students.filter(s => s.classId === classId && s.division === division);
     const subjectHeaders = schedulesForClass.map(s => subjects.find(sub => sub.id === s.subjectId)).filter(Boolean);
+    container.innerHTML = '<p class="text-danger p-5 text-center">Loading examination marks.</p>';
+        
     let marksObject = await window.getmarks(classId, division, examId);
     // 2. Process the raw data to get calculated results
     let resultsData = await processExamResultsData(studentsInClass, schedulesForClass, marksObject,examId, gradingSystem);
@@ -1117,6 +1152,7 @@ function renderSubjectWiseTableHTML(results, selectedExams, displayMode, subject
 async function processSubjectWiseResults(classId, division,selectedExams, subjectId, gradingSystem) {
     
     let marks = await window.getmarks(classId, division);
+
     console.log(marks);
     
     const studentsInClass = students.filter(s => s.classId === classId && s.division === division);
@@ -1665,5 +1701,3 @@ function renderRankListTab() {
             if (percentage >= 30) return 'D';
             return 'E';
         }
-
-
