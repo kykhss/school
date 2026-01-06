@@ -82,13 +82,16 @@ window.examSchedules = [];
 window.examRooms = [];
 window.examDuties = [];
 window.examAbsentees = [];
-window.needRefreshedMarks = false;
 window.examRoomAllocationRules = [];
 window.examRegistrationSettings = {}; // Single document
+let isloadedmarks = false;
+
+
 window.getmarks = async (classId, division, examId) => {
-  
-  if(needRefreshedMarks){
-    await window.attachMarksListener([{classId:classId, division:division}]);
+  const loadMarksBtn = document.getElementById('loadmarks-btn');
+  const textBefore = loadMarksBtn ? loadMarksBtn.innerHTML : '';
+  if(loadMarksBtn){
+    loadMarksBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Loading...`;
   }
   let markss = {};
   let allLocalMarks = [];
@@ -107,12 +110,17 @@ window.getmarks = async (classId, division, examId) => {
   }
   if(allLocalMarks.length>0){
   allLocalMarks.forEach(mark => { markss[mark.id] = mark; });
-  window.needRefreshedMarks = false;
+  window.attachMarksListener([{classId:classId, division:division}]);
   }else{
-    window.needRefreshedMarks = true;
+    if(!isloadedmarks){
+    window.attachMarksListener([{classId:classId, division:division}]);
     getmarks(classId, division, examId);
+    isloadedmarks = true;
   }
-  
+  }
+  if(loadMarksBtn){
+    window.updateLoadMarksButton('noChanges');
+    }
   return markss;
 }
 
