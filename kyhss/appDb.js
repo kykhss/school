@@ -1,7 +1,7 @@
 
 window.appDb = new Dexie("SchoolAppDB");
 // IMPORTANT: Version number is incremented to apply the new indexes
-appDb.version(5.3).stores({
+appDb.version(5.6).stores({
     classes: "&id, name, lastUpdated",
     subjects: "&id, name, lastUpdated",
     students: "&id, classId, division, admissionNumber, name, lastUpdated",
@@ -13,7 +13,7 @@ appDb.version(5.3).stores({
     examRegistrationSettings :'&id, lastUpdated',
     examAbsentees :'&id, lastUpdated',
     examDuties :'&id, lastUpdated',
-    marks: "&id, [classId+division], lastUpdated",
+    marks: "&id, [classId+division], [classId+division+examId], examId,studentId,lastUpdated",
     classroomSubjects: "&id, classId, division, subjectId, teacherId, lastUpdated",
     holidays: "&id, lastUpdated",
     attendance:"&id, lastUpdated",
