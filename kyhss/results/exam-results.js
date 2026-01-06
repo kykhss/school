@@ -125,7 +125,7 @@ window.renderResultsTab = async () => {
          printBtn.disabled = false; 
         return;
     }
-           //await window.attachMarksListener([{ classId: classId, division: division }]);
+           await window.attachMarksListener([{ classId: classId, division: division }]);
             generateExamWiseResultsTable(examId, classId, division);
             printBtn.disabled = false; // Enable print button after report generates
         } else {
@@ -1665,3 +1665,4 @@ function renderRankListTab() {
             if (percentage >= 30) return 'D';
             return 'E';
         }
+
