@@ -1,608 +1,648 @@
-import { query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-let reportData = [];
-    
-/**
- * Renders a summary table of mark entry status for a given exam across all classes.
- * @param {string} examId The ID of the exam to summarize.
+    /**
+ * Generates the HTML for a student's report card.
+ * @param {string} studentId - The ID of the student.
+ * @param {string} examId - The ID of the exam.
+ * @param {string} containerId - The ID of the HTML element to render the report into.
  */
-// Global variable to hold the summary data and filter state
-let currentSummaryData = [];
-let showPendingOnly = false;
-
-window.renderMarkEntrySummaryTable = (examId) => {
-    const summaryContainer = document.getElementById('mark-entry-summary-container');
-    if (!summaryContainer) return;
-
-    if (!examId) {
-        summaryContainer.innerHTML = '<p class="text-muted p-5 text-center">Select an exam to view the summary.</p>';
+function generateReportCardHTML(studentId, examId, containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) {
+        console.error(`Container with ID ${containerId} not found for report card.`);
         return;
     }
 
-    // --- Data Calculation Logic (remains the same) ---
-    let fullSummaryData = [];
-    const schedulesForExam = examSchedules.filter(s => s.examId === examId);
-
-    schedulesForExam.forEach(schedule => {
-        const { classId, division, subjectId } = schedule;
-        const studentsInClass = students
-
-    .filter(s => s.classId === classId && s.division === division && s.status !== 'TC Issued')
-
-    .sort((a, b) => a.name.localeCompare(b.name));
-const totalStudents = studentsInClass.length;
-
-        if (totalStudents === 0) return;
-
-        // Corrected logic to check the global 'marks' object
-        let enteredCount = 0;
-        studentsInClass.forEach(student => {
-            const markId = `${examId}_${student.id}_${subjectId}`;
-            if (marks[markId]) { // Check if a key exists in the marks object
-                enteredCount++;
-            }
-        });
-
-        const className = classes.find(c => c.id === classId)?.name || 'N/A';
-        const subjectName = subjects.find(sub => sub.id === subjectId)?.name || 'N/A';
-
-        fullSummaryData.push({
-            className,
-            division,
-            subjectName,
-            total: totalStudents,
-            entered: enteredCount,
-            pending: totalStudents - enteredCount
-        });
-    });
-
-    fullSummaryData.sort((a,b) => (a.className + a.division + a.subjectName).localeCompare(b.className + b.division + a.subjectName));
-    
-    // Store the full data globally
-    currentSummaryData = fullSummaryData;
-    
-    // Call the new rendering function
-    renderFilteredSummaryTable(examId);
-};
-
-/**
- * 2. RENDERS the summary table based on the current filter state.
- */
-const renderFilteredSummaryTable = (examId) => {
-    const summaryContainer = document.getElementById('mark-entry-summary-container');
-    if (!summaryContainer) return;
-    
-    let displayData = currentSummaryData;
-
-    // --- APPLY THE FILTER ---
-    if (showPendingOnly) {
-        displayData = currentSummaryData.filter(row => row.pending > 0);
-    }
-    
-    // --- GENERATE HTML with the new toggle button ---
-    const tableHTML = `
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="mb-0">Mark Entry Status for: <strong>${exams.find(e=>e.id===examId)?.name}</strong></h5>
-           
-        </div>
-        <div id="mark-entry-summary-printable" class="table-responsive">
-            <table class="table table-bordered table-hover table-sm">
-                <thead class="table-light">
-                    <tr>
-                        <th>Class</th>
-                        <th>Subject</th>
-                        <th class="text-center">Total Students</th>
-                        <th class="text-center text-success">Entered</th>
-                        <th class="text-center text-danger">Pending</th>
-                        <th class="text-center" style="width: 20%;">Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${displayData.map(row => {
-                        const percentage = row.total > 0 ? (row.entered / row.total) * 100 : 0;
-                        const statusClass = percentage === 100 ? 'bg-success' : (percentage > 0 ? 'bg-warning' : 'bg-danger');
-                        return `
-                        <tr>
-                            <td>${row.className} - ${row.division}</td>
-                            <td>${row.subjectName}</td>
-                            <td class="text-center">${row.total}</td>
-                            <td class="text-center text-success">${row.entered}</td>
-                            <td class="text-center text-danger">${row.pending}</td>
-                            <td>
-                                <div class="progress" style="height: 20px;">
-                                    <div class="progress-bar ${statusClass}" role="progressbar" style="width: ${percentage}%;" aria-valuenow="${percentage}" aria-valuemin="0" aria-valuemax="100">${percentage.toFixed(0)}%</div>
-                                </div>
-                            </td>
-                        </tr>
-                        `;
-                    }).join('')}
-                </tbody>
-            </table>
-            ${displayData.length === 0 ? '<p class="text-muted text-center py-4">No pending entries for this exam.</p>' : ''}
-        </div>
-    `;
-    
-    summaryContainer.innerHTML = tableHTML;
-    
-};
-
-
-
-const exportSummaryToPdf = async (examId) => {
-    const { jsPDF } = window.jspdf;
-    const input = document.getElementById('mark-entry-summary-printable');
-    
-    if (!input) {
-        showAlert('Error: Summary table not found for export.', 'danger');
-        return;
-    }
-
-    // Show a loading message
-    const originalContent = input.innerHTML;
-    input.innerHTML = '<div class="text-center my-5"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">Generating PDF...</p></div>';
-
-    try {
-        const examName = exams.find(e => e.id === examId)?.name || 'Exam Summary';
-
-        // Use html2canvas to convert the HTML table to an image
-        const canvas = await html2canvas(input, {
-            scale: 2, // Increase scale for better resolution
-            useCORS: true,
-            logging: false,
-        });
-
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF('p', 'mm', 'a4'); // 'p' for portrait, 'mm' for units, 'a4' for page size
-        
-        const imgWidth = 210; // A4 width in mm
-        const pageHeight = 297; // A4 height in mm
-        const imgHeight = canvas.height * imgWidth / canvas.width;
-        let heightLeft = imgHeight;
-
-        let position = 0;
-
-        // Add header
-        pdf.setFontSize(18);
-        pdf.text('Mark Entry Summary', 105, 15, null, null, 'center');
-        pdf.setFontSize(12);
-        pdf.text(`Exam: ${examName}`, 105, 25, null, null, 'center');
-        pdf.line(15, 30, 195, 30); // Draw a line
-        position = 35; // Start position for the image after the header
-
-        // Add the image to the PDF
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= (pageHeight - position);
-
-        // Handle multiple pages for long tables
-        while (heightLeft > 0) {
-            position = heightLeft - imgHeight;
-            pdf.addPage();
-            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-            heightLeft -= pageHeight;
-        }
-
-        pdf.save(`Mark_Entry_Summary_${examName.replace(/\s/g, '_')}.pdf`);
-        showAlert('PDF export successful!', 'success');
-        
-    } catch (error) {
-        console.error('PDF generation failed:', error);
-        showAlert('Failed to generate PDF. Please try again.', 'danger');
-    } finally {
-        // Restore the original content of the container
-        input.innerHTML = originalContent;
-    }
-};
-
-window.renderEntryReportTab = async () => {
-    //await getData('marks');
-    const container = document.getElementById('entry-report');
-    if (!container) return;
-
-    const isClassTeacher =  window.currentUserRole === 'teacher' && window.selectedUser.classCharge;
-
-    // --- NEW: Conditional Tab UI ---
-    const tabNav = isClassTeacher ? `
-        <ul class="nav nav-tabs">
-            <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#overall-report-pane">Overall Report</button></li>
-            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#my-class-pending-pane">My Class Pending</button></li>
-        </ul>` : '';
-
-    const tabContent = `
-        <div class="tab-content">
-            <div class="tab-pane fade show active" id="overall-report-pane">
-                <div id="entry-report-container" class="mt-4">
-                    <p class="text-muted text-center p-5">Please select an exam to view the detailed entry report.</p>
-                </div>
-            </div>
-            ${isClassTeacher ? `
-            <div class="tab-pane fade" id="my-class-pending-pane">
-                <div id="my-class-pending-container" class="mt-4">
-                    <p class="text-muted text-center p-5">Select an exam to see pending entries for your class.</p>
-                </div>
-            </div>` : ''}
-        </div>`;
-
-    container.innerHTML = `
-    <div class="pb-3 border-bottom">
-        <div class="row g-3 align-items-end border-bottom pb-3 mb-3 w-100">
-            <div class="col-md-6">
-                <label class="form-label fw-bold">Select Exam to Generate Report</label>
-                <select id="entry-report-exam" class="form-select">
-                    <option value="">-- Choose an Exam --</option>
-                    ${exams.map(ex => `<option value="${ex.id}">${ex.name}</option>`).join('')}
-                </select>
-            </div>
-        </div>
-        ${tabNav}
-        ${tabContent}
-        </div>
-    `;
-    const examSelect = document.getElementById('entry-report-exam');
-    // After setting innerHTML, find the active exam and set the value
-const firstActiveExam = window.exams.find(ex => ex.isActive);
-if (firstActiveExam) {
-
-    examSelect.value = firstActiveExam.id;
-    await window.attachMarksListener(teacherAssignedClasses);
-    generateEntryReport(firstActiveExam.id);
-}
-
-    document.getElementById('entry-report-exam').addEventListener('change', async (e) => {
-        await window.attachMarksListener(teacherAssignedClasses);
-    
-        const examId = e.target.value||firstActiveExam.id;
-        if (examId) {
-            generateEntryReport(examId); // Always generate the main report
-            if (isClassTeacher) {
-                renderMyClassPendingList(examId); // Also generate the teacher's pending list
-            }
-        } else {
-            document.getElementById('entry-report-container').innerHTML = `<p class="text-muted text-center p-5">Please select an exam.</p>`;
-            if (isClassTeacher) {
-                document.getElementById('my-class-pending-container').innerHTML = `<p class="text-muted text-center p-5">Please select an exam.</p>`;
-            }
-        }
-    });
-}
-
-/**
- * Generates the data for the main entry report and renders the controls and table.
- */
-async function generateEntryReport(examId) {
-    let marks = window.getmarks();
-    const container = document.getElementById('entry-report-container');
-    container.innerHTML = `<div class="text-center p-5"><div class="spinner-border text-primary"></div></div>`;
-
-    let relevantSchedules = [];
-    const isAdminOrController = currentUserRole === 'admin' || selectedUser.roles?.includes('exam_controller');
-
-    if (isAdminOrController) {
-        relevantSchedules = examSchedules.filter(s => s.examId === examId);
-    } else if (currentUserRole === 'teacher') {
-        const teacherAllocations = classroomSubjects.filter(cs => cs.teacherId === selectedUser.id);
-        relevantSchedules = examSchedules.filter(s =>
-            s.examId === examId && teacherAllocations.some(ta =>
-                ta.classId === s.classId && ta.division === s.division && ta.subjectId === s.subjectId
-            )
-        );
-    }
-
-    if (relevantSchedules.length === 0) {
-        container.innerHTML = `<div class="alert alert-warning">No mark entries found for your allocated subjects in this exam.</div>`;
-        return;
-    }
-    const rawReportData = [];
-    relevantSchedules.forEach(schedule => {
-        const studentsInClass = students.filter(s => s.classId === schedule.classId && s.division === schedule.division);
-        if (studentsInClass.length === 0) return;
-        const enteredCount = studentsInClass.filter(student => marks[`${examId}_${student.id}_${schedule.subjectId}`]).length;
-        
-        rawReportData.push({
-            classId: schedule.classId,
-            className: classes.find(c => c.id === schedule.classId)?.name || 'N/A',
-            division: schedule.division,
-            subjectId: schedule.subjectId,
-            subjectName: subjects.find(sub => sub.id === schedule.subjectId)?.name || 'N/A',
-            total: studentsInClass.length,
-            entered: enteredCount,
-            pending: studentsInClass.length - enteredCount
-        });
-    });
-
-    reportData = rawReportData.sort((a,b) => (a.className + a.division + a.subjectName).localeCompare(b.className + b.division + b.subjectName));
-    renderReportControlsAndTable(examId);
-}
-
-/**
- * Renders the filters and the table for the overall report view.
- */
-function renderReportControlsAndTable(examId) {
-    const container = document.getElementById('entry-report-container');
-    if (reportData.length === 0) {
-        container.innerHTML = '<div class="alert alert-warning">No subjects scheduled for this exam.</div>';
-        return;
-    }
-    
-    const classOptions = [...new Set(reportData.map(d => d.classId))].map(id => `<option value="${id}">${classes.find(c => c.id === id)?.name || ''}</option>`).join('');
-    const divisionOptions = [...new Set(reportData.map(d => d.division))].map(d => `<option value="${d}">${d}</option>`).join('');
-    const subjectOptions = [...new Set(reportData.map(d => d.subjectId))].map(id => `<option value="${id}">${subjects.find(s => s.id === id)?.name || ''}</option>`).join('');
-
-    container.innerHTML = `
-        <div class="row g-3 align-items-end mb-3">
-            <div class="col-md-3"><label class="form-label">Class</label><select id="report-filter-class" class="form-select"><option value="">All</option>${classOptions}</select></div>
-            <div class="col-md-2"><label class="form-label">Division</label><select id="report-filter-division" class="form-select"><option value="">All</option>${divisionOptions}</select></div>
-            <div class="col-md-3"><label class="form-label">Subject</label><select id="report-filter-subject" class="form-select"><option value="">All</option>${subjectOptions}</select></div>
-            <div class="col-md-4 text-md-end">
-                <button id="toggle-pending-btn" class="btn btn-outline-info btn-sm ${showPendingOnly ? 'active' : ''}"><i class="fas fa-exclamation-triangle me-1"></i> Show Pending Only</button>
-                <button id="report-export-pdf-btn" class="btn btn-danger btn-sm"><i class="fas fa-file-pdf me-2"></i>Export as PDF</button>
-            </div>
-        </div>
-        <div id="report-table-container"></div>`;
-
-    document.getElementById('report-filter-class').addEventListener('change', filterAndRenderReport);
-    document.getElementById('report-filter-division').addEventListener('change', filterAndRenderReport);
-    document.getElementById('report-filter-subject').addEventListener('change', filterAndRenderReport);
-    document.getElementById('report-export-pdf-btn').addEventListener('click', () => exportReportToPdf(examId));
-    document.getElementById('toggle-pending-btn').addEventListener('click', (e) => {
-        showPendingOnly = !showPendingOnly;
-        e.currentTarget.classList.toggle('active', showPendingOnly);
-        filterAndRenderReport();
-    });
-
-    filterAndRenderReport();
-}
-
-/**
- * Filters the global report data based on UI controls and renders the summary table.
- */
-function filterAndRenderReport() {
-    const classId = document.getElementById('report-filter-class').value;
-    const division = document.getElementById('report-filter-division').value;
-    const subjectId = document.getElementById('report-filter-subject').value;
-    const examId = document.getElementById('entry-report-exam').value;
-
-    let filteredData = [...reportData];
-    if (classId) filteredData = filteredData.filter(d => d.classId === classId);
-    if (division) filteredData = filteredData.filter(d => d.division === division);
-    if (subjectId) filteredData = filteredData.filter(d => d.subjectId === subjectId);
-    if (showPendingOnly) filteredData = filteredData.filter(row => row.pending > 0);
-    
-    renderSummaryTableHTML(filteredData, examId);
-}
-
-/**
- * Renders the HTML for the summary table.
- */
-function renderSummaryTableHTML(displayData, examId) {
-    const container = document.getElementById('report-table-container');
-    if (!container) return;
-
-    if (displayData.length === 0) {
-        container.innerHTML = '<p class="text-muted text-center p-4">No matching entries found.</p>';
-        return;
-    }
-
-    const tableHTML = `
-        <h5 class="mb-3">Mark Entry Status for: <strong>${exams.find(e=>e.id===examId)?.name}</strong></h5>
-        <div id="report-table-printable" class="table-responsive">
-            <table class="table table-bordered table-hover table-sm">
-                <thead class="table-light">
-                    <tr><th>Class</th><th>Subject</th><th class="text-center">Total</th><th class="text-center text-success">Entered</th><th class="text-center text-danger">Pending</th><th class="text-center" style="width: 20%;">Status</th></tr>
-                </thead>
-                <tbody>
-                    ${displayData.map(row => {
-                        const percentage = row.total > 0 ? (row.entered / row.total) * 100 : 0;
-                        const statusClass = percentage === 100 ? 'bg-success' : (percentage > 0 ? 'bg-warning' : 'bg-danger');
-                        return `<tr><td>${row.className} - ${row.division}</td><td>${row.subjectName}</td><td class="text-center">${row.total}</td><td class="text-center">${row.entered}</td><td class="text-center">${row.pending}</td><td>
-                            <div class="progress" style="height: 20px;"><div class="progress-bar ${statusClass}" role="progressbar" style="width: ${percentage}%;">${percentage.toFixed(0)}%</div></div>
-                        </td></tr>`;
-                    }).join('')}
-                </tbody>
-            </table>
-        </div>`;
-    container.innerHTML = tableHTML;
-}
-
-/**
- * Renders a summary table for the class teacher showing the mark entry status
- * for each subject in their class for the selected exam.
- */
-function renderMyClassPendingList(examId) {
-    console.log(exams);
-    const container = document.getElementById('my-class-pending-container');
-    if (!container || !selectedUser.classCharge) return;
-
-    const { classId, division } = selectedUser.classCharge;
-
-    // FIXED: Correct exam lookup
+    const student = students.find(s => s.id === studentId);
     const exam = exams.find(e => e.id === examId);
-    if (!exam) {
-        container.innerHTML = '<div class="alert alert-danger">Invalid exam selected.</div>';
+    const studentClass = classes.find(c => c.id === student?.classId); // Defensive: student?.classId
+    
+    // Defensive checks for core data
+    if (!student || !exam) {
+        container.innerHTML = `<p class="alert alert-warning text-center">Student or Exam data not found for generating report card.</p>`;
         return;
     }
 
-    // Active students in class
-    const studentsInClass = students.filter(s =>
-        s.classId === classId &&
-        s.division === division &&
-        s.status !== 'TC Issued' &&
-        s.status !== 'Graduated'
-    );
-
-    // Subjects already scheduled for this exam
-    const relevantSchedules = examSchedules.filter(s =>
+    // Filter schedules for this specific student's class and exam
+    const schedules = window.examSchedules.filter(s =>
         s.examId === examId &&
-        s.classId === classId &&
-        s.division === division
+        s.classId === student.classId &&
+        s.division === student.division
     );
 
-    // All subjects allocated to this class/division/sector
-    const subjectsForClass = classroomSubjects.filter(cs =>
-        cs.classId === classId &&
-        cs.division === division
-    );
+    // Call processExamResultsData (ensure it returns studentId and subjectId in subjectResults)
+    // We pass [student] as an array, and take the first element of the result.
+    const processedReportData = processExamResultsData([student], schedules, marks, examId, document.getElementById('shared-grading-system')?.value || 'type1');
 
-    // Subjects not scheduled
-    const scheduledSubjectIds = new Set(relevantSchedules.map(s => s.subjectId));
-    const missingSubjects = subjectsForClass.filter(sub => {
-    const subject = subjects.find(s => s.id === sub.subjectId);
-    return subject && 
-           subject.sector === exam.sector && 
-           !scheduledSubjectIds.has(sub.subjectId);
+    // Destructure the required properties from the first (and only) student's processed data
+    const {
+        studentId: processedStudentId, // Renaming to avoid conflict with outer studentId
+        studentName,
+        subjectResults,
+        grandTotalMarks,
+        grandMaxMarks,
+        grandPct,
+        finalStatus,
+        overallGrade
+    } = processedReportData[0] || {}; // Use default empty object if processedReportData[0] is undefined
+
+    // If subjectResults is not available (e.g., marks still loading or no schedules)
+    if (!subjectResults || subjectResults.length === 0) {
+        container.innerHTML = `<div class="text-center p-5"><div class="spinner-border"></div><p class="mt-2">Loading marks or no subjects scheduled for this exam/class.</p></div>`;
+        return;
+    }
+
+    // Get grading system safely
+    const gradingSystem = document.getElementById('shared-grading-system')?.value || 'type1';
+    
+    // Construct photo URL: use thumbnail if photoDriveId exists, otherwise a placeholder
+    const studentPhotoSrc = student.photoDriveId
+        ? `https://drive.google.com/thumbnail?id=${student.photoDriveId}&sz=400`
+        : 'https://placehold.co/150x200?text=No+Photo&font=roboto';
+
+
+    container.innerHTML = `
+    <div id="report-card-printable" class="p-4 border bg-white mx-auto" style="max-width: 210mm;">
+        <div class="report-header text-center mb-4">
+            ${schoolDetails.logoUrl ? `<img src="${schoolDetails.logoUrl}" alt="School Logo" style="max-height: 80px; margin-bottom: 1rem;">` : ''}
+            <h3>${schoolDetails.address || 'School Name'}</h3>
+            <p class="lead mb-0">${schoolDetails.name || 'School Address'}</p>
+            <h5 class="mt-3">PROGRESS REPORT - ${exam.name.toUpperCase()}</h5>
+        </div>
+
+        <div class="row mb-4 align-items-center">
+            <div class="col-md-8">
+                <table class="table table-sm table-borderless">
+                    <tbody>
+                        <tr><th style="width: 150px;">Student Name</th><td>: ${student.name}</td></tr>
+                        <tr><th>Admission No</th><td>: ${student.admissionNumber || 'N/A'}</td></tr>
+                        <tr><th>Class</th><td>: ${studentClass?.name || 'N/A'} - ${student.division || 'N/A'}</td></tr>
+                        <tr><th>Date of Birth</th><td>: ${new Date(student.dob).toLocaleDateString('en-GB') || 'N/A'}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="col-md-3 text-center">
+                <img src="${studentPhotoSrc}"
+                     alt="Student Photo" class="img-thumbnail rounded-3 shadow-sm" style="width: 130px; height: 170px; object-fit: cover; border: 2px solid #ddd;">
+            </div>
+        </div>
+
+        <table class="table table-bordered table-sm">
+            <thead class="table-light text-center fs-6"><tr><th>SUBJECT</th><th>THEORY</th><th>INTERNAL</th><th>TOTAL</th><th>MAX</th><th>GRADE</th></tr></thead>
+            <tbody>
+                ${subjectResults.map(res => {
+                    const subjectName = subjects.find(s => s.id === res.subjectId)?.name || 'N/A'; // Use subjectId directly
+                    const totalGrade = gradingSystem === 'type1' ? window.calculateGrade(res.total, res.maxTE + res.maxCE) : window.calculateGradeType2(res.total, res.maxTE + res.maxCE);
+                    
+                    return `
+                        <tr class="text-center">
+                            <td class="text-start">${subjectName}</td>
+                            <td class="text-center">${res.te}</td>
+                            <td class="text-center">${res.ce}</td>
+                            <td class="text-center">${res.total}</td>
+                            <td class="text-center">${res.maxTE + res.maxCE}</td>
+                            <td class="text-center">${totalGrade}</td>
+                        </tr>`;
+                }).join('')}
+            </tbody>
+            <tfoot class="fw-bold text-center">
+                <tr>
+                    <td colspan="2" class="text-end">GRAND TOTAL</td>
+                    <td class="text-center">${grandTotalMarks}</td>
+                    <td class="text-center">${grandMaxMarks}</td>
+                    <td colspan="2"></td>
+                </tr>
+            </tfoot>
+        </table>
+        <div class="row mt-4 fw-bold text-center">
+            <div class="col-6">Overall Percentage: <span class="fs-5">${grandPct?.toFixed(2) || '0.00'}%</span></div>
+            <div class="col-6">Final Result: <span class="fs-5 text-${finalStatus === 'PASS' ? 'success':'danger'}">${finalStatus || 'N/A'}</span></div>
+        </div>
+        <div class="row mt-5 pt-5 text-center text-muted" style="font-size: 0.9rem;">
+            <div class="col-6"><hr class="mx-auto w-50">Class Teacher</div>
+            <div class="col-6"><hr class="mx-auto w-50">Principal</div>
+        </div>
+    </div>`;
+}
+/**
+ * Generates and returns the HTML for a student's comparison report card.
+ * This version includes a detailed summary and a new "Grand Total" row after the subjects.
+ * @param {string} studentId - The ID of the student.
+ * @param {string[]} examIds - An array of exam IDs to compare.
+ * @returns {string} The complete HTML string for the report card, or an error message.
+ */
+
+window.generateReportCardHTML_Comparison = async (studentId, examIds) => {
+    
+
+    const student = window.students.find(s => s.id === studentId);
+    if (!student) {
+        console.error("Could not generate report card: Student not found for ID", studentId);
+        return '<p class="alert alert-danger">Student data not found.</p>';
+    }
+    let marks = window.getmarks(student.classId, student.division);
+
+    const studentClass = classes.find(c => c.id === student?.classId);
+    const gradingSystem = document.getElementById('shared-grading-system')?.value || 'type1';
+    const studentPhotoSrc = student.photoDriveId
+        ? `https://drive.google.com/thumbnail?id=${student.photoDriveId}&sz=400`
+        : 'https://placehold.co/150x200?text=No+Photo&font=roboto';
+
+    const examPromises = examIds.map(async (eId) => {
+    try {
+        const exam = window.exams.find(e => e.id === eId);
+        if (!exam) return null;
+
+        const schedules = window.examSchedules.filter(
+            s => s.examId === eId &&
+                 s.classId === student.classId &&
+                 s.division === student.division
+        );
+
+        const processedData = await processExamResultsData(
+            [student],
+            schedules,
+            marks,
+            eId,
+            gradingSystem
+        );
+
+        const report = processedData[0] || {};
+        
+        const allStudentsInClass = window.students
+            .filter(s =>
+                s.classId === student.classId &&
+                s.division === student.division &&
+                s.status !== 'TC Issued' &&
+                s.status !== 'Graduated'
+            )
+            .sort((a, b) => a.name.localeCompare(b.name));
+
+        let allProcessed = [];
+        try {
+            allProcessed = await processExamResultsData(
+                allStudentsInClass,
+                schedules,
+                marks,
+                eId,
+                gradingSystem
+            );
+        } catch (err) {
+            console.error('Process error:', err);
+        }
+
+        allProcessed.sort((a, b) => b.grandTotalMarks - a.grandTotalMarks);
+        const rank = allProcessed.findIndex(s => s.studentId === student.id) + 1;
+
+        return { exam, report, rank };
+
+    } catch (err) {
+        console.error('Exam processing failed:', err);
+        return null;
+    }
 });
 
-        //console.log(missingSubjects);
-    if (studentsInClass.length === 0) {
-        container.innerHTML = '<div class="alert alert-info">There are no active students in your class.</div>';
-        return;
+const examsData = (await Promise.all(examPromises)).filter(Boolean);
+console.log(examsData);
+
+
+    const allSubjectIds = [...new Set(examsData.flatMap(e => e.report.subjectResults?.map(r => r.subjectId) || []))];
+
+    let headerRow1 = `<tr><th rowspan="2">Subject</th>`;
+    let headerRow2 = ``;
+    examsData.forEach(ed => {
+        headerRow1 += `<th colspan="4" class="text-center">${ed.exam.name}</th>`;
+        headerRow2 += `<th>TE/MaxTE</th><th>CE/MaxCE</th><th>Total/Max</th><th>Grade</th>`;
+    });
+    headerRow1 += `</tr>`;
+    headerRow2 = `<tr>${headerRow2}</tr>`;
+
+    let bodyRows = ``;
+    allSubjectIds.forEach(subId => {
+        const subjectName = subjects.find(s => s.id === subId)?.name || "N/A";
+        let rowHtml = `<tr><td>${subjectName}</td>`;
+        examsData.forEach(ed => {
+            const res = ed.report.subjectResults?.find(r => r.subjectId === subId);
+
+            if (res) {
+                const totalMax = res.maxTE + res.maxCE;
+                const totalGrade = gradingSystem === 'type1' 
+                    ? window.calculateGrade(res.total, totalMax) 
+                    : window.calculateGradeType2(res.total, totalMax);
+                rowHtml += `
+                    <td class="text-center">${res.te}/${res.maxTE} (${res.teGrade})</td>
+                    <td class="text-center">${res.ce}/${res.maxCE} (${res.ceGrade})</td>
+                    <td class="text-center">${res.total}/${totalMax}</td>
+                    <td class="text-center">${totalGrade}</td>
+                `;
+            } else {
+                rowHtml += `<td>-</td><td>-</td><td>-</td><td>-</td>`;
+            }
+        });
+        rowHtml += `</tr>`;
+        bodyRows += rowHtml;
+    });
+
+    // --- MODIFICATION IS HERE ---
+    // A new row for the Grand Total is created.
+    // This snippet replaces the previous 'grandTotalRow' block.
+// It now correctly calculates the totals from the detailed subject results.
+
+let grandTotalRow = `<tr class="table-light fw-bold"><th>Grand Total</th>`;
+examsData.forEach(ed => {
+    const subjectResults = ed.report.subjectResults || [];
+
+    // Calculate TE and CE totals by iterating through the subject results
+const totalTE = subjectResults.reduce((sum, res) => sum + (Number(res.te) || 0), 0);
+const totalMaxTE = subjectResults.reduce((sum, res) => sum + (Number(res.maxTE) || 0), 0);
+const totalCE = subjectResults.reduce((sum, res) => sum + (Number(res.ce) || 0), 0);
+const totalMaxCE = subjectResults.reduce((sum, res) => sum + (Number(res.maxCE) || 0), 0);
+    // Use pre-calculated grand totals if available, otherwise fall back to the new sums
+    const grandTotal = ed.report.grandTotalMarks || (totalTE + totalCE);
+    const grandMaxTotal = ed.report.grandTotalMaxMarks || (totalMaxTE + totalMaxCE);
+    const overallGrade = ed.report.overallGrade || '-';
+
+    // Calculate the grade for the TE total
+    const teTotalGrade = gradingSystem === 'type1' 
+        ? window.calculateGrade(totalTE, totalMaxTE) 
+        : window.calculateGradeType2(totalTE, totalMaxTE);
+
+    // Calculate the grade for the CE total
+    const ceTotalGrade = gradingSystem === 'type1' 
+        ? window.calculateGrade(totalCE, totalMaxCE) 
+        : window.calculateGradeType2(totalCE, totalMaxCE);
+
+    // Build the four distinct columns for the grand total row with the calculated data
+    grandTotalRow += `
+        <td class="text-center">${totalTE}/${totalMaxTE} (${teTotalGrade})</td>
+        <td class="text-center">${totalCE}/${totalMaxCE} (${ceTotalGrade})</td>
+        <td class="text-center">${grandTotal}/${grandMaxTotal}</td>
+        <td class="text-center">${overallGrade}</td>
+    `;
+});
+grandTotalRow += `</tr>`;
+
+    let summaryRow = `<tr><th>Overall %</th>`;
+    examsData.forEach(ed => { summaryRow += `<td colspan="4" class="text-center">${ed.report.grandPct?.toFixed(2) || "0"}%</td>`; });
+    summaryRow += `</tr>`;
+
+    let gradeRow = `<tr><th>Overall Grade</th>`;
+    examsData.forEach(ed => { gradeRow += `<td colspan="4" class="text-center">${ed.report.overallGrade || "-"}</td>`; });
+    gradeRow += `</tr>`;
+
+    let resultRow = `<tr><th>Result</th>`;
+    examsData.forEach(ed => {
+        const status = ed.report.finalStatus || 'N/A';
+        resultRow += `<td colspan="4" class="text-center text-${status === 'PASS' ? 'success' : 'danger'}">${status}</td>`;
+    });
+    resultRow += `</tr>`;
+
+    let rankRow = `<tr><th>Rank</th>`;
+    examsData.forEach(ed => { rankRow += `<td colspan="4" class="text-center">${ed.rank}</td>`; });
+    rankRow += `</tr>`;
+
+    let remark = "Performance is consistent.";
+    if (examsData.length > 1) {
+        const first = examsData[0].report.grandPct || 0;
+        const last = examsData[examsData.length - 1].report.grandPct || 0;
+        if (last > first) remark = "Excellent! Performance has improved.";
+        else if (last < first) remark = "Performance has declined. Needs more effort.";
     }
 
-    // --- Calculate entry status ---
-    const subjectStatusList = relevantSchedules.map(cs => {
-        const subject = subjects.find(s => s.id === cs.subjectId);
-        const totalStudents = studentsInClass.length;
-
-        const enteredCount = studentsInClass.filter(student => {
-            const markId = `${examId}_${student.id}_${cs.subjectId}`;
-            return !!marks[markId];
-        }).length;
-
-        const pendingCount = totalStudents - enteredCount;
-        const percentage = totalStudents > 0 ? (enteredCount / totalStudents) * 100 : 0;
-        const statusClass =
-            percentage === 100 ? 'bg-success' :
-            percentage > 0 ? 'bg-warning' : 'bg-danger';
-
-        return {
-            subjectName: subject?.name || 'Unknown Subject',
-            total: totalStudents,
-            entered: enteredCount,
-            pending: pendingCount,
-            percentage,
-            statusClass
-        };
-    }).sort((a, b) => a.subjectName.localeCompare(b.subjectName));
-
-    // --- Render both tables ---
-    const tableHtml = `
-        <!-- Scheduled Subjects Summary Table -->
-        <div class="table-responsive mb-4">
-            <table class="table table-bordered table-hover table-sm">
-                <thead class="table-light">
-                    <tr>
-                        <th>Subject</th>
-                        <th class="text-center">Total Students</th>
-                        <th class="text-center text-success">Entered</th>
-                        <th class="text-center text-danger">Pending</th>
-                        <th class="text-center" style="width: 25%;">Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${subjectStatusList.map(row => `
-                        <tr>
-                            <td>${row.subjectName}</td>
-                            <td class="text-center">${row.total}</td>
-                            <td class="text-center">${row.entered}</td>
-                            <td class="text-center">${row.pending}</td>
-                            <td>
-                                <div class="progress" style="height: 20px;">
-                                    <div class="progress-bar ${row.statusClass}" role="progressbar" 
-                                         style="width: ${row.percentage}%;" 
-                                         aria-valuenow="${row.percentage}" aria-valuemin="0" aria-valuemax="100">
-                                         ${row.percentage.toFixed(0)}%
-                                    </div>
-                                </div>
-                            </td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
+    return `
+    <div id="report-card-printable" class="p-2 border bg-white mx-auto" style="max-width: 100%;">
+        <div class="report-header text-center mb-4">
+            ${schoolDetails.logoUrl ? `<img src="${schoolDetails.logoUrl}" style="max-height: 80px; margin-bottom: 0.5rem;margin-top: -1rem;">` : ''}
+            <h4>${schoolDetails.address.toUpperCase() || 'School Name'}</h4>
+            <p>${schoolDetails.name || ''}</p>
+            <h4>Progress Report Comparison</h4>
         </div>
-
-        <!-- Missing Subjects Table -->
-        <div class="table-responsive mt-4">
-            <h6 class="fw-bold text-danger">Subjects NOT Scheduled in Exam</h6>
-            <table class="table table-bordered table-hover table-sm">
-                <thead class="table-light">
-                    <tr>
-                        <th>Subject</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${missingSubjects.length > 0 ? missingSubjects.map(row => {
-                        const subject = subjects.find(s => s.id === row.subjectId&&s.sector === exam.sector);
-                        console.log(subject);
-                        return `
-                            <tr>
-                                <td>${subject ? (subject.sector === exam.sector? subject.name : 'Unknown Subject'):"Unknown Subject"}</td>
-                            </tr>
-                        `;
-                    }).join('') :
-                    `<tr><td class="text-center text-muted">All subjects are scheduled.</td></tr>`}
-                </tbody>
-            </table>
+        <div class="row mb-4 align-items-center">
+            <div class="col-8">
+                <table class="table table-sm table-borderless">
+                    <tbody>
+                        <tr><th style="width: 150px;">Student Name</th><td>: ${student.name}</td></tr>
+                        <tr><th>Admission No</th><td>: ${student.admissionNumber || 'N/A'}</td></tr>
+                        <tr><th>Class</th><td>: ${studentClass?.name || 'N/A'} - ${student.division || 'N/A'}</td></tr>
+                        <tr><th>Date of Birth</th><td>: ${new Date(student.dob).toLocaleDateString('en-GB') || 'N/A'}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="col-4 text-center">
+                <img src="${studentPhotoSrc}" alt="Student Photo" class="img-thumbnail rounded-3 shadow-sm" style="width: 130px; height: 170px; object-fit: cover; border: 2px solid #ddd;">
+            </div>
         </div>
-    `;
+        <table class="table table-bordered table-sm">
+            <thead class="table-light text-center">${headerRow1}${headerRow2}</thead>
+            <tbody>${bodyRows}${grandTotalRow}${summaryRow}${gradeRow}${resultRow}${rankRow}</tbody>
+        </table>
+        <div class="mt-2"><strong>Teacher's Remark:</strong> ${remark}</div>
+        <div class="row mt-5 text-center text-muted" style="font-size: 0.9rem;">
+            <div class="col-6"><hr class="mx-auto w-50">Class Teacher</div>
+            <div class="col-6"><hr class="mx-auto w-50">Headmaster / Principal</div>
+        </div>
+    </div>`;
+}
 
-    container.innerHTML = tableHtml;
+function generateReportCardHTML_Comparisonnew(studentId, examIds) {
+    const student = students.find(s => s.id === studentId);
+    if (!student) {
+        console.error("Could not generate report card: Student not found for ID", studentId);
+        return '<p class="alert alert-danger">Student data not found.</p>';
+    }
+
+    const studentClass = classes.find(c => c.id === student?.classId);
+    const gradingSystem = document.getElementById('shared-grading-system')?.value || 'type1';
+    const gradeFunc = gradingSystem === 'type1' ? window.calculateGrade : window.calculateGradeType2;
+    const studentPhotoSrc = student.photoDriveId
+        ? `https://drive.google.com/thumbnail?id=${student.photoDriveId}&sz=400`
+        : 'https://placehold.co/150x200?text=No+Photo&font=roboto';
+
+    const examsData = examIds.map(eId => {
+        const exam = exams.find(e => e.id === eId);
+        if (!exam) return null;
+
+        const schedules = examSchedules.filter(s => s.examId === eId && s.classId === student.classId && s.division === student.division);
+        const allStudentsInClass = students.filter(s => s.classId === student.classId && s.division === student.division && s.status !== 'TC Issued' && s.status !== 'Graduated').sort((a, b) => a.name.localeCompare(b.name));
+        
+        const allProcessed = processExamResultsData(allStudentsInClass, schedules, marks, eId, gradingSystem);
+
+        allProcessed.forEach(procStudent => {
+            let totalTE = 0, maxTE = 0, totalCE = 0, maxCE = 0;
+            procStudent.subjectResults.forEach(res => {
+                if (res.te !== 'AB' && res.te !== 'N/A') totalTE += Number(res.te);
+                if (res.ce !== 'AB' && res.ce !== 'N/A') totalCE += Number(res.ce);
+                maxTE += res.maxTE;
+                maxCE += res.maxCE;
+            });
+            procStudent.grandTotalTE = totalTE;
+            procStudent.grandMaxTE = maxTE;
+            procStudent.grandTotalCE = totalCE;
+            procStudent.grandMaxCE = maxCE;
+        });
+
+        const report = allProcessed.find(s => s.studentId === studentId) || {};
+
+        allProcessed.sort((a, b) => b.grandTotalMarks - a.grandTotalMarks);
+        const totalRank = (allProcessed.findIndex(s => s.studentId === studentId) + 1) || 0;
+        allProcessed.sort((a, b) => b.grandTotalTE - a.grandTotalTE);
+        const teRank = (allProcessed.findIndex(s => s.studentId === studentId) + 1) || 0;
+        allProcessed.sort((a, b) => b.grandTotalCE - a.grandTotalCE);
+        const ceRank = (allProcessed.findIndex(s => s.studentId === studentId) + 1) || 0;
+
+        return { exam, report, totalRank, teRank, ceRank };
+    }).filter(Boolean);
+
+    const allSubjectIds = [...new Set(examsData.flatMap(e => e.report.subjectResults?.map(r => r.subjectId) || []))];
+
+    let headerRow1 = `<tr><th rowspan="2">Subject</th>`;
+    let headerRow2 = ``;
+    examsData.forEach(ed => {
+        headerRow1 += `<th colspan="4" class="text-center">${ed.exam.name}</th>`;
+        headerRow2 += `<th>TE/MaxTE (Grade)</th><th>CE/MaxCE (Grade)</th><th>Total/Max</th><th>Grade</th>`;
+    });
+    headerRow1 += `</tr>`;
+    headerRow2 = `<tr>${headerRow2}</tr>`;
+
+    let bodyRows = ``;
+    allSubjectIds.forEach(subId => {
+        const subjectName = subjects.find(s => s.id === subId)?.name || "N/A";
+        let rowHtml = `<tr><td>${subjectName}</td>`;
+        examsData.forEach(ed => {
+            const res = ed.report.subjectResults?.find(r => r.subjectId === subId);
+            if (res) {
+                const totalMax = res.maxTE + res.maxCE;
+                const totalGrade = gradeFunc(res.total, totalMax);
+                rowHtml += `
+                    <td class="text-center">${res.te}/${res.maxTE} (${res.teGrade})</td>
+                    <td class="text-center">${res.ce}/${res.maxCE} (${res.ceGrade})</td>
+                    <td class="text-center">${res.total}/${totalMax}</td>
+                    <td class="text-center">${totalGrade}</td>`;
+            } else {
+                rowHtml += `<td colspan="4" class="text-center">-</td>`;
+            }
+        });
+        rowHtml += `</tr>`;
+        bodyRows += rowHtml;
+    });
+
+    // --- NEW: Create the "Grand Total" row ---
+    let grandTotalRow = `<tr class="fw-bold table-primary"><th>Grand Total</th>`;
+    examsData.forEach(ed => {
+        const totalMarks = ed.report.grandTotalMarks || 0;
+        const maxMarks = ed.report.grandMaxMarks || 0;
+        const overallGrade = ed.report.overallGrade || '-';
+        grandTotalRow += `<td colspan="4" class="text-center">${totalMarks} / ${maxMarks} (${overallGrade})</td>`;
+    });
+    grandTotalRow += `</tr>`;
+    
+    // Create detailed summary rows
+    let summaryRows = `<tr class="table-light"><th colspan="${1 + examsData.length * 4}" class="text-primary">PERFORMANCE SUMMARY</th></tr>`;
+    summaryRows += `<tr><th>Overall %</th>`;
+    examsData.forEach(ed => {
+        const pctTE = ed.report.grandMaxTE > 0 ? (ed.report.grandTotalTE / ed.report.grandMaxTE * 100).toFixed(2) : 0;
+        const pctCE = ed.report.grandMaxCE > 0 ? (ed.report.grandTotalCE / ed.report.grandMaxCE * 100).toFixed(2) : 0;
+        summaryRows += `<td colspan="4" class="text-center">TE: ${pctTE}% | CE: ${pctCE}% | <strong>Total: ${ed.report.grandPct?.toFixed(2) || 0}%</strong></td>`;
+    });
+    summaryRows += `</tr>`;
+    summaryRows += `<tr><th>Overall Grade</th>`;
+    examsData.forEach(ed => {
+        const gradeTE = gradeFunc(ed.report.grandTotalTE, ed.report.grandMaxTE);
+        const gradeCE = gradeFunc(ed.report.grandTotalCE, ed.report.grandMaxCE);
+        summaryRows += `<td colspan="4" class="text-center">TE: ${gradeTE} | CE: ${gradeCE} | <strong>Total: ${ed.report.overallGrade || "-"}</strong></td>`;
+    });
+    summaryRows += `</tr>`;
+    summaryRows += `<tr><th>Result</th>`;
+    examsData.forEach(ed => {
+        const resultTE = (gradeFunc(ed.report.grandTotalTE, ed.report.grandMaxTE) === 'E' || gradeFunc(ed.report.grandTotalTE, ed.report.grandMaxTE) === 'F') ? 'FAIL' : 'PASS';
+        const resultCE = (gradeFunc(ed.report.grandTotalCE, ed.report.grandMaxCE) === 'E' || gradeFunc(ed.report.grandTotalCE, ed.report.grandMaxCE) === 'F') ? 'FAIL' : 'PASS';
+        const resultTotal = ed.report.finalStatus || 'N/A';
+        summaryRows += `<td colspan="4" class="text-center text-${resultTotal === 'PASS' ? 'success' : 'danger'}">TE: ${resultTE} | CE: ${resultCE} | <strong>Total: ${resultTotal}</strong></td>`;
+    });
+    summaryRows += `</tr>`;
+    summaryRows += `<tr><th>Rank</th>`;
+    examsData.forEach(ed => {
+        summaryRows += `<td colspan="4" class="text-center">TE: ${ed.teRank || '-'} | CE: ${ed.ceRank || '-'} | <strong>Total: ${ed.totalRank || '-'}</strong></td>`;
+    });
+    summaryRows += `</tr>`;
+
+    let remark = "Performance is consistent.";
+    if (examsData.length > 1) {
+        const first = examsData[0].report.grandPct || 0;
+        const last = examsData[examsData.length - 1].report.grandPct || 0;
+        if (last > first) remark = "Excellent! Performance has improved.";
+        else if (last < first) remark = "Performance has declined. Needs more effort.";
+    }
+
+    // --- FINAL HTML ASSEMBLY ---
+    return `
+    <div id="report-card-printable" class="p-2 border bg-white mx-auto" style="max-width: 100%;">
+        <div class="report-header text-center mb-4">
+            ${schoolDetails.logoUrl ? `<img src="${schoolDetails.logoUrl}" style="max-height: 80px; margin-bottom: 0.5rem;margin-top: -1rem;">` : ''}
+            <h4>${schoolDetails.address.toUpperCase() || 'School Name'}</h4>
+            <p>${schoolDetails.name || ''}</p>
+            <h4>Progress Report Comparison</h4>
+        </div>
+        <div class="row mb-4 align-items-center">
+            <div class="col-8">
+                <table class="table table-sm table-borderless">
+                    <tbody>
+                        <tr><th style="width: 150px;">Student Name</th><td>: ${student.name}</td></tr>
+                        <tr><th>Admission No</th><td>: ${student.admissionNumber || 'N/A'}</td></tr>
+                        <tr><th>Class</th><td>: ${studentClass?.name || 'N/A'} - ${student.division || 'N/A'}</td></tr>
+                        <tr><th>Date of Birth</th><td>: ${new Date(student.dob).toLocaleDateString('en-GB') || 'N/A'}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="col-4 text-center">
+                <img src="${studentPhotoSrc}" alt="Student Photo" class="img-thumbnail rounded-3 shadow-sm" style="width: 130px; height: 170px; object-fit: cover; border: 2px solid #ddd;">
+            </div>
+        </div>
+        <table class="table table-bordered table-sm">
+            <thead class="table-light text-center">${headerRow1}${headerRow2}</thead>
+            
+            <tbody>${bodyRows}${grandTotalRow}${summaryRows}</tbody>
+            
+        </table>
+        <div class="mt-2"><strong>Teacher's Remark:</strong> ${remark}</div>
+        <div class="row mt-5 text-center text-muted" style="font-size: 0.9rem;">
+            <div class="col-6"><hr class="mx-auto w-50">Class Teacher</div>
+            <div class="col-6"><hr class="mx-auto w-50">Headmaster / Principal</div>
+        </div>
+    </div>`;
 }
 
 
-const exportReportToPdf = (examId) => {
-    // 1. --- Basic Setup ---
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF('p', 'mm', 'a4');
-    const tableElement = document.getElementById('report-table-printable').querySelector('table');
-
-    if (!tableElement) {
-        showAlert('Error: Report table not found for export.', 'danger');
-        return;
+function generateReportCardHTML_Comparisonold(studentId, examIds) {
+    const student = students.find(s => s.id === studentId);
+    if (!student) {
+        console.error("Could not generate report card: Student not found for ID", studentId);
+        return '<p class="alert alert-danger">Student data not found.</p>';
     }
 
-    const examName = exams.find(e => e.id === examId)?.name || 'Exam Summary';
-    const reportTitle = `Mark Entry Report for: ${examName}`;
+    const studentClass = classes.find(c => c.id === student?.classId);
+    const gradingSystem = document.getElementById('shared-grading-system')?.value || 'type1';
+    const studentPhotoSrc = student.photoDriveId
+        ? `https://drive.google.com/thumbnail?id=${student.photoDriveId}&sz=400`
+        : 'https://placehold.co/150x200?text=No+Photo&font=roboto';
 
-    // 2. --- Prepare Data for AutoTable ---
-    const head = Array.from(tableElement.querySelectorAll('thead tr')).map(tr => 
-        Array.from(tr.querySelectorAll('th')).map(th => th.innerText)
-    );
-    
-    const body = Array.from(tableElement.querySelectorAll('tbody tr')).map(tr => 
-        Array.from(tr.querySelectorAll('td')).map(td => td.innerText)
-    );
+    const examsData = examIds.map(eId => {
+        const exam = exams.find(e => e.id === eId);
+        if (!exam) return null;
 
-    // 3. --- Generate the PDF using autoTable ---
-    doc.autoTable({
-        head: head,
-        body: body,
-        // REMOVED startY and ADDED margin. This is the key change.
-        margin: { top: 30 }, // Reserve 30mm space at the top of EVERY page
-        theme: 'striped',
-        styles: {
-            fontSize: 8,
-            cellPadding: 2,
-        },
-        headStyles: {
-            fillColor: [22, 160, 133],
-            textColor: 255,
-            fontStyle: 'bold',
-        },
-        // This hook adds a header and footer to EVERY page.
-        didDrawPage: function (data) {
-            // Header (drawn at 20mm, well within the 30mm margin)
-            doc.setFontSize(16);
-            doc.setTextColor(40);
-            doc.text(reportTitle, data.settings.margin.left, 20);
+        const schedules = examSchedules.filter(s => s.examId === eId && s.classId === student.classId && s.division === student.division);
+        const processedData = processExamResultsData([student], schedules, marks, eId, gradingSystem);
+        const report = processedData[0] || {};
 
-            // Footer
-            const pageCount = doc.internal.getNumberOfPages();
-            doc.setFontSize(10);
-            doc.text(`Page ${data.pageNumber} of ${pageCount}`, data.settings.margin.left, doc.internal.pageSize.height - 10);
-        }
+        const allStudentsInClass = students.filter(s => s.classId === student.classId && s.division === student.division && s.status !== 'TC Issued' && s.status !== 'Graduated').sort((a, b) => a.name.localeCompare(b.name));
+        const allProcessed = processExamResultsData(allStudentsInClass, schedules, marks, eId, gradingSystem);
+        allProcessed.sort((a, b) => b.grandTotalMarks - a.grandTotalMarks);
+        const rank = allProcessed.findIndex(s => s.studentId === student.id) + 1;
+        return { exam, report, rank };
+    }).filter(Boolean);
+
+    const allSubjectIds = [...new Set(examsData.flatMap(e => e.report.subjectResults?.map(r => r.subjectId) || []))];
+
+    let headerRow1 = `<tr><th rowspan="2">Subject</th>`;
+    let headerRow2 = ``;
+    examsData.forEach(ed => {
+        headerRow1 += `<th colspan="4" class="text-center">${ed.exam.name}</th>`;
+        headerRow2 += `<th>TE/MaxTE</th><th>CE/MaxCE</th><th>Total/Max</th><th>Grade</th>`;
+    });
+    headerRow1 += `</tr>`;
+    headerRow2 = `<tr>${headerRow2}</tr>`;
+
+    let bodyRows = ``;
+    allSubjectIds.forEach(subId => {
+        const subjectName = subjects.find(s => s.id === subId)?.name || "N/A";
+        let rowHtml = `<tr><td>${subjectName}</td>`;
+        // This loop builds the main body of the marks table
+examsData.forEach(ed => {
+    const res = ed.report.subjectResults?.find(r => r.subjectId === subId);
+    if (res) {
+        const totalMax = res.maxTE + res.maxCE;
+
+        // The grade for the total marks of the subject
+        const totalGrade = gradingSystem === 'type1' 
+            ? window.calculateGrade(res.total, totalMax) 
+            : window.calculateGradeType2(res.total, totalMax);
+
+        // --- MODIFICATION IS HERE ---
+        // The individual grades for TE and CE are now included in brackets
+        rowHtml += `
+            <td class="text-center">${res.te}/${res.maxTE} (${res.teGrade})</td>
+            <td class="text-center">${res.ce}/${res.maxCE} (${res.ceGrade})</td>
+            <td class="text-center">${res.total}/${totalMax}</td>
+            <td class="text-center">${totalGrade}</td>
+        `;
+    } else {
+        // If no results, add empty cells
+        rowHtml += `<td>-</td><td>-</td><td>-</td><td>-</td>`;
+    }
+});
+        rowHtml += `</tr>`;
+        bodyRows += rowHtml;
     });
 
-    // 4. --- Save the PDF ---
-    doc.save(`Mark_Entry_Report_${examName.replace(/\s/g, '_')}.pdf`);
-    showAlert('PDF export successful!', 'success');
-};
-    
+    let summaryRow = `<tr><th>Overall %</th>`;
+    examsData.forEach(ed => { summaryRow += `<td colspan="4" class="text-center">${ed.report.grandPct?.toFixed(2) || "0"}%</td>`; });
+    summaryRow += `</tr>`;
+
+    let gradeRow = `<tr><th>Overall Grade</th>`;
+    examsData.forEach(ed => { gradeRow += `<td colspan="4" class="text-center">${ed.report.overallGrade || "-"}</td>`; });
+    gradeRow += `</tr>`;
+
+    let resultRow = `<tr><th>Result</th>`;
+    examsData.forEach(ed => {
+        const status = ed.report.finalStatus || 'N/A';
+        resultRow += `<td colspan="4" class="text-center text-${status === 'PASS' ? 'success' : 'danger'}">${status}</td>`;
+    });
+    resultRow += `</tr>`;
+
+    let rankRow = `<tr><th>Rank</th>`;
+    examsData.forEach(ed => { rankRow += `<td colspan="4" class="text-center">${ed.rank}</td>`; });
+    rankRow += `</tr>`;
+
+    let remark = "Performance is consistent.";
+    if (examsData.length > 1) {
+        const first = examsData[0].report.grandPct || 0;
+        const last = examsData[examsData.length - 1].report.grandPct || 0;
+        if (last > first) remark = "Excellent! Performance has improved.";
+        else if (last < first) remark = "Performance has declined. Needs more effort.";
+    }
+
+    return `
+    <div id="report-card-printable" class="p-2 border bg-white mx-auto" style="max-width: 100%;">
+        <div class="report-header text-center mb-4">
+            ${schoolDetails.logoUrl ? `<img src="${schoolDetails.logoUrl}" style="max-height: 80px; margin-bottom: 0.5rem;margin-top: -1rem;">` : ''}
+            <h4>${schoolDetails.address.toUpperCase() || 'School Name'}</h4>
+            <p>${schoolDetails.name || ''}</p>
+            <h4>Progress Report Comparison</h4>
+        </div>
+        <div class="row mb-4 align-items-center">
+            <div class="col-8">
+                <table class="table table-sm table-borderless">
+                    <tbody>
+                        <tr><th style="width: 150px;">Student Name</th><td>: ${student.name}</td></tr>
+                        <tr><th>Admission No</th><td>: ${student.admissionNumber || 'N/A'}</td></tr>
+                        <tr><th>Class</th><td>: ${studentClass?.name || 'N/A'} - ${student.division || 'N/A'}</td></tr>
+                        <tr><th>Date of Birth</th><td>: ${new Date(student.dob).toLocaleDateString('en-GB') || 'N/A'}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="col-4 text-center">
+                <img src="${studentPhotoSrc}" alt="Student Photo" class="img-thumbnail rounded-3 shadow-sm" style="width: 130px; height: 170px; object-fit: cover; border: 2px solid #ddd;">
+            </div>
+        </div>
+        <table class="table table-bordered table-sm">
+            <thead class="table-light text-center">${headerRow1}${headerRow2}</thead>
+            <tbody>${bodyRows}${summaryRow}${gradeRow}${resultRow}${rankRow}</tbody>
+        </table>
+        <div class="mt-2"><strong>Teacher's Remark:</strong> ${remark}</div>
+        <div class="row mt-5 text-center text-muted" style="font-size: 0.9rem;">
+            <div class="col-6"><hr class="mx-auto w-50">Class Teacher</div>
+            <div class="col-6"><hr class="mx-auto w-50">Headmaster / Principal</div>
+        </div>
+    </div>`;
+}
+
+        
