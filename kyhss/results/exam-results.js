@@ -125,7 +125,7 @@ window.renderResultsTab = async () => {
          printBtn.disabled = false; 
         return;
     }
-           await window.attachMarksListener([{ classId: classId, division: division }]);
+           //await window.attachMarksListener([{ classId: classId, division: division }]);
             generateExamWiseResultsTable(examId, classId, division);
             printBtn.disabled = false; // Enable print button after report generates
         } else {
@@ -140,7 +140,7 @@ window.renderResultsTab = async () => {
         const examName = examSelect.options[examSelect.selectedIndex].text;
         const className = classSelect.options[classSelect.selectedIndex].text;
         const divisionName = divisionSelect.value;
-        const reportTitle = `${examName} - Results (Class: ${className} - ${divisionName} (${indow.activeFinancialYear}))`;
+        const reportTitle = `${examName} - Results (Class: ${className} - ${divisionName} (${window.activeFinancialYear}))`;
         const reportSubtitle ="";
         printReportWithChart('exam-wise-results-container', 'exam-wise-performance-canvas', reportTitle, reportSubtitle);
     });
@@ -973,10 +973,9 @@ generateSubjectWiseTable();
     divisionSelect.addEventListener('change', () => {
         const classId = classSelect.value;
         const division = divisionSelect.value;
-        window.attachMarksListener([{ classId: classId, division: division }]);
-        const allocated = classroomSubjects.filter(cs => cs.classId === classId && cs.division === division);
+        const allocated = window.classroomSubjects.filter(cs => cs.classId === classId && cs.division === division);
         subjectSelect.innerHTML = allocated.map(a => {
-            const subject = subjects.find(s => s.id === a.subjectId);
+            const subject = window.subjects.find(s => s.id === a.subjectId);
             return subject ? `<option value="${subject.id}">${subject.name}</option>` : '';
         }).join('');
         generateSubjectWiseTable();
@@ -1035,7 +1034,7 @@ async function generateSubjectWiseTable() {
     const selectedExams = selectedExamIds.map(id => exams.find(e => e.id === id)).filter(Boolean);
     const results = await processSubjectWiseResults(classId, division,selectedExams, subjectId, gradingSystem);
 
-    console.log(results);
+    //console.log(results);
     // --- THIS IS THE CORRECTED SORTING LOGIC ---
 
 if (sortBy === 'name') {
@@ -1297,18 +1296,15 @@ async function generateResultsTable(container) {
         container.innerHTML = `<p class="text-center p-5 text-muted">Please select all filters.</p>`; 
         return; 
     }
-    
-    // --- CORRECTED: Use the dynamic listener to fetch only the required marks ---
-    // This will automatically trigger the report to re-render when data arrives.
-    await window.attachMarksListener([{ classId: classId, division: division }]);
-    // Process and render the table with currently available data
-    const studentsInClass = students.filter(s => s.classId === classId && s.division === division && s.status === 'Active')
+
+    const studentsInClass = window.students.filter(s => s.classId === classId && s.division === division && s.status === 'Active')
 
 .sort((a, b) => a.name.localeCompare(b.name));
-const schedulesForClass = examSchedules.filter(s => s.examId === examId && s.classId === classId && s.division === division);
+const schedulesForClass = window.examSchedules.filter(s => s.examId === examId && s.classId === classId && s.division === division);
     
     // The global 'marks' object will be used here
-    let marks = await window.getmarks();
+    window.needRefreshedMarks = false;
+    let marks = await window.getmarks(classId, division);
     
     let results = processRankListData(studentsInClass, schedulesForClass, marks, examId);
     
