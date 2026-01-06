@@ -568,8 +568,8 @@ async function saveMarks(examId, classId, division, subjectId) {
                         if (toAddOrUpdate.length > 0) await appDb.marks.bulkPut(toAddOrUpdate);
                         if (toDelete.length > 0) await appDb.marks.bulkDelete([...new Set(toDelete)]);
                         // Update memory too
-                        toAddOrUpdate.forEach(m => marks[m.id] = m);
-                        toDelete.forEach(id => delete marks[id]);
+                        //toAddOrUpdate.forEach(m => marks[m.id] = m);
+                        //toDelete.forEach(id => delete marks[id]);
                     } catch(e) { console.error(e); }
                 }
             }, (error) => {
@@ -930,7 +930,7 @@ window.processMarksChanges = (changes) => {
                         lastUpdated: lastUpdated // Add the timestamp to each flattened record
                     };
                     
-                    marks[flatMarkId] = flatMarkData;
+                    //marks[flatMarkId] = flatMarkData;
                     toAddOrUpdate.push(flatMarkData);
                 }
             }
@@ -939,6 +939,7 @@ window.processMarksChanges = (changes) => {
     
     // Determine which flat mark records need to be deleted
     const toDelete = [];
+    let marks = window.getmarks(); // Get the in-memory marks object
     Object.keys(marks).forEach(key => {
         const studentIdInKey = key.split('_')[1];
         // Delete if the student's doc was removed OR if it was modified (to clear out old marks before adding new ones)
@@ -1051,4 +1052,3 @@ function unsubscribeAllListeners() {
     }
     activeMarksListeners = {};
 }
-
