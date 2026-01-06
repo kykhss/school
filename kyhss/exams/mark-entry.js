@@ -583,7 +583,7 @@ async function saveMarks(examId, classId, division, subjectId) {
 
     // 2. Wait for ALL class promises to finish before letting the code continue
     await Promise.all(loadingPromises);
-    console.log("All marks loaded into memory.");
+   // console.log("All marks loaded into memory.");
 }
 /**
  * Loads the mark entry sheet by directly querying the database for all marks
@@ -1052,3 +1052,4 @@ function unsubscribeAllListeners() {
     }
     activeMarksListeners = {};
 }
+
