@@ -243,12 +243,12 @@ const firstActiveExam = window.exams.find(ex => ex.isActive);
 if (firstActiveExam) {
 
     examSelect.value = firstActiveExam.id;
-    await window.attachMarksListener(teacherAssignedClasses);
+    //await window.attachMarksListener(teacherAssignedClasses);
     generateEntryReport(firstActiveExam.id);
 }
 
     document.getElementById('entry-report-exam').addEventListener('change', async (e) => {
-        await window.attachMarksListener(teacherAssignedClasses);
+       //await window.attachMarksListener(teacherAssignedClasses);
     
         const examId = e.target.value||firstActiveExam.id;
         if (examId) {
@@ -268,7 +268,11 @@ if (firstActiveExam) {
 /**
  * Generates the data for the main entry report and renders the controls and table.
  */
+
 async function generateEntryReport(examId) {
+    let marks = await window.getmarks();
+    //console.log(marks);
+    
     const container = document.getElementById('entry-report-container');
     container.innerHTML = `<div class="text-center p-5"><div class="spinner-border text-primary"></div></div>`;
 
@@ -290,7 +294,6 @@ async function generateEntryReport(examId) {
         container.innerHTML = `<div class="alert alert-warning">No mark entries found for your allocated subjects in this exam.</div>`;
         return;
     }
-    
     const rawReportData = [];
     relevantSchedules.forEach(schedule => {
         const studentsInClass = students.filter(s => s.classId === schedule.classId && s.division === schedule.division);
@@ -311,6 +314,12 @@ async function generateEntryReport(examId) {
 
     reportData = rawReportData.sort((a,b) => (a.className + a.division + a.subjectName).localeCompare(b.className + b.division + b.subjectName));
     renderReportControlsAndTable(examId);
+}
+
+window.onStatusChange = (value) =>{
+    console.log("Status changed:", value);
+    
+    filterAndRenderReport();
 }
 
 /**
