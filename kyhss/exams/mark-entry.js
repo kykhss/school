@@ -1,4 +1,4 @@
-import {writeBatch, serverTimestamp, query, where, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import {writeBatch,updateDoc, serverTimestamp, query, where, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     window.renderMarkEntryTab = () => {
     const container = document.getElementById('entry');
@@ -1121,3 +1121,4 @@ function unsubscribeAllListeners() {
     }
     activeMarksListeners = {};
 }
+
