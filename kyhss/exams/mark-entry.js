@@ -451,6 +451,7 @@ async function saveMarks(examId, classId, division, subjectId) {
     }
 }
 
+ 
  window.attachMarksListener = async (classDataArray, refresh = false) => {
     if (!Array.isArray(classDataArray) || classDataArray.length === 0) {
         console.warn("attachMarksListener was called with an invalid or empty classDataArray.");
@@ -520,16 +521,18 @@ async function saveMarks(examId, classId, division, subjectId) {
                     .where({ classId, division })
                     .reverse()
                     .sortBy('lastUpdated');
-
+                //console.log("lastLocalMark", lastLocalMark);
                 const lastLocalSyncTime = (lastLocalMark.length > 0 && lastLocalMark[0].lastUpdated) 
                     ? lastLocalMark[0].lastUpdated 
                     : new Date(0);
+                   // console.log("lastLocalSyncTime", lastLocalSyncTime);
 
                 const updatesQuery = query(
                     window.getCollectionRef(marksCollectionName),
+                    where('lastUpdated', '>', lastLocalSyncTime),
                     where('classId', '==', classId),
-                    where('division', '==', division),
-                    where('lastUpdated', '>', lastLocalSyncTime)
+                    where('division', '==', division)
+                    
                 );
 
                 const updatesSnapshot = await getDocs(updatesQuery);
@@ -592,12 +595,23 @@ async function saveMarks(examId, classId, division, subjectId) {
 
     // 2. Wait for ALL class promises to finish
     await Promise.all(loadingPromises);
+    setStatus('loaded');
+
     console.log("All marks loaded into memory.");
 };
 
+let status = null;
+
+function setStatus(value) {
+    status = value;
+    window.onStatusChange(value);
+}
+
+
+
 window.updateLoadMarksButton = (state) => {
     const btn = document.getElementById('loadmarks-btn');
-    if (!btn) return;
+    
 
     const states = {
         loading: {
@@ -623,9 +637,11 @@ window.updateLoadMarksButton = (state) => {
         }
     };
 
+    
+
     const s = states[state];
     if (!s) return;
-
+if (!btn) return;
     btn.innerHTML = s.html;
     btn.disabled = s.disabled;
     btn.className = s.className;
@@ -1121,4 +1137,5 @@ function unsubscribeAllListeners() {
     }
     activeMarksListeners = {};
 }
+
 
