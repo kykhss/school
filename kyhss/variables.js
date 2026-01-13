@@ -63,7 +63,7 @@ window.classes = [];
 window.subjects = [];
 window.classroomSubjects = []; // Class-Subject-Teacher mapping
 window.teacherAssignedClasses = []; // Specific to logged-in teacher
-
+window.examToEdit = null;
 // ==========================================
 // 4. ACADEMICS, ATTENDANCE & TIMETABLE
 // ==========================================
@@ -106,12 +106,21 @@ window.getmarks = async (classId, division, examId) => {
                
   }else{
      allLocalMarks = await appDb.marks.toArray();//where({ classId, division })
-                
-  }
+     if(allLocalMarks.length>0){
+      allLocalMarks.forEach(mark => { markss[mark.id] = mark; });
+     }
+     window.attachMarksListener(teacherAssignedClasses);
+     isloadedmarks = true;
+     }
   if(allLocalMarks.length>0){
+    
   allLocalMarks.forEach(mark => { markss[mark.id] = mark; });
+  if(!isloadedmarks){
   window.attachMarksListener([{classId:classId, division:division}]);
+  isloadedmarks = true;
+  }
   }else{
+    window.attachMarksListener([{classId:classId, division:division}]);
     if(!isloadedmarks){
     window.attachMarksListener([{classId:classId, division:division}]);
     getmarks(classId, division, examId);
