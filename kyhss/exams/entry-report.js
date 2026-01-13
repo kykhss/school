@@ -232,6 +232,11 @@ window.renderEntryReportTab = async () => {
                     ${exams.map(ex => `<option value="${ex.id}">${ex.name}</option>`).join('')}
                 </select>
             </div>
+            <div class="col-md-6 text-md-end">
+                <button id="entry-report-generate-btn" class="btn btn-danger mt-2 mt-md-0"><i class="fas fa-file-pdf me-2"></i> Export Summary as PDF</button>
+            </div>
+            </div>
+        </div>
         </div>
         ${tabNav}
         ${tabContent}
@@ -244,14 +249,16 @@ if (firstActiveExam) {
 
     examSelect.value = firstActiveExam.id;
     //await window.attachMarksListener(teacherAssignedClasses);
-    generateEntryReport(firstActiveExam.id);
+  // generateEntryReport(firstActiveExam.id);
 }
-
-    document.getElementById('entry-report-exam').addEventListener('change', async (e) => {
-       //await window.attachMarksListener(teacherAssignedClasses);
-    
-        const examId = e.target.value||firstActiveExam.id;
+//
+    document.getElementById('entry-report-generate-btn').addEventListener('click', async () => {
+        const examId = document.getElementById('entry-report-exam').value || firstActiveExam.id;
         if (examId) {
+            document.getElementById('entry-report-container').innerHTML = `<p class="text-muted text-center p-5">loding.....</p>`;
+
+            //await window.attachMarksListener(teacherAssignedClasses);
+
             generateEntryReport(examId); // Always generate the main report
             if (isClassTeacher) {
                 renderMyClassPendingList(examId); // Also generate the teacher's pending list
@@ -263,6 +270,23 @@ if (firstActiveExam) {
             }
         }
     });
+
+    // document.getElementById('entry-report-exam').addEventListener('change', async (e) => {
+    //    //await window.attachMarksListener(teacherAssignedClasses);
+    
+    //     const examId = e.target.value||firstActiveExam.id;
+    //     if (examId) {
+    //         generateEntryReport(examId); // Always generate the main report
+    //         if (isClassTeacher) {
+    //             renderMyClassPendingList(examId); // Also generate the teacher's pending list
+    //         }
+    //     } else {
+    //         document.getElementById('entry-report-container').innerHTML = `<p class="text-muted text-center p-5">Please select an exam.</p>`;
+    //         if (isClassTeacher) {
+    //             document.getElementById('my-class-pending-container').innerHTML = `<p class="text-muted text-center p-5">Please select an exam.</p>`;
+    //         }
+    //     }
+    // });
 }
 
 /**
@@ -318,7 +342,6 @@ async function generateEntryReport(examId) {
 
 window.onStatusChange = (value) =>{
     console.log("Status changed:", value);
-    
     filterAndRenderReport();
 }
 
