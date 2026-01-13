@@ -320,7 +320,8 @@ async function generateEntryReport(examId) {
     }
     const rawReportData = [];
     relevantSchedules.forEach(schedule => {
-        const studentsInClass = students.filter(s => s.classId === schedule.classId && s.division === schedule.division);
+        const studentsInClass = students.filter(s => s.classId === schedule.classId && s.division === schedule.division && s.status === "Active");
+        
         if (studentsInClass.length === 0) return;
         const enteredCount = studentsInClass.filter(student => marks[`${examId}_${student.id}_${schedule.subjectId}`]).length;
         
@@ -638,3 +639,4 @@ const exportReportToPdf = (examId) => {
     showAlert('PDF export successful!', 'success');
 };
     
+
