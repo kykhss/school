@@ -1235,58 +1235,74 @@ window.renderAddStudentForm = async () => {
 
     // --- GLOBAL ACTIONS (Exposed to window) ---
     window.sendWhatsApp = (id) => {
-        // 1. Find the student object from the local list
-        const s = recentStudentsList.find(item => item.id === id);
-        
-        if (!s) { 
-            alert("Student details not found currently loaded."); 
-            return; 
-        }
-        if (!s.whatsappNo) { 
-            alert("No WhatsApp number provided for this student."); 
-            return; 
-        }
+    // 1. Find the student object from the local list
+    const s = recentStudentsList.find(item => item.id === id);
+    
+    if (!s) { 
+        alert("Student details not found currently loaded."); 
+        return; 
+    }
+    if (!s.whatsappNo) { 
+        alert("No WhatsApp number provided for this student."); 
+        return; 
+    }
 
-        // 2. Construct the formatted message
-        // Note: \n creates a new line, *text* makes it bold
-        let msg = `*🎓 ADMISSION DETAILS VERIFICATION 🎓*\n\n`;
-        msg += `Dear Parent, \n`;
-        msg += `Please verify the official details entered for your ward:\n\n`;
+    // 2. Construct the formatted message
+    let msg = `*🎓 ADMISSION DETAILS VERIFICATION 🎓*\n\n`;
+    msg += `Dear Parent, \n`;
+    msg += `Please verify the official details entered for your ward:\n\n`;
 
-        msg += `*👤 STUDENT INFO*\n`;
-        msg += `*Name:* ${s.name}\n`;
-        msg += `*Adm No:* ${s.admissionNumber}\n`;
-        msg += `*Adm Date:* ${s.admissionDate || '-'}\n`;
-        msg += `*Class:* ${s.classId} - ${s.division}\n`;
-        msg += `*DOB:* ${s.dob}\n`;
-        msg += `*Gender:* ${s.gender === 'M' ? 'Male' : 'Female'}\n`;
-        msg += `*Aadhaar:* ${s.aadhaar || '-'}\n\n`;
+    msg += `*👤 STUDENT INFO*\n`;
+    msg += `*Name:* ${s.name}\n`;
+    msg += `*Adm No:* ${s.admissionNumber}\n`;
+    msg += `*Adm Date:* ${s.admissionDate || '-'}\n`;
+    msg += `*Class:* ${s.classId} - ${s.division}\n`;
+    msg += `*DOB:* ${s.dob}\n`;
+    msg += `*Gender:* ${s.gender === 'M' ? 'Male' : 'Female'}\n`;
+    msg += `*Aadhaar:* ${s.aadhaar || '-'}\n\n`;
 
-        msg += `*👨‍👩‍👦 FAMILY DETAILS*\n`;
-        msg += `*Father:* ${s.fatherName || '-'}\n`;
-        msg += `*Mother:* ${s.motherName || '-'}\n`;
-        if (s.guardianType === 'Local Guardian') {
-             msg += `*Guardian:* ${s.localGuardianName} (${s.localGuardianRelation})\n`;
-        }
-        msg += `*BPL Status:* ${s.aplBpl || 'APL'}\n\n`;
+    msg += `*👨‍👩‍👦 FAMILY DETAILS*\n`;
+    msg += `*Father:* ${s.fatherName || '-'}\n`;
+    msg += `*Mother:* ${s.motherName || '-'}\n`;
+    if (s.guardianType === 'Local Guardian') {
+         msg += `*Guardian:* ${s.localGuardianName} (${s.localGuardianRelation})\n`;
+    }
+    msg += `*BPL Status:* ${s.aplBpl || 'APL'}\n\n`;
 
-        msg += `*🚌 TRANSPORT*\n`;
-        msg += `*Vehicle:* ${s.vehicleNeed ? (s.vehicleStage|| 'None') : '-'}\n`;
-        msg += `*Bus Point:* ${s.busPoint || '-'}\n\n`;
+    msg += `*🚌 TRANSPORT*\n`;
+    msg += `*Vehicle:* ${s.vehicleNeed ? (s.vehicleStage|| 'None') : '-'}\n`;
+    msg += `*Bus Point:* ${s.busPoint || '-'}\n\n`;
 
-        msg += `*📍 CONTACT & ADDRESS*\n`;
-        msg += `*Mobile:* ${s.mobile1} ${s.mobile2 ? '/ ' + s.mobile2 : ''}\n`;
-        msg += `*Address:* ${s.houseName || ''}, ${s.place || ''}\n`;
-        msg += `*PO:* ${s.postOffice || ''}, *PIN:* ${s.pin || ''}\n`;
-        msg += `*District:* ${s.district || ''}\n\n`;
-        msg += `*Taluk:* ${s.taluk || ''}\n`;
-        msg += `*Nationality:* ${s.nationality || ''}\n`;
+    msg += `*📍 CONTACT & ADDRESS*\n`;
+    msg += `*Mobile:* ${s.mobile1} ${s.mobile2 ? '/ ' + s.mobile2 : ''}\n`;
+    msg += `*Address:* ${s.houseName || ''}, ${s.place || ''}\n`;
+    msg += `*PO:* ${s.postOffice || ''}, *PIN:* ${s.pin || ''}\n`;
+    msg += `*District:* ${s.district || ''}\n\n`;
+    msg += `*Taluk:* ${s.taluk || ''}\n`;
+    msg += `*Nationality:* ${s.nationality || ''}\n\n`;
 
-        msg += `_⚠️ Please review these details carefully. If there are any spelling mistakes or errors, kindly reply to this message immediately._`;
+    msg += `_⚠️ Please review these details carefully. If there are any spelling mistakes or errors, kindly reply to this message immediately._\n\n`;
+    
+    // --- NEW SCHOOL DETAILS SECTION ---
+    msg += `--------------------------------\n\n`;
+    msg += `*🏫 SCHOOL DETAILS*\n`;
+    msg += `*School Name:* Kattilangadi Yatheemkhana Higher Secondary School (KYHSS ATHAVANAD)\n\n`;
 
-        // 3. Open WhatsApp API
-        window.open(`https://wa.me/${s.whatsappNo}?text=${encodeURIComponent(msg)}`, '_blank');
-    };
+    // Dynamic name used here: ${s.name}
+    msg += `We are delighted to welcome *${s.name}* to the KYHSS family. Thank you for choosing KYHSS ATHAVANAD as the foundation for your child’s learning journey. We look forward to a joyful, meaningful, and enriching educational experience together.\n\n`;
+
+    msg += `*📱 Stay Connected With Us*\n`;
+    msg += `To stay updated on school activities, celebrations, learning moments, and important announcements, we warmly invite you to follow our official social media pages.\n\n`;
+
+    msg += `🔗 *Instagram :*\nhttps://www.instagram.com/kyhsschool?igsh=ZjNxcnNzOWE0bjlt\n\n`;
+    msg += `🔗 *Facebook :*\nhttps://www.facebook.com/share/1F9kVoam2E/?mibextid=qi2Omg\n\n`;
+    msg += `🔗 *Whatsapp Channel :*\nhttps://whatsapp.com/channel/0029VajBHLd2f3ELKyoVoX1d\n\n`;
+
+    msg += `Warm regards,\n*The Management*\nKYHSS ATHAVANAD`;
+
+    // 3. Open WhatsApp API
+    window.open(`https://wa.me/${s.whatsappNo}?text=${encodeURIComponent(msg)}`, '_blank');
+};
 
     window.editStudent = async (id) => {
         const docRef = doc(window.db, 'students', id);
@@ -1390,3 +1406,4 @@ window.generateTopperPoster = async (studentId, examId, rank) => {
     const editorUrl = `robust-editor.html?selectId=${student.id}&template=topper`;
     window.open(editorUrl, '_blank');
 };
+
