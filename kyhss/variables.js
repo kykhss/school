@@ -109,9 +109,10 @@ window.getmarks = async (classId, division, examId) => {
      if(allLocalMarks.length>0){
       allLocalMarks.forEach(mark => { markss[mark.id] = mark; });
      }
-     window.attachMarksListener(teacherAssignedClasses);
+    window.attachMarksListener(teacherAssignedClasses);
      isloadedmarks = true;
      }
+
   if(allLocalMarks.length>0){
     
   allLocalMarks.forEach(mark => { markss[mark.id] = mark; });
@@ -120,7 +121,6 @@ window.getmarks = async (classId, division, examId) => {
   isloadedmarks = true;
   }
   }else{
-    window.attachMarksListener([{classId:classId, division:division}]);
     if(!isloadedmarks){
     window.attachMarksListener([{classId:classId, division:division}]);
     getmarks(classId, division, examId);
