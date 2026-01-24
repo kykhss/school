@@ -327,6 +327,17 @@
             transform: scale(1.1);
             box-shadow: 0 0 4px rgba(59, 130, 246, 0.7);
         }
+
+        /* Add this to your <style> block */
+.cancelled-class-slot {
+    background-color: #f3f4f6; /* Gray background */
+    color: #9ca3af; /* Gray text */
+    cursor: default;
+    border: 1px dashed #d1d5db;
+}
+.cancelled-class-slot strong {
+    color: #059669; /* Green text for "No Class" label */
+}
     </style>
 </head>
 <body class="bg-gray-100">
@@ -381,11 +392,19 @@
                 </div>
 
                 <p class="text-gray-600 mb-4">Tick the teachers who are absent for the selected date:</p>
-                <div id="absent-teacher-checkboxes" class="select-teacher-container">
-                    <p id="loading-teachers-message" class="text-gray-500">Loading teachers...</p>
-                </div>
-                <button id="show-substitution-button" class="mt-6 px-6 py-3 rounded-md w-full md:w-auto" disabled>Show Substitution Plan</button>
-            </div>
+                <p class="text-gray-600 mb-4">Tick the teachers who are absent for the selected date:</p>
+<div id="absent-teacher-checkboxes" class="select-teacher-container mb-6">
+    <p id="loading-teachers-message" class="text-gray-500">Loading teachers...</p>
+</div>
+
+<div class="border-t border-gray-200 pt-4 mt-4">
+    <h3 class="text-lg font-semibold text-gray-700 mb-2">Select Classes with No Class Today</h3>
+    <p class="text-sm text-gray-500 mb-3">Teachers assigned to these classes will be marked as <strong>FREE</strong> and given <strong>PRIORITY</strong> for substitution.</p>
+    <div id="no-class-checkboxes" class="select-teacher-container">
+        </div>
+</div>
+<button id="show-substitution-button" class="mt-6 px-6 py-3 rounded-md w-full md:w-auto" disabled>Show Substitution Plan</button>
+</div>
 
             <div id="substitution-plan-container" class="hidden bg-white shadow-md rounded-lg p-6 mb-6">
                 <h2 class="text-2xl font-semibold text-gray-800 text-center mb-4">Substitution Plan</h2>
@@ -556,6 +575,9 @@
         // Firebase instances
         let db = null;
         let app = null; 
+        // --- ADD THIS TO GLOBAL VARIABLES ---
+let classesWithNoClassToday = new Set();
+
 
       function base64Encode(str) {
                 return btoa(unescape(encodeURIComponent(str)));
@@ -784,14 +806,17 @@
                 }
 
                 allClasses.clear();
-                for (const slotKey in currentTimetable) {
-                    const assignments = currentTimetable[slotKey];
-                    if(Array.isArray(assignments)){
-                        assignments.forEach(assignment => {
-                            if (assignment.class) allClasses.add(assignment.class);
-                        });
-                    }
-                }
+for (const slotKey in currentTimetable) {
+    const assignments = currentTimetable[slotKey];
+    if(Array.isArray(assignments)){
+        assignments.forEach(assignment => {
+            if (assignment.class) allClasses.add(assignment.class);
+        });
+    }
+}
+
+// --- ADD THIS LINE ---
+populateNoClassCheckboxes();
                 
                 const coreDataLoaded = Object.keys(allTeachers).length > 0 && Object.keys(currentTimetable).length > 0;
                 [savePlanButton, refreshButton, populateAllSubstitutionsButton, printSubstitutionScheduleButton, undoButton, redoButton].forEach(btn => btn.disabled = !coreDataLoaded);
@@ -974,101 +999,115 @@
          * Generates and displays the main substitution table.
          * @param {boolean} resetHistory - True if history should be reset (e.g., on date change), false for undo/redo.
          */
-        async function showSubstitutionPlan(resetHistory = true) {
-            if (!db || Object.keys(allTeachers).length === 0) {
-                showMessage(db ? 'Teacher data missing.' : 'App not ready.', 'error');
-                [substitutionPlanContainer, dailyAvailableTeachersContainer].forEach(el => el.classList.add('hidden'));
-                [populateAllSubstitutionsButton, printSubstitutionScheduleButton, refreshButton, savePlanButton, undoButton, redoButton].forEach(btn => btn.disabled = true);
-                return;
-            }
+        /**
+ * Generates and displays the main substitution table.
+ * UPDATED: Handles "No Class Today" logic to clear slots.
+ */
+async function showSubstitutionPlan(resetHistory = true) {
+    if (!db || Object.keys(allTeachers).length === 0) {
+        showMessage(db ? 'Teacher data missing.' : 'App not ready.', 'error');
+        return;
+    }
 
-            if (resetHistory) {
-                await loadSubstitutionsForCurrentDate(); 
-                substitutionHistory = [];
-                historyIndex = -1;
-                recordSubstitutionState(); // Record the initial loaded state
-            }
+    if (resetHistory) {
+        await loadSubstitutionsForCurrentDate(); 
+        substitutionHistory = [];
+        historyIndex = -1;
+        recordSubstitutionState(); 
+    }
 
-            const selectedTeacherIds = Array.from(absentTeacherCheckboxesDiv.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
-            const selectedDay = daySelect.value;
-            const selectedDate = dateInput.value;
+    const selectedTeacherIds = Array.from(absentTeacherCheckboxesDiv.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+    const selectedDay = daySelect.value;
+    const selectedDate = dateInput.value;
 
-            if (selectedTeacherIds.length === 0) {
-                showMessage('Select at least one absent teacher.', 'info');
-                [substitutionPlanContainer, dailyAvailableTeachersContainer].forEach(el => el.classList.add('hidden'));
-                [populateAllSubstitutionsButton, printSubstitutionScheduleButton, refreshButton, savePlanButton, undoButton, redoButton].forEach(btn => btn.disabled = true);
-                return;
-            }
+    // Validate selection
+    if (selectedTeacherIds.length === 0) {
+        showMessage('Select at least one absent teacher.', 'info');
+        [substitutionPlanContainer, dailyAvailableTeachersContainer].forEach(el => el.classList.add('hidden'));
+        return;
+    }
+    
+    selectedAbsentTeachersSummary.textContent = `Plan for: ${selectedTeacherIds.map(id => allTeachers[id]?.teacherName || `ID: ${id}`).join(', ')} on ${FULL_DAYS[DAYS.indexOf(selectedDay)]} (${selectedDate})`;
+
+    // Reset Table Headers and Body
+    const thead = substitutionTable.querySelector('thead tr');
+    const tbody = substitutionTable.querySelector('tbody');
+    thead.innerHTML = '<th>Teacher Name</th>'; 
+    tbody.innerHTML = ''; 
+
+    for (let p = 1; p <= NUM_PERIODS_PER_DAY; p++) thead.appendChild(Object.assign(document.createElement('th'), {textContent: `P${p}`}));
+
+    // --- ROW GENERATION LOOP ---
+    selectedTeacherIds.forEach(teacherId => {
+        const teacher = allTeachers[teacherId];
+        if (!teacher) return;
+
+        const row = tbody.insertRow(); 
+        row.insertCell().textContent = teacher.teacherName; 
+
+        for (let period = 1; period <= NUM_PERIODS_PER_DAY; period++) {
+            const slotKey = `${selectedDay}${period}`;
+            const cell = row.insertCell();
+            Object.assign(cell.dataset, { teacherId, slotKey, day: selectedDay, period });
+            cell.classList.add('substitution-slot'); 
+
+            const assignmentsInThisPeriod = currentTimetable[slotKey] || [];
+            const teacherAssignedHere = assignmentsInThisPeriod.find(a => a.teacher_id === teacherId);
             
-            selectedAbsentTeachersSummary.textContent = `Plan for: ${selectedTeacherIds.map(id => allTeachers[id]?.teacherName || `ID: ${id}`).join(', ')} on ${FULL_DAYS[DAYS.indexOf(selectedDay)]} (${selectedDate})`;
+            const originalClassDiv = Object.assign(document.createElement('div'), { className: 'slot-content' });
+            const substituteInfoDiv = Object.assign(document.createElement('div'), { className: 'substitution-info' });
 
-            const thead = substitutionTable.querySelector('thead tr');
-            const tbody = substitutionTable.querySelector('tbody');
-            thead.innerHTML = '<th>Teacher Name</th>'; // Reset header
-            tbody.innerHTML = ''; 
+            if (teacherAssignedHere) {
+                // --- NEW LOGIC STARTS HERE ---
+                // Check if the class assigned to this slot is marked as "No Class Today"
+                if (classesWithNoClassToday.has(teacherAssignedHere.class)) {
+                    // CLEAR THE SLOT: No substitution needed
+                    originalClassDiv.innerHTML = `<span style="text-decoration: line-through;">${teacherAssignedHere.subject}</span><br><strong>NO CLASS</strong>`;
+                    cell.classList.add('cancelled-class-slot');
+                    cell.dataset.isOccupied = 'false'; // Vital: prevents click handler from asking for sub
+                    // Clear any existing sub data visually
+                    substituteInfoDiv.textContent = ''; 
+                } 
+                // --- NEW LOGIC ENDS HERE ---
+                else {
+                    // Standard Logic: Slot needs a substitute
+                    originalClassDiv.innerHTML = `${teacherAssignedHere.subject || 'N/A'}<br>(${teacherAssignedHere.class || 'N/A'})`;
+                    cell.dataset.isOccupied = 'true'; 
+                    cell.dataset.originalClass = teacherAssignedHere.class || ''; 
 
-            for (let p = 1; p <= NUM_PERIODS_PER_DAY; p++) thead.appendChild(Object.assign(document.createElement('th'), {textContent: `P${p}`})); // Changed to P1, P2 etc.
-
-            selectedTeacherIds.forEach(teacherId => {
-                const teacher = allTeachers[teacherId];
-                if (!teacher) { console.warn(`Teacher ID ${teacherId} not found. Skipping.`); return; }
-
-                const row = tbody.insertRow(); 
-                row.insertCell().textContent = teacher.teacherName; 
-
-                for (let period = 1; period <= NUM_PERIODS_PER_DAY; period++) {
-                    const slotKey = `${selectedDay}${period}`;
-                    const cell = row.insertCell();
-                    Object.assign(cell.dataset, { teacherId, slotKey, day: selectedDay, period });
-                    cell.classList.add('substitution-slot'); 
-
-                    const assignmentsInThisPeriod = currentTimetable[slotKey] || [];
-                    const teacherAssignedHere = assignmentsInThisPeriod.find(a => a.teacher_id === teacherId);
-                    
-                    const originalClassDiv = Object.assign(document.createElement('div'), { className: 'slot-content' });
-                    const substituteInfoDiv = Object.assign(document.createElement('div'), { className: 'substitution-info' });
-
-                    if (teacherAssignedHere) {
-                        originalClassDiv.innerHTML = `${teacherAssignedHere.subject || 'N/A'}<br>(${teacherAssignedHere.class || 'N/A'})`;
-                        cell.dataset.isOccupied = 'true'; 
-                        // Store the original class for finding substitutes later
-                        cell.dataset.originalClass = teacherAssignedHere.class || ''; 
-
-                        const assignmentKey = `${teacherId}_${slotKey}`;
-                        if (substitutionAssignments[assignmentKey]) {
-                            const subTeacherName = allTeachers[substitutionAssignments[assignmentKey]]?.teacherName || 'Unknown';
-                            substituteInfoDiv.innerHTML = `Substitute: <strong>${subTeacherName}</strong>`;
-                            cell.classList.add('substituted-slot'); 
-                        } else {
-                            substituteInfoDiv.textContent = 'Substitute: N/A'; 
-                            cell.classList.add('occupied-slot'); 
-                        }
-                    } else if (teacher.unavailable_slots?.has(slotKey)) {
-                        originalClassDiv.textContent = 'Unavailable';
-                        cell.classList.add('unavailable-slot');
-                        cell.dataset.isOccupied = 'false';
+                    const assignmentKey = `${teacherId}_${slotKey}`;
+                    if (substitutionAssignments[assignmentKey]) {
+                        const subTeacherName = allTeachers[substitutionAssignments[assignmentKey]]?.teacherName || 'Unknown';
+                        substituteInfoDiv.innerHTML = `Substitute: <strong>${subTeacherName}</strong>`;
+                        cell.classList.add('substituted-slot'); 
                     } else {
-                        originalClassDiv.textContent = 'FREE';
-                        cell.classList.add('free-slot');
-                        cell.dataset.isOccupied = 'false';
+                        substituteInfoDiv.textContent = 'Substitute: N/A'; 
+                        cell.classList.add('occupied-slot'); 
                     }
-                    cell.append(originalClassDiv, substituteInfoDiv);
-                    // Add both click and double-click listeners
-                    cell.addEventListener('click', handleSubstitutionCellClick);
-                    cell.addEventListener('dblclick', handleSubstitutionCellDoubleClick);
                 }
-            });
-
-            [substitutionPlanContainer, dailyAvailableTeachersContainer].forEach(el => el.classList.remove('hidden'));
-            [populateAllSubstitutionsButton, printSubstitutionScheduleButton, refreshButton, savePlanButton, undoButton, redoButton].forEach(btn => btn.disabled = false);
-            showMessage('Substitution plan displayed.', 'success');
-            
-            substituteList.innerHTML = ''; 
-            noSubstituteMessage.classList.remove('hidden');
-            noSubstituteMessage.textContent = "Click an 'Occupied' slot in the table above to see available substitutes."; // Reset message
-            substituteList.appendChild(noSubstituteMessage);
-            updateDailyAvailableTeachersTable();
+            } else if (teacher.unavailable_slots?.has(slotKey)) {
+                originalClassDiv.textContent = 'Unavailable';
+                cell.classList.add('unavailable-slot');
+                cell.dataset.isOccupied = 'false';
+            } else {
+                originalClassDiv.textContent = 'FREE';
+                cell.classList.add('free-slot');
+                cell.dataset.isOccupied = 'false';
+            }
+            cell.append(originalClassDiv, substituteInfoDiv);
+            cell.addEventListener('click', handleSubstitutionCellClick);
+            cell.addEventListener('dblclick', handleSubstitutionCellDoubleClick);
         }
+    });
+
+    [substitutionPlanContainer, dailyAvailableTeachersContainer].forEach(el => el.classList.remove('hidden'));
+    [populateAllSubstitutionsButton, printSubstitutionScheduleButton, refreshButton, savePlanButton, undoButton, redoButton].forEach(btn => btn.disabled = false);
+    showMessage('Substitution plan displayed.', 'success');
+    
+    substituteList.innerHTML = ''; 
+    noSubstituteMessage.classList.remove('hidden');
+    updateDailyAvailableTeachersTable();
+}
         window.showSubstitutionPlan = showSubstitutionPlan; 
 
 
@@ -1128,6 +1167,38 @@
 
             return { periodsToday, continuityScore };
         }
+        
+// --- ADD THIS NEW FUNCTION ---
+/**
+ * Populates checkboxes for classes.
+ */
+function populateNoClassCheckboxes() {
+    const container = document.getElementById('no-class-checkboxes');
+    container.innerHTML = '';
+    const sortedClasses = Array.from(allClasses).sort();
+
+    sortedClasses.forEach(className => {
+        const div = document.createElement('div');
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.id = `noclass-${className}`;
+        input.value = className;
+        input.className = 'form-checkbox h-4 w-4 text-red-600 transition duration-150 ease-in-out';
+
+        input.addEventListener('change', (e) => {
+            if (e.target.checked) classesWithNoClassToday.add(e.target.value);
+            else classesWithNoClassToday.delete(e.target.value);
+        });
+
+        const label = document.createElement('label');
+        label.htmlFor = `noclass-${className}`;
+        label.className = 'ml-2 text-gray-700';
+        label.textContent = className;
+
+        div.append(input, label);
+        container.appendChild(div);
+    });
+}
         /**
          * Handles single clicks on cells in the main substitution table to auto-assign or show substitutes.
          */
@@ -1284,47 +1355,59 @@
          * @returns {string} HTML string for the daily schedule indicator.
          */
         function getTeacherDailyAvailabilityHtml(teacherId, day, currentSlotKeyToAssign) {
-            const teacher = allTeachers[teacherId];
-            // console.log(teacher);
-            // console.log(day);
-            if (!teacher) return '';
+    const teacher = allTeachers[teacherId];
+    if (!teacher) return '';
 
-            let html = '<div class="daily-schedule-indicator">';
-            
-            for (let p = 1; p <= NUM_PERIODS_PER_DAY; p++) {
-                const slotKey = `${day}${p}`;
-                let dotClass = 'dot-free'; // Default to free (green)
-                let dotTitle = `P${p}: FREE`;
+    let html = '<div class="daily-schedule-indicator">';
+    
+    for (let p = 1; p <= NUM_PERIODS_PER_DAY; p++) {
+        const slotKey = `${day}${p}`;
+        let dotClass = 'dot-free'; 
+        let dotTitle = `P${p}: FREE`;
 
-                // Check all reasons a teacher might be busy
-                const hasOwnClass = (currentTimetable[slotKey] || []).some(a => a.teacher_id === teacherId);
-                const isUnavailable = teacher.unavailable_slots?.has(slotKey);
-                
-                // Check if they are already subbing in another slot
-                let isAlreadySubbing = false;
-                for (const key in substitutionAssignments) {
-                    if (key.endsWith(`_${slotKey}`) && substitutionAssignments[key] === teacherId) {
-                        isAlreadySubbing = true;
-                        break;
-                    }
-                }
-
-                if (slotKey === currentSlotKeyToAssign) {
-                    dotClass = 'dot-current'; // This is the slot in question (blue)
-                    dotTitle = `P${p}: This Assignment`;
-                } else if (hasOwnClass || isUnavailable || isAlreadySubbing) {
-                    dotClass = 'dot-busy'; // Busy (red)
-                    if (hasOwnClass) dotTitle = `P${p}: Own Class`;
-                    else if (isUnavailable) dotTitle = `P${p}: Unavailable`;
-                    else if (isAlreadySubbing) dotTitle = `P${p}: Already Subbing`;
-                }
-                
-                html += `<span class="period-dot ${dotClass}" title="${dotTitle}"></span>`;
+        // Check regular assignment
+        const regularAssignment = (currentTimetable[slotKey] || []).find(a => a.teacher_id === teacherId);
+        
+        // Check unavailability
+        const isUnavailable = teacher.unavailable_slots?.has(slotKey);
+        
+        // Check subs
+        let isAlreadySubbing = false;
+        for (const key in substitutionAssignments) {
+            if (key.endsWith(`_${slotKey}`) && substitutionAssignments[key] === teacherId) {
+                isAlreadySubbing = true;
+                break;
             }
-            
-            html += '</div>';
-            return html;
         }
+
+        if (slotKey === currentSlotKeyToAssign) {
+            dotClass = 'dot-current'; 
+            dotTitle = `P${p}: This Assignment`;
+        } else if (isAlreadySubbing) {
+            dotClass = 'dot-busy';
+            dotTitle = `P${p}: Already Subbing`;
+        } else if (isUnavailable) {
+            dotClass = 'dot-busy';
+            dotTitle = `P${p}: Unavailable`;
+        } else if (regularAssignment) {
+            // --- NEW CHECK ---
+            if (classesWithNoClassToday.has(regularAssignment.class)) {
+                // Class is cancelled
+                dotClass = 'dot-free'; // Make it green
+                dotTitle = `P${p}: FREE (Class ${regularAssignment.class} cancelled)`;
+                // Optional: You could create a 'dot-freed' class in CSS to make it a distinct color (e.g., Purple)
+            } else {
+                dotClass = 'dot-busy';
+                dotTitle = `P${p}: Own Class`;
+            }
+        }
+        
+        html += `<span class="period-dot ${dotClass}" title="${dotTitle}"></span>`;
+    }
+    
+    html += '</div>';
+    return html;
+}
         /**
          * Handles double clicks on cells in the main substitution table to cancel a substitution.
          */
@@ -1431,7 +1514,97 @@
             // Combine preferred substitutes first, then general substitutes
             return [...preferredSubstitutes, ...generalSubstitutes];
         }
-        function findPossibleSubstitutes(slotKey, absentTeacherIdToExclude, originalClassForSlot) {
+
+function findPossibleSubstitutes(slotKey, absentTeacherIdToExclude, originalClassForSlot) {
+    const potentialSubstitutes = [];
+    const assignmentsInThisPeriod = currentTimetable[slotKey] || [];
+    const allSelectedAbsentTeacherIdsToday = Array.from(absentTeacherCheckboxesDiv.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+    
+    // Get teachers already subbing
+    const teachersAlreadySubbingThisSlot = Object.keys(substitutionAssignments)
+        .filter(key => key.endsWith(`_${slotKey}`))
+        .map(key => substitutionAssignments[key]);
+    
+    const day = slotKey.substring(0, 2);
+
+    for (const teacherId in allTeachers) {
+        const teacher = allTeachers[teacherId];
+        if (!teacher || !teacher.teacher_id) continue;
+
+        // 1. Check basic unavailability
+        if (allSelectedAbsentTeacherIdsToday.includes(teacher.teacher_id) || 
+            (teacher.unavailable_slots?.has(slotKey))) {
+            continue;
+        }
+
+        // 2. Check if they are already acting as a substitute (unless it's for this specific slot/teacher)
+        const isAssignedAsSub = teachersAlreadySubbingThisSlot.includes(teacher.teacher_id);
+        const isCurrentSubForThisSlot = teacher.teacher_id === substitutionAssignments[`${absentTeacherIdToExclude}_${slotKey}`];
+        
+        if (isAssignedAsSub && !isCurrentSubForThisSlot) {
+            continue;
+        }
+
+        // 3. Check regular timetable assignment logic (The key change is here)
+        const regularAssignment = assignmentsInThisPeriod.find(a => a.teacher_id === teacher.teacher_id);
+        let isFreedByNoClass = false;
+
+        if (regularAssignment) {
+            if (classesWithNoClassToday.has(regularAssignment.class)) {
+                // Their class is cancelled today. They are FREE and PRIORITY.
+                isFreedByNoClass = true;
+            } else {
+                // They have a regular class that is happening. They are busy.
+                continue;
+            }
+        }
+
+        // Create a shallow copy of the teacher object to attach the priority flag
+        // This prevents mutating the global allTeachers object
+        potentialSubstitutes.push({
+            ...teacher,
+            isFreedByNoClass: isFreedByNoClass
+        });
+    }
+
+    // --- Sorting Logic ---
+    const sortByPreference = (a, b) => {
+        // 1. HIGHEST PRIORITY: Teachers freed because their class has no class today
+        if (a.isFreedByNoClass !== b.isFreedByNoClass) {
+            return a.isFreedByNoClass ? -1 : 1; // True comes first
+        }
+
+        // 2. Preferred subject/class match (Original logic)
+        const aTeachesClass = originalClassForSlot && a.classes_taught && a.classes_taught.has(originalClassForSlot);
+        const bTeachesClass = originalClassForSlot && b.classes_taught && b.classes_taught.has(originalClassForSlot);
+        if (aTeachesClass !== bTeachesClass) {
+            return aTeachesClass ? -1 : 1;
+        }
+
+        // 3. Busyness / Continuity (Original logic)
+        const busynessA = getTeacherBusyness(a.teacher_id, day, slotKey);
+        const busynessB = getTeacherBusyness(b.teacher_id, day, slotKey);
+
+        if (busynessA.continuityScore !== busynessB.continuityScore) {
+            return busynessA.continuityScore - busynessB.continuityScore;
+        }
+        if (busynessA.periodsToday !== busynessB.periodsToday) {
+            return busynessA.periodsToday - busynessB.periodsToday;
+        }
+
+        // 4. Substitution Count
+        const countA = teacherSubstitutionCountsData[a.teacher_id]?.substitutionCount || 0;
+        const countB = teacherSubstitutionCountsData[b.teacher_id]?.substitutionCount || 0;
+        if (countA !== countB) {
+            return countA - countB;
+        }
+        
+        return (a.teacherName || '').localeCompare(b.teacherName || '');
+    };
+
+    return potentialSubstitutes.sort(sortByPreference);
+}
+        function findPossibleSubstitutes2(slotKey, absentTeacherIdToExclude, originalClassForSlot) {
             const potentialSubstitutes = [];
             const assignmentsInThisPeriod = currentTimetable[slotKey] || [];
             const allSelectedAbsentTeacherIdsToday = Array.from(absentTeacherCheckboxesDiv.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
@@ -1507,35 +1680,47 @@
         /**
          * Automatically populates all empty substitution slots.
          */
-        function populateAllSubstitutions() {
-            if (!substitutionPlanContainer.classList.contains('hidden')) {
-                let assignmentsMade = 0;
-                const cellsToUpdate = substitutionTable.querySelectorAll('tbody tr td.occupied-slot'); 
+        /**
+ * Automatically populates all empty substitution slots.
+ * UPDATED: Skips slots if the class is marked as "No Class Today".
+ */
+function populateAllSubstitutions() {
+    if (!substitutionPlanContainer.classList.contains('hidden')) {
+        let assignmentsMade = 0;
+        // Select all slots that look like they need a substitute
+        const cellsToUpdate = substitutionTable.querySelectorAll('tbody tr td.occupied-slot'); 
 
-                cellsToUpdate.forEach(cell => {
-                    const absentTeacherId = cell.dataset.teacherId;
-                    const slotKey = cell.dataset.slotKey;
-                    const originalClass = cell.dataset.originalClass || ''; // Get the original class for auto-population
+        cellsToUpdate.forEach(cell => {
+            const absentTeacherId = cell.dataset.teacherId;
+            const slotKey = cell.dataset.slotKey;
+            const originalClass = cell.dataset.originalClass || ''; 
 
-                    const possibleSubstitutes = findPossibleSubstitutes(slotKey, absentTeacherId, originalClass);
-                    if (possibleSubstitutes.length > 0) {
-                        const bestSubstitute = possibleSubstitutes[0];
-                        assignSubstitute(absentTeacherId, slotKey, bestSubstitute.teacher_id, cell);
-                        assignmentsMade++;
-                    }
-                });
-
-                if (assignmentsMade > 0) {
-                    showMessage(`${assignmentsMade} substitution(s) automatically populated.`, 'success');
-                    updateDailyAvailableTeachersTable(); 
-                    recordSubstitutionState(); // Record state after auto-population
-                } else {
-                    showMessage('No available slots to auto-populate or no suitable substitutes found for remaining slots.', 'info');
-                }
-            } else {
-                showMessage('Please generate a substitution plan first.', 'info');
+            // --- NEW CHECK ---
+            // If this class is in the "No Class Today" list, DO NOT assign a substitute.
+            if (classesWithNoClassToday.has(originalClass)) {
+                return; // Skip to the next cell
             }
+            // --- END NEW CHECK ---
+
+            const possibleSubstitutes = findPossibleSubstitutes(slotKey, absentTeacherId, originalClass);
+            if (possibleSubstitutes.length > 0) {
+                const bestSubstitute = possibleSubstitutes[0];
+                assignSubstitute(absentTeacherId, slotKey, bestSubstitute.teacher_id, cell);
+                assignmentsMade++;
+            }
+        });
+
+        if (assignmentsMade > 0) {
+            showMessage(`${assignmentsMade} substitution(s) automatically populated.`, 'success');
+            updateDailyAvailableTeachersTable(); 
+            recordSubstitutionState(); 
+        } else {
+            showMessage('No available slots to auto-populate (or remaining slots belong to cancelled classes).', 'info');
         }
+    } else {
+        showMessage('Please generate a substitution plan first.', 'info');
+    }
+}
 
 
         /**
@@ -1768,53 +1953,72 @@
         /**
          * Updates the "Daily Available Teachers" table.
          */
-        function updateDailyAvailableTeachersTable() {
-            const selectedDay = daySelect.value;
-            const tbody = dailyAvailableTeachersTable.querySelector('tbody');
-            tbody.innerHTML = ''; 
+        /**
+ * Updates the "Daily Available Teachers" table.
+ * UPDATED: Shows teachers as FREE if their assigned class is cancelled today.
+ */
+function updateDailyAvailableTeachersTable() {
+    const selectedDay = daySelect.value;
+    const tbody = dailyAvailableTeachersTable.querySelector('tbody');
+    tbody.innerHTML = ''; 
 
-            const theadRow = dailyAvailableTeachersTable.querySelector('thead tr');
-            theadRow.innerHTML = '<th>Teacher Name</th>'; 
-            for (let p = 1; p <= NUM_PERIODS_PER_DAY; p++) theadRow.appendChild(Object.assign(document.createElement('th'),{textContent: `P${p}`})); // Changed to P1, P2 etc.
+    const theadRow = dailyAvailableTeachersTable.querySelector('thead tr');
+    theadRow.innerHTML = '<th>Teacher Name</th>'; 
+    for (let p = 1; p <= NUM_PERIODS_PER_DAY; p++) theadRow.appendChild(Object.assign(document.createElement('th'),{textContent: `P${p}`})); 
 
-            const sortedTeachers = Object.values(allTeachers).sort((a, b) => (a.teacherName || '').localeCompare(b.teacherName || ''));
-            const selectedAbsentTeacherIds = Array.from(absentTeacherCheckboxesDiv.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+    const sortedTeachers = Object.values(allTeachers).sort((a, b) => (a.teacherName || '').localeCompare(b.teacherName || ''));
+    const selectedAbsentTeacherIds = Array.from(absentTeacherCheckboxesDiv.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
 
-            sortedTeachers.forEach(teacher => {
-                if (!teacher || !teacher.teacher_id || selectedAbsentTeacherIds.includes(teacher.teacher_id)) return; 
+    sortedTeachers.forEach(teacher => {
+        if (!teacher || !teacher.teacher_id || selectedAbsentTeacherIds.includes(teacher.teacher_id)) return; 
 
-                const row = tbody.insertRow(); 
-                row.insertCell().textContent = teacher.teacherName || `ID: ${teacher.teacher_id}`; 
+        const row = tbody.insertRow(); 
+        row.insertCell().textContent = teacher.teacherName || `ID: ${teacher.teacher_id}`; 
 
-                for (let period = 1; period <= NUM_PERIODS_PER_DAY; period++) {
-                    const slotKey = `${selectedDay}${period}`;
-                    const cell = row.insertCell();
-                    cell.dataset.teacherId = teacher.teacher_id; cell.dataset.slotKey = slotKey;
+        for (let period = 1; period <= NUM_PERIODS_PER_DAY; period++) {
+            const slotKey = `${selectedDay}${period}`;
+            const cell = row.insertCell();
+            cell.dataset.teacherId = teacher.teacher_id; cell.dataset.slotKey = slotKey;
 
-                    const assignmentsInThisPeriod = currentTimetable[slotKey] || [];
-                    const teacherHasOwnClassHere = assignmentsInThisPeriod.find(a => a.teacher_id === teacher.teacher_id); 
-                    let subForWhom = null;
-                    for(const key in substitutionAssignments) if(substitutionAssignments[key] === teacher.teacher_id && key.endsWith(`_${slotKey}`)) subForWhom = key.split('_')[0];
-                    
-                    if (teacher.unavailable_slots?.has(slotKey)) {
-                        cell.textContent = 'Unavailable'; cell.classList.add('unavailable-slot');
-                    } else if (teacherHasOwnClassHere) {
-                        cell.innerHTML = `<div class="slot-content">${teacherHasOwnClassHere.subject || 'N/A'}<br>(${teacherHasOwnClassHere.class || 'N/A'})</div>`;
-                        cell.classList.add('occupied-slot'); 
-                    } else if (subForWhom) { 
-                        const absentName = allTeachers[subForWhom]?.teacherName || 'Absent';
-                        const origAsgn = (currentTimetable[slotKey] || []).find(a => a.teacher_id === subForWhom);
-                        let details = `SUB for ${absentName}`;
-                        if(origAsgn) details += `<br>(${origAsgn.subject || 'N/A'} - ${origAsgn.class || 'N/A'})`;
-                        cell.innerHTML = `<div class="slot-content">${details}</div>`;
-                        cell.classList.add('substituted-slot'); 
-                    } else {
-                        cell.textContent = 'FREE'; cell.classList.add('free-slot');
-                    }
-                    cell.style.cursor = 'default'; 
+            const assignmentsInThisPeriod = currentTimetable[slotKey] || [];
+            const teacherHasOwnClassHere = assignmentsInThisPeriod.find(a => a.teacher_id === teacher.teacher_id); 
+            
+            let subForWhom = null;
+            for(const key in substitutionAssignments) if(substitutionAssignments[key] === teacher.teacher_id && key.endsWith(`_${slotKey}`)) subForWhom = key.split('_')[0];
+            
+            if (teacher.unavailable_slots?.has(slotKey)) {
+                cell.textContent = 'Unavailable'; 
+                cell.classList.add('unavailable-slot');
+            } else if (teacherHasOwnClassHere) {
+                // --- NEW CHECK FOR CANCELLED CLASS ---
+                if (classesWithNoClassToday.has(teacherHasOwnClassHere.class)) {
+                    // Class is cancelled -> Teacher is FREE
+                    cell.innerHTML = `<div class="slot-content">
+                        <span style="text-decoration: line-through; color: #6b7280; font-size: 0.7em;">${teacherHasOwnClassHere.class}</span><br>
+                        <span style="color: #047857; font-weight: bold;">FREE</span>
+                    </div>`;
+                    cell.classList.add('free-slot'); // Mark as free visually green
+                } else {
+                    // Regular Class
+                    cell.innerHTML = `<div class="slot-content">${teacherHasOwnClassHere.subject || 'N/A'}<br>(${teacherHasOwnClassHere.class || 'N/A'})</div>`;
+                    cell.classList.add('occupied-slot'); 
                 }
-            });
+                // --- END NEW CHECK ---
+            } else if (subForWhom) { 
+                const absentName = allTeachers[subForWhom]?.teacherName || 'Absent';
+                const origAsgn = (currentTimetable[slotKey] || []).find(a => a.teacher_id === subForWhom);
+                let details = `SUB for ${absentName}`;
+                if(origAsgn) details += `<br>(${origAsgn.subject || 'N/A'} - ${origAsgn.class || 'N/A'})`;
+                cell.innerHTML = `<div class="slot-content">${details}</div>`;
+                cell.classList.add('substituted-slot'); 
+            } else {
+                cell.textContent = 'FREE'; 
+                cell.classList.add('free-slot');
+            }
+            cell.style.cursor = 'default'; 
         }
+    });
+}
 
         // --- Tab Switching Logic ---
         function switchTab(tabId) {
