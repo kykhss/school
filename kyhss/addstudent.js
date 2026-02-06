@@ -523,12 +523,7 @@ window.renderAddStudentForm = async () => {
     try {
         // 2. Query Database
         // Note: Ensure window.getCollectionRef is defined, or use collection(db, 'students')
-        //const q = query(window.getCollectionRef('students'), where('whatsappNo', '==', whatsappNo));
-        const q = query(
-  window.getCollectionRef('students'),
-  where('whatsappNo', '==', whatsappNo),
-  where('id', '!=', admnId.value||'iqu')
-);
+        const q = query(window.getCollectionRef('students'), where('whatsappNo', '==', whatsappNo));
 
         const snapshot = await getDocs(q);
 
@@ -547,7 +542,7 @@ window.renderAddStudentForm = async () => {
 
         snapshot.docs.forEach((doc, index) => {
             const data = doc.data();
-            
+            if (data.id === admnId.value) return;
             // Store the first valid record we find to use for autofill later
             if (index === 0) {
                 firstSiblingData = data;
@@ -1412,6 +1407,7 @@ window.generateTopperPoster = async (studentId, examId, rank) => {
     const editorUrl = `robust-editor.html?selectId=${student.id}&template=topper`;
     window.open(editorUrl, '_blank');
 };
+
 
 
 
