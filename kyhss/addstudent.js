@@ -527,7 +527,7 @@ window.renderAddStudentForm = async () => {
         const q = query(
   window.getCollectionRef('students'),
   where('whatsappNo', '==', whatsappNo),
-  where('id', '!=', admissionId)
+  where('id', '!=', admnId)
 );
 
         const snapshot = await getDocs(q);
@@ -1412,5 +1412,6 @@ window.generateTopperPoster = async (studentId, examId, rank) => {
     const editorUrl = `robust-editor.html?selectId=${student.id}&template=topper`;
     window.open(editorUrl, '_blank');
 };
+
 
 
