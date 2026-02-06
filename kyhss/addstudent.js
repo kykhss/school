@@ -523,7 +523,13 @@ window.renderAddStudentForm = async () => {
     try {
         // 2. Query Database
         // Note: Ensure window.getCollectionRef is defined, or use collection(db, 'students')
-        const q = query(window.getCollectionRef('students'), where('whatsappNo', '==', whatsappNo));
+        //const q = query(window.getCollectionRef('students'), where('whatsappNo', '==', whatsappNo));
+        const q = query(
+  window.getCollectionRef('students'),
+  where('whatsappNo', '==', whatsappNo),
+  where('id', '!=', admissionId)
+);
+
         const snapshot = await getDocs(q);
 
         // 3. Handle No Matches
@@ -1406,4 +1412,5 @@ window.generateTopperPoster = async (studentId, examId, rank) => {
     const editorUrl = `robust-editor.html?selectId=${student.id}&template=topper`;
     window.open(editorUrl, '_blank');
 };
+
 
