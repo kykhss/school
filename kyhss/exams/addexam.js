@@ -1,3 +1,4 @@
+import {setDoc, updateDoc, serverTimestamp} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
  /**
  * Renders the "Add Exam" tab, now including an 'isActive' field on creation.
@@ -72,11 +73,11 @@ window.renderExamAddTab = async function() {
         if(examName && sector) {
             // --- NEW: Handle both Edit and Add ---
             const examId = isEditMode ? 
-                examToEdit.id : // Use existing ID if editing
-                `${activeFinancialYear.replace('-', '')}_${examName.replace(/\s+/g, '_').toUpperCase()}`; // Create new ID if adding
+                window.examToEdit.id : // Use existing ID if editing
+                `${window.activeFinancialYear.replace('-', '')}_${examName.replace(/\s+/g, '_').toUpperCase()}`; // Create new ID if adding
 
             const examData = {
-                ...examToEdit, // Spread existing data (like posterSettings)
+                ...window.examToEdit, // Spread existing data (like posterSettings)
                 id: examId,
                 name: examName,
                 sector: sector,
@@ -85,7 +86,7 @@ window.renderExamAddTab = async function() {
                 lastUpdated: serverTimestamp()
             };
 
-            await setDoc(getDocRef('exams', examId), examData, { merge: true });
+            await setDoc(window.getDocRef('exams', examId), examData, { merge: true });
             showAlert(`Exam '${examName}' ${isEditMode ? 'updated' : 'added'}.`, 'success');
             
             clearExamEdit(); // This will reset the form
@@ -113,9 +114,9 @@ function renderExamsList() {
                 <div class="d-flex align-items-center">
                     <div class="form-check form-switch me-3">
                         <input class="form-check-input" type="checkbox" role="switch" 
-                               id="exam-toggle-${e.id}" ${e.isActive ? 'checked' : ''} 
+                               id="exam-toggleS-${e.id}" ${e.isActive ? 'checked' : ''} 
                                onchange="window.toggleExamStatus('${e.id}', this.checked)">
-                        <label class="form-check-label" for="exam-toggle-${e.id}">${e.isActive ? 'Active' : 'Inactive'}</label>
+                        <label class="form-check-label" for="exam-toggleS-${e.id}">${e.isActive ? 'Active' : 'Inactive'}</label>
                     </div>
                     <div class="form-check form-switch me-3">
                         <input class="form-check-input" type="checkbox" role="switch" 
@@ -139,7 +140,7 @@ function renderExamsList() {
  */
 window.toggleExamStatusPublish = async function(examId, newStatus) {
     try {
-        const examRef = getDocRef('exams', examId);
+        const examRef = window.getDocRef('exams', examId);
         await updateDoc(examRef, { isPublished: newStatus });
         showAlert(`Exam status updated to ${newStatus ? 'Active' : 'Inactive'}.`, 'success');
         // The real-time listener will automatically call renderExamsList() to refresh the UI.
@@ -150,7 +151,7 @@ window.toggleExamStatusPublish = async function(examId, newStatus) {
 };
 window.toggleExamStatus = async function(examId, newStatus) {
     try {
-        const examRef = getDocRef('exams', examId);
+        const examRef = window.getDocRef('exams', examId);
         await updateDoc(examRef, { isActive: newStatus });
         showAlert(`Exam status updated to ${newStatus ? 'Active' : 'Inactive'}.`, 'success');
         // The real-time listener will automatically call renderExamsList() to refresh the UI.
@@ -160,4 +161,148 @@ window.toggleExamStatus = async function(examId, newStatus) {
     }
 };
         
-      
+
+/**
+ * Sets the form to edit a specific exam.
+ * @param {string} examId - The ID of the exam to edit.
+ */
+window.editExamDetails = (examId) => {
+    window.examToEdit = window.exams.find(e => e.id === examId);
+    if (!window.examToEdit) {
+        return showAlert('Could not find that exam to edit.', 'danger');
+    }
+
+    // This logic handles finding the correct "Add Exam" form to update,
+    // whether it's in the "Exam Selection" screen or the "Exam Control" tab.
+    
+    let container = document.getElementById('add-exam-container');
+    let formId = 'add-exam';
+
+    if (container) {
+        // We are on the Exam Selection screen
+        container.innerHTML = `<div id="${formId}"></div>`;
+        renderExamAddTab();
+        
+        // This is your clever hack to hide the redundant list; we must re-apply it.
+        const examListInCard = container.querySelector('#exams-list');
+        if (examListInCard) {
+            examListInCard.parentElement.style.display = 'none';
+        }
+        // Scroll to the form for editing
+        container.scrollIntoView({ behavior: 'smooth' });
+
+    } else if (document.getElementById('add-exam')) {
+        // We are on the "Exam Control" screen's "Add Exam" tab
+        renderExamAddTab();
+    }
+};
+
+/**
+ * Clears the exam edit state and resets the form.
+ */
+
+window.clearExamEdit = () => {
+    window.examToEdit = null;
+    
+    // Re-render the form container wherever it might be
+    let container = document.getElementById('add-exam-container');
+    if (container) {
+        container.innerHTML = '<div id="add-exam"></div>';
+        renderExamAddTab();
+        const examListInCard = container.querySelector('#exams-list');
+        if (examListInCard) {
+            examListInCard.parentElement.style.display = 'none';
+        }
+    } else if (document.getElementById('add-exam')) {
+        renderExamAddTab();
+    }
+};
+/**
+ * Sets the form to edit a specific exam.
+ * @param {string} examId - The ID of the exam to edit.
+ */
+window.editExamDetails = (examId) => {
+    window.examToEdit = window.exams.find(e => e.id === examId);
+    if (!window.examToEdit) {
+        return showAlert('Could not find that exam to edit.', 'danger');
+    }
+
+    // This logic handles finding the correct "Add Exam" form to update,
+    // whether it's in the "Exam Selection" screen or the "Exam Control" tab.
+    
+    let container = document.getElementById('add-exam-container');
+    let formId = 'add-exam';
+
+    if (container) {
+        // We are on the Exam Selection screen
+        container.innerHTML = `<div id="${formId}"></div>`;
+        renderExamAddTab();
+        
+        // This is your clever hack to hide the redundant list; we must re-apply it.
+        const examListInCard = container.querySelector('#exams-list');
+        if (examListInCard) {
+            examListInCard.parentElement.style.display = 'none';
+        }
+        // Scroll to the form for editing
+        container.scrollIntoView({ behavior: 'smooth' });
+
+    } else if (document.getElementById('add-exam')) {
+        // We are on the "Exam Control" screen's "Add Exam" tab
+        renderExamAddTab();
+    }
+};
+
+/**
+ * Clears the exam edit state and resets the form.
+ */
+window.clearExamEdit = () => {
+    window.examToEdit = null;
+    
+    // Re-render the form container wherever it might be
+    let container = document.getElementById('add-exam-container');
+    if (container) {
+        container.innerHTML = '<div id="add-exam"></div>';
+        renderExamAddTab();
+        const examListInCard = container.querySelector('#exams-list');
+        if (examListInCard) {
+            examListInCard.parentElement.style.display = 'none';
+        }
+    } else if (document.getElementById('add-exam')) {
+        renderExamAddTab();
+    }
+};
+/**
+ * Helper function to set the global state and re-render the module.
+ * @param {string} examId The ID of the exam to manage.
+ */
+window.selectExamToManage = (examId) => {
+    window.selectedExamForControl = examId;
+    renderExamControlModule(); // This will now render the dashboard
+};
+
+/**
+ * Helper function to clear the global state and return to the selection screen.
+ */
+window.unselectExam = () => {
+    window.selectedExamForControl = null;
+    renderExamControlModule(); // This will now render the selection screen
+};
+       function renderExamControlOverviewTab() {
+    const container = document.getElementById('exam-control-overview');
+    if (!container) return;
+
+    // This tab is now much simpler. It just displays details for the selected exam.
+    // The dropdown is removed.
+    container.innerHTML = `
+        <div id="exam-overview-details-container">
+            <p class="text-muted text-center p-4">Loading exam details...</p>
+        </div>
+    `;
+
+    if (window.selectedExamForControl) {
+        displayExamOverviewDetails(window.selectedExamForControl);
+    } else {
+        document.getElementById('exam-overview-details-container').innerHTML = 
+            `<p class="text-muted text-center p-4">No exam selected.</p>`;
+    }
+}
