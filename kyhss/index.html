@@ -29767,8 +29767,9 @@ const targetDivisions = ['A', 'B', 'C'];
 const studentsInClass = students.filter(s => 
   s.classId === classId && 
   s.status !== 'TC Issued' && 
-  s.status === 'Active' &&  
-  targetDivisions.includes(s.division)
+  s.status === 'Active' 
+    //&&  
+ // targetDivisions.includes(s.division)
 )    .sort((a, b) => {
             const divCompare = (a.division || '').localeCompare(b.division || '');
             if (divCompare !== 0) return divCompare;
@@ -30039,7 +30040,7 @@ function displayRegNoStatus2(examId, classId, division) {
  * @param {string} division
  */
 async function generateAndSaveExamRegNumbers(examId, classId, division) {
-    const studentsInClass = students.filter(s => s.classId === classId ); //&&(s.division === "D"||s.division === "E"||s.division === "F")
+    const studentsInClass = students.filter(s => s.classId === classId &&(s.division === "D"||s.division === "E"||s.division === "F") ); //&&(s.division === "D"||s.division === "E"||s.division === "F")
     if (studentsInClass.length === 0) {
         showAlert('No students found to generate numbers for.', 'info');
         return;
