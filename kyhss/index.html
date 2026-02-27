@@ -29767,7 +29767,7 @@ const targetDivisions = ['A', 'B', 'C'];
 const studentsInClass = students.filter(s => 
   s.classId === classId && 
   s.status !== 'TC Issued' && 
-  s.status === 'Active' && 
+  s.status === 'Active' &&  
   targetDivisions.includes(s.division)
 )    .sort((a, b) => {
             const divCompare = (a.division || '').localeCompare(b.division || '');
