@@ -850,92 +850,80 @@ async function getStudentFeeSetup(studentId, financialYear) {
          * @returns {Object} An object with fee heads as keys and pending amounts as values.
          */
         async function getStudentPendingFees(studentId, financialYear) {
-            const studentSetup = await getStudentFeeSetup(studentId, financialYear);
-            const studentPayments = await getStudentReceiptsForFY(studentId, financialYear);
+    // 1. Fetch Data
+    const studentSetup = await getStudentFeeSetup(studentId, financialYear);
+    const studentPayments = await getStudentReceiptsForFY(studentId, financialYear);
 
-            let calculatedPayable = {
-                'arrears': 0, 'admissionFee': 0,
-                'tf1': 0, 'tf2': 0, 'tf3': 0,
-                'vf1': 0, 'vf2': 0, 'vf3': 0,
-                'examFee': 0, 'concession': 0, 'misc': 0 // MISC is not a payable, but helps track overpayment
-            };
+    // 2. Define the Mapping (Label to Key)
+    const headMap = {
+        'ARREARS': 'arrears',
+        'ADMISSION FEE': 'admissionFee',
+        'TUITION FEE (T1)': 'tf1',
+        'VEHICLE FEE (T1)': 'vf1',
+        'TUITION FEE (T2)': 'tf2',
+        'VEHICLE FEE (T2)': 'vf2',
+        'TUITION FEE (T3)': 'tf3',
+        'VEHICLE FEE (T3)': 'vf3',
+        'EXAM FEE': 'examFee',
+        'MISC': 'misc'
+    };
 
-            let totalPaidAmount = 0;
+    // 3. Initialize Balances based on Student Setup
+    let pendingFees = {};
+    let totalInitialPayable = 0;
 
-            if (studentSetup) {
-                calculatedPayable['arrears'] = studentSetup.arrears || 0;
-                calculatedPayable['admissionFee'] = studentSetup.admissionFee || 0;
-                calculatedPayable['tf1'] = studentSetup.tf1 || 0;
-                calculatedPayable['tf2'] = studentSetup.tf2 || 0;
-                calculatedPayable['tf3'] = studentSetup.tf3 || 0;
-                calculatedPayable['vf1'] = studentSetup.vf1 || 0;
-                calculatedPayable['vf2'] = studentSetup.vf2 || 0;
-                calculatedPayable['vf3'] = studentSetup.vf3 || 0;
-                calculatedPayable['examFee'] = studentSetup.examFee || 0;
-                calculatedPayable['concession'] = studentSetup.concession || 0; // Concession is a reduction
-            }
-
-            // Sum up all payments made by this student for this FY
-            studentPayments.forEach(receipt => {
-                receipt.items.forEach(item => {
-                    const head = item.head;
-                    const amount = parseFloat(item.amount) || 0;
-                    if (calculatedPayable[head] !== undefined) {
-                        // If it's a 'payable' head, treat as paid
-                        calculatedPayable[head] -= amount;
-                    } else {
-                        // For 'MISC' or other non-defined heads, consider it as a generic payment reducing overall balance
-                        // or specific handling if needed. For now, it reduces overall 'MISC' balance
-                        // This logic needs to be careful: MISC in receipts might be for something else entirely.
-                        // For a simple pending fee, we sum up what was "due" and what was "paid".
-                    }
-                });
-                totalPaidAmount += receipt.totalAmount; // Sum total actual payments
-            });
-
-            // Calculate final pending amounts
-            let pendingFees = {};
-            let totalPayableSum = 0;
-
-            availableFeeHeads.forEach(head => { // Iterate over expected heads to ensure all are covered
-                if (head === 'concession') {
-                    // Concession is an amount *to be reduced*, not an amount to be paid.
-                    // If the student setup has a concession, and it hasn't been "applied" by overpaying other heads,
-                    // or if it's meant to be a direct deduction from the total.
-                    // For receipt entry, we'll show it as a potential "credit" if not yet utilized.
-                    // For reporting, it reduces the total payable.
-                    pendingFees[head] = -(calculatedPayable['concession'] || 0); // Show as negative for reduction
-                    // Do NOT add to totalPayableSum here, as it's a reduction.
-                } else if (head === 'misc') {
-                    pendingFees[head] = 0; // MISC is for 'overpayment' or other, not typically 'pending'
-                } else {
-                    const dueAmount = (studentSetup ? studentSetup[head.toLowerCase().replace(/ \((t[1-3])\)/g, (_, term) => term).replace(/ /g, '')] : 0) || 0;
-                    const paidForHead = studentPayments.reduce((sum, r) => sum + (r.items.find(i => i.head === head)?.amount || 0), 0);
-                    
-                    pendingFees[head] = Math.max(0, dueAmount - paidForHead);
-                    totalPayableSum += dueAmount;
-                }
-            });
-
-            // Re-calculate the total payable taking concession into account
-            // This ensures totalPayable reflects the actual due amount for the student
-            // For report generation, this is the crucial number.
-            const initialTotalPayable = (studentSetup?.arrears || 0) + 
-                                        (studentSetup?.admissionFee || 0) + 
-                                        (studentSetup?.tf1 || 0) + (studentSetup?.tf2 || 0) + (studentSetup?.tf3 || 0) + 
-                                        (studentSetup?.vf1 || 0) + (studentSetup?.vf2 || 0) + (studentSetup?.vf3 || 0) + 
-                                        (studentSetup?.examFee || 0) - (studentSetup?.concession || 0);
-
-            let netTotalPaid = studentPayments.reduce((sum, r) => sum + (r.totalAmount || 0), 0);
-            
-            return {
-                ...pendingFees,
-                totalPayable: initialTotalPayable,
-                totalPaid: netTotalPaid,
-                balanceDue: Math.max(0, initialTotalPayable - netTotalPaid)
-            };
+    // We iterate through our map to set up the initial "Due" amounts
+    Object.keys(headMap).forEach(label => {
+        const key = headMap[label];
+        const dueAmount = (studentSetup && studentSetup[key]) ? parseFloat(studentSetup[key]) : 0;
+        
+        pendingFees[label] = dueAmount;
+        
+        // Add all heads except MISC to the initial payable sum
+        if (key !== 'misc') {
+            totalInitialPayable += dueAmount;
         }
+    });
 
+    // Handle Concession (Deduction)
+    const concession = (studentSetup && studentSetup.concession) ? parseFloat(studentSetup.concession) : 0;
+    const finalTotalPayable = totalInitialPayable - concession;
+
+    // 4. Subtract Payments already made
+    let netTotalPaid = 0;
+
+    studentPayments.forEach(receipt => {
+        if (receipt.isCancelled) return; // Skip cancelled receipts
+
+        netTotalPaid += parseFloat(receipt.totalAmount || 0);
+
+        receipt.items.forEach(item => {
+            // Find the correct head in our pendingFees object
+            // If it's a known head (like T1), subtract from that specific balance
+            // If it's unknown, we treat it as 'MISC'
+            const label = headMap[item.head] ? item.head : 'MISC';
+            
+            if (pendingFees[label] !== undefined) {
+                pendingFees[label] -= parseFloat(item.amount || 0);
+            }
+        });
+    });
+
+    // 5. Final Result
+    // Ensure no pending fee shows as negative (due to overpayment on a specific head)
+    const itemizedPending = {};
+    Object.keys(pendingFees).forEach(label => {
+        itemizedPending[label] = Math.max(0, pendingFees[label]);
+    });
+
+    return {
+        ...itemizedPending,
+        concession: concession,
+        totalPayable: finalTotalPayable,
+        totalPaid: netTotalPaid,
+        balanceDue: Math.max(0, finalTotalPayable - netTotalPaid)
+    };
+}
 
         // --- Main UI Rendering Functions ---
         window.renderFeeManagement = () => {
@@ -961,8 +949,14 @@ async function getStudentFeeSetup(studentId, financialYear) {
                     <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#fee-receipt-tab" data-subtab="receipt" type="button">Fee Receipt</button></li>
                     <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#online-payments-tab" data-subtab="online" type="button">Online Payments</button></li>
                     <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#fee-reports-tab" data-subtab="reports" type="button">Reports</button></li>
-                    <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#fee-arrears-tab" data-subtab="arrears" type="button">Arrears Reconciliation</button></li>
-                </ul>
+                    <li class="nav-item" role="presentation">
+    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#fee-excel-tab" data-subtab="excel" type="button">
+        <i class="fas fa-file-excel me-2"></i>Excel Update
+    </button>
+</li>
+
+
+</ul>
                 <div class="tab-content" id="fee-main-tab-content">
                     <div class="tab-pane fade show active" id="fee-structure-tab" role="tabpanel"></div>
                     <div class="tab-pane fade" id="fee-setup-tab" role="tabpanel"></div>
@@ -970,7 +964,10 @@ async function getStudentFeeSetup(studentId, financialYear) {
                     <div class="tab-pane fade" id="online-payments-tab" role="tabpanel"></div>
                     <div class="tab-pane fade" id="fee-reports-tab" role="tabpanel"></div>
                     <div class="tab-pane fade" id="fee-arrears-tab" role="tabpanel"></div>
-                </div>`;
+                </div>
+                <div class="tab-pane fade" id="fee-excel-tab" role="tabpanel">
+    <div id="excel-export-container" class="p-4"></div>
+</div>`;
 
             document.getElementById('master-fy-selector').addEventListener('change', async (e) => {
                 activeFinancialYear = e.target.value;
@@ -1020,6 +1017,9 @@ async function getStudentFeeSetup(studentId, financialYear) {
                 case 'arrears':
                     renderArrearsReconciliationTab();
                     break;
+                case 'excel':
+                    renderExcelExportTab();
+                    break;
             } 
         }
 
@@ -1061,6 +1061,134 @@ async function getStudentFeeSetup(studentId, financialYear) {
             attachFeeStructureFormListeners();
             renderFeeStructuresList(); // Render the list on the right
         }
+
+      async function renderExcelExportTab() {
+    const container = document.getElementById('excel-export-container');
+    if (!container) return;
+
+    container.innerHTML = `
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body p-4">
+                <h5 class="fw-bold text-success mb-3"><i class="fas fa-file-excel me-2"></i>Excel Audit Export</h5>
+                <p class="text-muted small">Generate a flattened report based on a specific range of Receipt Numbers.</p>
+                
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">From Receipt No</label>
+                        <input type="text" id="excel-from-rec" class="form-control" placeholder="e.g. R2526-0001">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">To Receipt No</label>
+                        <input type="text" id="excel-to-rec" class="form-control" placeholder="e.g. R2526-0500">
+                    </div>
+                    <div class="col-md-3">
+                        <button id="btn-generate-excel" class="btn btn-success w-100 fw-bold">
+                            <i class="fas fa-filter me-2"></i>Fetch & Flatten
+                        </button>
+                    </div>
+                    <div class="col-md-3">
+                        <button id="btn-download-csv" class="btn btn-outline-primary w-100 fw-bold d-none">
+                            <i class="fas fa-download me-2"></i>Download CSV
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="excel-preview-area"></div>
+    `;
+
+    document.getElementById('btn-generate-excel').addEventListener('click', generateExcelData);
+    document.getElementById('btn-download-csv').addEventListener('click', exportToCSV);
+}
+
+// Function to trigger the actual CSV download
+window.exportToCSV = () => {
+    if (!window.currentExcelData) return;
+    
+    const rows = window.currentExcelData;
+    const header = Object.keys(rows[0]).join(",");
+    const csvContent = rows.map(row => 
+        Object.values(row).map(v => `"${v}"`).join(",")
+    ).join("\n");
+
+    const blob = new Blob([header + "\n" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Receipts_Export_${new Date().toISOString().slice(0,10)}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+};
+async function generateExcelData() {
+    const fromRec = document.getElementById('excel-from-rec').value.trim();
+    const toRec = document.getElementById('excel-to-rec').value.trim();
+    const previewArea = document.getElementById('excel-preview-area');
+    const downloadBtn = document.getElementById('btn-download-csv');
+
+    if (!fromRec || !toRec) {
+        showAlert("Please enter both 'From' and 'To' receipt numbers.", "warning");
+        return;
+    }
+
+    // Filter by Financial Year and Receipt Range
+    // Note: localeCompare with numeric:true allows string range filtering like R001 to R050
+    const filtered = receipts.filter(r => {
+        const isMatchFY = r.financialYear === activeFinancialYear;
+        const isWithinRange = r.receiptNo.localeCompare(fromRec, undefined, {numeric: true}) >= 0 &&
+                             r.receiptNo.localeCompare(toRec, undefined, {numeric: true}) <= 0;
+        return isMatchFY && isWithinRange && !r.isCancelled;
+    }).sort((a, b) => a.receiptNo.localeCompare(b.receiptNo, undefined, {numeric: true}));
+
+    if (filtered.length === 0) {
+        previewArea.innerHTML = `<div class="alert alert-info py-4 text-center">No active receipts found in the range ${fromRec} to ${toRec}.</div>`;
+        downloadBtn.classList.add('d-none');
+        return;
+    }
+
+    // Map to your specific requested structure
+    const excelRows = filtered.map(r => {
+        const student = students.find(s => s.id === r.studentId);
+        
+        // Internal helper to sum specific items
+        const sumItems = (keywords) => r.items
+            .filter(i => keywords.some(k => i.head.includes(k)))
+            .reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+
+        return {
+            "ReceiptNo": r.receiptNo,
+            "Date": r.date,
+            "AdmnNo": student ? student.admissionNumber : "N/A",
+            "Payer": r.payerName,
+            "AdmnFee": sumItems(["ADMISSION FEE"]),
+            "Arrears": sumItems(["ARREARS"]),
+            "TuitionTotal": sumItems(["TUITION FEE"]), // Sums T1, T2, T3
+            "VehicleTotal": sumItems(["VEHICLE FEE"]), // Sums V1, V2, V3
+            "ExamFee": sumItems(["EXAM FEE"]),
+            "Misc": sumItems(["MISC"]),
+            "GrandTotal": r.totalAmount,
+            "Auditor": r.recordedBy || 'N/A'
+        };
+    });
+
+    window.currentExcelData = excelRows; // Save for download
+    downloadBtn.classList.remove('d-none');
+
+    // Build Preview Table
+    previewArea.innerHTML = `
+        <div class="table-responsive card border-0 shadow-sm overflow-auto" style="max-height: 500px;">
+            <table class="table table-sm table-hover align-middle mb-0" style="font-size: 0.8rem;">
+                <thead class="table-dark sticky-top">
+                    <tr>${Object.keys(excelRows[0]).map(k => `<th>${k}</th>`).join('')}</tr>
+                </thead>
+                <tbody>
+                    ${excelRows.map(row => `<tr>${Object.values(row).map(v => `<td>${v}</td>`).join('')}</tr>`).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
 
         function renderStudentFeeSetupTab() {
     const container = document.getElementById('fee-setup-tab');
@@ -1284,7 +1412,7 @@ async function processSFSCsv(csvText) {
 
             <hr class="my-5">
             <h5 class="mb-3 fw-bold text-muted">Recent Receipts (${activeFinancialYear})</h5>
-            <div id="recent-receipt-list"></div>
+            <div id="recent-receipts-list"></div>
         </div>
     `;
 
@@ -1418,14 +1546,14 @@ function attachBulkReceiptListeners() {
 }
 
         function renderRecentReceipts() {
-    // 1. Check the Container - Ensure this matches the ID in your HTML exactly
-    const container = document.getElementById('recent-receipt-list'); 
-    if (!container) {
-        console.error("Target container 'recent-receipts-list' not found in HTML.");
-        return;
-    }
+    const container = document.getElementById('recent-receipts-list'); 
+    if (!container) return;
 
-    // 2. Initial Layout (Filter Bar + Summary + Content Area)
+    // --- PAGINATION STATE ---
+    let currentPage = 1;
+    const recordsPerPage = 50;
+
+    // 1. Initial Layout
     container.innerHTML = `
         <div class="card border-0 shadow-sm mb-3 no-print">
             <div class="card-body p-3 bg-light">
@@ -1434,7 +1562,7 @@ function attachBulkReceiptListeners() {
                         <label class="form-label small fw-bold text-muted text-uppercase">Search</label>
                         <div class="input-group input-group-sm">
                             <span class="input-group-text bg-white border-end-0"><i class="fas fa-search"></i></span>
-                            <input type="text" id="receipt-filter-search" class="form-control border-start-0" placeholder="No. or Student Name...">
+                            <input type="text" id="receipt-filter-search" class="form-control border-start-0" placeholder="No. or Name...">
                         </div>
                     </div>
                     <div class="col-md-3">
@@ -1455,53 +1583,68 @@ function attachBulkReceiptListeners() {
         </div>
 
         <div id="receipt-summary-area" class="mb-3"></div>
-
         <div id="receipt-table-content"></div>
+        
+        <div id="receipt-pagination-area" class="d-flex justify-content-between align-items-center mt-3 p-2 bg-white rounded shadow-sm"></div>
     `;
 
-    // 3. The Update Logic
     const updateTable = () => {
         const tableContainer = document.getElementById('receipt-table-content');
         const summaryArea = document.getElementById('receipt-summary-area');
+        const paginationArea = document.getElementById('receipt-pagination-area');
+        
         const searchTerm = document.getElementById('receipt-filter-search').value.toLowerCase();
         const fromDate = document.getElementById('receipt-filter-from').value;
         const toDate = document.getElementById('receipt-filter-to').value;
 
-        // FILTER & SORT
-        const filtered = receipts.filter(r => {
+        // 2. FILTER & SORT (Full dataset)
+        const filteredAll = receipts.filter(r => {
             const matchesFY = r.financialYear === activeFinancialYear;
             const matchesSearch = r.receiptNo.toLowerCase().includes(searchTerm) || 
                                 (r.payerName && r.payerName.toLowerCase().includes(searchTerm));
             const matchesDate = (!fromDate || r.date >= fromDate) && (!toDate || r.date <= toDate);
             return matchesFY && matchesSearch && matchesDate;
         }).sort((a, b) => {
-            // Newest Date First, then Newest Receipt Number
             if (b.date !== a.date) return b.date.localeCompare(a.date);
             return b.receiptNo.localeCompare(a.receiptNo, undefined, {numeric: true});
         });
 
-        // Calculate Summary
-        const totalAmount = filtered.reduce((sum, r) => sum + (r.isCancelled ? 0 : parseFloat(r.totalAmount || 0)), 0);
+        // 3. PAGINATION MATH
+        const totalRecords = filteredAll.length;
+        const totalPages = Math.ceil(totalRecords / recordsPerPage) || 1;
+        
+        // Safety check for page bounds
+        if (currentPage > totalPages) currentPage = totalPages;
+        if (currentPage < 1) currentPage = 1;
+
+        const startIndex = (currentPage - 1) * recordsPerPage;
+        const endIndex = startIndex + recordsPerPage;
+        const currentBatch = filteredAll.slice(startIndex, endIndex);
+
+        // 4. RENDER SUMMARY
+        const totalAmount = filteredAll.reduce((sum, r) => sum + (r.isCancelled ? 0 : parseFloat(r.totalAmount || 0)), 0);
         summaryArea.innerHTML = `
-            <div class="alert alert-info py-2 px-3 d-flex justify-content-between align-items-center border-0 shadow-sm">
-                <span class="small fw-bold text-uppercase"><i class="fas fa-calculator me-2"></i>Filtered Results: ${filtered.length}</span>
-                <span class="h5 mb-0 fw-bold">Total Collection: ₹ ${totalAmount.toFixed(2)}</span>
+            <div class="alert alert-info py-2 px-3 d-flex justify-content-between align-items-center border-0 shadow-sm mb-0">
+                <span class="small fw-bold text-uppercase">Showing ${startIndex + 1} - ${Math.min(endIndex, totalRecords)} of ${totalRecords} Records</span>
+                <span class="h6 mb-0 fw-bold text-primary">Filtered Total: ₹ ${totalAmount.toFixed(2)}</span>
             </div>
         `;
 
-        if (filtered.length === 0) {
-            tableContainer.innerHTML = '<div class="text-center py-5 text-muted card border-0 shadow-sm">No receipts found matching these filters.</div>';
+        if (totalRecords === 0) {
+            tableContainer.innerHTML = '<div class="text-center py-5 text-muted card border-0 shadow-sm">No receipts found.</div>';
+            paginationArea.classList.add('d-none');
             return;
         }
+        paginationArea.classList.remove('d-none');
 
-        // 4. Build Table
+        // 5. RENDER TABLE BATCH
         tableContainer.innerHTML = `
-            <div class="table-responsive card border-0 shadow-sm">
+            <div class="table-responsive card border-0 shadow-sm mt-3">
                 <table class="table table-hover align-middle mb-0">
                     <thead class="table-dark small text-uppercase">
                         <tr>
                             <th class="ps-3">No.</th>
-                            <th>Date (YYYY-MM-DD)</th>
+                            <th>Date</th>
                             <th>Payer / Student</th>
                             <th class="text-end">Amount</th>
                             <th class="text-center">Mode</th>
@@ -1510,59 +1653,63 @@ function attachBulkReceiptListeners() {
                         </tr>
                     </thead>
                     <tbody class="small">
-                        ${filtered.map(r => {
+                        ${currentBatch.map(r => {
                             const student = students.find(s => s.id === r.studentId);
-                            const statusClass = r.isCancelled ? 'bg-danger-subtle text-danger border-danger-subtle' : 'bg-success-subtle text-success border-success-subtle';
-                            
+                            const statusClass = r.isCancelled ? 'bg-danger-subtle text-danger' : 'bg-success-subtle text-success';
                             return `
                                 <tr class="${r.isCancelled ? 'opacity-50' : ''}">
-                                    <td class="ps-3 fw-bold fw-mono text-primary">${r.receiptNo}</td>
-                                    <td><span class="badge bg-light text-dark border font-monospace">${r.date}</span></td>
+                                    <td class="ps-3 fw-bold text-primary">${r.receiptNo}</td>
+                                    <td><span class="badge bg-light text-dark border">${r.date}</span></td>
                                     <td>
-                                        <div class="fw-bold text-dark">${r.payerName}</div>
-                                        <div class="text-muted" style="font-size: 0.7rem">
-                                            ${student ? `${student.admissionNumber} | ${classes.find(c => c.id === student.classId)?.name || ''}-${student.division}` : 'N/A'}
-                                        </div>
+                                        <div class="fw-bold">${r.payerName}</div>
+                                        <div class="text-muted small">${student ? student.admissionNumber : 'Guest'}</div>
                                     </td>
                                     <td class="text-end fw-bold">₹ ${parseFloat(r.totalAmount).toFixed(2)}</td>
-                                    <td class="text-center">
-                                        <span class="badge rounded-pill text-dark bg-light border">${r.paymentMode}</span>
-                                    </td>
-                                    <td class="text-center">
-                                        <span class="badge border rounded-pill ${statusClass}">${r.isCancelled ? 'CANCELLED' : 'PAID'}</span>
-                                    </td>
+                                    <td class="text-center"><span class="badge rounded-pill bg-light text-dark border">${r.paymentMode}</span></td>
+                                    <td class="text-center"><span class="badge rounded-pill ${statusClass}">${r.isCancelled ? 'CANCEL' : 'PAID'}</span></td>
                                     <td class="pe-3 text-end">
                                         <div class="btn-group">
-                                            <button class="btn btn-sm btn-outline-primary" onclick="handleEditReceipt('${r.id}')" title="Edit"><i class="fas fa-edit"></i></button>
-                                            <button class="btn btn-sm btn-outline-dark" onclick="printSingleReceiptno('${r.id}')" title="Print"><i class="fas fa-print"></i></button>
-                                            ${!r.isCancelled && currentUserRole === 'admin' ? 
-                                                `<button class="btn btn-sm btn-outline-danger" onclick="handleCancelReceipt('${r.id}')" title="Cancel"><i class="fas fa-ban"></i></button>` : ''}
+                                            <button class="btn btn-sm btn-outline-primary" onclick="handleEditReceipt('${r.id}')"><i class="fas fa-edit"></i></button>
+                                            <button class="btn btn-sm btn-outline-dark" onclick="printSingleReceiptno('${r.id}')"><i class="fas fa-print"></i></button>
                                         </div>
                                     </td>
-                                </tr>
-                            `;
+                                </tr>`;
                         }).join('')}
                     </tbody>
                 </table>
             </div>
         `;
+
+        // 6. RENDER PAGINATION BUTTONS
+        paginationArea.innerHTML = `
+            <div class="text-muted small">Page <b>${currentPage}</b> of <b>${totalPages}</b></div>
+            <div class="btn-group shadow-sm">
+                <button class="btn btn-sm btn-outline-primary px-3" id="prev-page" ${currentPage === 1 ? 'disabled' : ''}>
+                    <i class="fas fa-chevron-left me-1"></i> Previous
+                </button>
+                <button class="btn btn-sm btn-outline-primary px-3" id="next-page" ${currentPage === totalPages ? 'disabled' : ''}>
+                    Next <i class="fas fa-chevron-right ms-1"></i>
+                </button>
+            </div>
+        `;
+
+        // Attach pagination events
+        document.getElementById('prev-page').onclick = () => { currentPage--; updateTable(); };
+        document.getElementById('next-page').onclick = () => { currentPage++; updateTable(); };
     };
 
-    // 5. Attach Listeners
-    const searchField = document.getElementById('receipt-filter-search');
-    const fromField = document.getElementById('receipt-filter-from');
-    const toField = document.getElementById('receipt-filter-to');
-    const clearBtn = document.getElementById('receipt-clear-filter-btn');
-
-    searchField.addEventListener('input', updateTable);
-    fromField.addEventListener('change', updateTable);
-    toField.addEventListener('change', updateTable);
-    clearBtn.addEventListener('click', () => {
-        searchField.value = ''; fromField.value = ''; toField.value = '';
+    // 7. EVENT LISTENERS
+    document.getElementById('receipt-filter-search').addEventListener('input', () => { currentPage = 1; updateTable(); });
+    document.getElementById('receipt-filter-from').addEventListener('change', () => { currentPage = 1; updateTable(); });
+    document.getElementById('receipt-filter-to').addEventListener('change', () => { currentPage = 1; updateTable(); });
+    document.getElementById('receipt-clear-filter-btn').addEventListener('click', () => {
+        document.getElementById('receipt-filter-search').value = '';
+        document.getElementById('receipt-filter-from').value = '';
+        document.getElementById('receipt-filter-to').value = '';
+        currentPage = 1;
         updateTable();
     });
 
-    // Initial Trigger
     updateTable();
 }
         window.handleEditReceipt = (receiptId) => {
@@ -2470,24 +2617,28 @@ function attachBulkReceiptListeners() {
     const container = document.getElementById('single-receipt-pane');
     if (!container) return;
 
-    const isEditMode = receiptToEdit !== null;
+    // --- DATA PREP ---
     const currentFY = activeFinancialYear;
-    const displayNo = isEditMode ? receiptToEdit.receiptNo : "NEW-AUTO";
+    // Calculate the absolute minimum date based on existing receipts
+    const lastDateInDb = receipts.length > 0 
+        ? receipts.reduce((max, r) => r.date > max ? r.date : max, "0000-00-00") 
+        : "2020-01-01";
+    
+    const today = new Date().toISOString().slice(0, 10);
+    // Set default date to today, but if today is before the last receipt, force lastDate
+    const defaultDate = today < lastDateInDb ? lastDateInDb : today;
 
     container.innerHTML = `
         <div class="card border-0 shadow-lg mb-4">
             <div class="card-body p-0">
                 <div class="p-4 bg-primary text-white d-flex justify-content-between align-items-center rounded-top">
                     <div>
-                        <h4 class="mb-0 fw-bold">${isEditMode ? '<i class="fas fa-edit me-2"></i>Edit' : '<i class="fas fa-plus-circle me-2"></i>Create'} Fee Receipt</h4>
+                        <h4 class="mb-0 fw-bold"><i class="fas fa-plus-circle me-2"></i>Create New Fee Receipt</h4>
                         <small class="opacity-75">FY: ${currentFY}</small>
                     </div>
-                    <div class="text-end d-flex align-items-center gap-3">
-                        <div class="text-end">
-                            <div class="small opacity-75 text-uppercase">Receipt No</div>
-                            <h5 class="mb-0 fw-mono" id="display-receipt-no">${displayNo}</h5>
-                        </div>
-                        ${isEditMode ? `<button class="btn btn-sm btn-light text-primary fw-bold" id="new-receipt-reset-btn"><i class="fas fa-plus"></i> New</button>` : ''}
+                    <div class="text-end">
+                        <div class="small opacity-75 text-uppercase">Receipt No</div>
+                        <h5 class="mb-0 fw-mono" id="display-receipt-no">AUTO-GENERATING...</h5>
                     </div>
                 </div>
 
@@ -2497,7 +2648,6 @@ function attachBulkReceiptListeners() {
                             <div class="btn-group shadow-sm" role="group">
                                 <input type="radio" class="btn-check" name="payerType" id="type-student" value="student" checked>
                                 <label class="btn btn-outline-primary px-4 fw-bold" for="type-student"><i class="fas fa-user-graduate me-2"></i>Student</label>
-                                
                                 <input type="radio" class="btn-check" name="payerType" id="type-non-student" value="non-student">
                                 <label class="btn btn-outline-primary px-4 fw-bold" for="type-non-student"><i class="fas fa-user me-2"></i>Non-Student</label>
                             </div>
@@ -2506,30 +2656,28 @@ function attachBulkReceiptListeners() {
 
                     <div class="row g-3 mb-4">
                         <div class="col-md-8">
-                            <div id="student-search-section" class="card border-0 shadow-sm">
-                                <div class="card-body p-3">
+                            <div id="student-search-section">
+                                <div class="card border-0 shadow-sm p-3">
                                     <label class="form-label fw-bold small text-primary text-uppercase">Search Student</label>
-                                    <div class="input-group">
-                                        <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
-                                        <input type="text" id="student-master-search" class="form-control border-start-0" placeholder="Type Admission No or Name..." list="student-master-list">
-                                    </div>
+                                    <input type="text" id="student-master-search" class="form-control" placeholder="Admission No or Name..." list="student-master-list">
                                     <datalist id="student-master-list">
                                         ${students.map(s => `<option value="${s.admissionNumber}">${s.name} | ${classes.find(c => c.id === s.classId)?.name || ''}-${s.division}</option>`).join('')}
                                     </datalist>
                                 </div>
                             </div>
-                            <div id="non-student-section" class="card border-0 shadow-sm d-none">
-                                <div class="card-body p-3">
+                            <div id="non-student-section" class="d-none">
+                                <div class="card border-0 shadow-sm p-3">
                                     <label class="form-label fw-bold small text-primary text-uppercase">Payer Name</label>
-                                    <input type="text" id="non-student-name" class="form-control" placeholder="Enter Full Name of Non-Student Payer">
+                                    <input type="text" id="non-student-name" class="form-control" placeholder="Enter Full Name of Payer">
                                 </div>
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div class="card border-0 shadow-sm h-100">
-                                <div class="card-body p-3">
-                                    <label class="form-label fw-bold small text-muted text-uppercase">Payment Date</label>
-                                    <input type="date" id="receipt-date" value="${new Date().toISOString().slice(0,10)}" class="form-control">
+                            <div class="card border-0 shadow-sm h-100 p-3">
+                                <label class="form-label fw-bold small text-muted text-uppercase">Payment Date</label>
+                                <input type="date" id="receipt-date" value="${defaultDate}" min="${lastDateInDb}" class="form-control">
+                                <div id="date-error-msg" class="text-danger fw-bold mt-1 d-none" style="font-size: 0.65rem;">
+                                    <i class="fas fa-exclamation-triangle"></i> Minimum date: ${lastDateInDb}
                                 </div>
                             </div>
                         </div>
@@ -2537,73 +2685,53 @@ function attachBulkReceiptListeners() {
 
                     <div class="row g-4 mb-4">
                         <div class="col-md-4">
-                            <div id="student-info-panel" class="card border-0 shadow-sm h-100 d-none overflow-hidden">
-                                <div class="p-4 text-center bg-white border-bottom">
-                                    <div id="student-avatar-circle" class="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center mb-3" style="width:60px; height:60px; font-size: 1.5rem">
-                                        <i class="fas fa-user-graduate"></i>
-                                    </div>
-                                    <h5 id="sum-name" class="fw-bold mb-1 text-dark"></h5>
-                                    <p id="sum-class" class="text-muted small mb-2"></p>
-                                    
-                                    <button type="button" id="quick-edit-setup-btn" class="btn btn-xs btn-outline-secondary py-1 px-2 mb-3" style="font-size: 0.7rem;">
-                                        <i class="fas fa-cog me-1"></i> ADJUST FEE SETUP
-                                    </button>
-
-                                    <div id="balance-card" class="p-3 rounded bg-danger bg-opacity-10 border border-danger border-opacity-10">
-                                        <small id="balance-label" class="text-danger fw-bold text-uppercase d-block mb-1" style="font-size: 0.65rem;">Current Balance</small>
-                                        <h3 id="balance-amount-text" class="text-danger fw-bold mb-0">₹ <span id="sum-due">0.00</span></h3>
-                                    </div>
+                            <div id="student-info-panel" class="card border-0 shadow-sm d-none h-100 text-center p-4">
+                                <div class="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center mb-3 mx-auto" style="width:60px; height:60px; font-size: 1.5rem">
+                                    <i class="fas fa-user-graduate"></i>
                                 </div>
-                                <div class="p-2 bg-light" id="sibling-section">
-                                    <label class="fw-bold text-muted mb-2 px-2 w-100 d-block" style="font-size: 0.7rem;">
-                                        <i class="fas fa-users me-1 text-primary"></i> SIBLINGS DETECTED
-                                    </label>
-                                    <div id="sibling-list" class="list-group list-group-flush border-top" style="max-height: 150px; overflow-y: auto;"></div>
+                                <h5 id="sum-name" class="fw-bold mb-1"></h5>
+                                <p id="sum-class" class="text-muted small"></p>
+                                <div class="p-3 rounded bg-danger bg-opacity-10 border border-danger border-opacity-10 mt-2">
+                                    <small class="text-danger fw-bold text-uppercase d-block mb-1">Pending Balance</small>
+                                    <h3 class="text-danger fw-bold mb-0">₹ <span id="sum-due">0.00</span></h3>
                                 </div>
                             </div>
-                            <div id="no-student-placeholder" class="card border-dashed h-100 d-flex align-items-center justify-content-center text-muted p-5 text-center">
-                                <i class="fas fa-user-clock fa-2x mb-2 opacity-50"></i>
-                                <p class="mb-0">Search a student above or switch to Non-Student mode</p>
+                            <div id="no-student-placeholder" class="card border-dashed d-flex align-items-center justify-content-center text-muted p-5 h-100">
+                                <p class="mb-0">Select student or Non-Student mode</p>
                             </div>
                         </div>
 
                         <div class="col-md-8">
-                            <div class="card border-0 shadow-sm h-100 border-start border-primary border-4">
-                                <div class="card-body p-4 bg-white">
-                                    <label for="dist-input" class="form-label h5 fw-bold text-primary mb-3">Lump Sum Amount Received</label>
-                                    <div class="input-group input-group-lg mb-3">
-                                        <span class="input-group-text bg-primary text-white border-primary">₹</span>
-                                        <input type="number" step="0.01" id="dist-input" class="form-control border-primary fw-bold text-primary" placeholder="Enter amount to distribute...">
-                                    </div>
-                                    <p class="small text-muted mb-0"><i class="fas fa-magic me-1 text-primary"></i> Auto-fills the table based on priority: Arrears > Admission > Terms.</p>
+                            <div class="card border-0 shadow-sm h-100 border-start border-primary border-4 p-4 bg-white">
+                                <label class="form-label h5 fw-bold text-primary mb-3">Lump Sum Amount Received</label>
+                                <div class="input-group input-group-lg">
+                                    <span class="input-group-text bg-primary text-white border-primary">₹</span>
+                                    <input type="number" step="0.01" id="dist-input" class="form-control border-primary fw-bold" placeholder="0.00">
                                 </div>
+                                <div class="table-responsive mb-4 shadow-sm rounded">
+                        <table class="table table-hover align-middle mb-0 bg-white">
+                            <thead class="table-light small text-uppercase text-muted">
+                                <tr>
+                                    <th class="ps-4">Fee Head</th>
+                                    <th class="text-end">Total</th>
+                                    <th class="text-end">Paid</th>
+                                    <th class="text-end" style="width:160px">Paying Now</th>
+                                    <th class="text-end pe-4" style="width:160px">New Balance</th>
+                                </tr>
+                            </thead>
+                            <tbody id="fee-items-container"></tbody>
+                        </table>
+                    </div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="card border-0 shadow-sm mb-4 overflow-hidden">
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle mb-0">
-                                <thead class="table-light small text-uppercase text-muted">
-                                    <tr>
-                                        <th class="ps-4">Fee Head</th>
-                                        <th class="text-end">Total</th>
-                                        <th class="text-end">Paid</th>
-                                        <th class="text-end" style="width: 160px;">Paying Now</th>
-                                        <th class="text-end pe-4" style="width: 160px;">New Balance</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="fee-items-container">
-                                    <tr><td colspan="5" class="text-center py-5 text-muted">Please select a payer first</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
+                    
 
                     <div class="row g-3 align-items-center p-4 bg-dark text-white rounded shadow-lg mx-0">
                         <div class="col-md-4">
                             <label class="form-label small fw-bold opacity-75">PAYMENT MODE</label>
-                            <select id="payment-mode" class="form-select bg-secondary text-white border-0">
+                            <select id="payment-mode" class="form-select bg-secondary text-white border-0 shadow-none">
                                 <option value="CASH">CASH</option>
                                 <option value="BANK">BANK / UPI</option>
                             </select>
@@ -2629,36 +2757,64 @@ function attachBulkReceiptListeners() {
     const distInput = document.getElementById('dist-input');
     const feeItemsContainer = document.getElementById('fee-items-container');
     const totalDisplay = document.getElementById('total-amount-display');
+    const dateInput = document.getElementById('receipt-date');
+    const dateError = document.getElementById('date-error-msg');
 
-    // --- 1. TOGGLE STUDENT/NON-STUDENT ---
+    // --- DATE PROTECTION LOGIC ---
+    dateInput.addEventListener('change', (e) => {
+        if (e.target.value < lastDateInDb) {
+            dateInput.classList.add('is-invalid');
+            dateError.classList.remove('d-none');
+            showAlert(`Restricted: Last receipt was on ${lastDateInDb}`, 'danger');
+            e.target.value = defaultDate; // Reset
+        } else {
+            dateInput.classList.remove('is-invalid');
+            dateError.classList.add('d-none');
+        }
+    });
+
+    // --- FORM LOGIC (UpdateTotal/Distribute as previously defined) ---
+    const updateTotal = () => {
+        let s = 0;
+        feeItemsContainer.querySelectorAll('.fee-paying-input').forEach(i => s += parseFloat(i.value) || 0);
+        totalDisplay.textContent = s.toFixed(2);
+        document.getElementById('total-amount').value = s.toFixed(2);
+    };
+
+    const distributePayment = (amt) => {
+        let rem = parseFloat(amt) || 0;
+        feeItemsContainer.querySelectorAll('.fee-paying-input').forEach(i => {
+            const p = parseFloat(i.dataset.pending) || 0;
+            const val = Math.min(rem, p);
+            i.value = val.toFixed(2);
+            rem -= val;
+            const row = i.closest('tr');
+            row.querySelector('.fee-balance-input').value = (p - val).toFixed(2);
+        });
+        updateTotal();
+    };
+
+    // --- TOGGLE SWITCH ---
     document.querySelectorAll('input[name="payerType"]').forEach(radio => {
         radio.addEventListener('change', (e) => {
-            const isStudent = e.target.value === 'student';
-            document.getElementById('student-search-section').classList.toggle('d-none', !isStudent);
-            document.getElementById('student-info-panel').classList.toggle('d-none', !isStudent);
-            document.getElementById('no-student-placeholder').classList.toggle('d-none', !isStudent);
-            document.getElementById('non-student-section').classList.toggle('d-none', isStudent);
+            const isS = e.target.value === 'student';
+            document.getElementById('student-search-section').classList.toggle('d-none', !isS);
+            document.getElementById('student-info-panel').classList.toggle('d-none', !isS);
+            document.getElementById('no-student-placeholder').classList.toggle('d-none', !isS);
+            document.getElementById('non-student-section').classList.toggle('d-none', isS);
             
-            feeItemsContainer.innerHTML = !isStudent ? `
-                <tr>
-                    <td class="ps-4 fw-bold text-dark small">MISCELLANEOUS INCOME</td>
-                    <td class="text-end text-muted small">-</td><td class="text-end text-success small">-</td>
-                    <td><input type="number" step="0.01" class="form-control form-control-sm text-end fee-paying-input fw-bold text-primary" data-head="MISC" data-pending="999999" value="0.00"></td>
-                    <td class="pe-4"><input type="number" class="form-control form-control-sm text-end border-0 bg-light" value="0" readonly></td>
-                </tr>` : `<tr><td colspan="5" class="text-center py-5 text-muted">Search student above</td></tr>`;
-            updateTotal();
+            if (!isS) {
+                feeItemsContainer.innerHTML = `<tr><td class="ps-4 fw-bold">MISCELLANEOUS INCOME</td><td class="text-end">-</td><td class="text-end">-</td><td><input type="number" class="form-control text-end fee-paying-input" data-head="MISC" data-pending="999999" value="0.00"></td><td class="pe-4"><input type="number" class="form-control text-end border-0 bg-light" value="0" readonly></td></tr>`;
+            } else {
+                feeItemsContainer.innerHTML = `<tr><td colspan="5" class="text-center py-5 text-muted">Search student...</td></tr>`;
+            }
         });
     });
 
-    // --- 2. THE SEARCH LOGIC (FIXED) ---
+    // --- SEARCH LOGIC ---
     searchInput.addEventListener('change', async (e) => {
-        const val = e.target.value.trim();
-        if (!val) return;
-
-        // Robust Match: Check Admission No OR exact datalist match
-        const student = students.find(s => s.admissionNumber === val || 
-            `${s.name} | ${classes.find(c => c.id === s.classId)?.name || ''}-${s.division}` === val);
-
+        const val = e.target.value;
+        const student = students.find(s => s.admissionNumber === val || `${s.name} | ${classes.find(c => c.id === s.classId)?.name || ''}-${s.division}` === val);
         if (!student) return;
 
         document.getElementById('selected-student-id').value = student.id;
@@ -2667,172 +2823,79 @@ function attachBulkReceiptListeners() {
         document.getElementById('student-info-panel').classList.remove('d-none');
         document.getElementById('no-student-placeholder').classList.add('d-none');
 
-        showGlobalLoading(`Syncing financial status for ${student.name}...`);
-        
-        try {
-            const [setup, payments, calcs] = await Promise.all([
-                getStudentFeeSetup(student.id, currentFY),
-                getStudentReceiptsForFY(student.id, currentFY),
-                getStudentPendingFees(student.id, currentFY)
-            ]);
+        const [setup, payments, calcs] = await Promise.all([
+            getStudentFeeSetup(student.id, currentFY),
+            getStudentReceiptsForFY(student.id, currentFY),
+            getStudentPendingFees(student.id, currentFY)
+        ]);
+        console.log('Fetched setup, payments, calcs: ', setup, payments, calcs);
+        const heads = [{k:'arrears',l:'ARREARS'},{k:'admissionFee',l:'ADMISSION FEE'},{k:'tf1',l:'TUITION FEE (T1)'},{k:'vf1',l:'VEHICLE FEE (T1)'},{k:'tf2',l:'TUITION FEE (T2)'},{k:'vf2',l:'VEHICLE FEE (T2)'},{k:'tf3',l:'TUITION FEE (T3)'},{k:'vf3',l:'VEHICLE FEE (T3)'},{k:'examFee',l:'EXAM FEE'},{k:'misc',l:'MISC'}];
+        feeItemsContainer.innerHTML = heads.map(h => {
+            const tot = (setup ? setup[h.k] : 0) || 0;
+            const paid = payments.reduce((s, r) => s + (r.items.find(i => i.head === (h.k).toUpperCase())?.amount || 0), 0);
+            const pend = Math.max(0, tot - paid);
+            return `<tr class="${pend > 0 ? '' : 'opacity-50'}"><td class="ps-4 fw-bold text-dark small">${h.l}</td><td class="text-end text-muted">₹${tot.toFixed(2)}</td><td class="text-end text-success">₹${paid.toFixed(2)}</td><td><input type="number" step="0.01" class="form-control text-end fee-paying-input fw-bold text-primary" data-head="${h.l}" data-pending="${pend}" value="0.00"></td><td class="pe-4"><input type="number" class="form-control text-end border-0 bg-light fee-balance-input" value="${pend.toFixed(2)}" readonly></td></tr>`;
+        }).join('');
 
-            // Siblings by last 10 digits of WA
-            const currentWa = student.whatsappNo ? String(student.whatsappNo).replace(/\D/g, '').slice(-10) : null;
-            const siblings = students.filter(s => s.id !== student.id && currentWa && String(s.whatsappNo).replace(/\D/g, '').slice(-10) === currentWa);
-
-            let familyTotalBalance = calcs.balanceDue;
-            const sibList = document.getElementById('sibling-list');
-            sibList.innerHTML = '';
-            for(let sib of siblings) {
-                const sCalc = await getStudentPendingFees(sib.id, currentFY);
-                familyTotalBalance += sCalc.balanceDue;
-                sibList.innerHTML += `<button type="button" onclick="const i=document.getElementById('student-master-search'); i.value='${sib.admissionNumber}'; i.dispatchEvent(new Event('change'));" class="list-group-item list-group-item-action p-2 d-flex justify-content-between align-items-center"><div><div class="fw-bold">${sib.name}</div><div class="text-muted small">${sib.admissionNumber}</div></div><span class="badge ${sCalc.balanceDue > 0 ? 'bg-danger-subtle text-danger' : 'bg-success-subtle text-success'} rounded-pill">₹${sCalc.balanceDue.toFixed(0)}</span></button>`;
-            }
-            if(siblings.length === 0) sibList.innerHTML = '<div class="p-3 text-center text-muted small italic">No siblings detected</div>';
-
-            document.getElementById('sibling-section').querySelector('label').innerHTML = `<div class="d-flex justify-content-between align-items-center w-100"><span><i class="fas fa-users me-1 text-primary"></i> SIBLINGS</span><span class="badge bg-dark rounded-pill">Family Due: ₹${familyTotalBalance.toFixed(0)}</span></div>`;
-
-            // UI Color Transition
-            const balanceCard = document.getElementById('balance-card');
-            if (calcs.balanceDue <= 0) {
-                balanceCard.className = 'p-3 rounded bg-success bg-opacity-10 border border-success border-opacity-25';
-                document.getElementById('balance-label').innerHTML = '<i class="fas fa-check-circle"></i> ACCOUNT CLEAR';
-            } else {
-                balanceCard.className = 'p-3 rounded bg-danger bg-opacity-10 border border-danger border-opacity-10';
-                document.getElementById('balance-label').textContent = 'Current Balance';
-            }
-            document.getElementById('sum-due').textContent = calcs.balanceDue.toFixed(2);
-
-            // Populate Table
-            const heads = [{k:'arrears',l:'ARREARS'},{k:'admissionFee',l:'ADMISSION FEE'},{k:'tf1',l:'TUITION FEE (T1)'},{k:'vf1',l:'VEHICLE FEE (T1)'},{k:'tf2',l:'TUITION FEE (T2)'},{k:'vf2',l:'VEHICLE FEE (T2)'},{k:'tf3',l:'TUITION FEE (T3)'},{k:'vf3',l:'VEHICLE FEE (T3)'},{k:'examFee',l:'EXAM FEE'},{k:'misc',l:'MISC'}];
-            feeItemsContainer.innerHTML = heads.map(h => {
-                const tot = (setup ? setup[h.k] : 0) || 0;
-                const paid = payments.reduce((s, r) => s + (r.items.find(i => i.head === h.l)?.amount || 0), 0);
-                const pend = Math.max(0, tot - paid);
-                return `<tr class="${pend > 0 ? '' : 'opacity-50'}"><td class="ps-4 fw-bold text-dark small">${h.l}</td><td class="text-end text-muted small">₹${tot.toFixed(2)}</td><td class="text-end text-success small">₹${paid.toFixed(2)}</td><td><input type="number" step="0.01" class="form-control form-control-sm text-end fee-paying-input fw-bold text-primary" data-head="${h.l}" data-pending="${pend}" value="0.00"></td><td class="pe-4"><input type="number" class="form-control form-control-sm text-end border-0 bg-light fee-balance-input" value="${pend.toFixed(2)}" readonly></td></tr>`;
-            }).join('');
-
-            distInput.value = calcs.balanceDue.toFixed(2);
-            distributePayment(calcs.balanceDue);
-
-            document.getElementById('quick-edit-setup-btn').onclick = () => {
-                document.querySelector('[data-subtab="setup"]').click();
-                setTimeout(() => { document.getElementById('sfs-class').value = student.classId; document.getElementById('sfs-class').dispatchEvent(new Event('change')); setTimeout(() => { document.getElementById('sfs-division').value = student.division; document.getElementById('sfs-fetch-btn').click(); }, 200); }, 300);
-            };
-        } catch(e) { console.error(e); } finally { hideGlobalLoading(); }
+        document.getElementById('sum-due').textContent = calcs.balanceDue.toFixed(2);
+        distInput.value = calcs.balanceDue.toFixed(2);
+        distributePayment(calcs.balanceDue);
     });
 
-    // --- 3. DYNAMIC CALCULATION LOGIC ---
-    const distributePayment = (amt) => {
-        let rem = parseFloat(amt) || 0;
-        feeItemsContainer.querySelectorAll('.fee-paying-input').forEach(i => {
-            const p = parseFloat(i.dataset.pending) || 0;
-            const val = Math.min(rem, p);
-            i.value = val.toFixed(2);
-            rem -= val;
-            i.closest('tr').querySelector('.fee-balance-input').value = (p - val).toFixed(2);
-        });
-        updateTotal();
-    };
-
-    const updateTotal = () => {
-        let s = 0;
-        feeItemsContainer.querySelectorAll('.fee-paying-input').forEach(i => s += parseFloat(i.value) || 0);
-        totalDisplay.textContent = s.toFixed(2);
-        document.getElementById('total-amount').value = s.toFixed(2);
-    };
-
+    // Attach interaction
     feeItemsContainer.addEventListener('input', (e) => {
         if (e.target.classList.contains('fee-paying-input')) {
             const p = parseFloat(e.target.dataset.pending) || 0;
-            e.target.closest('tr').querySelector('.fee-balance-input').value = (p - parseFloat(e.target.value || 0)).toFixed(2);
+            const row = e.target.closest('tr');
+            row.querySelector('.fee-balance-input').value = (p - parseFloat(e.target.value || 0)).toFixed(2);
             updateTotal();
         }
     });
-
     distInput.addEventListener('input', (e) => distributePayment(e.target.value));
 
-    // --- 4. MULTI-USER SAFE SAVE (TRANSACTION) ---
-    document.getElementById('receipt-save-btn').addEventListener('click', async () => {
-    const isS = document.getElementById('type-student').checked;
-    const sid = document.getElementById('selected-student-id').value;
-    const tot = parseFloat(document.getElementById('total-amount').value);
-    
-    // Non-student name validation
-    const nonStudentName = document.getElementById('non-student-name').value;
+    // --- SAVE LOGIC ---
+    document.getElementById('receipt-save-btn').onclick = async () => {
+        const isS = document.getElementById('type-student').checked;
+        const sid = document.getElementById('selected-student-id').value;
+        const tot = parseFloat(document.getElementById('total-amount').value);
+        const selDate = dateInput.value;
 
-    if ((isS && !sid) || (!isS && !nonStudentName) || tot <= 0) { 
-        showAlert('Please fill in all details correctly.', 'warning'); 
-        return; 
-    }
+        if ((isS && !sid) || tot <= 0 || selDate < lastDateInDb) {
+            showAlert('Invalid selection or date restricted.', 'warning');
+            return;
+        }
 
-    const btn = document.getElementById('receipt-save-btn');
-    btn.disabled = true; 
-    btn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> SAVING...`;
+        const btn = document.getElementById('receipt-save-btn');
+        btn.disabled = true; btn.innerHTML = `SAVING...`;
 
-    try {
-        const items = [];
-        feeItemsContainer.querySelectorAll('.fee-paying-input').forEach(i => {
-            const v = parseFloat(i.value) || 0;
-            if (v > 0) items.push({ head: i.dataset.head, amount: v });
-        });
+        try {
+            const items = [];
+            feeItemsContainer.querySelectorAll('.fee-paying-input').forEach(i => {
+                const v = parseFloat(i.value) || 0;
+                if (v > 0) items.push({ head: i.dataset.head, amount: v });
+            });
 
-        // Current auditor info
-        const auditorName = selectedUser.name || 'Unknown Staff';
-        // Formatted audit date (yyyy-mm-dd)
-        const auditDateStr = new Date().toISOString().slice(0, 10);
+            await runTransaction(db, async (txn) => {
+                const cRef = doc(db, `/artifacts/${appId}/public/data/counters_${currentFY}`, 'receipt_sequence');
+                const snap = await txn.get(cRef);
+                const next = (snap.exists() ? snap.data().lastValue : 4985) + 1;
+                const rNo = `R${currentFY.slice(2,4)}${currentFY.slice(7,9)}-${next.toString().padStart(4, '0')}`;
 
-        const final = await runTransaction(db, async (txn) => {
-            const cRef = doc(db, `/artifacts/${appId}/public/data/counters_${currentFY}`, 'receipt_sequence');
-            const snap = await txn.get(cRef);
-            const next = (snap.exists() ? snap.data().lastValue : 4985) + 1;
-            const rNo = `R${currentFY.slice(2,4)}${currentFY.slice(7,9)}-${next.toString().padStart(4, '0')}`;
+                const data = {
+                    receiptNo: rNo, date: selDate,
+                    studentId: isS ? sid : "NON-STUDENT", payerName: isS ? document.getElementById('sum-name').textContent : document.getElementById('non-student-name').value,
+                    isStudent: isS, items: items, totalAmount: tot, paymentMode: document.getElementById('payment-mode').value,
+                    financialYear: currentFY, isCancelled: false, recordedBy: selectedUser.name || 'Staff', timestamp: serverTimestamp()
+                };
 
-            const data = {
-                receiptNo: rNo,
-                date: document.getElementById('receipt-date').value, // Payment date chosen by user
-                studentId: isS ? sid : "NON-STUDENT",
-                payerName: isS ? document.getElementById('sum-name').textContent : nonStudentName,
-                isStudent: isS,
-                items: items,
-                totalAmount: tot,
-                paymentMode: document.getElementById('payment-mode').value,
-                financialYear: currentFY,
-                isCancelled: false,
-                
-                // --- AUDIT FIELDS ---
-                recordedBy: auditorName,       // The Auditor's name
-                auditedBy: auditorName,        // Explicit Auditor field
-                auditDate: auditDateStr,       // DD-MM-YY formatted audit entry
-                // --------------------
+                txn.set(getFeeDocRef(currentFY, 'receipts', rNo), data);
+                txn.set(cRef, { lastValue: next }, { merge: true });
+            });
 
-                timestamp: serverTimestamp()   // Precise Firebase time for sorting/sync
-            };
-
-            txn.set(getFeeDocRef(currentFY, 'receipts', rNo), data);
-            txn.set(cRef, { lastValue: next }, { merge: true });
-            return data;
-        });
-
-        showAlert(`Receipt ${final.receiptNo} Saved!`, 'success');
-        await printSingleReceipt(final);
-        
-        // Clear edit state if any and refresh
-        receiptToEdit = null;
-        renderFeeSubTab('receipt');
-        
-    } catch (err) { 
-        console.error(err); 
-        showAlert('Save error: ' + err.message, 'danger'); 
-        btn.disabled = false; 
-        btn.innerHTML = `<i class="fas fa-print me-2"></i>SAVE & PRINT`;
-    }
-});
-
-    if (isEditMode) {
-        document.getElementById('new-receipt-reset-btn').onclick = () => { receiptToEdit=null; renderReceiptEntryForm(); };
-        // Hydration Logic... (as provided in previous steps)
-    }
+            showAlert('Saved!', 'success');
+            renderFeeSubTab('receipt');
+        } catch (e) { console.error(e); btn.disabled = false; btn.innerHTML = 'SAVE & PRINT'; }
+    };
 }
     async function printSingleReceipt(receiptData) {
     const printableContentDiv = document.getElementById('printable-receipt-content');
