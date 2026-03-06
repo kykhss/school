@@ -416,6 +416,31 @@
             </div>
         </div>
     </div>
+
+    <div class="modal fade" id="teacherAvailabilityModal" tabindex="-1" aria-labelledby="teacherAvailabilityModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="teacherAvailabilityModalLabel">Teacher Availability Manager</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3 sticky-top bg-white pb-2 border-bottom">
+                            <label class="form-label fw-bold">Editing Availability For:</label>
+                            <select id="availability-context-date" class="form-select">
+                                <option value="">-- Select a Date --</option>
+                            </select>
+                        </div>
+                        <div id="teacher-availability-container">
+                            <p class="text-muted text-center py-4">Please select a date from the dropdown above.</p>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
 <!-- ================= END OF ALL 9 MODALS ================= -->
 
 </body>
@@ -24174,30 +24199,7 @@ function renderExamControlDutyAssignmentTab() {
             </div>
         </div>
 
-        <div class="modal fade" id="teacherAvailabilityModal" tabindex="-1" aria-labelledby="teacherAvailabilityModalLabel" aria-hidden="true">
-            <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="teacherAvailabilityModalLabel">Teacher Availability Manager</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="mb-3 sticky-top bg-white pb-2 border-bottom">
-                            <label class="form-label fw-bold">Editing Availability For:</label>
-                            <select id="availability-context-date" class="form-select">
-                                <option value="">-- Select a Date --</option>
-                            </select>
-                        </div>
-                        <div id="teacher-availability-container">
-                            <p class="text-muted text-center py-4">Please select a date from the dropdown above.</p>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    </div>
-                </div>
-            </div>
-        </div>
+        
         <div id="duty-consolidation-container" class="ui-card mt-4 d-none"></div>
     `;
 
@@ -28551,16 +28553,24 @@ function generateAndPrintDutyReport(examId, date) {
     }
 
     const examName = exams.find(e => e.id === examId)?.name || examId;
+    const formattedDate = new Date(date).toLocaleDateString('en-GB', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    });
+
     const reportTitle = `Duty Assignment Report`;
-    const reportSubTitle = `Exam: ${examName} | Date: ${new Date(date).toLocaleDateString('en-GB', { dateStyle: 'long' })}`;
+    const reportSubTitle = `Exam: ${examName}`;
 
     // 1. Get all duties for the specific date
     const dutiesForDate = examDuties.filter(d => d.examId === examId && d.date === date);
     
-    // 2. Get all rooms that have either a duty or an allocation on this day
+    // 2. Get all rooms involved on this day
     const roomsInvolvedIds = new Set();
     dutiesForDate.forEach(d => roomsInvolvedIds.add(d.roomId));
-    examRoomAllocationRules.filter(r => r.examId === examId && r.date === date).forEach(r => roomsInvolvedIds.add(r.roomId));
+    examRoomAllocationRules.filter(r => r.examId === examId && r.date === date)
+                           .forEach(r => roomsInvolvedIds.add(r.roomId));
 
     const roomsConsolidatedData = Array.from(roomsInvolvedIds).map(roomId => {
         const room = examRooms.find(r => r.id === roomId);
@@ -28571,10 +28581,33 @@ function generateAndPrintDutyReport(examId, date) {
             dutyFN: dutiesForDate.find(d => d.roomId === roomId && d.session === 'FN'),
             dutyAN: dutiesForDate.find(d => d.roomId === roomId && d.session === 'AN')
         };
-    }).sort((a, b) => a.roomName.localeCompare(b.roomName));
+    }).sort((a, b) => a.roomName.localeCompare(b.roomName, undefined, {numeric: true}));
 
-    // 3. Build the report's HTML content
+    // 3. Build the table content
     const reportHtml = `
+    <div style="display: flex; align-items: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 15px;">
+            <div style="flex: 0 0 80px;">
+                ${schoolDetails.logoUrl ? `<img src="${schoolDetails.logoUrl}" alt="Logo" style="max-height: 75px;">` : ''}
+            </div>
+            <div style="flex-grow: 1; text-align: center;">
+                <h2 style="margin: 0; font-weight: bold; color: #000; text-transform: uppercase;">
+                    ${schoolDetails.name || 'School Name'}
+                </h2>
+                <p style="margin: 2px 0; font-size: 0.95em;">${schoolDetails.address || 'School Address'}</p>
+                <div style="display: flex; justify-content: center; gap: 15px; font-size: 0.85em; color: #555;">
+                    ${schoolDetails.phone ? `<span><i class="fas fa-phone"></i> ${schoolDetails.phone}</span>` : ''}
+                    ${schoolDetails.email ? `<span><i class="fas fa-envelope"></i> ${schoolDetails.email}</span>` : ''}
+                </div>
+            </div>
+            <div style="flex: 0 0 80px;"></div>
+        </div>
+        <div style="text-align: center; margin-bottom: 20px;">
+            <h4 style="margin: 0; font-weight: bold; text-decoration: underline;">${reportTitle}</h4>
+            <div style="display: flex; justify-content: space-around; margin-top: 8px; font-weight: 500;">
+                <span><strong>Exam:</strong> ${examName}</span>
+                <span><strong>Date:</strong> ${formattedDate}</span>
+            </div>
+        </div>
         <table class="report-table">
             <thead>
                 <tr>
@@ -28582,85 +28615,59 @@ function generateAndPrintDutyReport(examId, date) {
                     <th rowspan="2">Cap.</th>
                     <th colspan="2">Forenoon (FN) Duty</th>
                     <th colspan="2">Afternoon (AN) Duty</th>
-                  <!---  <th rowspan="2">Allocation Rules</th> --->
                 </tr>
                 <tr>
-                    <th>Teacher</th>
-                    <th>Sign</th>
-                    <th>Teacher</th>
-                    <th>Sign</th>
+                    <th>Teacher Name</th>
+                    <th style="width: 15%;">Signature</th>
+                    <th>Teacher Name</th>
+                    <th style="width: 15%;">Signature</th>
                 </tr>
             </thead>
             <tbody>
-                ${roomsConsolidatedData.map(room => {
-                    // Find all allocation rules for each session in this room
-                    const rulesFN = examRoomAllocationRules.filter(r => r.examId === examId && r.date === date && r.session === 'FN' && r.roomId === room.roomId);
-                    const rulesAN = examRoomAllocationRules.filter(r => r.examId === examId && r.date === date && r.session === 'AN' && r.roomId === room.roomId);
-                    
-                    const fnRulesHtml = rulesFN.map(r => `<div>${r.regNoRangeText}</div>`).join('');
-                    const anRulesHtml = rulesAN.map(r => `<div>${r.regNoRangeText}</div>`).join('');
-
-                    return `
-                        <tr>
-                            <td>${room.roomName}</td>
-                            <td class="text-center">${room.capacity}</td>
-                            <td>${room.dutyFN?.dutyTeacherName || '–'}</td>
-                            <td class="sign-cell"></td>
-                            <td>${room.dutyAN?.dutyTeacherName || '–'}</td>
-                            <td class="sign-cell"></td>
-                             <!--- <td class="rule-cell">
-                                ${fnRulesHtml ? `<strong>FN:</strong> ${fnRulesHtml}` : ''}
-                                ${anRulesHtml ? `<strong>AN:</strong> ${anRulesHtml}` : ''}
-                            </td> -->
-                        </tr>`;
-                }).join('')}
+                ${roomsConsolidatedData.map(room => `
+                    <tr>
+                        <td class="fw-bold">${room.roomName}</td>
+                        <td class="text-center">${room.capacity}</td>
+                        <td>${room.dutyFN?.dutyTeacherName || '–'}</td>
+                        <td class="sign-cell"></td>
+                        <td>${room.dutyAN?.dutyTeacherName || '–'}</td>
+                        <td class="sign-cell"></td>
+                    </tr>`).join('')}
             </tbody>
         </table>
+        <div style="margin-top: 30px; display: flex; justify-content: space-between; padding: 0 20px;">
+            <p><strong>Chief Superintendent</strong></p>
+            <p><strong>Office Seal</strong></p>
+        </div>
     `;
 
-    // --- 4. DYNAMIC STYLING LOGIC ---
+    // 4. Dynamic Styling
     const rowCount = roomsConsolidatedData.length;
-    let dynamicFontSize = "0.85em";
-    let dynamicPadding = "6px";
-
-    if (rowCount > 25) { // Threshold for when to shrink content
-        dynamicFontSize = "0.75em"; // Smaller font
-        dynamicPadding = "4px";  // Tighter padding
-    }
+    let dynamicFontSize = rowCount > 25 ? "0.75em" : "0.85em";
+    let dynamicPadding = rowCount > 25 ? "4px" : "8px";
     
     const extraCss = `
-        .report-table { width: 100%; border-collapse: collapse; }
+        .report-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         .report-table th, .report-table td { 
-            border: 1px solid #aaa !important; 
+            border: 1px solid #000 !important; 
             padding: ${dynamicPadding} !important; 
             font-size: ${dynamicFontSize} !important;
             vertical-align: middle;
         }
-        .report-table thead tr { background-color: #f0f0f0; }
-        .report-table th { text-align: center; }
-        .sign-cell { width: 12%; }
-        .rule-cell { font-size: 0.9em; text-align: left; }
+        .report-table thead tr { background-color: #f2f2f2 !important; -webkit-print-color-adjust: exact; }
+        .report-table th { text-align: center; text-transform: uppercase; font-weight: bold; }
+        .sign-cell { height: 35px; }
+        .fw-bold { font-weight: bold; }
     `;
 
+    // 5. Professional Header using global schoolDetails
     const customHeader = `
-        <div style="display: flex; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 5px;">
-            <div style="flex: 0 0 80px;">${schoolDetails.logoUrl ? `<img src="${schoolDetails.logoUrl}" alt="School Logo" style="max-height: 70px;">` : ''}</div>
-            <div style="flex-grow: 1; text-align: center;">
-                <h4 style="margin-bottom: 0px;">${schoolDetails.name || 'School Name'}</h4>
-                <p style="font-size: 0.9em; margin-bottom: 0;">${schoolDetails.address || 'School Address'}</p>
-            </div>
-            <div style="flex: 0 0 80px;"></div>
-        </div>
-        <div style="text-align: center;">
-            <h5 style="font-weight: bold;">${reportTitle}</h5>
-            <p style="font-size: 0.85em;">${reportSubTitle}</p>
-        </div>
+        ""
     `;
 
-    // Use your centralized print function
     printReport({
         contentHtml: reportHtml,
-        title: 'Full_Day_Duty_Report',
+        title: `Duty_Report_${date}`,
         customHeaderHtml: customHeader,
         pageSize: 'A4',
         extraCss: extraCss
@@ -30040,7 +30047,7 @@ function displayRegNoStatus2(examId, classId, division) {
  * @param {string} division
  */
 async function generateAndSaveExamRegNumbers(examId, classId, division) {
-    const studentsInClass = students.filter(s => s.classId === classId &&(s.division === "A"||s.division === "B"||s.division === "C") ); //&&(s.division === "D"||s.division === "E"||s.division === "F")
+    const studentsInClass = students.filter(s => s.classId === classId ); //&&(s.division === "D"||s.division === "E"||s.division === "F")
     if (studentsInClass.length === 0) {
         showAlert('No students found to generate numbers for.', 'info');
         return;
@@ -30185,6 +30192,12 @@ let currentAllocationSession = null;
             <h5 class="section-header text-secondary">3. Saved Rules (Database)</h5>
             <div id="existing-rules-table-wrapper"></div>
         </div>
+
+        <div id="total-summary-container"></div>
+
+
+
+        <div id="allocation-details" class="position-fixed top-0 end-0 p-3" style="z-index: 1055;"></div>
     `;
 
     // Initialize
@@ -30283,6 +30296,9 @@ function attachMatrixListeners() {
         
         // 2. Render Existing Rules List (NEW)
         renderExistingRulesTable(examId, selectedSessionKeys);
+        renderTotalSummaryTable(examId, selectedSessionKeys);
+
+         // 3. Show Matrix and Rules sections
     });
     // Save Matrix
     saveBtn.addEventListener('click', () => {
@@ -30302,6 +30318,144 @@ function attachMatrixListeners() {
 // Global variable to track sort state
 let currentSortConfig = { column: 'date', direction: 'asc' };
 
+function generateAllocationSummary(examId, sessionKeys) {
+    // 1. Filter rules for the active session
+    const activeRules = examRoomAllocationRules.filter(r => {
+        const key = `${r.date}_${r.session}`;
+        return r.examId === examId && sessionKeys.includes(key);
+    });
+
+    // 2. Prepare Summary Data
+    // We sort classes by their 'order' property as requested earlier
+    const summary = classes.sort((a, b) => a.order - b.order).map(cls => {
+        // Total Students (using your previous filter logic)
+        const totalStudents = students.filter(s => 
+            s.classId === cls.id && 
+            s.status !== 'TC Issued' && 
+            s.status !== 'Active' && 
+            ['A', 'B', 'C'].includes(s.division)
+        ).length;
+
+        // Currently Allocated (summing the 'count' or 'range' from rules)
+        // Note: Assuming rule.studentCount exists, otherwise calculate from range
+        const allocated = activeRules
+            .filter(r => r.classId === cls.id)
+            .reduce((sum, r) => sum + (r.studentCount || 0), 0);
+
+        const balance = totalStudents - allocated;
+
+        return {
+            className: cls.name,
+            total: totalStudents,
+            allocated: allocated,
+            balance: balance,
+            statusColor: balance === 0 ? 'text-success' : (balance < 0 ? 'text-danger' : 'text-warning')
+        };
+    });
+
+    return summary;
+}
+function renderTotalSummaryTable(examId, sessionKeys) {
+    const summaryWrapper = document.getElementById('total-summary-container');
+    if (!summaryWrapper) return;
+
+    // 1. Get rules for these specific sessions
+    const activeRules = examRoomAllocationRules.filter(r => {
+        const key = `${r.date}_${r.session}`;
+        return r.examId === examId && sessionKeys.includes(key);
+    });
+
+    // 2. Generate Data per Class
+    const summaryData = classes.sort((a, b) => a.order - b.order).map(cls => {
+        // Find students belonging to this class (Filtered by your criteria)
+        const classStudents = students.filter(s => 
+            s.classId === cls.id && 
+            s.status !== 'TC Issued' && 
+            s.status !== 'Active' && 
+            ['A', 'B', 'C'].includes(s.division)
+        );
+
+        const totalExpected = classStudents.length;
+
+        // Sum up allocations from the rules
+        const totalAllocated = activeRules
+            .filter(r => r.classId === cls.id)
+            .reduce((sum, r) => sum + (parseInt(r.studentCount) || 0), 0);
+
+        const balance = totalExpected - totalAllocated;
+
+        return {
+            name: cls.name,
+            expected: totalExpected,
+            allocated: totalAllocated,
+            balance: balance
+        };
+    });
+
+    // 3. Build the HTML
+    let html = `
+        <div class="card border-primary mb-4">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="fas fa-microchip me-2"></i>Allocation Audit (Cross-Check)</h6>
+                <span class="badge bg-white text-primary">${sessionKeys.join(', ')}</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered mb-0 text-center align-middle">
+                    <thead class="table-light small text-uppercase">
+                        <tr>
+                            <th class="text-start">Class / Batch</th>
+                            <th>Total Students</th>
+                            <th>Allocated</th>
+                            <th>Balance</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+    `;
+
+    summaryData.forEach(row => {
+        let statusHtml = '';
+        let rowClass = '';
+
+        if (row.balance === 0) {
+            statusHtml = `<span class="badge rounded-pill bg-success-subtle text-success"><i class="fas fa-check"></i> Ready</span>`;
+        } else if (row.balance > 0) {
+            statusHtml = `<span class="badge rounded-pill bg-warning-subtle text-warning"><i class="fas fa-exclamation-triangle"></i> Missing ${row.balance}</span>`;
+            rowClass = 'table-warning-light'; // Custom CSS for slight highlight
+        } else {
+            statusHtml = `<span class="badge rounded-pill bg-danger-subtle text-danger"><i class="fas fa-times"></i> Over ${Math.abs(row.balance)}</span>`;
+            rowClass = 'table-danger-light';
+        }
+
+        html += `
+            <tr class="${rowClass}">
+                <td class="text-start fw-bold">${row.name}</td>
+                <td>${row.expected}</td>
+                <td class="text-primary fw-semibold">${row.allocated}</td>
+                <td class="${row.balance !== 0 ? 'fw-bold text-danger' : 'text-muted'}">${row.balance}</td>
+                <td>${statusHtml}</td>
+            </tr>
+        `;
+    });
+
+    html += `
+                    </tbody>
+                    <tfoot class="table-dark">
+                        <tr>
+                            <td class="text-start">TOTAL</td>
+                            <td>${summaryData.reduce((a, b) => a + b.expected, 0)}</td>
+                            <td>${summaryData.reduce((a, b) => a + b.allocated, 0)}</td>
+                            <td>${summaryData.reduce((a, b) => a + b.balance, 0)}</td>
+                            <td>-</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    `;
+
+    summaryWrapper.innerHTML = html;
+}
 function renderExistingRulesTable(examId, sessionKeys) {
     const container = document.getElementById('existing-rules-container');
     const wrapper = document.getElementById('existing-rules-table-wrapper');
