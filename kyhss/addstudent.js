@@ -524,7 +524,6 @@ window.renderAddStudentForm = async () => {
         // 2. Query Database
         // Note: Ensure window.getCollectionRef is defined, or use collection(db, 'students')
         const q = query(window.getCollectionRef('students'), where('whatsappNo', '==', whatsappNo));
-
         const snapshot = await getDocs(q);
 
         // 3. Handle No Matches
@@ -542,7 +541,7 @@ window.renderAddStudentForm = async () => {
 
         snapshot.docs.forEach((doc, index) => {
             const data = doc.data();
-            if (data.id === admnId.value) return;
+            
             // Store the first valid record we find to use for autofill later
             if (index === 0) {
                 firstSiblingData = data;
@@ -736,12 +735,27 @@ window.renderAddStudentForm = async () => {
             const snapshot = await getDocs(q);
             let maxAdmnNum = 0;
             snapshot.docs.forEach(doc => {
-                const num = parseInt(doc.data().admissionNumber, 10);
-                if (!isNaN(num) && num > maxAdmnNum) maxAdmnNum = num;
-            });
+  try {
+    let admn = doc.data().admissionNumber;
+
+    if (!admn) return;
+
+    // Remove K or H (uppercase or lowercase)
+    admn = admn.toString().replace(/[KH]/gi, '');
+
+    const num = parseInt(admn, 10);
+
+    if (!isNaN(num) && num > maxAdmnNum) {
+      maxAdmnNum = num;
+    }
+
+  } catch (err) {
+    console.error("Error processing admission number:", err);
+  }
+});
 
             const nextAdmnNum = maxAdmnNum + 1;
-            const formattedNum = nextAdmnNum.toString().padStart(4, '0');
+            const formattedNum = sector === "KG" ? "K" + nextAdmnNum.toString().padStart(4, '0') :sector === "H" ? "H" + nextAdmnNum.toString().padStart(4, '0') :nextAdmnNum.toString().padStart(4, '0');
             
             // Year Code (2025-2026 -> 25)
             let yearForId = selectedYear;
@@ -912,7 +926,9 @@ window.renderAddStudentForm = async () => {
 
         try {
              // Gather Data
-            
+            //let admissionSector = document.getElementById('admissionSector').value;
+            //let admissionNumber = admissionSector === "KG" ? "K" + document.getElementById('admissionNumber').value : document.getElementById('admissionNumber').value;
+
             const studentData = {
             // --- A. SYSTEM & IDENTITY ---
             id: isEditMode ? currentStudent.id : admnId.value, // Generate ID if new
@@ -1407,9 +1423,3 @@ window.generateTopperPoster = async (studentId, examId, rank) => {
     const editorUrl = `robust-editor.html?selectId=${student.id}&template=topper`;
     window.open(editorUrl, '_blank');
 };
-
-
-
-
-
-
