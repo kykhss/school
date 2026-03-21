@@ -1190,7 +1190,7 @@ async function trackedGetDocs(colName, queryRef) {
 async function attachDataListeners(collectionsToWatch) {
     if (!collectionsToWatch || collectionsToWatch.length === 0) return;
 
-    // Identify Smart-Sync compatible collections
+    // Identify which collections have the 'lastUpdated' index in Dexie
     const smartSyncCollections = new Set();
     for (const tableName in collectionMap) {
         if (window.appDb[tableName] && appDb[tableName].schema.idxByName.lastUpdated) {
@@ -1199,18 +1199,16 @@ async function attachDataListeners(collectionsToWatch) {
     }
 
     for (const name of collectionsToWatch) {
-        
-        // Skip if already loaded and active
         if (activeListeners[name] && dataLoadStatus[name]) continue;
 
         const config = collectionMap[name];
         if (!config) {
-            console.warn(`Configuration for ${name} not found.`);
+            console.warn(`[Config Missing] ${name} not found.`);
             resolvePromiseFor(name);
             continue;
         }
 
-        // Cleanup old listeners
+        // Cleanup existing listeners before re-attaching
         if (activeListeners[name]) {
             activeListeners[name]();
             delete activeListeners[name];
@@ -1219,201 +1217,176 @@ async function attachDataListeners(collectionsToWatch) {
         let collectedData = {};
 
         // ============================================================
-        // PHASE 0: IMMEDIATE LOAD FROM INDEXEDDB (Offline First)
+        // PHASE 0: IMMEDIATE OFFLINE LOAD (Dexie -> UI)
         // ============================================================
-        // We ALWAYS load from local DB first to show UI immediately.
         try {
             const localData = await appDb[name].toArray();
-            
             if (localData.length > 0) {
-                console.log(`[Cache Load] Loaded ${localData.length} records for ${name} from IndexedDB.`);
-                
-                // Populate Memory
+                console.log(`[Cache] Found ${localData.length} records for ${name}.`);
                 localData.forEach(doc => collectedData[doc.id] = doc);
                 config.setter(localData);
-                
-                // Render immediately with cached data
                 triggerRender(config);
             }
         } catch (e) {
-            console.warn(`[Cache Load Error] Could not load ${name} from Dexie:`, e);
+            console.error(`[Dexie Load Error] ${name}:`, e);
         }
 
         // ============================================================
-        // PHASE 1: OFFLINE MODE CHECK
-        // ============================================================
-        if (!navigator.onLine || 1=== 2) {
-            console.log(`[Offline] Skipping network sync for ${name}. Using cached data.`);
-            dataLoadStatus[name] = true;
-            resolvePromiseFor(name);
-            continue; // Stop here if offlin
-        }
-
-        // ============================================================
-        // PHASE 2: SMART SYNC (Delta Fetch)
+        // PHASE 1: SMART SYNC (Count Check & Delta Fetch)
         // ============================================================
         let needsFullSync = true;
         let localCount = 0;
 
-        if (smartSyncCollections.has(name)) {
+        if (navigator.onLine && smartSyncCollections.has(name)) {
             try {
-                localCount = await appDb[name].count();
+                localCount = await getLocalCountForSync(name);
                 const metadata = await appDb.lastSynced.get(name);
                 const lastLocalSyncTime = metadata?.timestamp || new Date(0);
 
-                if (localCount > 0) {
-                    const generatedQueries = getQueriesForCollection(name);
-                    
-                    if (generatedQueries.length > 0) {
-                        // A. Check Server Counts
-                        const countPromises = generatedQueries.map(qInfo => getCountFromServer(qInfo.query));
-                        const countSnapshots = await Promise.all(countPromises);
+                const generatedQueries = getQueriesForCollection(name);
+                
+                if (generatedQueries.length > 0) {
+                    // A. Get Aggregated Server Count
+                    const countPromises = generatedQueries.map(qInfo => getCountFromServer(qInfo.query));
+                    const countSnapshots = await Promise.all(countPromises);
+                    let totalServerCount = 0;
+                    countSnapshots.forEach(snap => totalServerCount += snap.data().count);
+
+                    // B. Compare Logic
+                    const skipCountCheck = (name === 'examRoomAllocationRules');
+                    console.log(`[Smart Sync] ${name} → Local Count: ${localCount}, Server Count: ${totalServerCount}${skipCountCheck ? " (Count Check Skipped)" : ""}`);
+                    if (localCount === totalServerCount || skipCountCheck) {
+                        console.log(`[Smart Sync] ${name} counts match. Fetching deltas...`);
                         
-                        let totalServerCount = 0;
-                        countSnapshots.forEach(snap => totalServerCount += snap.data().count);
+                        // Fetch only items modified since last sync
+                        const updatePromises = generatedQueries.map(qInfo => 
+                            getDocs(query(qInfo.query, where('lastUpdated', '>', lastLocalSyncTime)))
+                        );
+                        const allSnapshots = await Promise.all(updatePromises);
+                        
+                        let docsToSave = [];
+                        allSnapshots.forEach(snap => {
+                            docsToSave.push(...snap.docs.map(d => ({id: d.id, ...d.data()})));
+                        });
 
-                        // Special case for Rule Arrays (Doc Count != Item Count)
-                        const skipCountCheck = (name === 'examRoomAllocationRules');
-
-                        // B. Compare
-                        if (localCount === totalServerCount || skipCountCheck) {
-                            
-                            // Fetch only NEW/UPDATED docs
-                            const updatePromises = generatedQueries.map(qInfo => 
-                                getDocs(query(qInfo.query, where('lastUpdated', '>', lastLocalSyncTime)))
-                            );
-                            const allSnapshots = await Promise.all(updatePromises);
-                            
-                            let docsToSave = [];
-                            allSnapshots.forEach(snap => {
-                                if (!snap.empty) {
-                                    docsToSave.push(...snap.docs.map(d => ({id: d.id, ...d.data()})));
-                                }
-                            });
-
-                            // C. Apply Updates
-                            if (docsToSave.length > 0) {
-                                console.log(`[Smart Sync] Applying ${docsToSave.length} updates to ${name}.`);
-                                
-                                if (name === 'examRoomAllocationRules') {
-                                    await handleExamRulesSync(docsToSave, [], config);
-                                } else {
-                                    await appDb[name].bulkPut(docsToSave);
-                                }
-                                
-                                // Refresh Memory from DB after update
-                                const updatedLocalData = await appDb[name].toArray();
-                                if (name === 'classes') {
-                                const filtered = updatedLocalData.filter(item => item.academicYear === window.systemConfig.activeYear);
-                                config.setter(filtered);
-                                } else {
-                                config.setter(updatedLocalData);
-                                }
-                                triggerRender(config);
-                            }
-
-                            // D. Mark Sync Complete
-                            dataLoadStatus[name] = true; 
-                            resolvePromiseFor(name);
-                            await recordLastSyncTime(name, new Date());
-                            
-                            needsFullSync = false; // We are up to date!
-                            console.log(`[Smart Sync] Success for ${name}`);
-                        } else {
-                            console.log(`[Smart Sync] Count mismatch for ${name}. Full sync required.`);
+                        if (docsToSave.length > 0) {
+                            await appDb[name].bulkPut(docsToSave);
+                            // Refresh memory cache from updated DB
+                            const updatedData = await appDb[name].toArray();
+                            config.setter(updatedData);
                         }
+
+                        // Mark sync complete to skip Phase 3 full pull
+                        dataLoadStatus[name] = true; 
+                        resolvePromiseFor(name);
+                        await recordLastSyncTime(name, new Date());
+                        needsFullSync = false; 
+                        triggerRender(config);
                     }
                 }
             } catch (e) {
-                console.warn(`[Smart Sync] Failed for ${name}, falling back.`, e);
-                needsFullSync = true;
+                console.warn(`[Smart Sync Failed] Falling back to Full Sync for ${name}:`, e);
             }
         }
 
         // ============================================================
-        // PHASE 3: REAL-TIME LISTENER (Fallback & Live Updates)
+        // PHASE 2: REAL-TIME LISTENERS (Live Updates)
         // ============================================================
-        
         const queriesToExecute = getQueriesForCollection(name);
-        if (queriesToExecute.length === 0) {
-            dataLoadStatus[name] = true;
-            resolvePromiseFor(name);
-            continue;
-        }
-
-        let queriesReceivedInitialSnapshot = 0;
-        let queriesFinishedProcessing = 0;
-        const expectedInitialSnapshots = queriesToExecute.length;
         const currentUnsubs = [];
+        let snapshotsProcessed = 0;
 
         queriesToExecute.forEach(qInfo => {
-            const unsub = onSnapshot(qInfo.query, async snapshot => {
-                try {
-                    let isInitialPhase = !dataLoadStatus[name];
+            const unsub = onSnapshot(qInfo.query, async (snapshot) => {
+                let isFirstLoad = !dataLoadStatus[name];
 
-                    // 1. Full Reset Check (Only on first load if Smart Sync failed)
-                    if (isInitialPhase) {
-                        queriesReceivedInitialSnapshot++;
-                        if (needsFullSync && localCount > 0 && queriesReceivedInitialSnapshot === 1) {
-                             console.log(`[Sync] Performing full reset for ${name}`);
-                             await appDb[name].clear();
-                             collectedData = {}; 
-                        }
-                    }
+                // If Smart Sync failed or counts mismatched, clear local DB on first snapshot
+                if (isFirstLoad && needsFullSync && snapshotsProcessed === 0 && localCount > 0) {
+                    console.log(`[Full Sync] Resetting local ${name} table.`);
+                    await appDb[name].clear();
+                    collectedData = {};
+                }
 
-                    const changes = snapshot.docChanges();
+                const changes = snapshot.docChanges();
+                if (changes.length > 0) {
+                    const { toAddOrUpdate, toDelete } = processFirestoreChanges(changes);
                     
-                    // 2. Process Changes
-                    if (changes.length > 0) {
-                        const { toAddOrUpdate, toDelete } = processFirestoreChanges(changes);
-                        
-                        if (name === 'examRoomAllocationRules') {
-                            await handleExamRulesSync(toAddOrUpdate, toDelete, config);
-                        } else {
-                            const store = appDb[name];
-                            await appDb.transaction('rw', store, async () => {
-                                if (toDelete.length > 0) await store.bulkDelete(toDelete);
-                                if (toAddOrUpdate.length > 0) await store.bulkPut(toAddOrUpdate);
-                            });
+                    // Update Dexie
+                    await appDb.transaction('rw', appDb[name], async () => {
+                        if (toDelete.length > 0) await appDb[name].bulkDelete(toDelete);
+                        if (toAddOrUpdate.length > 0) await appDb[name].bulkPut(toAddOrUpdate);
+                    });
 
-                            // Update Memory Cache
-                            toDelete.forEach(id => delete collectedData[id]);
-                            toAddOrUpdate.forEach(doc => collectedData[doc.id] = doc);
-                            config.setter(Object.values(collectedData));
-                        }
-                    }
-
-                    // 3. Resolve Promise (App Ready)
-                    if (isInitialPhase) {
-                        queriesFinishedProcessing++;
-                        if (queriesFinishedProcessing >= expectedInitialSnapshots) {
-                            dataLoadStatus[name] = true;
-                            resolvePromiseFor(name);
-                            await recordLastSyncTime(name, new Date()); 
-                        }
-                    }
-
-                    // 4. Render Updates
+                    // Update Memory Cache & UI
+                    toDelete.forEach(id => delete collectedData[id]);
+                    toAddOrUpdate.forEach(doc => collectedData[doc.id] = doc);
+                    config.setter(Object.values(collectedData));
                     triggerRender(config);
+                }
 
-                } catch (error) {
-                    console.error(`[Listener Error] ${name}:`, error);
-                    // Ensure app doesn't hang on error
-                    if (!dataLoadStatus[name]) {
+                if (isFirstLoad) {
+                    snapshotsProcessed++;
+                    if (snapshotsProcessed >= queriesToExecute.length) {
                         dataLoadStatus[name] = true;
                         resolvePromiseFor(name);
+                        await recordLastSyncTime(name, new Date());
                     }
                 }
-            }, error => {
-                console.error(`[Connection Error] ${name}:`, error);
-                if (!dataLoadStatus[name]) resolvePromiseFor(name);
             });
-            
             currentUnsubs.push(unsub);
         });
-        
+
         activeListeners[name] = () => currentUnsubs.forEach(u => u());
     }
+}
+async function getLocalCountForSync(name) {
+    const table = appDb[name];
+    
+    // Teacher-level filtering to match getQueriesForCollection
+    if (currentUserRole === 'teacher') {
+        const singleField = ['students', 'syllabusCompletion', 'studentFeeSetups'];
+        const arrayField = ['chapters', 'syllabuses'];
+
+        if (singleField.includes(name)) {
+            let count = 0;
+            for (const { classId, division } of teacherAssignedClasses) {
+                count += await table.where({ classId, division }).count();
+            }
+            return count;
+        } 
+        
+        if (arrayField.includes(name)) {
+            let count = 0;
+            for (const { classId, division } of teacherAssignedClasses) {
+                // Filter Dexie to match array-contains logic
+                count += await table.where('classId').equals(classId)
+                                    .filter(item => item.appliesToDivisions.includes(division))
+                                    .count();
+            }
+            return count;
+        }
+    }
+
+    // Admin or Global count
+    return await table.count();
+}
+// Records the last successful sync timestamp
+async function recordLastSyncTime(id, date) {
+    await appDb.lastSynced.put({ id, timestamp: date });
+}
+
+// Cleans Firebase changes into simple JS objects
+function processFirestoreChanges(changes) {
+    const toAddOrUpdate = [];
+    const toDelete = [];
+    changes.forEach(change => {
+        if (change.type === "removed") {
+            toDelete.push(change.doc.id);
+        } else {
+            toAddOrUpdate.push({ id: change.doc.id, ...change.doc.data() });
+        }
+    });
+    return { toAddOrUpdate, toDelete };
 }
 
 // ======================================================
