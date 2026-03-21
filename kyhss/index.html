@@ -1112,7 +1112,7 @@ async function handleExamRulesSync(toAddOrUpdate, toDelete, config) {
     }
 }
 
-function processFirestoreChanges(changes) {
+function processFirestoreChangeslast(changes) {
     const toAddOrUpdate = [];
     const toDelete = [];
     changes.forEach(change => {
