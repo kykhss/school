@@ -452,152 +452,113 @@ async function saveMarks(examId, classId, division, subjectId) {
 }
 
  
- window.attachMarksListener = async (classDataArray, refresh = false) => {
-    if (!Array.isArray(classDataArray) || classDataArray.length === 0) {
-        console.warn("attachMarksListener was called with an invalid or empty classDataArray.");
-        return;
-    }
+ 
+const handleDatabaseUpdate = async (docChanges, source) => {
+    const { toAddOrUpdate, studentIdsToClean } = processMarksChanges(docChanges);
 
-    if (!navigator.onLine) {
-        return null;
-    }
+    await appDb.transaction('rw', appDb.marks, async () => {
+        // 1. Delete ALL existing marks for these specific students
+        // This prevents "ghost" marks if a subject was removed from the server
+        for (const sId of studentIdsToClean) {
+            await appDb.marks.where('studentId').equals(sId).delete();
+        }
+
+        // 2. Put the new flattened subject marks
+        if (toAddOrUpdate.length > 0) {
+            await appDb.marks.bulkPut(toAddOrUpdate);
+        }
+    });
+
+    console.log(`[Sync] ${source}: Processed ${studentIdsToClean.size} students.`);
+};
+
+window.attachMarksListener = async (classDataArray, refresh = false) => {
+    if (!Array.isArray(classDataArray) || classDataArray.length === 0) return;
+    if (!navigator.onLine) return null;
 
     const academicYear = window.systemConfig.activeYear;
     const marksCollectionName = `marks-${academicYear}`;
+    const FIRESTORE_BATCH_LIMIT = 30;
 
-    // --- HELPER: Centralized DB Save Logic ---
-    // This prevents writing the same bulkPut/bulkDelete code 3 times
-    const handleDatabaseUpdate = async (docChanges, source) => {
-        try {
-            if (docChanges.length === 0) {
-                updateLoadMarksButton('noChanges');
-                return;
-            }
+    // --- STEP 1: GET UNIQUE CLASS IDS & LOCAL STATS ---
+    const uniqueClassIds = [...new Set(classDataArray.map(c => c.classId))];
+    const localStats = new Map(); // Map<classId, {count, time}>
 
-            // Reuse your existing processing logic
-            const { toAddOrUpdate, toDelete } = processMarksChanges(docChanges);
+    const statsPromises = uniqueClassIds.map(async (classId) => {
+        // Count unique students across ALL divisions for this class
+        const allClassMarks = await appDb.marks.where('classId').equals(classId).toArray();
+        const studentCount = new Set(allClassMarks.map(m => m.studentId)).size;
 
-            if (toAddOrUpdate.length > 0) {
-                await appDb.marks.bulkPut(toAddOrUpdate);
-                updateLoadMarksButton('newData');
-            } else {
-                updateLoadMarksButton('noChanges');
-            }
-
-            if (toDelete.length > 0) {
-                await appDb.marks.bulkDelete([...new Set(toDelete)]);
-                updateLoadMarksButton('newData');
-            }
-
-
-        } catch (error) {
-            console.error(`[DB Update Error - ${source}]:`, error);
-        }
-    };
-
-    // 1. Create an array of promises
-    const loadingPromises = classDataArray.map(async ({ classId, division }) => {
-        const loadMarksBtn = document.getElementById('loadmarks-btn');
-
-        return new Promise(async (resolve) => {
-            if (!classId || !division) {
-                resolve(); 
-                return;
-            }
-
-            const listenerKey = `${classId}_${division}`;
-
-            // If already listening and not refreshing, assume ready.
-            if (activeMarksListeners[listenerKey] && !refresh) {
-                resolve();
-                return;
-            }
-
-            let dataLoadedViaDelta = false;
-
-            // --- STEP 1: TRY SMART DELTA SYNC ---
-            try {
-                const lastLocalMark = await appDb.marks
-                    .where({ classId, division })
-                    .reverse()
-                    .sortBy('lastUpdated');
-                //console.log("lastLocalMark", lastLocalMark);
-                const lastLocalSyncTime = (lastLocalMark.length > 0 && lastLocalMark[0].lastUpdated) 
-                    ? lastLocalMark[0].lastUpdated 
-                    : new Date(0);
-                   // console.log("lastLocalSyncTime", lastLocalSyncTime);
-
-                const updatesQuery = query(
-                    window.getCollectionRef(marksCollectionName),
-                    where('lastUpdated', '>', lastLocalSyncTime),
-                    where('classId', '==', classId),
-                    where('division', '==', division)
-                    
-                );
-
-                const updatesSnapshot = await getDocs(updatesQuery);
-
-                if (!updatesSnapshot.empty) {
-                    // Create mock changes for the helper
-                    const changesMock = updatesSnapshot.docs.map(doc => ({ type: 'modified', doc }));
-                    await handleDatabaseUpdate(changesMock, 'DeltaSync');
-                } else {
-                    updateLoadMarksButton('noChanges');
-                }
-
-                dataLoadedViaDelta = true;
-                resolve(); // Success via Delta
-
-            } catch (error) {
-                console.warn(`[Marks Sync] Delta sync failed for ${listenerKey}, falling back to listener.`, error);
-                if(loadMarksBtn) {
-                     loadMarksBtn.innerHTML = `<span class="text-danger me-2"></span>Sync Error (Retrying...)`;
-                }
-                // Don't resolve yet; fallback to snapshot below
-            }
-
-            // --- STEP 2: ATTACH BACKGROUND LISTENER ---
-            if (activeMarksListeners[listenerKey]) {
-                // If Delta succeeded, we are done with the Promise. 
-                // But if Delta failed, we need to resolve here if the listener was ALREADY active.
-                if (!dataLoadedViaDelta) resolve();
-                return;
-            }
-
-            const fullQuery = query(
-                window.getCollectionRef(marksCollectionName),
-                where('classId', '==', classId),
-                where('division', '==', division)
-            );
-
-            const unsubscribe = onSnapshot(fullQuery, async (snapshot) => {
-                const changes = snapshot.docChanges();
-
-                // 2A. If this is the Initial Load (and Delta Sync failed or was skipped)
-                if (!dataLoadedViaDelta) {
-                    await handleDatabaseUpdate(changes, 'Snapshot-Initial');
-                    dataLoadedViaDelta = true;
-                    resolve(); 
-                } 
-                // 2B. Normal background updates (Real-time)
-                else {
-                    await handleDatabaseUpdate(changes, 'Snapshot-Update');
-                }
-
-            }, (error) => {
-                console.error(`[Firestore] Error listening to marks: `, error);
-                resolve(); // Always resolve so Promise.all doesn't hang indefinitely
-            });
-
-            activeMarksListeners[listenerKey] = unsubscribe;
+        // Get latest timestamp for the whole class
+        const latest = allClassMarks.sort((a, b) => b.lastUpdated - a.lastUpdated)[0];
+        
+        localStats.set(classId, {
+            count: studentCount,
+            time: latest ? latest.lastUpdated : new Date(0)
         });
     });
 
-    // 2. Wait for ALL class promises to finish
-    await Promise.all(loadingPromises);
-    setStatus('loaded');
+    await Promise.all(statsPromises);
 
-    console.log("All marks loaded into memory.");
+    // --- STEP 2: CHUNK (30 Classes per Batch) ---
+    const chunks = [];
+    for (let i = 0; i < uniqueClassIds.length; i += FIRESTORE_BATCH_LIMIT) {
+        chunks.push(uniqueClassIds.slice(i, i + FIRESTORE_BATCH_LIMIT));
+    }
+
+    const chunkPromises = chunks.map(async (classIdBatch) => {
+        const alreadyListening = classIdBatch.every(cId => activeMarksListeners[cId]);
+        if (alreadyListening && !refresh) return;
+
+        let totalLocalStudentCount = 0;
+        let minBatchTime = new Date();
+        
+        classIdBatch.forEach(cId => {
+            const stat = localStats.get(cId);
+            totalLocalStudentCount += stat.count;
+            if (stat.time < minBatchTime) minBatchTime = stat.time;
+            if (stat.count === 0) minBatchTime = new Date(0); 
+        });
+
+        // B. Get Server Count for the whole Class Batch
+        const batchQuery = query(
+            window.getCollectionRef(marksCollectionName),
+            where('classId', 'in', classIdBatch)
+        );
+        
+        const serverCountSnap = await getCountFromServer(batchQuery);
+        const totalServerCount = serverCountSnap.data().count;
+
+        // C. Smart Sync Decision
+        let needsFullSync = totalLocalStudentCount !== totalServerCount;
+
+        if (!needsFullSync) {
+            console.log(`[Smart Sync] Class counts match. Fetching deltas for batch.`);
+            
+            const deltaQuery = query(batchQuery, where('lastUpdated', '>', minBatchTime));
+            const deltaSnap = await getDocs(deltaQuery);
+            
+            if (!deltaSnap.empty) {
+                const mockChanges = deltaSnap.docs.map(doc => ({ type: 'modified', doc }));
+                await handleDatabaseUpdate(mockChanges, 'ClassDeltaSync');
+            }
+        } else {
+            console.warn(`[Sync] Mismatch: Local ${totalLocalStudentCount} vs Server ${totalServerCount}`);
+            // onSnapshot will fill the gaps
+        }
+
+        // D. Real-Time Listener (Whole Class)
+        const unsub = onSnapshot(batchQuery, async (snapshot) => {
+            const changes = snapshot.docChanges();
+            if (changes.length > 0) {
+                await handleDatabaseUpdate(changes, 'LiveClassUpdate');
+            }
+        });
+
+        classIdBatch.forEach(cId => activeMarksListeners[cId] = unsub);
+    });
+
+    await Promise.all(chunkPromises);
 };
 
 let status = null;
