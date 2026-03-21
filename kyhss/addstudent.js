@@ -60,7 +60,7 @@ window.renderAddStudentForm = async () => {
     let initialAcademicYear = '';
     
     if (isEditMode && currentStudent.admittedYear) {
-        initialAcademicYear = currentStudent.admittedYear||currentStudent.academicYear;
+        initialAcademicYear = currentStudent.admittedYear||currentStudent.academicYear||"2025-2026";
     } else {
         // Try to get from Local Storage first
         const savedYear = localStorage.getItem('system_activeYear');
@@ -120,7 +120,7 @@ window.renderAddStudentForm = async () => {
                             <div class="col-md-3">
                                 <label for="academicYear" class="form-label fw-bold">Academic Year <span class="text-danger">*</span></label>
                                 <input id="academicYear" type="text" class="form-control fw-bold text-primary border-primary" 
-                                       placeholder="YYYY-YYYY" value="${initialAcademicYear}" required ${isEditMode ? 'readonly' : ''}>
+                                       placeholder="YYYY-YYYY" value="${initialAcademicYear}" required ${isEditMode ?  '':'readonly'}>
                                 <div class="invalid-feedback">Year required</div>
                             </div>
 
