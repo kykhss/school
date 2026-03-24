@@ -1310,20 +1310,23 @@ async function attachDataListeners(collectionsToWatch) {
                 const changes = snapshot.docChanges();
                 if (changes.length > 0) {
                     const { toAddOrUpdate, toDelete } = processFirestoreChanges(changes);
-                    
+                    if(name === 'examRoomAllocationRules') {
+                        await handleExamRulesSync(toAddOrUpdate, toDelete, config);
+                        //return; // Skip the rest of the loop since it's handled in the function
+                    }else{
                     // Update Dexie
                     await appDb.transaction('rw', appDb[name], async () => {
                         if (toDelete.length > 0) await appDb[name].bulkDelete(toDelete);
                         if (toAddOrUpdate.length > 0) await appDb[name].bulkPut(toAddOrUpdate);
                     });
-
+                
                     // Update Memory Cache & UI
                     toDelete.forEach(id => delete collectedData[id]);
                     toAddOrUpdate.forEach(doc => collectedData[doc.id] = doc);
                     config.setter(Object.values(collectedData));
                     triggerRender(config);
                 }
-
+                }
                 if (isFirstLoad) {
                     snapshotsProcessed++;
                     if (snapshotsProcessed >= queriesToExecute.length) {
