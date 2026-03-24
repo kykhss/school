@@ -1,4 +1,4 @@
-import {writeBatch,updateDoc, serverTimestamp, query, where, getDocs,getCountFromServer, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import {writeBatch, updateDoc, serverTimestamp, query, where,getCountFromServer, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     window.renderMarkEntryTab = () => {
     const container = document.getElementById('entry');
@@ -285,8 +285,9 @@ async function loadMarkEntrySheet(examId, classId, division, subjectId) {
     
     const maxTE = schedule.maxTE || 0;
     const maxCE = schedule.maxCE || 0;
-    const studentsInClass = students
-        .filter(s => s.classId === classId && s.division === division && s.status !== 'TC Issued' && s.status !== 'Graduated')
+    //const studentsInClass = await window.getStudents(classId, division);
+       
+    const studentsInClass = students.filter(s => s.classId === classId && s.division === division && status === 'Active')
         .sort((a, b) => a.name.localeCompare(b.name));
 
     if (studentsInClass.length === 0) {
@@ -451,8 +452,6 @@ async function saveMarks(examId, classId, division, subjectId) {
     }
 }
 
- 
- 
 const handleDatabaseUpdate = async (docChanges, source) => {
     const { toAddOrUpdate, studentIdsToClean } = processMarksChanges(docChanges);
 
@@ -560,7 +559,6 @@ window.attachMarksListener = async (classDataArray, refresh = false) => {
 
     await Promise.all(chunkPromises);
 };
-
 let status = null;
 
 function setStatus(value) {
@@ -948,58 +946,51 @@ window.exportMarkEntryReportToPdf = async (examId) => {
  */
 window.processMarksChanges = (changes) => {
     const toAddOrUpdate = [];
-    const studentIdsToProcess = new Set();
-    const studentDocsToRemove = new Set();
+    const studentIdsToClean = new Set(); // IDs of students being updated or removed
 
     changes.forEach(change => {
         const studentId = change.doc.id;
-        if (change.type === "removed") {
-            studentDocsToRemove.add(studentId);
-        } else { // 'added' or 'modified'
-            studentIdsToProcess.add(studentId);
-            const studentMarksDoc = { id: studentId, ...change.doc.data() };
-            const lastUpdated = studentMarksDoc.lastUpdated; // Get the top-level timestamp
+        studentIdsToClean.add(studentId);
 
-            for (const key in studentMarksDoc) {
+        if (change.type !== "removed") {
+            const docData = change.doc.data();
+            const lastUpdated = docData.lastUpdated;
+
+            // Flatten "marks.ExamID.SubjectID" into individual subject rows
+            Object.keys(docData).forEach(key => {
                 if (key.startsWith('marks.')) {
                     const [, examId, subjectId] = key.split('.');
-                    const markData = studentMarksDoc[key];
+                    const markData = docData[key];
                     
                     const flatMarkId = `${examId}_${studentId}_${subjectId}`;
-                    const flatMarkData = {
+                    toAddOrUpdate.push({
                         id: flatMarkId,
-                        examId, subjectId, studentId,
-                        classId: studentMarksDoc.classId,
-                        division: studentMarksDoc.division,
+                        examId, 
+                        subjectId, 
+                        studentId,
+                        classId: docData.classId,
+                        division: docData.division,
                         te: markData.te,
                         ce: markData.ce,
-                        lastUpdated: lastUpdated // Add the timestamp to each flattened record
-                    };
-                    
-                    //marks[flatMarkId] = flatMarkData;
-                    toAddOrUpdate.push(flatMarkData);
+                        lastUpdated: lastUpdated
+                    });
                 }
-            }
-        }
-    });
-    
-    // Determine which flat mark records need to be deleted
-    const toDelete = [];
-    let marks = window.getmarks(); // Get the in-memory marks object
-    Object.keys(marks).forEach(key => {
-        const studentIdInKey = key.split('_')[1];
-        // Delete if the student's doc was removed OR if it was modified (to clear out old marks before adding new ones)
-        if (studentDocsToRemove.has(studentIdInKey) || studentIdsToProcess.has(studentIdInKey)) {
-             // We need to find all marks for the student that are no longer in the toAddOrUpdate list
-            if (!toAddOrUpdate.some(item => item.id === key)) {
-                delete marks[key];
-                toDelete.push(key);
-            }
+            });
         }
     });
 
-    return { toAddOrUpdate, toDelete };
+    return { toAddOrUpdate, studentIdsToClean };
+};
+
+async function getMarksStudentCount(classId, division) {
+    // We use .offset(0).keys() to get all IDs, then extract unique Student IDs
+    // Or better: use a unique index if you have one.
+    const allMarks = await appDb.marks.where({ classId, division }).toArray();
+    const uniqueStudents = new Set(allMarks.map(m => m.studentId));
+    return uniqueStudents.size; // This matches Firestore Doc Count!
 }
+
+
 
 /**
  * Attaches real-time listeners for marks data with an intelligent sync strategy.
@@ -1098,5 +1089,3 @@ function unsubscribeAllListeners() {
     }
     activeMarksListeners = {};
 }
-
-
