@@ -1212,7 +1212,7 @@ async function attachDataListeners(collectionsToWatch) {
                     countSnapshots.forEach(snap => totalServerCount += snap.data().count);
 
                     // B. Compare Logic
-                    //const skipCountCheck = (name === 'examRoomAllocationRules');
+                    const skipCountCheck = (name === 'examRoomAllocationRulesd');
                     console.log(`[Smart Sync] ${name} → Local Count: ${localCount}, Server Count: ${totalServerCount}${skipCountCheck ? " (Count Check Skipped)" : ""}`);
                     if (localCount === totalServerCount || skipCountCheck) {
                         console.log(`[Smart Sync] ${name} counts match. Fetching deltas...`);
