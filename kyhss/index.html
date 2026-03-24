@@ -1341,33 +1341,36 @@ async function attachDataListeners(collectionsToWatch) {
 }
 async function getLocalCountForSync(name) {
     const table = appDb[name];
-    
-    // Teacher-level filtering to match getQueriesForCollection
-    if (currentUserRole === 'teacher') {
-        const singleField = ['students', 'syllabusCompletion', 'studentFeeSetups'];
-        const arrayField = ['chapters', 'syllabuses'];
+    const collectionsWithSingleDivisionField = ['students', 'syllabusCompletion', 'studentFeeSetups'];
+    const collectionsWithDivisionArrayField = ['chapters', 'syllabuses'];
 
-        if (singleField.includes(name)) {
+    // If Teacher, we MUST only count records belonging to their assigned classes/divisions
+    if (currentUserRole === 'teacher') {
+        
+        // Case A: Standard Class/Division filtering
+        if (collectionsWithSingleDivisionField.includes(name)) {
             let count = 0;
             for (const { classId, division } of teacherAssignedClasses) {
+                // We use Dexie's where({ key: val }) for high performance
                 count += await table.where({ classId, division }).count();
             }
             return count;
         } 
         
-        if (arrayField.includes(name)) {
+        // Case B: Array-contains filtering (e.g., chapters applies to multiple divisions)
+        if (collectionsWithDivisionArrayField.includes(name)) {
             let count = 0;
             for (const { classId, division } of teacherAssignedClasses) {
-                // Filter Dexie to match array-contains logic
+                // Scan the table for classId, then filter by division in the array
                 count += await table.where('classId').equals(classId)
-                                    .filter(item => item.appliesToDivisions.includes(division))
+                                    .filter(item => item.appliesToDivisions && item.appliesToDivisions.includes(division))
                                     .count();
             }
             return count;
         }
     }
 
-    // Admin or Global count
+    // Admin or Global count (or if collection isn't restricted by division)
     return await table.count();
 }
 // Records the last successful sync timestamp
@@ -1599,6 +1602,7 @@ function getQueriesForCollection(name) {
     const collectionsWithSingleDivisionField = ['students', 'syllabusCompletion', 'studentFeeSetups'];
     const collectionsWithDivisionArrayField = ['chapters', 'syllabuses'];
 
+    // 1. Teacher Logic (Restricted Access)
     if (currentUserRole === 'teacher' && (collectionsWithSingleDivisionField.includes(name) || collectionsWithDivisionArrayField.includes(name))) {
         if (teacherAssignedClasses.length > 0) {
             teacherAssignedClasses.forEach(({ classId, division }) => {
@@ -1609,12 +1613,16 @@ function getQueriesForCollection(name) {
                 } else if (collectionsWithDivisionArrayField.includes(name)) {
                     currentQuery = query(baseRef, where('classId', '==', classId), where('appliesToDivisions', 'array-contains', division));
                 }
+                
                 if (currentQuery) {
                     queries.push({ key: `${name}_${classId}_${division}`, query: currentQuery });
                 }
             });
         }
-    } else {
+    } 
+    // 2. Admin/Global Logic
+    else {
+        // Special check for Fee-related collections that use a different sub-path
         const isFeeCollection = ['receipts', 'feeStructures', 'studentFeeSetups'].includes(name);
         const ref = isFeeCollection ? getFeeCollectionRef(activeFinancialYear, name) : getCollectionRef(name);
         queries.push({ key: `${name}_all`, query: ref });
