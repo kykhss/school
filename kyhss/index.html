@@ -558,7 +558,7 @@
     }
 }
 
-function waitForCollectionLoad(collectionName) {
+window.waitForCollectionLoad = function(collectionName) {
     if (dataLoadStatus[collectionName]) {
         return Promise.resolve(); // Data is already loaded, resolve immediately
     }
@@ -3936,211 +3936,253 @@ window.formatAadhaar = (input) => {
 let currentFilteredStudents = []; // Store the full list of filtered students
 let classOptions = '';
 
-window.renderStudentManagement = () => {
-    
-    const mainContent = document.getElementById('main-content');
-    if (!mainContent) {
-        console.error('Main content element not found!');
-        return;
-    }
-     waitForCollectionLoad('sudents');
-    const currentYear = new Date().getFullYear();
-    const currentAcademicYear = `${currentYear}-${currentYear + 1}`;
-    let classOptions = '';
+const studentsPerPage = 50;
 
-    const teacherAllocations = teacherAssignedClasses.filter(cs => cs.classId);
-        const uniqueClassIds = [...new Set(teacherAssignedClasses.map(a => a.classId))];
-        classOptions = uniqueClassIds.map(classId => {
-            const c = classes.find(cls => cls.id === classId);
+window.renderStudentManagement = async () => {
+    const mainContent = document.getElementById('main-content');
+    if (!mainContent) return;
+
+    // Phase 1: Wait for data load
+    await window.waitForCollectionLoad('students');
+
+    // Determine User Scope
+    const isTeacher = currentUserRole === 'teacher';
+    const teacherCharge = selectedUser?.classCharge || null;
+
+    // Generate Class Options based on role
+    let classOptions = '<option value="">-- All Classes --</option>';
+    if (isTeacher && teacherCharge) {
+        // Teachers only see their assigned class by default
+        const c = classes.find(cls => cls.id === teacherCharge.classId);
+        classOptions = `<option value="${teacherCharge.classId}" selected>${c?.name || teacherCharge.classId}</option>`;
+    } else {
+        const uniqueClassIds = [...new Set(students.map(s => s.classId))];
+        classOptions += uniqueClassIds.map(id => {
+            const c = classes.find(cls => cls.id === id);
             return c ? `<option value="${c.id}">${c.name}</option>` : '';
         }).join('');
+    }
 
-    //const classOptions = teacherAssignedClasses.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-//const savedYear = localStorage.getItem('system_activeYear');
-    const savedYear = localStorage.getItem('system_activeYear')||window.systemConfig.activeYear;
+    const savedYear = localStorage.getItem('system_activeYear') || window.systemConfig.activeYear;
 
     mainContent.innerHTML = `
-        <h1 class="h2 mb-4">Student Management</h1>
-        <div class="card shadow mb-4">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h5 class="fw-bold mb-0">Filter Students</h5>
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" role="switch" id="new-admissions-btn">
-                        <label class="form-check-label" for="new-admissions-btn">New Admissions <input type="text" value="${savedYear}"" id="newYear" width="75px"></label>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-user-graduate me-2 text-primary"></i>Student Management</h1>
+            <div class="d-flex gap-2">
+                 <button id="export-students-btn" class="btn btn-sm btn-outline-success">
+                    <i class="fas fa-file-excel me-1"></i> Export CSV
+                </button>
+                <button id="toggle-report-btn" class="btn btn-sm btn-outline-primary">
+                    <i class="fas fa-chart-pie me-1"></i> Analytics
+                </button>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white py-3">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <h6 class="m-0 font-weight-bold text-primary">Filter & Search</h6>
                     </div>
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" role="switch" id="show-inactive-toggle">
-                        <label class="form-check-label" for="show-inactive-toggle">Show Inactive Students</label>
+                    <div class="col-md-6 text-end">
+                        <div class="form-check form-switch d-inline-block me-3">
+                            <input class="form-check-input" type="checkbox" id="show-inactive-toggle">
+                            <label class="form-check-label small" for="show-inactive-toggle">Show TC Issued</label>
+                        </div>
+                        <div class="form-check form-switch d-inline-block">
+                            <input class="form-check-input" type="checkbox" id="new-admissions-btn">
+                            <label class="form-check-label small" for="new-admissions-btn">New Adm (${savedYear})</label>
+                            <input type="hidden" id="newYear" value="${savedYear}">
+                        </div>
                     </div>
                 </div>
-                <div class="row g-3 align-items-end">
+            </div>
+            <div class="card-body bg-light-subtle">
+                <div class="row g-3">
                     <div class="col-md-3">
-                        <label for="filter-class" class="form-label">Class</label>
-                        <select id="filter-class" class="form-select">
-                            <option value="">-- All Classes --</option>
+                        <label class="form-label small fw-bold">Class</label>
+                        <select id="filter-class" class="form-select form-select-sm" ${isTeacher ? 'disabled' : ''}>
                             ${classOptions}
                         </select>
                     </div>
                     <div class="col-md-3">
-                        <label for="filter-division" class="form-label">Division</label>
-                        <select id="filter-division" class="form-select" disabled>
+                        <label class="form-label small fw-bold">Division</label>
+                        <select id="filter-division" class="form-select form-select-sm">
                             <option value="">-- All Divisions --</option>
                         </select>
                     </div>
                     <div class="col-md-4">
-                        <label for="student-search-input" class="form-label">Search (Admn No. or Name)</label>
-                        <input type="text" id="student-search-input" class="form-control" placeholder="Search by Admn No. or Name">
+                        <label class="form-label small fw-bold">Search</label>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-white"><i class="fas fa-search text-muted"></i></span>
+                            <input type="text" id="student-search-input" class="form-control" placeholder="Name or Admn No...">
+                        </div>
                     </div>
-                   <!----
-                     <div class="col-md-2 d-flex justify-content-end">
-                        <button id="new-admissions-btn" class="btn btn-outline-info w-100">
-                            New Admissions (${currentAcademicYear})
-                        </button>
-                    </div> ---->
-                </div>
-                <hr class="mt-4 mb-3">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                         <button id="export-students-btn" class="btn btn-success btn-sm">
-                             <i class="fas fa-file-excel me-1"></i> Export Filtered Data
-                         </button>
-                    </div>
-                    <div>
-                        <button id="toggle-report-btn" class="btn btn-info btn-sm me-2">
-                            <i class="fas fa-chart-pie me-1"></i> Show/Hide Report
-                        </button>
-                        <button id="reset-filters-btn" class="btn btn-outline-secondary btn-sm">Reset Filters</button>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button id="reset-filters-btn" class="btn btn-sm btn-secondary w-100">Reset</button>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div id="student-report-section" class="card shadow mb-4 d-none">
-            <div class="card-header fw-bold text-primary d-flex justify-content-between align-items-center">
-                <span id="admission-report-title">Admission Report</span>
-                <button id="print-admission-report-btn" class="btn btn-sm btn-outline-secondary">
-                    <i class="fas fa-print me-1"></i> Print Report
-                </button>
-            </div>
+        <div id="student-report-section" class="card border-left-primary shadow-sm mb-4 d-none animate__animated animate__fadeIn">
             <div class="card-body" id="admission-report-content"></div>
         </div>
 
-        <div class="card shadow">
-            <div class="card-header fw-bold text-primary" id="student-list-title">Student List (Active Students)</div>
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <div>
-                        <span class="text-muted">Showing <span id="pagination-start">0</span> to <span id="pagination-end">0</span> of <span id="pagination-total">0</span> students</span>
-                    </div>
-                    <div class="btn-group" role="group" aria-label="Pagination controls">
-                        <button id="prev-page-btn" class="btn btn-outline-primary btn-sm" disabled>Previous</button>
-                        <button id="next-page-btn" class="btn btn-outline-primary btn-sm" disabled>Next</button>
-                    </div>
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <h6 class="m-0 font-weight-bold text-dark" id="student-list-title">Student Registry</h6>
+                <div class="pagination-info small text-muted">
+                    Showing <span id="pagination-start">0</span>-<span id="pagination-end">0</span> of <span id="pagination-total">0</span>
                 </div>
+            </div>
+            <div class="card-body p-0">
                 <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>sl</th>
-                                <th>id</th>
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light">
+                            <tr class="small text-uppercase text-muted">
+                                <th class="ps-4">Sl</th>
                                 <th>Admn No</th>
-                                <th>Name</th>
-                                <th>Class</th>
-                                ${currentUserRole === 'admin' ? '<th class="text-end">Actions</th>' : ''}
+                                <th>Student Name</th>
+                                <th>Class & Div</th>
+                                <th>Status</th>
+                                <th class="text-end pe-4">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="student-list-tbody"></tbody>
                     </table>
                 </div>
-                <p id="no-students-message" class="text-muted text-center mt-3 d-none">No students found matching your criteria.</p>
+                <div id="no-students-message" class="text-center py-5 d-none">
+                    <i class="fas fa-user-slash fa-3x text-light mb-3"></i>
+                    <p class="text-muted">No students found matching current filters.</p>
+                </div>
+            </div>
+            <div class="card-footer bg-white border-0 py-3">
+                <div class="d-flex justify-content-center gap-2">
+                    <button id="prev-page-btn" class="btn btn-sm btn-outline-primary px-4 shadow-sm" disabled>Previous</button>
+                    <button id="next-page-btn" class="btn btn-sm btn-outline-primary px-4 shadow-sm" disabled>Next</button>
+                </div>
             </div>
         </div>
     `;
 
-    const filterClassDropdown = document.getElementById('filter-class');
-    const filterDivisionDropdown = document.getElementById('filter-division');
-    const studentSearchInput = document.getElementById('student-search-input');
-    const newAdmissionsBtn = document.getElementById('new-admissions-btn');
-    const resetFiltersBtn = document.getElementById('reset-filters-btn');
-    const exportStudentsBtn = document.getElementById('export-students-btn');
-    const toggleReportBtn = document.getElementById('toggle-report-btn');
-    const studentReportSection = document.getElementById('student-report-section');
-    const showInactiveToggle = document.getElementById('show-inactive-toggle');
+    // --- Core Logic & Event Binding ---
+    setupStudentListeners();
+    updateFilterDivisions(); // Initial call to populate divisions and render
+};
 
-    let currentPage = 1;
-    const studentsPerPage = 50;
-    let currentFilteredStudents = [];
+function setupStudentListeners() {
+    const isTeacher = currentUserRole === 'teacher';
+    const teacherCharge = selectedUser?.classCharge || null;
 
-    const updateFilterDivisions = () => {
-        const selectedClass = teacherAssignedClasses.find(c => c.id === filterClassDropdown.value);
-        const uniqueDivisions = [...new Set(teacherAssignedClasses.map(a => a.classId === filterClassDropdown.value&&a.division))];
-        filterDivisionDropdown.innerHTML = '<option value="">-- All Divisions --</option>';
-        if (uniqueDivisions) {
-            filterDivisionDropdown.disabled = false;
-            filterDivisionDropdown.innerHTML += uniqueDivisions.map(d => `<option value="${d}">${d}</option>`).join('');
-        } else {
-            filterDivisionDropdown.disabled = true;
-        }
+    const els = {
+        class: document.getElementById('filter-class'),
+        div: document.getElementById('filter-division'),
+        search: document.getElementById('student-search-input'),
+        inactive: document.getElementById('show-inactive-toggle'),
+        newAdm: document.getElementById('new-admissions-btn'),
+        prev: document.getElementById('prev-page-btn'),
+        next: document.getElementById('next-page-btn')
+    };
+
+    const updateView = () => {
         currentPage = 1;
         filterAndRenderStudents();
     };
 
-    const filterAndRenderStudents = (genderFilter = null) => {
-        const admissionReportContent = document.getElementById('admission-report-content');
-        const showInactive = showInactiveToggle.checked;
+    els.class.addEventListener('change', () => {
+        updateFilterDivisions();
+        updateView();
+    });
+    
+    els.div.addEventListener('change', updateView);
+    els.search.addEventListener('input', updateView);
+    els.inactive.addEventListener('change', updateView);
+    els.newAdm.addEventListener('change', updateView);
 
-        // --- MODIFICATION: Choose the base student list based on the toggle ---
-        document.getElementById('student-list-title').textContent = `Student List (${showInactive ? 'Inactive' : 'Active'} Students)`;
-        document.getElementById('admission-report-title').textContent = `Admission Report (${showInactive ? 'Inactive' : 'Active'} Students)`;
+    els.prev.onclick = () => { if (currentPage > 1) { currentPage--; renderPaginatedStudents(); } };
+    els.next.onclick = () => { currentPage++; renderPaginatedStudents(); };
 
-        let baseStudentList = showInactive
-            ? students.filter(s => s.status === 'TC Issued' || s.status === 'Graduated')
-            : students.filter(s => s.status !== 'TC Issued' && s.status !== 'Graduated');
-
-        const filterClassId = filterClassDropdown.value;
-        const filterDivision = filterDivisionDropdown.value;
-        const searchTerm = studentSearchInput.value.toLowerCase();
-        const isNewAdmissionsFiltered = newAdmissionsBtn.checked;//newAdmissionsBtn.classList.contains('btn-info');
-        
-        let studentsToFilter = currentUserRole === 'teacher' 
-            ?
-            baseStudentList : baseStudentList;
-            // baseStudentList.filter(s => s.classId === selectedUser.classCharge?.classId && s.division === selectedUser.classCharge?.division) 
-            
-
-        if (filterClassId) studentsToFilter = studentsToFilter.filter(s => s.classId === filterClassId);
-        if (filterDivision) studentsToFilter = studentsToFilter.filter(s => s.division === filterDivision);
-        if (searchTerm) {
-            studentsToFilter = studentsToFilter.filter(s => {
-                const name = s.name?.toLowerCase() || '';
-                const admnNo = String(s.admissionNumber || '');
-                return name.includes(searchTerm) || admnNo.includes(searchTerm);
-            });
-        }
-        if (isNewAdmissionsFiltered) {    
-            const currentYear = document.getElementById('newYear').value;
-            studentsToFilter = studentsToFilter.filter(s => {
-                if (s.academicYear) return s.academicYear === currentYear;
-                return false;
-            });
-        }
-        if (genderFilter === 'M' || genderFilter === 'F') {
-            studentsToFilter = studentsToFilter.filter(s => s.gender === genderFilter);
-        }
-
-        studentsToFilter.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-        currentFilteredStudents = studentsToFilter;
-        
-        renderPaginatedStudents();
-
-        if (currentFilteredStudents.length > 0) {
-            generateAdmissionReport(studentsToFilter, admissionReportContent);
-        } else {
-            studentReportSection.classList.add('d-none');
-            admissionReportContent.innerHTML = '';
-        }
+    document.getElementById('reset-filters-btn').onclick = () => {
+        if (!isTeacher) els.class.value = '';
+        els.div.value = '';
+        els.search.value = '';
+        els.inactive.checked = false;
+        els.newAdm.checked = false;
+        updateView();
     };
+
+    document.getElementById('toggle-report-btn').onclick = () => {
+        document.getElementById('student-report-section').classList.toggle('d-none');
+    };
+
+    document.getElementById('export-students-btn').onclick = () => exportFilteredStudentsToCsv(currentFilteredStudents);
+}
+
+function updateFilterDivisions() {
+    const classId = document.getElementById('filter-class').value;
+    const divSelect = document.getElementById('filter-division');
+    
+    divSelect.innerHTML = '<option value="">-- All Divisions --</option>';
+    
+    if (classId) {
+        // Filter divisions existing in student data for this class
+        const divisions = [...new Set(students.filter(s => s.classId === classId).map(s => s.division))].sort();
+        divisions.forEach(d => {
+            if (d) divSelect.innerHTML += `<option value="${d}">${d}</option>`;
+        });
+        divSelect.disabled = false;
+        
+        // Auto-select Teacher's division if applicable
+        if (currentUserRole === 'teacher' && selectedUser.classCharge?.division) {
+            divSelect.value = selectedUser.classCharge.division;
+        }
+    } else {
+        divSelect.disabled = true;
+    }
+    filterAndRenderStudents();
+}
+const filterAndRenderStudents = () => {
+    const showInactive = document.getElementById('show-inactive-toggle').checked;
+    const filterClassId = document.getElementById('filter-class').value;
+    const filterDivision = document.getElementById('filter-division').value;
+    const searchTerm = document.getElementById('student-search-input').value.toLowerCase();
+    const isNewAdmissions = document.getElementById('new-admissions-btn').checked;
+    const currentYear = document.getElementById('newYear').value;
+
+    // Filter Logic
+    let filtered = students.filter(s => {
+        // 1. Status Check
+        const isCurrentlyInactive = (s.status === 'TC Issued' || s.status === 'Graduated');
+        if (showInactive !== isCurrentlyInactive) return false;
+
+        // 2. Class/Div Check
+        if (filterClassId && s.classId !== filterClassId) return false;
+        if (filterDivision && s.division !== filterDivision) return false;
+
+        // 3. Search Term
+        if (searchTerm) {
+            const match = s.name?.toLowerCase().includes(searchTerm) || 
+                          String(s.admissionNumber).includes(searchTerm);
+            if (!match) return false;
+        }
+
+        // 4. New Admissions
+        if (isNewAdmissions && s.academicYear !== currentYear) return false;
+
+        return true;
+    });
+
+    filtered.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    currentFilteredStudents = filtered;
+    
+    renderPaginatedStudents();
+    
+    // Update Analytics if visible
+    const reportContent = document.getElementById('admission-report-content');
+    generateAdmissionReport(currentFilteredStudents, reportContent);
+};
+
 
     const renderPaginatedStudents = () => {
         const studentListTbody = document.getElementById('student-list-tbody');
