@@ -3935,7 +3935,6 @@ window.formatAadhaar = (input) => {
 
 let currentFilteredStudents = []; // Store the full list of filtered students
 let classOptions = '';
-
 const studentsPerPage = 50;
 
 window.renderStudentManagement = async () => {
@@ -4183,112 +4182,56 @@ const filterAndRenderStudents = () => {
     generateAdmissionReport(currentFilteredStudents, reportContent);
 };
 
+const renderPaginatedStudents = () => {
+    const tbody = document.getElementById('student-list-tbody');
+    const total = currentFilteredStudents.length;
+    const startIndex = (currentPage - 1) * studentsPerPage;
+    const displayList = currentFilteredStudents.slice(startIndex, startIndex + studentsPerPage);
 
-    const renderPaginatedStudents = () => {
-        const studentListTbody = document.getElementById('student-list-tbody');
-        const noStudentsMessage = document.getElementById('no-students-message');
-        const paginationTotal = document.getElementById('pagination-total');
-        const paginationStart = document.getElementById('pagination-start');
-        const paginationEnd = document.getElementById('pagination-end');
-        const prevPageBtn = document.getElementById('prev-page-btn');
-        const nextPageBtn = document.getElementById('next-page-btn');
+    document.getElementById('pagination-total').textContent = total;
+    document.getElementById('pagination-start').textContent = total > 0 ? startIndex + 1 : 0;
+    document.getElementById('pagination-end').textContent = Math.min(startIndex + studentsPerPage, total);
+
+    if (total === 0) {
+        tbody.innerHTML = '';
+        document.getElementById('no-students-message').classList.remove('d-none');
+        return;
+    }
+
+    document.getElementById('no-students-message').classList.add('d-none');
+
+    tbody.innerHTML = displayList.map((s, i) => {
+        const cls = classes.find(c => c.id === s.classId);
+        const statusBadge = s.status === 'TC Issued' ? 'bg-danger' : (s.status === 'Graduated' ? 'bg-secondary' : 'bg-success');
         
-        const totalStudents = currentFilteredStudents.length;
-        const totalPages = Math.ceil(totalStudents / studentsPerPage);
-        
-        const startIndex = (currentPage - 1) * studentsPerPage;
-        const endIndex = Math.min(startIndex + studentsPerPage, totalStudents);
-        const studentsToDisplay = currentFilteredStudents.slice(startIndex, endIndex);
-
-        paginationTotal.textContent = totalStudents;
-        paginationStart.textContent = totalStudents > 0 ? startIndex + 1 : 0;
-        paginationEnd.textContent = endIndex;
-        
-        prevPageBtn.disabled = currentPage === 1;
-        nextPageBtn.disabled = currentPage === totalPages || totalPages === 0;
-
-        if (studentsToDisplay.length > 0) {
-            let index = startIndex;
-            studentListTbody.innerHTML = studentsToDisplay.map(s => {
-                index++
-                const cls = classes.find(c => c.id === s.classId);
-                return `<tr>
-                    <td>${index}</td>
-                    <td>${s.id || 'id'}</td>
-                    <td>${s.admissionNumber || 'N/A'}</td>
-                    <td><a href="#" class="student-name-link fw-bold" data-id="${s.id}">${s.name || 'N/A'}</a></td>
-                    <td>${cls?.name || 'N/A'} - ${s.division || 'N/A'}</td>
-                    ${currentUserRole === 'admin' ? `<td class="text-end">
-                        <button onclick="window.handleEditStudent('${s.id}')" class="btn btn-sm btn-outline-primary me-2" title="Edit"><i class="fas fa-edit"></i></button>
-                        <button onclick="window.handleDelete44('students', '${s.id}')" class="btn btn-sm btn-outline-danger d-none" title="Delete"><i class="fas fa-trash-alt"></i></button>
-                        <button onclick="window.showAdmissionExtractModal('${s.id}')" class="btn btn-sm btn-outline-info ad-form-btn" title="Admission Form"><i class="fas fa-file-alt"></i></button>
-                    </td>` : ''}
-                </tr>`;
-            }).join('');
-            noStudentsMessage.classList.add('d-none');
-        } else {
-            studentListTbody.innerHTML = '';
-            noStudentsMessage.classList.remove('d-none');
-        }
-    };
-    
-    // --- EVENT LISTENERS ---
-    
-    showInactiveToggle.addEventListener('change', () => filterAndRenderStudents());
-    toggleReportBtn.addEventListener('click', () => studentReportSection.classList.toggle('d-none'));
-
-    studentReportSection.addEventListener('click', (e) => {
-        if (e.target.id === 'print-admission-report-btn') {
-            printContentOfDiv('admission-report-content', 'Admission Report');
-        }
-    });
-
-    filterClassDropdown.addEventListener('change', updateFilterDivisions);
-    filterDivisionDropdown.addEventListener('change', () => { currentPage = 1; filterAndRenderStudents(); });
-    studentSearchInput.addEventListener('input', () => { currentPage = 1; filterAndRenderStudents(); });
-
-    let isNewAdmissionsFiltered = false;
-    newAdmissionsBtn.addEventListener('click', () => {
-        isNewAdmissionsFiltered = !isNewAdmissionsFiltered;
-        newAdmissionsBtn.classList.toggle('btn-info');
-        newAdmissionsBtn.classList.toggle('btn-outline-info');
-        currentPage = 1;
-        filterAndRenderStudents();
-    });
-
-    resetFiltersBtn.addEventListener('click', () => {
-        filterClassDropdown.value = '';
-        filterDivisionDropdown.value = '';
-        filterDivisionDropdown.disabled = true;
-        studentSearchInput.value = '';
-        isNewAdmissionsFiltered = false;
-        newAdmissionsBtn.classList.remove('btn-info');
-        newAdmissionsBtn.classList.add('btn-outline-info');
-        currentPage = 1;
-        filterAndRenderStudents();
-    });
-
-    document.getElementById('prev-page-btn').addEventListener('click', () => { if (currentPage > 1) { currentPage--; renderPaginatedStudents(); } });
-    document.getElementById('next-page-btn').addEventListener('click', () => { const totalPages = Math.ceil(currentFilteredStudents.length / studentsPerPage); if (currentPage < totalPages) { currentPage++; renderPaginatedStudents(); } });
-    exportStudentsBtn.addEventListener('click', () => exportFilteredStudentsToCsv(currentFilteredStudents));
-
-    document.getElementById('student-list-tbody').addEventListener('click', (e) => {
-        const studentNameLink = e.target.closest('.student-name-link');
-        if (studentNameLink) { e.preventDefault(); window.renderStudent360Profile(studentNameLink.dataset.id);}// populateAndShowFullStudentModal(studentNameLink.dataset.id); }
-        const adFormButton = e.target.closest('.ad-form-btn');
-        if (adFormButton) { e.preventDefault(); showAdmissionExtractModal(adFormButton.dataset.id); }
-    });
-
-    //document.getElementById('print-student-extract-btn')?.addEventListener('click', showAdmissionExtractModal);
-    document.getElementById('print-student-details-btn')?.addEventListener('click', () => {
-        const studentName = document.getElementById('fullStudentDetailModalLabel').textContent.replace('Student Details: ', '');
-        printContentOfDiv('student-details-printable', `Student Profile - ${studentName}`);
-    });
-
-    // Initial Render
-    updateFilterDivisions();
+        return `
+            <tr>
+                <td class="ps-4 text-muted small">${startIndex + i + 1}</td>
+                <td class="fw-bold text-dark">${s.admissionNumber || 'N/A'}</td>
+                <td>
+                    <div class="d-flex align-items-center">
+                        <div class="avatar-xs me-2 bg-primary-subtle text-primary rounded-circle d-flex align-items-center justify-content-center" style="width:30px; height:30px; font-size:11px;">
+                            ${s.name?.charAt(0)}
+                        </div>
+                        <a href="javascript:void(0)" onclick="populateAndShowFullStudentModal('${s.id}')" class="text-decoration-none fw-bold text-primary">
+                            ${s.name}
+                        </a>
+                    </div>
+                </td>
+                <td>${cls?.name || 'N/A'} - ${s.division || 'N/A'}</td>
+                <td><span class="badge ${statusBadge} small" style="font-size:10px">${s.status || 'Active'}</span></td>
+                <td class="text-end pe-4">
+                    <div class="btn-group">
+                        <button onclick="window.showAdmissionExtractModal('${s.id}')" class="btn btn-xs btn-outline-info" title="Form 3"><i class="fas fa-file-alt"></i></button>
+                        ${currentUserRole === 'admin' ? `
+                            <button onclick="window.handleEditStudent('${s.id}')" class="btn btn-xs btn-outline-primary" title="Edit"><i class="fas fa-user-edit"></i></button>
+                        ` : ''}
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
 };
-
 /**
  * Creates and downloads a CSV file from the filtered student data.
  * @param {Array<object>} students - The list of students to export.
