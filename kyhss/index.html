@@ -3956,7 +3956,9 @@ window.renderStudentManagement = () => {
         }).join('');
 
     //const classOptions = teacherAssignedClasses.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-const savedYear = localStorage.getItem('system_activeYear');
+//const savedYear = localStorage.getItem('system_activeYear');
+    const savedYear = localStorage.getItem('system_activeYear')||window.systemConfig.activeYear;
+
     mainContent.innerHTML = `
         <h1 class="h2 mb-4">Student Management</h1>
         <div class="card shadow mb-4">
