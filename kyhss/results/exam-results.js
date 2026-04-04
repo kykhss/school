@@ -1126,11 +1126,11 @@ generateSubjectWiseTable();
     });
 
     resultsContainerElement.addEventListener('click', (event) => {
-        const header = event.target.closest('.copy-column-header');
-        if (header?.dataset.columnType) {
-            copySubjectWiseColumnData(header.dataset.columnType);
-        }
-    });
+    const header = event.target.closest('.copy-column-header');
+    if (header && header.dataset.columnType) {
+        copySubjectWiseColumnData(header.dataset.columnType);
+    }
+});
 
     printButton.addEventListener('click', () => {
         const subjectName = subjectSelect.options[subjectSelect.selectedIndex]?.text || 'Subject';
@@ -1237,37 +1237,41 @@ function renderSubjectWiseTableHTML(results, selectedExams, displayMode, subject
                 Overall % <i class="fas fa-copy small opacity-50"></i>
             </th>
         </tr>`;
+let headerRow2 = `<tr class="table-light">`;
+selectedExams.forEach(exam => {
+    const schedule = examSchedules.find(s => 
+        s.examId === exam.id && 
+        s.subjectId === subjectId && 
+        s.classId === classId && 
+        s.division === division
+    );
+    
+    const maxTE = schedule?.maxTE || 0;
+    const maxCE = schedule?.maxCE || 0;
+    const maxTotal = maxTE + maxCE;
 
-    let headerRow2 = `<tr class="table-light">`;
-    selectedExams.forEach(exam => {
-        // FIX: Specific lookup using class and division context
-        const schedule = examSchedules.find(s => 
-            s.examId === exam.id && 
-            s.subjectId === subjectId && 
-            s.classId === classId && 
-            s.division === division
-        );
-         //console.log("Rendering table with displayMode:", schedule);
-   
-        const maxTE = schedule?.maxTE || 0;
-        const maxCE = schedule?.maxCE || 0;
-        const maxTotal = maxTE + maxCE;
+    if (displayMode === 'te') {
+        headerRow2 += `<th class="text-center border-start small copy-column-header" data-column-type="exam-${exam.id}-te">TE/${maxTE} <i class="fas fa-copy ms-1 opacity-25"></i></th>`;
+    } else if (displayMode === 'ce') {
+        headerRow2 += `<th class="text-center border-start small copy-column-header" data-column-type="exam-${exam.id}-ce">CE/${maxCE} <i class="fas fa-copy ms-1 opacity-25"></i></th>`;
+    } else if (displayMode === 'total') {
+        headerRow2 += `<th class="text-center border-start small copy-column-header" data-column-type="exam-${exam.id}-total">Tot/${maxTotal} <i class="fas fa-copy ms-1 opacity-25"></i></th>`;
+    } else if (displayMode === 'both') {
+        headerRow2 += `
+            <th class="text-center border-start small copy-column-header" data-column-type="exam-${exam.id}-te">TE/${maxTE}</th>
+            <th class="text-center small copy-column-header" data-column-type="exam-${exam.id}-te-grade">Grd</th>
+            <th class="text-center small copy-column-header" data-column-type="exam-${exam.id}-ce">CE/${maxCE}</th>
+            <th class="text-center small copy-column-header" data-column-type="exam-${exam.id}-ce-grade">Grd</th>
+            <th class="text-center small copy-column-header" data-column-type="exam-${exam.id}-total">Tot/${maxTotal}</th>
+            <th class="text-center small copy-column-header" data-column-type="exam-${exam.id}-total-grade">Grd</th>`;
+    }
 
-        if (displayMode === 'te') {
-            headerRow2 += `<th class="text-center border-start small">TE/${maxTE}</th>`;
-        } else if (displayMode === 'ce') {
-            headerRow2 += `<th class="text-center border-start small">CE/${maxCE}</th>`;
-        } else if (displayMode === 'total') {
-            headerRow2 += `<th class="text-center border-start small">Tot/${maxTotal}</th>`;
-        } else if (displayMode === 'both') {
-            headerRow2 += `
-                <th class="text-center border-start small">TE/${maxTE}</th><th class="text-center small">Grd</th>
-                <th class="text-center small">CE/${maxCE}</th><th class="text-center small">Grd</th>
-                <th class="text-center small">Tot/${maxTotal}</th><th class="text-center small">Grd</th>`;
-        }
-        headerRow2 += `<th class="text-center small border-start bg-white-50">%</th><th class="text-center small bg-white-50">Grd</th>`;
-    });
-    headerRow2 += `</tr></thead>`;
+    // Common columns for all modes
+    headerRow2 += `
+        <th class="text-center small border-start bg-white-50 copy-column-header" data-column-type="exam-${exam.id}-percent">%</th>
+        <th class="text-center small bg-white-50 copy-column-header" data-column-type="exam-${exam.id}-grade">Grd</th>`;
+});
+headerRow2 += `</tr></thead>`;
 
     let bodyHTML = `<tbody>`;
     results.forEach(res => {
@@ -1422,38 +1426,83 @@ function renderSubjectPerformanceChart(resultsData, exams, gradingSystem, subjec
 /**
  * Copies data from a specific column in the subject-wise results table to the clipboard.
  */
+/**
+ * Copies data from a specific column in the subject-wise results table to the clipboard.
+ * Supports static columns (Name, Admn No) and dynamic exam columns.
+ */
 function copySubjectWiseColumnData(columnType) {
     const table = document.getElementById('subject-wise-data-table');
     if (!table) return showAlert('Report table not found.', 'danger');
 
     const rows = Array.from(table.querySelectorAll('tbody tr'));
     let dataToCopy = [];
+    
+    // The number of fixed columns before exam data starts (Rank, Name, Admn No)
     const fixedInitialColsCount = 3;
 
     rows.forEach(row => {
         let cellValue = '';
-        if (columnType === 'student-name') cellValue = row.cells[1]?.textContent.trim() || '';
-        else if (columnType === 'admission-no') cellValue = row.cells[2]?.textContent.trim() || '';
-        else if (columnType === 'total-sum') cellValue = row.cells[row.cells.length - 2]?.textContent.trim() || '';
-        else if (columnType === 'avg-percent') cellValue = row.cells[row.cells.length - 1]?.textContent.replace('%', '').trim() || '';
+
+        // 1. Handle Static Columns
+        if (columnType === 'student-name') {
+            cellValue = row.cells[1]?.textContent.trim() || '';
+        } 
+        else if (columnType === 'admission-no') {
+            cellValue = row.cells[2]?.textContent.trim() || '';
+        } 
+        // 2. Handle Summary Columns (End of row)
+        else if (columnType === 'total-sum') {
+            cellValue = row.cells[row.cells.length - 2]?.textContent.trim() || '';
+        } 
+        else if (columnType === 'avg-percent') {
+            cellValue = row.cells[row.cells.length - 1]?.textContent.replace('%', '').trim() || '';
+        } 
+        // 3. Handle Dynamic Exam Columns (Mapping via Header Row 2)
         else {
-            const headerRow2Cells = Array.from(table.querySelectorAll('thead tr')[1].cells);
-            const headerCellIndex = headerRow2Cells.findIndex(th => th.dataset.columnType === columnType);
+            // Find the second row of the header (index 1)
+            const headerRow2 = table.querySelectorAll('thead tr')[1];
+            if (!headerRow2) return;
+
+            const headerCells = Array.from(headerRow2.cells);
+            const headerCellIndex = headerCells.findIndex(th => th.dataset.columnType === columnType);
+
             if (headerCellIndex !== -1) {
-                const actualColumnIndexInBody = headerCellIndex + fixedInitialColsCount;
-                cellValue = row.cells[actualColumnIndexInBody]?.textContent.trim() || '';
-                if (columnType.includes('-percent')) cellValue = cellValue.replace('%', '');
-            } else { return; }
+                const bodyCellIndex = headerCellIndex + fixedInitialColsCount;
+                const targetCell = row.cells[bodyCellIndex];
+
+                // If the student has no data for this exam, the row might have a "N/A" colspan
+                // We check if the cell exists and isn't spanning multiple columns
+                if (targetCell) {
+                    cellValue = targetCell.textContent.trim();
+                    
+                    // Clean up formatting for easier pasting into Excel
+                    if (columnType.includes('-percent')) {
+                        cellValue = cellValue.replace('%', '');
+                    }
+                    // Extract only the main value if it contains a sub-grade in parentheses
+                    // Example: "45 (B+)" -> "45"
+                    if (cellValue.includes('(') && !columnType.includes('-grade')) {
+                        cellValue = cellValue.split('(')[0].trim();
+                    }
+                } else {
+                    cellValue = ''; // Empty string if data is missing/N/A
+                }
+            } else {
+                return; // Column type not found
+            }
         }
         dataToCopy.push(cellValue);
     });
 
-    navigator.clipboard.writeText(dataToCopy.join('\n')).then(() => {
-        showAlert('Column data copied to clipboard!', 'success');
-    }).catch(err => {
-        console.error('Failed to copy text:', err);
-        showAlert('Failed to copy column data.', 'danger');
-    });
+    // 4. Perform the Clipboard Action
+    if (dataToCopy.length > 0) {
+        navigator.clipboard.writeText(dataToCopy.join('\n')).then(() => {
+            showAlert(`${columnType.replace(/-/g, ' ')} copied to clipboard!`, 'success');
+        }).catch(err => {
+            console.error('Failed to copy text:', err);
+            showAlert('Clipboard access denied.', 'danger');
+        });
+    }
 }
         
         /**
