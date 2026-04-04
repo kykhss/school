@@ -13,46 +13,108 @@
 // --- RESULTS TAB OVERHAUL ---
 
 window.renderResultsTab = async () => {
-  //await syncMarksDataForUser();
-  //await syncDataForUser();
     const container = document.getElementById('results');
-     // Sort exams to show active ones first
-    const sortedExams = [...exams].sort((a, b) => (b.isActive || false) - (a.isActive || false));
+    if (!container) return;
 
+    // 1. Prepare Data: Sort exams (Active first, then by name)
+    const sortedExams = [...exams].sort((a, b) => {
+        if (b.isActive !== a.isActive) return (b.isActive || false) - (a.isActive || false);
+        return a.name.localeCompare(b.name);
+    });
+
+    // 2. Build Neat Layout Template
     container.innerHTML = `
-        <div class="d-flex justify-content-end align-items-center p-3 bg-light border rounded mb-3">
-        <label class="form-label  me-2 mb-0 fw-bold">Exam</label>
-        <select id="res-exam" class="form-select form-select-sm w-auto">${sortedExams.map(e => `<option value="${e.id}">${e.name}</option>`).join('')}</select>
-            <label class="form-label me-2 mb-0 fw-bold">Active Grading System:</label>
-            <select id="shared-grading-system" class="form-select form-select-sm w-auto">
-                <option value="type1">A+, A, B+, B...</option>
-                <option value="type2">O, A, B, C...</option>
-            </select>
-            <button id="marksrefresh-btn" class="btn btn-primary ms-2">refresh marks</button>
-        </div>
-       
-        <ul class="nav nav-pills mb-3" id="pills-tab" role="tablist">
-            <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#pills-ranklist" type="button">Class Rank List</button></li>
-            <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#pills-reportcard" type="button">Student Report Card</button></li>
-            <li class="nav-item" role="presentation"><button class="nav-link active" data-bs-toggle="pill" data-bs-target="#pills-exam-wise" type="button">Exam-wise Report</button></li>
-            <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#pills-subject-wise" type="button">Subject-wise Analysis</button></li>
-        </ul>
-        <div class="tab-content" id="pills-tabContent">
-            <div class="tab-pane fade" id="pills-ranklist" role="tabpanel"></div>
-            <div class="tab-pane fade" id="pills-reportcard" role="tabpanel"></div>
-            <div class="tab-pane fade show active" id="pills-exam-wise" role="tabpanel"></div>
-            <div class="tab-pane fade" id="pills-subject-wise" role="tabpanel"></div>
-        </div>`;
-    const marksrefresh = document.getElementById('marksrefresh-btn');
-        marksrefresh.addEventListener('click', async () => {
-           window.needRefreshedMarks = true;});
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-body bg-light border-bottom rounded-top py-3">
+                <div class="row g-3 align-items-center">
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-center">
+                            <label class="form-label mb-0 fw-bold me-2 text-nowrap">
+                                <i class="fas fa-file-invoice me-1 text-primary"></i> Exam:
+                            </label>
+                            <select id="res-exam" class="form-select form-select-sm shadow-sm">
+                                ${sortedExams.map(e => `<option value="${e.id}">${e.name} ${e.isActive ? '(Active)' : ''}</option>`).join('')}
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-5">
+                        <div class="d-flex align-items-center">
+                            <label class="form-label mb-0 fw-bold me-2 text-nowrap">
+                                <i class="fas fa-graduation-cap me-1 text-success"></i> Grading:
+                            </label>
+                            <select id="shared-grading-system" class="form-select form-select-sm shadow-sm">
+                                <option value="type1">Standard (A+, A, B...)</option>
+                                <option value="type2">Primary (O, A, B...)</option>
+                            </select>
+                        </div>
+                    </div>
 
+                    <div class="col-md-3 text-end">
+                        <button id="marksrefresh-btn" class="btn btn-sm btn-primary px-3 shadow-sm transition-all">
+                            <i class="fas fa-sync-alt me-1"></i> Refresh Marks
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card-body p-0">
+                <ul class="nav nav-tabs nav-fill border-0 bg-white" id="pills-tab" role="tablist">
+                    <li class="nav-item">
+                        <button class="nav-link active py-3 fw-bold border-0" data-bs-toggle="pill" data-bs-target="#pills-exam-wise" type="button">
+                            <i class="fas fa-table me-2"></i>Exam-wise Report
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link py-3 fw-bold border-0" data-bs-toggle="pill" data-bs-target="#pills-ranklist" type="button">
+                            <i class="fas fa-list-ol me-2"></i>Class Rank List
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link py-3 fw-bold border-0" data-bs-toggle="pill" data-bs-target="#pills-subject-wise" type="button">
+                            <i class="fas fa-chart-line me-2"></i>Subject Analysis
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link py-3 fw-bold border-0" data-bs-toggle="pill" data-bs-target="#pills-reportcard" type="button">
+                            <i class="fas fa-id-card me-2"></i>Report Cards
+                        </button>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="tab-content" id="pills-tabContent">
+            <div class="tab-pane fade show active" id="pills-exam-wise" role="tabpanel"></div>
+            <div class="tab-pane fade" id="pills-ranklist" role="tabpanel"></div>
+            <div class="tab-pane fade" id="pills-subject-wise" role="tabpanel"></div>
+            <div class="tab-pane fade" id="pills-reportcard" role="tabpanel"></div>
+        </div>`;
+
+    // 3. Attach Logic & Event Listeners
+    const refreshBtn = document.getElementById('marksrefresh-btn');
+    refreshBtn.addEventListener('click', async () => {
+        refreshBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span> Syncing...`;
+        refreshBtn.disabled = true;
+        
+        window.needRefreshedMarks = true;
+        
+        // Trigger specific re-renders based on current active tab
+        const activeTab = document.querySelector('#pills-tab .active');
+        // Logic to refresh data would go here...
+        
+        setTimeout(() => {
+            refreshBtn.innerHTML = `<i class="fas fa-sync-alt me-1"></i> Refresh Marks`;
+            refreshBtn.disabled = false;
+        }, 1500);
+    });
+
+    // 4. Initialize Sub-Views
     renderExamWiseResultView();
     renderSubjectWiseResultView();
     renderRankListTab();
     renderReportCardTab();
-}
-
+};
 // ----------------------------------------------------------------------------------
         // --- EXAM-WISE & SUBJECT-WISE RESULTS (ENHANCED) ---
         // ----------------------------------------------------------------------------------
@@ -894,6 +956,46 @@ function renderExamWisePerformanceChart(resultsData, gradingSystem, subjects) {
 /**
  * Renders the UI for the "Subject-wise Analysis" tab with all filters and display options.
  */
+function updateAvailableExams() {
+    const classId = document.getElementById('sw-class').value;
+    const division = document.getElementById('sw-division').value;
+    const examsSelect = document.getElementById('sw-exams');
+    const orderControls = document.getElementById('sw-exams-order-controls');
+
+    if (!classId || !division) {
+        examsSelect.innerHTML = '<option value="">-- Select Class & Div First --</option>';
+        examsSelect.disabled = true;
+        return;
+    }
+
+    // 1. Find unique exam IDs from schedules for this specific class/div
+    const scheduledExamIds = [...new Set(
+        examSchedules
+            .filter(s => s.classId === classId && s.division === division)
+            .map(s => s.examId)
+    )];
+
+    // 2. Map IDs to actual Exam objects and sort by name/active status
+    const availableExams = exams
+        .filter(e => scheduledExamIds.includes(e.id))
+        .sort((a, b) => (b.isActive || false) - (a.isActive || false));
+
+    // 3. Populate the dropdown
+    if (availableExams.length > 0) {
+        examsSelect.innerHTML = availableExams.map(e => 
+            `<option value="${e.id}">${e.name} ${e.isActive ? '⭐' : ''}</option>`
+        ).join('');
+        examsSelect.disabled = false;
+    } else {
+        examsSelect.innerHTML = '<option value="">No scheduled exams found</option>';
+        examsSelect.disabled = true;
+    }
+
+    // Reset ordering state when available exams change
+    orderedExamIds = [];
+    if (orderControls) orderControls.innerHTML = '';
+}
+
 let orderedExamIds = [];
 function renderSubjectWiseResultView() {
     const container = document.getElementById('pills-subject-wise');
@@ -915,7 +1017,12 @@ function renderSubjectWiseResultView() {
             <div class="col-md-3"><label class="form-label">Class</label><select id="sw-class" class="form-select">${classOptions}</select></div>
             <div class="col-md-2"><label class="form-label">Division</label><select id="sw-division" class="form-select"></select></div>
             <div class="col-md-3"><label class="form-label">Subject</label><select id="sw-subject" class="form-select"></select></div>
-            <div class="col-md-4"><label class="form-label">Exams (select multiple)</label><select id="sw-exams" class="form-select" multiple style="height: 100px;">${exams.map(e => `<option value="${e.id}">${e.name}</option>`).join('')}</select></div>
+           <div class="col-md-4">
+    <label class="form-label fw-bold small">Exams for Analysis</label>
+    <select id="sw-exams" class="form-select shadow-sm" multiple style="height: 100px;" disabled>
+        <option value="">-- Select Class & Div First --</option>
+    </select>
+</div>
 
             <div id="sw-exams-order-controls" class="mt-2"></div>
             </div>
@@ -1003,6 +1110,7 @@ generateSubjectWiseTable();
         }
         divisionSelect.innerHTML = divisionOptionsHTML;
         divisionSelect.dispatchEvent(new Event('change'));
+        updateAvailableExams(); // Call this
     });
 
     divisionSelect.addEventListener('change', () => {
@@ -1014,6 +1122,7 @@ generateSubjectWiseTable();
             return subject ? `<option value="${subject.id}">${subject.name}</option>` : '';
         }).join('');
         generateSubjectWiseTable();
+        updateAvailableExams(); // Call this
     });
 
     resultsContainerElement.addEventListener('click', (event) => {
@@ -1087,62 +1196,128 @@ if (sortBy === 'name') {
 }
     results.forEach((res, i) => res.rank = i + 1);
 
-    container.innerHTML = renderSubjectWiseTableHTML(results, selectedExams, displayMode, subjectId, colorCodeSystem);
+    //container.innerHTML = renderSubjectWiseTableHTML(results, selectedExams, displayMode, subjectId, colorCodeSystem);
+container.innerHTML = renderSubjectWiseTableHTML(results, selectedExams, displayMode, subjectId, colorCodeSystem, classId, division);
     renderSubjectPerformanceChart(results, selectedExams, gradingSystem, subjectId);
 }
 
 /**
  * Generates the HTML for the subject-wise results table.
  */
-function renderSubjectWiseTableHTML(results, selectedExams, displayMode, subjectId, colorSystem) {
-    let headerRow1 = `<thead><tr><th rowspan="2" class="align-middle">Rank</th><th rowspan="2" class="align-middle copy-column-header" data-column-type="student-name">Name <i class="fas fa-copy copy-icon"></i></th><th rowspan="2" class="align-middle copy-column-header" data-column-type="admission-no">Admn No. <i class="fas fa-copy copy-icon"></i></th>`;
-    selectedExams.forEach(exam => {
-        const colspan = displayMode === 'both' ? 6 : 3;
-        headerRow1 += `<th colspan="${colspan}" class="text-center">${exam.name}</th>`;
-    });
-    headerRow1 += `<th rowspan="2" class="align-middle copy-column-header" data-column-type="total-sum">Total <i class="fas fa-copy copy-icon"></i></th><th rowspan="2" class="align-middle copy-column-header" data-column-type="avg-percent">Overall % <i class="fas fa-copy copy-icon"></i></th></tr>`;
+/**
+ * Generates the HTML for the subject-wise results table.
+ * Fixes: Dynamic Colspan alignment and consistent Max Mark calculation.
+ */
+/**
+ * Generates the HTML for the subject-wise results table.
+ * Added classId and division parameters to ensure correct max mark lookup.
+ */
+function renderSubjectWiseTableHTML(results, selectedExams, displayMode, subjectId, colorSystem, classId, division) {
+    const examColspan = displayMode === 'both' ? 8 : 3;
 
-    let headerRow2 = `<tr>`;
+    let headerRow1 = `<thead>
+        <tr class="table-warning">
+            <th rowspan="2" class="align-middle text-center">Rank</th>
+            <th rowspan="2" class="align-middle copy-column-header" data-column-type="student-name" style="min-width:200px">
+                Name <i class="fas fa-copy small opacity-50"></i>
+            </th>
+            <th rowspan="2" class="align-middle copy-column-header text-center" data-column-type="admission-no">
+                Admn No. <i class="fas fa-copy small opacity-50"></i>
+            </th>`;
+
     selectedExams.forEach(exam => {
-        const schedule = examSchedules.find(s => s.examId === exam.id && s.subjectId === subjectId);
-        const maxTE = schedule?.maxTE || 0, maxCE = schedule?.maxCE || 0, maxTotal = maxTE + maxCE;
-        if (displayMode === 'te') headerRow2 += `<th class="copy-column-header" data-column-type="exam-${exam.id}-te">TE/${maxTE} <i class="fas fa-copy copy-icon"></i></th>`;
-        else if (displayMode === 'ce') headerRow2 += `<th class="copy-column-header" data-column-type="exam-${exam.id}-ce">CE/${maxCE} <i class="fas fa-copy copy-icon"></i></th>`;
-        else if (displayMode === 'total') headerRow2 += `<th class="copy-column-header" data-column-type="exam-${exam.id}-total">Total/${maxTotal} <i class="fas fa-copy copy-icon"></i></th>`;
-        else if (displayMode === 'both') {
-            headerRow2 += `<th class="copy-column-header" data-column-type="exam-${exam.id}-te">TE/${maxTE}</th><th class="copy-column-header" data-column-type="exam-${exam.id}-te-grade">Grd</th><th class="copy-column-header" data-column-type="exam-${exam.id}-ce">CE/${maxCE}</th><th class="copy-column-header" data-column-type="exam-${exam.id}-ce-grade">Grd</th><th class="copy-column-header" data-column-type="exam-${exam.id}-total">Total/${maxTotal}</th><th class="copy-column-header" data-column-type="exam-${exam.id}-total-grade">Grd</th>`;
+        headerRow1 += `<th colspan="${examColspan}" class="text-center border-start">${exam.name}</th>`;
+    });
+
+    headerRow1 += `
+            <th rowspan="2" class="align-middle copy-column-header text-center table-primary" data-column-type="total-sum">
+                Total <i class="fas fa-copy small opacity-50"></i>
+            </th>
+            <th rowspan="2" class="align-middle copy-column-header text-center table-primary" data-column-type="avg-percent">
+                Overall % <i class="fas fa-copy small opacity-50"></i>
+            </th>
+        </tr>`;
+
+    let headerRow2 = `<tr class="table-light">`;
+    selectedExams.forEach(exam => {
+        // FIX: Specific lookup using class and division context
+        const schedule = examSchedules.find(s => 
+            s.examId === exam.id && 
+            s.subjectId === subjectId && 
+            s.classId === classId && 
+            s.division === division
+        );
+         //console.log("Rendering table with displayMode:", schedule);
+   
+        const maxTE = schedule?.maxTE || 0;
+        const maxCE = schedule?.maxCE || 0;
+        const maxTotal = maxTE + maxCE;
+
+        if (displayMode === 'te') {
+            headerRow2 += `<th class="text-center border-start small">TE/${maxTE}</th>`;
+        } else if (displayMode === 'ce') {
+            headerRow2 += `<th class="text-center border-start small">CE/${maxCE}</th>`;
+        } else if (displayMode === 'total') {
+            headerRow2 += `<th class="text-center border-start small">Tot/${maxTotal}</th>`;
+        } else if (displayMode === 'both') {
+            headerRow2 += `
+                <th class="text-center border-start small">TE/${maxTE}</th><th class="text-center small">Grd</th>
+                <th class="text-center small">CE/${maxCE}</th><th class="text-center small">Grd</th>
+                <th class="text-center small">Tot/${maxTotal}</th><th class="text-center small">Grd</th>`;
         }
-        headerRow2 += `<th class="copy-column-header" data-column-type="exam-${exam.id}-percent">%</th><th class="copy-column-header" data-column-type="exam-${exam.id}-grade">Grd</th>`;
+        headerRow2 += `<th class="text-center small border-start bg-white-50">%</th><th class="text-center small bg-white-50">Grd</th>`;
     });
     headerRow2 += `</tr></thead>`;
 
     let bodyHTML = `<tbody>`;
     results.forEach(res => {
-        bodyHTML += `<tr><td>${res.rank}</td><td class="text-nowrap">${res.student.name}</td><td>${res.student.admissionNumber || 'N/A'}</td>`;
+        bodyHTML += `<tr>
+            <td class="text-center fw-bold">${res.rank}</td>
+            <td class="text-nowrap">${res.student.name}</td>
+            <td class="text-center">${res.student.admissionNumber || 'N/A'}</td>`;
+
         selectedExams.forEach(exam => {
             const data = res.markData[exam.id];
             if (data) {
-                const schedule = examSchedules.find(s => s.examId === exam.id && s.subjectId === subjectId);
-                const maxTE = schedule?.maxTE || 0, maxCE = schedule?.maxCE || 0, maxTotal = maxTE + maxCE;
-                const teClass = getColorClass(data.te, maxTE, colorSystem), ceClass = getColorClass(data.ce, maxCE, colorSystem), totalClass = getColorClass(data.total, maxTotal, colorSystem), percentClass = getColorClass(data.percent, 100, colorSystem);
-                const gradeClass = (data.grade === 'E' || data.grade === 'F' || data.grade === 'AB') ? 'text-danger fw-bold' : '';
-                const teCeGradeClass = (data.teGrade === 'E' || data.teGrade === 'F' || data.ceGrade === 'E' || data.ceGrade === 'F') ? 'text-danger fw-bold' : '';
-                if (displayMode === 'te') bodyHTML += `<td class="text-center ${teClass}">${data.te}</td>`;
-                else if (displayMode === 'ce') bodyHTML += `<td class="text-center ${ceClass}">${data.ce}</td>`;
-                else if (displayMode === 'total') bodyHTML += `<td class="text-center ${totalClass}">${data.total}</td>`;
-                else if (displayMode === 'both') {
-                    bodyHTML += `<td class="text-center ${teClass}">${data.te}</td><td class="text-center ${teCeGradeClass}">${data.teGrade}</td><td class="text-center ${ceClass}">${data.ce}</td><td class="text-center ${teCeGradeClass}">${data.ceGrade}</td><td class="text-center ${totalClass}">${data.total}</td><td class="text-center ${gradeClass}">${data.totalGrade}</td>`;
+                // Use the data already processed in processSubjectWiseResults (it's safer)
+                const mTE = data.maxTE;
+                const mCE = data.maxCE;
+                const mTot = data.maxTotal;
+
+                if (displayMode === 'te') {
+                    bodyHTML += `<td class="text-center border-start ${getColorClass(data.te, mTE, colorSystem)}">${data.te}</td>`;
+                } else if (displayMode === 'ce') {
+                    bodyHTML += `<td class="text-center border-start ${getColorClass(data.ce, mCE, colorSystem)}">${data.ce}</td>`;
+                } else if (displayMode === 'total') {
+                    bodyHTML += `<td class="text-center border-start ${getColorClass(data.total, mTot, colorSystem)}">${data.total}</td>`;
+                } else if (displayMode === 'both') {
+                    bodyHTML += `
+                        <td class="text-center border-start ${getColorClass(data.te, mTE, colorSystem)}">${data.te}</td>
+                        <td class="text-center small">${data.teGrade}</td>
+                        <td class="text-center ${getColorClass(data.ce, mCE, colorSystem)}">${data.ce}</td>
+                        <td class="text-center small">${data.ceGrade}</td>
+                        <td class="text-center ${getColorClass(data.total, mTot, colorSystem)}">${data.total}</td>
+                        <td class="text-center small fw-bold">${data.totalGrade}</td>`;
                 }
-                bodyHTML += `<td class="text-center ${percentClass}">${data.percent === 'AB' ? 'AB' : data.percent.toFixed(1)}%</td><td class="text-center ${gradeClass}">${data.grade}</td>`;
+
+                const pctDisp = data.percent === 'AB' ? 'AB' : `${data.percent.toFixed(1)}%`;
+                const grdClass = (data.grade === 'E' || data.grade === 'F' || data.grade === 'AB') ? 'text-danger fw-bold' : '';
+                
+                bodyHTML += `<td class="text-center border-start small">${pctDisp}</td>
+                             <td class="text-center small ${grdClass}">${data.grade}</td>`;
             } else {
-                const colspan = displayMode === 'both' ? 8 : 3;
-                bodyHTML += `<td colspan="${colspan}" class="text-muted text-center">N/A</td>`;
+                bodyHTML += `<td colspan="${examColspan}" class="text-muted text-center small border-start bg-light">N/A</td>`;
             }
         });
-        bodyHTML += `<td class="fw-bold">${res.totalSum}</td><td class="fw-bold">${res.avgPercent.toFixed(1)}%</td></tr>`;
+
+        bodyHTML += `
+            <td class="text-center fw-bold table-primary border-start">${res.totalSum}</td>
+            <td class="text-center fw-bold table-primary">${res.avgPercent.toFixed(1)}%</td>
+        </tr>`;
     });
+
     bodyHTML += `</tbody>`;
-    return `<table id="subject-wise-data-table" class="table table-bordered table-sm">${headerRow1}${headerRow2}${bodyHTML}</table>`;
+    return `<table id="subject-wise-data-table" class="table table-bordered table-hover table-sm shadow-sm">${headerRow1}${headerRow2}${bodyHTML}</table>`;
 }
 
 /**
@@ -1153,7 +1328,7 @@ async function processSubjectWiseResults(classId, division,selectedExams, subjec
     
     let marks = await window.getmarks(classId, division);
 
-    console.log(marks);
+    //console.log(marks);
     
     const studentsInClass = students.filter(s => s.classId === classId && s.division === division);
     
@@ -1434,6 +1609,21 @@ function renderRankListTable(sortedResults) {
  * Renders the enhanced Report Card tab with class filters, a student list,
  * a "Print All" button, and a new "Print This Card" button for individual reports.
  */
+// Add a container in your HTML below the select: 
+// <div id="selected-order-display" class="mt-2"></div>
+let selectedOrder = [];
+
+function updateOrderDisplay() {
+    const examSelect = document.getElementById('rc-exam-select');
+    const display = document.getElementById('selected-order-display');
+    display.innerHTML = selectedOrder.map(id => {
+        const examName = examSelect.querySelector(`option[value="${id}"]`).text;
+        return `<span class="badge bg-primary me-1">${examName}</span>`;
+    }).join(' → ');
+}
+
+
+
 function renderReportCardTab() {
     console.log('Rendering Report Card Tab...');
     const container = document.getElementById('pills-reportcard');
@@ -1462,6 +1652,7 @@ function renderReportCardTab() {
                     ${sortedExams.map(e => `<option value="${e.id}">${e.name}</option>`).join('')}
                 </select>
                 <small class="form-text text-muted">Hold Ctrl/Cmd to select multiple exams for comparison.</small>
+                <div id="selected-order-display" class="mt-2"></div>
             </div>
         </div>
         <hr class="no-print">
@@ -1500,6 +1691,38 @@ function renderReportCardTab() {
     const classSelect = document.getElementById('rc-class-select');
     const divisionSelect = document.getElementById('rc-division-select');
     const examSelect = document.getElementById('rc-exam-select');
+examSelect.addEventListener('mousedown', function(e) {
+    e.preventDefault(); // Prevents the default "reset other selections" behavior
+    
+    const option = e.target;
+    if (option.tagName === 'OPTION') {
+        option.selected = !option.selected; // Toggle selection
+        
+        // Manually trigger the 'change' event so your logic runs
+        examSelect.dispatchEvent(new Event('change'));
+    }
+});
+
+examSelect.addEventListener('change', (e) => {
+    // 1. Get currently highlighted options from the DOM
+    const currentSelection = Array.from(examSelect.selectedOptions).map(opt => opt.value);
+    
+    // 2. Add newly selected items to the end of our tracking array
+    currentSelection.forEach(id => {
+        if (!selectedOrder.includes(id)) {
+            selectedOrder.push(id);
+        }
+    });
+
+    // 3. IMPORTANT: Filter BEFORE updating the display
+    // This removes IDs from our list that are no longer selected in the UI
+    selectedOrder = selectedOrder.filter(id => currentSelection.includes(id));
+
+    // 4. Now update the display with the cleaned list
+    updateOrderDisplay();
+
+    console.log("Exams in selection order:", selectedOrder);
+});
     const studentListContainer = document.getElementById('rc-student-list');
     const resultsContainer = document.getElementById('rc-results-container');
     const printAllBtn = document.getElementById('rc-print-all-btn');
@@ -1555,8 +1778,10 @@ function renderReportCardTab() {
             document.querySelectorAll('.rc-student-link').forEach(l => l.classList.remove('active'));
             link.classList.add('active');
             const studentId = link.dataset.studentId;
-            const studentName = students.find(s=>s.id === studentId)?.name || 'Report';
-            const examIds = Array.from(examSelect.selectedOptions).map(opt => opt.value);
+            const studentName = window.students.find(s=>s.id === studentId)?.name || 'Report';
+            //const examIds = Array.from(selectedOrder).map(opt => opt.id);
+            // selectedOrder is already [ "1", "5", "2" ]
+                const examIds = selectedOrder;
             if (examIds.length === 0) {
                 showAlert('Please select at least one exam.', 'warning');
                 return;
@@ -1576,7 +1801,8 @@ function renderReportCardTab() {
     printAllBtn.addEventListener('click', () => {
         const classId = classSelect.value;
         const division = divisionSelect.value;
-        const examIds = Array.from(examSelect.selectedOptions).map(opt => opt.value);
+        //const examIds = Array.from(examSelect.selectedOptions).map(opt => opt.value);
+        const examIds = selectedOrder;
         if (!classId || !division || examIds.length === 0) {
             return showAlert('Please select a class, division, and at least one exam to print all.', 'warning');
         }
