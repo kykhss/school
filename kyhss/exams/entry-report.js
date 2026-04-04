@@ -321,7 +321,6 @@ async function generateEntryReport(examId) {
     const rawReportData = [];
     relevantSchedules.forEach(schedule => {
         const studentsInClass = students.filter(s => s.classId === schedule.classId && s.division === schedule.division && s.status === "Active");
-        
         if (studentsInClass.length === 0) return;
         const enteredCount = studentsInClass.filter(student => marks[`${examId}_${student.id}_${schedule.subjectId}`]).length;
         
@@ -441,110 +440,107 @@ function renderSummaryTableHTML(displayData, examId) {
  * for each subject in their class for the selected exam.
  */
 function renderMyClassPendingList(examId) {
-    console.log(exams);
+    const marks = window.getmarks();
     const container = document.getElementById('my-class-pending-container');
-    if (!container || !selectedUser.classCharge) return;
+    if (!container) return;
+
+    // Use a safety check for classCharge
+    if (!selectedUser || !selectedUser.classCharge) {
+        container.innerHTML = '<div class="alert alert-warning">Class Charge information missing.</div>';
+        return;
+    }
 
     const { classId, division } = selectedUser.classCharge;
-
-    // FIXED: Correct exam lookup
-    const exam = exams.find(e => e.id === examId);
+    const exam = window.exams.find(e => e.id === examId);
+    
     if (!exam) {
         container.innerHTML = '<div class="alert alert-danger">Invalid exam selected.</div>';
         return;
     }
 
-    // Active students in class
+    // 1. Pre-filter students (Performance: Do this once)
     const studentsInClass = students.filter(s =>
         s.classId === classId &&
         s.division === division &&
-        s.status !== 'TC Issued' &&
-        s.status !== 'Graduated'
+        !['TC Issued', 'Graduated'].includes(s.status)
     );
 
-    // Subjects already scheduled for this exam
-    const relevantSchedules = examSchedules.filter(s =>
-        s.examId === examId &&
-        s.classId === classId &&
-        s.division === division
-    );
-
-    // All subjects allocated to this class/division/sector
-    const subjectsForClass = classroomSubjects.filter(cs =>
-        cs.classId === classId &&
-        cs.division === division
-    );
-
-    // Subjects not scheduled
-    const scheduledSubjectIds = new Set(relevantSchedules.map(s => s.subjectId));
-    const missingSubjects = subjectsForClass.filter(sub => {
-    const subject = subjects.find(s => s.id === sub.subjectId);
-    return subject && 
-           subject.sector === exam.sector && 
-           !scheduledSubjectIds.has(sub.subjectId);
-});
-
-        //console.log(missingSubjects);
     if (studentsInClass.length === 0) {
         container.innerHTML = '<div class="alert alert-info">There are no active students in your class.</div>';
         return;
     }
 
-    // --- Calculate entry status ---
-    const subjectStatusList = relevantSchedules.map(cs => {
-        const subject = subjects.find(s => s.id === cs.subjectId);
-        const totalStudents = studentsInClass.length;
+    // 2. Identify Missing Subjects (Performance: Single pass)
+    const scheduledSubjectIds = new Set(
+        examSchedules
+            .filter(s => s.examId === examId && s.classId === classId && s.division === division)
+            .map(s => s.subjectId)
+    );
 
-        const enteredCount = studentsInClass.filter(student => {
-            const markId = `${examId}_${student.id}_${cs.subjectId}`;
-            return !!marks[markId];
-        }).length;
+    const missingSubjectsList = classroomSubjects
+        .filter(cs => cs.classId === classId && cs.division === division)
+        .map(cs => window.subjects.find(s => s.id === cs.subjectId))
+        .filter(s => s && s.sector === exam.sector && !scheduledSubjectIds.has(s.id));
 
-        const pendingCount = totalStudents - enteredCount;
-        const percentage = totalStudents > 0 ? (enteredCount / totalStudents) * 100 : 0;
-        const statusClass =
-            percentage === 100 ? 'bg-success' :
-            percentage > 0 ? 'bg-warning' : 'bg-danger';
+    // 3. Calculate Entry Status
+    const subjectStatusList = examSchedules
+        .filter(s => s.examId === examId && s.classId === classId && s.division === division)
+        .map(sch => {
+            const subject = window.subjects.find(sub => sub.id === sch.subjectId);
+            const totalStudents = studentsInClass.length;
 
-        return {
-            subjectName: subject?.name || 'Unknown Subject',
-            total: totalStudents,
-            entered: enteredCount,
-            pending: pendingCount,
-            percentage,
-            statusClass
-        };
-    }).sort((a, b) => a.subjectName.localeCompare(b.subjectName));
+            // Efficiency: Check marks for this student group
+            const enteredCount = studentsInClass.reduce((count, student) => {
+                const markId = `${examId}_${student.id}_${sch.subjectId}`;
+                return marks[markId] ? count + 1 : count;
+            }, 0);
 
-    // --- Render both tables ---
-    const tableHtml = `
-        <!-- Scheduled Subjects Summary Table -->
+            const percentage = (enteredCount / totalStudents) * 100;
+            
+            return {
+                name: subject?.name || 'Unknown',
+                total: totalStudents,
+                entered: enteredCount,
+                pending: totalStudents - enteredCount,
+                percentage,
+                statusClass: percentage === 100 ? 'bg-success' : (percentage > 0 ? 'bg-warning' : 'bg-danger')
+            };
+        }).sort((a, b) => a.name.localeCompare(b.name));
+
+    // 4. Final Render
+    container.innerHTML = `
+        <div class="row mb-3">
+            <div class="col-12">
+                <h6 class="fw-bold border-bottom pb-2">Class Marks Entry Progress (${classId} - ${division})</h6>
+            </div>
+        </div>
+
         <div class="table-responsive mb-4">
-            <table class="table table-bordered table-hover table-sm">
+            <table class="table table-bordered table-sm table-hover align-middle">
                 <thead class="table-light">
-                    <tr>
+                    <tr class="small">
                         <th>Subject</th>
-                        <th class="text-center">Total Students</th>
+                        <th class="text-center">Total</th>
                         <th class="text-center text-success">Entered</th>
                         <th class="text-center text-danger">Pending</th>
-                        <th class="text-center" style="width: 25%;">Status</th>
+                        <th style="width: 30%;">Status</th>
                     </tr>
                 </thead>
                 <tbody>
                     ${subjectStatusList.map(row => `
                         <tr>
-                            <td>${row.subjectName}</td>
+                            <td class="fw-bold">${row.name}</td>
                             <td class="text-center">${row.total}</td>
                             <td class="text-center">${row.entered}</td>
                             <td class="text-center">${row.pending}</td>
                             <td>
-                                <div class="progress" style="height: 20px;">
+                                <div class="progress" style="height: 12px; border-radius: 10px;">
                                     <div class="progress-bar ${row.statusClass}" role="progressbar" 
-                                         style="width: ${row.percentage}%;" 
+                                         style="width: ${row.percentage}%" 
                                          aria-valuenow="${row.percentage}" aria-valuemin="0" aria-valuemax="100">
-                                         ${row.percentage.toFixed(0)}%
                                     </div>
                                 </div>
+                                <small class="text-muted" style="font-size: 10px;">${row.percentage.toFixed(0)}% Complete</small>
                             </td>
                         </tr>
                     `).join('')}
@@ -552,34 +548,19 @@ function renderMyClassPendingList(examId) {
             </table>
         </div>
 
-        <!-- Missing Subjects Table -->
-        <div class="table-responsive mt-4">
-            <h6 class="fw-bold text-danger">Subjects NOT Scheduled in Exam</h6>
-            <table class="table table-bordered table-hover table-sm">
-                <thead class="table-light">
-                    <tr>
-                        <th>Subject</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${missingSubjects.length > 0 ? missingSubjects.map(row => {
-                        const subject = subjects.find(s => s.id === row.subjectId&&s.sector === exam.sector);
-                        console.log(subject);
-                        return `
-                            <tr>
-                                <td>${subject ? (subject.sector === exam.sector? subject.name : 'Unknown Subject'):"Unknown Subject"}</td>
-                            </tr>
-                        `;
-                    }).join('') :
-                    `<tr><td class="text-center text-muted">All subjects are scheduled.</td></tr>`}
-                </tbody>
-            </table>
+        <div class="card bg-light border-0">
+            <div class="card-body py-2">
+                <h6 class="fw-bold text-danger small mb-2"><i class="bi bi-exclamation-triangle-fill"></i> Unscheduled Subjects (Sector: ${exam.sector})</h6>
+                <div class="d-flex flex-wrap gap-2">
+                    ${missingSubjectsList.length > 0 
+                        ? missingSubjectsList.map(s => `<span class="badge bg-white text-danger border border-danger">${s.name}</span>`).join('')
+                        : `<span class="text-muted small">All subjects are correctly scheduled.</span>`
+                    }
+                </div>
+            </div>
         </div>
     `;
-
-    container.innerHTML = tableHtml;
 }
-
 
 const exportReportToPdf = (examId) => {
     // 1. --- Basic Setup ---
@@ -639,4 +620,3 @@ const exportReportToPdf = (examId) => {
     showAlert('PDF export successful!', 'success');
 };
     
-
