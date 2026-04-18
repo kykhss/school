@@ -710,7 +710,7 @@ async function processExamResultsData(studentsInClass, schedulesForClass, marks,
                 teGrade = gradeFunc(te, maxTE);
                 ceGrade = gradeFunc(ce, maxCE);
 
-                if (grade === 'E' || grade === 'F'|| grade ==="AB") finalStatus!=="NC"?  finalStatus='FAIL':"";
+                if (teGrade === 'E' || teGrade === 'F'|| teGrade ==="AB") finalStatus!=="NC"?  finalStatus='FAIL':"";
                 grandTe += (Number(te) || 0);
                 grandCe += maxCE >= Number(ce)?(Number(ce) || 0):0;
                 grandmaxTe += maxTE;
@@ -823,10 +823,11 @@ function renderExamResultsTable(resultsData, subjectHeaders, schedulesForClass, 
         // Subject Results Cells
         res.subjectResults.forEach(subRes => {
             const gradeColor = (subRes.grade === 'E' || subRes.grade === 'F') ? 'text-danger fw-bold' : '';
+            const tegradeColor = (subRes.teGrade === 'E' || subRes.teGrade === 'F' || subRes.teGrade === 'AB') ? 'text-danger fw-bold' : '';
             const NEColor = (subRes.grade === 'N/A') ? 'text-primary fw-bold' : (subRes.grade === 'AB')?'text-danger fw-bold':'';
             
             bodyHTML += `
-                <td class="text-center ${NEColor}">
+                <td class="text-center ${tegradeColor}">
                     ${subRes.te} / ${subRes.ce}
                     <br>
                     <small class="text-muted">(${subRes.teGrade} / ${subRes.ceGrade})</small>
