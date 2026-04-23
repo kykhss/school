@@ -1,7 +1,7 @@
 // sw.js
 const cacheName = 'kyhsss-v1';
 const assets = [
-  './NEWFINAL2.html',
+  './index.html',
   './addstudent.js',
   './variables.js',
   './appDb.js'
