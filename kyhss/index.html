@@ -40,6 +40,7 @@
     <script type="module" src="exams/entry-report.js"></script>
     <script type="module" src="feemgt/feemanagement.js"></script>
     <script type="module" src="exams/examcontoll/examcontrol.js"></script>
+    <script type="module" src="exams/resultexport.js"></script>
    
 
 
@@ -1000,7 +1001,8 @@ const viewDependencies = {
     'data-migration': ['bookIssuances'],
     'my-fest-events': ['fests', 'festRegistrations', 'festEvents','festGroups'],
     'notification-mgt': ['customNotifications'],
-    'settings':['schoolDetails', 'systemConfig']
+    'settings':['schoolDetails', 'systemConfig'],
+     'result-export': window.renderResultDownload,
 };
 
 // Keep track of active listeners
@@ -31373,7 +31375,10 @@ async function startMigration() {
     'notification-mgt': window.renderNotificationManager,
     'student-360-profile': window.showStudent360Details,
     'bulk-manager' : window.renderBulkFieldManager,
-    'settings' : window.renderSettingsModule
+    'settings' : window.renderSettingsModule,
+     'result-export':['students','exams','classes','examSchedules','classroomSubjects','subjects','teachers', ],
+    'reAppear':['students','exams','classes','examSchedules','classroomSubjects','subjects','teachers', ]
+    
 
 };      
 // --- In your <script type="module"> block ---
