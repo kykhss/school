@@ -264,6 +264,9 @@ window.dashboardStats = {};
   { id: 'settings', icon: 'fa-cog', text: 'Settings' },
   {id: 'notification-mgt', icon: 'fa-bullhorn', text: 'Notification Manager'},
   { id: 'bulk-manager', icon: 'fa-database', text: 'Bulk Manager' },
+          { id: 'result-export', icon: 'fa-file-export', text: 'Result Export' },
+  { id: 'reAppear', icon: 'fa-file-export', text: 'ReAppears' },
+
 
  
 ];
