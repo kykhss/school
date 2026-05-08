@@ -1002,7 +1002,8 @@ const viewDependencies = {
     'my-fest-events': ['fests', 'festRegistrations', 'festEvents','festGroups'],
     'notification-mgt': ['customNotifications'],
     'settings':['schoolDetails', 'systemConfig'],
-     'result-export': window.renderResultDownload,
+     'result-export':['students','exams','classes','examSchedules','classroomSubjects','subjects','teachers', ],
+    'reAppear':['students','exams','classes','examSchedules','classroomSubjects','subjects','teachers', ]
 };
 
 // Keep track of active listeners
@@ -31376,9 +31377,8 @@ async function startMigration() {
     'student-360-profile': window.showStudent360Details,
     'bulk-manager' : window.renderBulkFieldManager,
     'settings' : window.renderSettingsModule,
-     'result-export':['students','exams','classes','examSchedules','classroomSubjects','subjects','teachers', ],
-    'reAppear':['students','exams','classes','examSchedules','classroomSubjects','subjects','teachers', ]
-    
+             'result-export': window.renderResultDownload,
+     
 
 };      
 // --- In your <script type="module"> block ---
