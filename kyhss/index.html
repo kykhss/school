@@ -8548,7 +8548,17 @@ function renderReportFieldSelector(collectionName, savedFields = []) {
     selectedFieldsContainer.innerHTML = '';
 
     let baseFields = [];
-    if (collectionName === 'students' && students.length > 0) baseFields = Object.keys(students[0]);
+    if (collectionName === 'students' && students.length > 0) {
+    const allKeys = new Set();
+    
+    // Loop through every student to collect all possible field names
+    students.forEach(student => {
+        Object.keys(student).forEach(key => allKeys.add(key));
+    });
+
+    // Convert the Set back into an array
+    baseFields = Array.from(allKeys);
+}
     else if (collectionName === 'teachers' && teachers.length > 0) baseFields = Object.keys(teachers[0]);
     else if (collectionName === 'classes' && classes.length > 0) baseFields = Object.keys(classes[0]);
     
