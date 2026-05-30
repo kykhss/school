@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>KYHSS Frame</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #111;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+  padding: 20px 16px 30px;
+  font-family: sans-serif;
+}
+#uploadBtn {
+  margin-bottom: 18px;
+  padding: 14px 36px;
+  font-size: 17px;
+  font-weight: 700;
+  background: #f0c040;
+  color: #111;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+}
+#uploadBtn:active { opacity: 0.8; }
+#fileInput { display: none; }
+.frame-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  touch-action: none;
+  user-select: none;
+}
+#photoCanvas {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+}
+#frameImg {
+  display: block;
+  width: 100%;
+  position: relative;
+  z-index: 2;
+  pointer-events: none;
+}
+#downloadBtn {
+  margin-top: 18px;
+  padding: 14px 36px;
+  font-size: 17px;
+  font-weight: 700;
+  background: #2ea043;
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  display: none;
+}
+#downloadBtn:active { opacity: 0.8; }
+#hint {
+  margin-top: 10px;
+  font-size: 13px;
+  color: #888;
+  text-align: center;
+  display: none;
+}
+#offscreen { display: none; }
+</style>
+</head>
+<body>
+
+<button id="uploadBtn" onclick="document.getElementById('fileInput').click()">📷 Upload Photo</button>
+<input type="file" id="fileInput" accept="image/*">
+
+<div class="frame-wrap" id="frameWrap">
+  <canvas id="photoCanvas"></canvas>
+  <img id="frameImg" src="frame.png">
+</div>
+
+<button id="downloadBtn" onclick="downloadFull()">⬇ Download</button>
+<div id="hint">Pinch to zoom · Drag to move</div>
+<canvas id="offscreen"></canvas>
+
+<script>
+const BOX = { x: 665, y: 1046, w: 830, h: 1001 };
+const FW = 2160, FH = 2700;
+
+const canvas = document.getElementById('photoCanvas');
+const ctx = canvas.getContext('2d');
+const frameWrap = document.getElementById('frameWrap');
+const frameImg = document.getElementById('frameImg');
+const offscreen = document.getElementById('offscreen');
+const octx = offscreen.getContext('2d');
+
+let photo = null;
+let px = 0, py = 0, pscale = 1;
+
+function setupCanvas() {
+  const w = frameWrap.offsetWidth;
+  const h = frameImg.offsetHeight || w * (FH / FW);
+  canvas.width = w;
+  canvas.height = h;
+}
+
+frameImg.onload = () => { setupCanvas(); drawPhoto(); };
+if (frameImg.complete) { setupCanvas(); }
+window.addEventListener('resize', () => { setupCanvas(); drawPhoto(); });
+
+document.getElementById('fileInput').addEventListener('change', function() {
+  const file = this.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      photo = img;
+      autoFit();
+      document.getElementById('downloadBtn').style.display = 'inline-block';
+      document.getElementById('hint').style.display = 'block';
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+  this.value = '';
+});
+
+function autoFit() {
+  const ds = canvas.width / FW;
+  const bw = BOX.w * ds, bh = BOX.h * ds;
+  const photoAR = photo.naturalWidth / photo.naturalHeight;
+  const boxAR = bw / bh;
+  pscale = photoAR > boxAR ? bh / photo.naturalHeight : bw / photo.naturalWidth;
+  pscale *= 1.02;
+  px = 0; py = 0;
+  drawPhoto();
+}
+
+function drawPhoto() {
+  setupCanvas();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (!photo) return;
+  const ds = canvas.width / FW;
+  const bx = BOX.x * ds, by = BOX.y * ds, bw = BOX.w * ds, bh = BOX.h * ds;
+  const cx = bx + bw / 2, cy = by + bh / 2;
+  const pw = photo.naturalWidth * pscale * ds;
+  const ph = photo.naturalHeight * pscale * ds;
+  ctx.save();
+  ctx.beginPath();
+  roundRect(ctx, bx, by, bw, bh, 14 * ds);
+  ctx.clip();
+  ctx.drawImage(photo, cx - pw/2 + px * ds, cy - ph/2 + py * ds, pw, ph);
+  ctx.restore();
+}
+
+function roundRect(c, x, y, w, h, r) {
+  c.moveTo(x+r, y);
+  c.lineTo(x+w-r, y); c.quadraticCurveTo(x+w, y, x+w, y+r);
+  c.lineTo(x+w, y+h-r); c.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+  c.lineTo(x+r, y+h); c.quadraticCurveTo(x, y+h, x, y+h-r);
+  c.lineTo(x, y+r); c.quadraticCurveTo(x, y, x+r, y);
+  c.closePath();
+}
+
+// Mouse drag
+let dragging = false, lastX, lastY;
+canvas.addEventListener('mousedown', e => { dragging = true; lastX = e.clientX; lastY = e.clientY; });
+window.addEventListener('mousemove', e => {
+  if (!dragging || !photo) return;
+  const ds = canvas.width / FW;
+  px += (e.clientX - lastX) / ds;
+  py += (e.clientY - lastY) / ds;
+  lastX = e.clientX; lastY = e.clientY;
+  drawPhoto();
+});
+window.addEventListener('mouseup', () => { dragging = false; });
+canvas.addEventListener('wheel', e => {
+  if (!photo) return;
+  e.preventDefault();
+  pscale *= e.deltaY < 0 ? 1.05 : 0.95;
+  drawPhoto();
+}, { passive: false });
+
+// Touch
+let pinching = false, lastDist = 0, scaleAtPinchStart;
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  if (e.touches.length === 1) {
+    dragging = true;
+    lastX = e.touches[0].clientX; lastY = e.touches[0].clientY;
+  } else if (e.touches.length === 2) {
+    dragging = false; pinching = true;
+    lastDist = getTouchDist(e.touches);
+    scaleAtPinchStart = pscale;
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (!photo) return;
+  if (e.touches.length === 1 && dragging) {
+    const ds = canvas.width / FW;
+    px += (e.touches[0].clientX - lastX) / ds;
+    py += (e.touches[0].clientY - lastY) / ds;
+    lastX = e.touches[0].clientX; lastY = e.touches[0].clientY;
+    drawPhoto();
+  } else if (e.touches.length === 2 && pinching) {
+    const dist = getTouchDist(e.touches);
+    pscale = scaleAtPinchStart * (dist / lastDist);
+    drawPhoto();
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  if (e.touches.length < 2) pinching = false;
+  if (e.touches.length < 1) dragging = false;
+}, { passive: false });
+
+function getTouchDist(touches) {
+  const dx = touches[0].clientX - touches[1].clientX;
+  const dy = touches[0].clientY - touches[1].clientY;
+  return Math.sqrt(dx*dx + dy*dy);
+}
+
+function downloadFull() {
+  if (!photo) return;
+  offscreen.width = FW; offscreen.height = FH;
+  octx.clearRect(0, 0, FW, FH);
+  const cx = BOX.x + BOX.w/2, cy = BOX.y + BOX.h/2;
+  const pw = photo.naturalWidth * pscale, ph = photo.naturalHeight * pscale;
+  octx.save();
+  octx.beginPath();
+  roundRect(octx, BOX.x, BOX.y, BOX.w, BOX.h, 28);
+  octx.clip();
+  octx.drawImage(photo, cx - pw/2 + px, cy - ph/2 + py, pw, ph);
+  octx.restore();
+  octx.drawImage(frameImg, 0, 0, FW, FH);
+  const a = document.createElement('a');
+  a.download = 'KYHSS_Welcome.png';
+  a.href = offscreen.toDataURL('image/png');
+  a.click();
+}
+</script>
+</body>
+</html>
