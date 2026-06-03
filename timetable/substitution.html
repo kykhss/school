@@ -716,7 +716,7 @@ let classesWithNoClassToday = new Set();
                 loadingTeachersMessage.textContent = 'Loading data from database...';
 
                 // Load Timetable Data
-                const timetableDocRef = doc(db, `${basePath}/${FIRESTORE_COLLECTION_TIMETABLES}`, 'lastTimetable');
+                const timetableDocRef = doc(db, `${basePath}/${FIRESTORE_COLLECTION_TIMETABLES}`, 'lastTimetable26-27');
                 const timetableDocSnap = await getDoc(timetableDocRef);
                 currentTimetable = timetableDocSnap.exists() ? timetableDocSnap.data() : {};
                 if (!timetableDocSnap.exists()) {
