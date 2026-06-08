@@ -362,7 +362,7 @@
 
     <div class="container mx-auto p-4 md:p-6">
         <h1 class="text-3xl font-semibold text-gray-800 text-center mb-6">Teacher Substitution Planner</h1>
-        <input id="timetablename" type="text" value="lastTimetable26-27-1" class="hidden">
+        <input id="timetablename" type="text" value="lastTimetable26-27-1">
        <div class="tabs">
     <button class="tab-button active" data-tab="substitution-tab">Substitution Planner</button>
     <button class="tab-button" data-tab="timetable-tab">Timetable View</button>
@@ -654,7 +654,7 @@ let classesWithNoClassToday = new Set();
                 return localStorage.getItem('userId') || 'defaultUser';
             }
 
-            setBase64ParamsInUrl('iqu478'); 
+            setBase64ParamsInUrl('kyhss26-27'); 
             let appId = "timetableData"; 
             const currentUserId= loadParamsFromBase64Url();
             const basePath = `${appId}/${currentUserId}`;
