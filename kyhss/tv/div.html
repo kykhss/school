@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobile Div Synchronization Panel</title>
+    <style>
+        body { font-family: -apple-system, system-ui, sans-serif; background: #f1f5f9; margin: 0; padding: 15px; color: #1e293b; text-align: center; }
+        .card { background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; box-sizing: border-box; margin-bottom: 15px; }
+        .pin-input { font-size: 26px; text-align: center; letter-spacing: 6px; font-weight: bold; border: 2px solid #3b82f6; color: #2563eb; border-radius: 10px; padding: 10px; width: 100%; box-sizing: border-box; margin-bottom: 15px; }
+        .btn { background: #3b82f6; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; font-size: 15px; cursor: pointer; margin: 5px; }
+        .btn-success { background: #10b981; width: 100%; padding: 15px; margin: 0 0 15px 0; font-size: 16px; }
+        
+        /* THE CRITICAL DIV ZONE: Only changes within this container broadcast to the TV */
+        #sharedArea { background: #1e293b; color: white; border-radius: 12px; padding: 20px; min-height: 150px; text-align: center; border: 2px dashed #3b82f6; margin-top: 15px; }
+    </style>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+</head>
+<body>
+
+<div class="card">
+    <h2 style="margin: 0 0 15px 0;">📱 Local Div Sync Controller</h2>
+    
+    <input type="number" id="tvPin" class="pin-input" placeholder="0000" pattern="\d*">
+    <button class="btn btn-success" onclick="connectToTVNode()">🔗 Establish TV Handshake Connection</button>
+    <div id="status" style="font-weight:600; color:#64748b; font-size:14px; margin-bottom:10px;">Status: Disconnected</div>
+</div>
+
+<div class="card">
+    <h3 style="margin: 0 0 10px 0;">🛠️ Control Board Actions</h3>
+    <p style="font-size:13px; color:#64748b; margin-top:-5px;">Tap below to dynamically change elements inside the synced container</p>
+    <button class="btn" onclick="updateContentPreset('welcome')">👋 Welcome Screen</button>
+    <button class="btn" onclick="updateContentPreset('alert')">🚨 System Warning</button>
+    <button class="btn" onclick="updateContentPreset('dashboard')">📊 Stats Framework</button>
+</div>
+
+<div id="sharedArea">
+    <h3 style="margin-top:10px;">Handshake Pending</h3>
+    <p style="color: #94a3b8;">Enter your TV code above and hit connect to link this component frame container.</p>
+</div>
+
+<script>
+    const peer = new Peer();
+    let tvConnection = null;
+
+    function connectToTVNode() {
+        const inputPin = document.getElementById('tvPin').value.trim();
+        const statusReport = document.getElementById('status');
+
+        if (inputPin.length !== 4) {
+            statusReport.innerText = "Status: ❌ Please check PIN configuration.";
+            statusReport.style.color = "#dc2626";
+            return;
+        }
+
+        statusReport.innerText = "Status: Transmitting socket signal...";
+        statusReport.style.color = "#3b82f6";
+
+        // Create direct connection reference instance target link loop
+        tvConnection = peer.connect('tv-div-sync-' + inputPin);
+
+        tvConnection.on('open', () => {
+            statusReport.innerText = "Status: 🟢 Sync Pipeline Active!";
+            statusReport.style.color = "#10b981";
+            
+            // Push current inner layout code structures over immediately on open connection
+            syncDivToTV();
+        });
+    }
+
+    // This specific function grabs the exact inner data content and mirrors it
+    function syncDivToTV() {
+        if (!tvConnection) return;
+
+        const structuralPayload = document.getElementById('sharedArea').innerHTML;
+        
+        // Ship data down the stream pipe wire
+        tvConnection.send({
+            htmlContent: structuralPayload
+        });
+    }
+
+    // Dynamic state modifiers that refresh your specific structural target
+    function updateContentPreset(type) {
+        const sharedAreaContainer = document.getElementById('sharedArea');
+
+        if (type === 'welcome') {
+            sharedAreaContainer.innerHTML = `
+                <h2 style="color: #10b981; margin-top:5px;">Welcome to HQ!</h2>
+                <p style="color: #94a3b8; font-size:15px;">This complete presentation component card is syncing wirelessly straight from a smartphone.</p>
+                <div style="background:#334155; padding:10px; border-radius:6px; font-weight:bold;">📍 Room Room-2B</div>
+            `;
+        } 
+        else if (type === 'alert') {
+            sharedAreaContainer.innerHTML = `
+                <div style="background: #dc2626; padding: 15px; border-radius: 8px; font-weight: bold; border: 2px solid white; animation: pulse 1s infinite;">
+                    <h2 style="margin:0 0 5px 0;">🚨 CRITICAL SYSTEM NOTICE</h2>
+                    <p style="margin:0; font-size:14px;">Maintenance operations starting shortly. Please clear production systems space.</p>
+                </div>
+            `;
+        } 
+        else if (type === 'dashboard') {
+            sharedAreaContainer.innerHTML = `
+                <h3 style="margin-top:5px; color:#f59e0b;">📊 Real-time Operations Dashboard</h3>
+                <table style="width:100%; border-collapse:collapse; margin-top:10px; font-size:14px; text-align:left;">
+                    <tr style="border-bottom:1px solid #334155; color:#94a3b8;"><th>Metric</th><th>Value</th><th>Status</th></tr>
+                    <tr style="border-bottom:1px solid #334155;"><td>Network Traffic</td><td>842 Mbps</td><td style="color:#10b981;">Nominal</td></tr>
+                    <tr><td>Active Users</td><td>1,204 Users</td><td style="color:#f59e0b;">Peak</td></tr>
+                </table>
+            `;
+        }
+
+        // Trigger synchronization right after content modification finishes execution
+        syncDivToTV();
+    }
+</script>
+</body>
+</html>
