@@ -7,11 +7,13 @@
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #020617; font-family: system-ui, sans-serif; color: white; }
         .layer { position: absolute; top:0; left:0; width:100%; height:100%; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
-        .pin-box { font-size: 80px; font-weight: 900; background: #1e293b; padding: 20px 60px; border-radius: 16px; border: 4px solid #10b981; color: #10b981; letter-spacing: 10px; margin: 20px 0; }
+        .pin-box { font-size: 80px; font-weight: 900; background: #1e293b; padding: 20px 60px; border-radius: 16px; border: 4px solid #10b981; color: #10b981; letter-spacing: 10px; margin: 20px 0; box-shadow: 0 0 40px rgba(16, 185, 129, 0.3); }
         
-        #sharedArea { width: 100%; height: 100%; display: none; background: #000; position: relative; }
+        /* Universal Shared Area Matrix Container */
+        #sharedArea { width: 100%; height: 100%; display: none; box-sizing: border-box; background: #000; position: relative; }
         .tv-media { width: 100%; height: 100%; object-fit: contain; border: none; display: none; background: #000; position: absolute; top: 0; left: 0; }
         
+        /* Fixed Safe PDF Viewport Container */
         #tvPdfWrapper { width: 100%; height: 100%; overflow: hidden; display: none; position: absolute; top: 0; left: 0; background: #0f172a; }
         #tvPdfCanvas { display: block; margin: 0 auto; max-width: 100%; height: 100vh; object-fit: contain; }
     </style>
@@ -22,8 +24,9 @@
 
 <div id="setupScreen" class="layer">
     <div style="font-size: 32px; color: #94a3b8; font-weight: bold;">📺 TV Media Node Active</div>
-    <div style="font-size: 18px; color: #64748b; margin-top: 10px;">Enter this PIN on your mobile device:</div>
+    <div style="font-size: 18px; color: #64748b; margin-top: 10px;">Connect phone to Hotspot/Wi-Fi and enter this PIN:</div>
     <div class="pin-box" id="tvPin">----</div>
+    <div style="font-size: 16px; color: #475569;" id="status">Initializing network pipeline...</div>
 </div>
 
 <div id="sharedArea">
@@ -36,22 +39,29 @@
 </div>
 
 <script>
+    // Point PDF.js to its required web worker script
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
 
+    // FIX: Generate PIN and assign it to the matching 'tvPin' HTML ID element
     const secretPin = Math.floor(1000 + Math.random() * 9000).toString();
-    document.getElementById('generatedPin').innerText = secretPin;
+    document.getElementById('tvPin').innerText = secretPin;
 
     const peer = new Peer('tv-core-mgt-' + secretPin);
     const tvVideo = document.getElementById('tvVideo');
     const tvPdfWrapper = document.getElementById('tvPdfWrapper');
     let tvPdfDoc = null;
 
+    peer.on('open', () => {
+        document.getElementById('status').innerText = "📡 Antenna Online. Awaiting controller payload...";
+    });
+
+    // Channel handler for lightweight metadata & PDF transfers
     peer.on('connection', (conn) => {
         conn.on('data', (data) => {
             document.getElementById('setupScreen').style.display = 'none';
             document.getElementById('sharedArea').style.display = 'block';
 
-            // Handle Remote Page Control Changes
+            // Handle Remote Page/Video Control Changes from Mobile Phone
             if (data.type === 'control_cmd') {
                 if (data.action === 'play') tvVideo.play();
                 else if (data.action === 'pause') tvVideo.pause();
@@ -61,7 +71,7 @@
                 return;
             }
 
-            // Handle Text/PDF Payload Deliveries
+            // Handle Lightweight Text/PDF Payload Deliveries
             if (data.fileMime === 'application/pdf') {
                 document.querySelectorAll('.tv-media').forEach(el => el.style.display = 'none');
                 tvPdfWrapper.style.display = 'block';
@@ -75,7 +85,7 @@
         });
     });
 
-    // CRITICAL UPDATE: Handles heavy images and videos via chunks/media streams safely
+    // Channel handler for heavy media stream loops (Images and Videos)
     peer.on('call', (call) => {
         document.getElementById('setupScreen').style.display = 'none';
         document.getElementById('sharedArea').style.display = 'block';
@@ -84,20 +94,18 @@
 
         call.answer();
         call.on('stream', (remoteStream) => {
-            // Check the metadata sent alongside the stream header
             const metadata = call.metadata;
             
             if (metadata && metadata.type.startsWith('video/')) {
                 tvVideo.srcObject = remoteStream;
                 tvVideo.style.display = 'block';
-                tvVideo.muted = false; // Restores audio capabilities to the TV channel
-                tvVideo.play().catch(e => console.log("Awaiting play interaction command."));
+                tvVideo.muted = false; // Ensures full audio is received by the TV
+                tvVideo.play().catch(e => console.log("Awaiting play command from phone."));
             } 
             else if (metadata && metadata.type.startsWith('image/')) {
-                // For images sent via media stream tracks, capture the frame onto the image component
                 const img = document.getElementById('tvImage');
                 
-                // Creates a virtual canvas frame capture loop to paint the heavy image instantly
+                // Grab the live stream frame and render it onto a canvas to bypass memory crashes
                 const videoTrack = remoteStream.getVideoTracks()[0];
                 const imageCapture = new ImageCapture(videoTrack);
                 imageCapture.grabFrame().then(imageBitmap => {
@@ -107,16 +115,18 @@
                     canvas.getContext('2d').drawImage(imageBitmap, 0, 0);
                     img.src = canvas.toDataURL();
                     img.style.display = 'block';
-                });
+                }).catch(err => console.error("Error drawing image stream frame:", err));
             }
         });
     });
 
+    // Renders custom high-definition PDF frames natively without opening print menus
     function renderTvPage(num) {
+        if (!tvPdfDoc) return;
         tvPdfDoc.getPage(num).then((page) => {
             const canvas = document.getElementById('tvPdfCanvas');
             const ctx = canvas.getContext('2d');
-            const viewport = page.getViewport({ scale: 2.0 });
+            const viewport = page.getViewport({ scale: 2.0 }); 
             canvas.height = viewport.height;
             canvas.width = viewport.width;
             page.render({ canvasContext: ctx, viewport: viewport });
