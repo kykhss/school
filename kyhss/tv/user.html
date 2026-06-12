@@ -3,79 +3,86 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Secure TV Controller</title>
+    <title>Mobile TV Controller</title>
     <style>
-        body { font-family: system-ui, sans-serif; background: #f8fafc; margin: 0; padding: 20px; color: #1e293b; }
-        .card { background: white; padding: 30px; border-radius: 16px; max-width: 450px; margin: 20px auto; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; }
-        h2 { margin-top: 0; font-size: 24px; color: #0f172a; text-align: center; }
-        .form-group { margin-bottom: 20px; }
-        label { display: block; font-weight: 600; margin-bottom: 8px; color: #475569; font-size: 14px; }
-        input { width: 100%; padding: 12px; border: 2px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; font-size: 16px; transition: border-color 0.2s; }
+        body { font-family: system-ui, sans-serif; background: #f8fafc; margin: 0; padding: 15px; color: #1e293b; }
+        .card { background: white; padding: 20px; border-radius: 16px; max-width: 100%; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; box-sizing: border-box; }
+        h2 { margin-top: 0; font-size: 22px; color: #0f172a; text-align: center; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-weight: 600; margin-bottom: 6px; color: #475569; font-size: 14px; }
+        input { width: 100%; padding: 14px; border: 2px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
         input:focus { border-color: #2563eb; outline: none; }
-        .pin-input { font-size: 24px; text-align: center; letter-spacing: 5px; font-weight: bold; border-color: #3b82f6; color: #2563eb; }
-        .btn { background: #2563eb; color: white; border: none; padding: 14px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; font-size: 16px; margin-top: 10px; }
-        .btn:hover { background: #1d4ed8; }
+        .pin-input { font-size: 28px; text-align: center; letter-spacing: 8px; font-weight: bold; border-color: #3b82f6; color: #2563eb; }
+        .btn { background: #2563eb; color: white; border: none; padding: 16px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; font-size: 16px; margin-top: 10px; }
+        .btn:active { background: #1d4ed8; }
         .status { text-align: center; font-weight: 600; margin-top: 15px; font-size: 14px; }
     </style>
+    <script src="https://cdn.pubnub.com/sdk/javascript/pubnub.7.2.2.min.js"></script>
 </head>
 <body>
 
 <div class="card">
-    <h2>🔐 Device Synchronization</h2>
-    <hr style="border: 0; border-top: 1px solid #e2e8f0; margin-bottom: 20px;">
+    <h2>📱 TV Remote Control</h2>
+    <p style="text-align: center; color:#64748b; margin-top:-10px; font-size:14px;">Verify PIN to send commands over internet</p>
     
     <div class="form-group">
-        <label for="tvPin">Enter 4-Digit TV Code</label>
-        <input type="text" id="tvPin" class="pin-input" placeholder="0000" maxlength="4">
+        <label for="tvPin">Enter 4-Digit Code from TV</label>
+        <input type="number" id="tvPin" class="pin-input" placeholder="0000" pattern="\d*" novalidate>
     </div>
 
     <div class="form-group">
-        <label for="tickerText">Update Banner Message</label>
-        <input type="text" id="tickerText" value="Hello! This message is broadcast via a verified, secure controller channel.">
+        <label for="tickerText">Ticker Banner Message</label>
+        <input type="text" id="tickerText" value="Hello from my smartphone! 🚀">
     </div>
 
     <div class="form-group">
-        <label for="imgUrl">Change TV Wallpaper (Image URL)</label>
+        <label for="imgUrl">TV Image URL</label>
         <input type="text" id="imgUrl" value="https://images.unsplash.com/photo-1518837695005-2083093ee35b?w=1200">
     </div>
 
-    <button class="btn" onclick="sendSecurePayload()">🔗 Transmit Content to TV</button>
+    <button class="btn" onclick="sendCloudPayload()">📡 Authenticate & Push</button>
     
     <div id="statusReport" class="status"></div>
 </div>
 
 <script>
-    function sendSecurePayload() {
+    // Initialize cloud broker client
+    const pubnub = new PubNub({
+        publishKey: 'pub-c-cb6df645-ec05-4f4f-b672-ecdb92b95c02',
+        subscribeKey: 'sub-c-57697b0a-be75-11e4-b333-02ee2ddab7fe',
+        userId: "mobile_remote_node"
+    });
+
+    function sendCloudPayload() {
         const inputPin = document.getElementById('tvPin').value.trim();
-        const actualTvPin = localStorage.getItem('active_tv_pin');
         const statusEl = document.getElementById('statusReport');
 
-        if (!inputPin) {
-            statusEl.innerText = "❌ Access Denied: Please enter the PIN shown on the TV display.";
+        if (inputPin.length !== 4) {
+            statusEl.innerText = "❌ Please enter a valid 4-digit PIN.";
             statusEl.style.color = "#dc2626";
             return;
         }
 
-        // Check if user entry matches what the TV expects
-        if (inputPin !== actualTvPin) {
-            statusEl.innerText = "❌ Verification Failed: Code does not match the active TV display node.";
-            statusEl.style.color = "#dc2626";
-            return;
-        }
+        statusEl.innerText = "Sending secure signal...";
+        statusEl.style.color = "#64748b";
 
-        // Pack instructions together with authorization token
-        const payload = {
-            pin: inputPin,
-            ticker: document.getElementById('tickerText').value,
-            imgUrl: document.getElementById('imgUrl').value,
-            timestamp: Date.now()
-        };
-
-        // Ship to storage pipeline
-        localStorage.setItem('tv_payload', JSON.stringify(payload));
-        
-        statusEl.innerText = "✅ Authorization Successful! Content pushed to TV.";
-        statusEl.style.color = "#16a34a";
+        // Transmit content target straight to the cloud channel named after the targeted pin code!
+        pubnub.publish({
+            channel: 'tv_channel_' + inputPin,
+            message: {
+                pin: inputPin,
+                ticker: document.getElementById('tickerText').value,
+                imgUrl: document.getElementById('imgUrl').value
+            }
+        }, function(status, response) {
+            if (!status.error) {
+                statusEl.innerText = "✨ Connected! Content broadcasted successfully.";
+                statusEl.style.color = "#16a34a";
+            } else {
+                statusEl.innerText = "❌ Network error sending data.";
+                statusEl.style.color = "#dc2626";
+            }
+        });
     }
 </script>
 </body>
