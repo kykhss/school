@@ -7,7 +7,92 @@
     <style>
         body { font-family: system-ui, sans-serif; background: #f8fafc; margin: 0; padding: 15px; color: #1e293b; }
         .card { background: white; padding: 20px; border-radius: 16px; max-width: 100%; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; box-sizing: border-box; }
+        h2 { margin-top: 0; font-size: 22px; color: #0f172a; text-align: center; }<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobile TV Controller</title>
+    <style>
+        body { font-family: system-ui, sans-serif; background: #f8fafc; margin: 0; padding: 15px; color: #1e293b; }
+        .card { background: white; padding: 20px; border-radius: 16px; max-width: 100%; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; box-sizing: border-box; }
         h2 { margin-top: 0; font-size: 22px; color: #0f172a; text-align: center; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-weight: 600; margin-bottom: 6px; color: #475569; font-size: 14px; }
+        input { width: 100%; padding: 14px; border: 2px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
+        input:focus { border-color: #10b981; outline: none; }
+        .pin-input { font-size: 28px; text-align: center; letter-spacing: 8px; font-weight: bold; border-color: #10b981; color: #059669; }
+        .btn { background: #10b981; color: white; border: none; padding: 16px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; font-size: 16px; margin-top: 10px; }
+        .btn:active { background: #059669; }
+        .status { text-align: center; font-weight: 600; margin-top: 15px; font-size: 14px; color: #64748b; }
+    </style>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+</head>
+<body>
+
+<div class="card">
+    <h2>📱 TV Remote Control</h2>
+    
+    <div class="form-group">
+        <label for="tvPin">Enter 4-Digit Code from TV</label>
+        <input type="number" id="tvPin" class="pin-input" placeholder="0000" pattern="\d*">
+    </div>
+
+    <div class="form-group">
+        <label for="tickerText">Ticker Banner Message</label>
+        <input type="text" id="tickerText" value="Live updates sent flawlessly from my phone! 🚀">
+    </div>
+
+    <div class="form-group">
+        <label for="imgUrl">TV Image URL</label>
+        <input type="text" id="imgUrl" value="https://images.unsplash.com/photo-1518837695005-2083093ee35b?w=1200">
+    </div>
+
+    <button class="btn" onclick="connectAndPush()">⚡ Connect & Push Updates</button>
+    
+    <div id="statusReport" class="status">Disconnected</div>
+</div>
+
+<script>
+    // Create a temporary identifier for the phone
+    const peer = new Peer();
+
+    function connectAndPush() {
+        const inputPin = document.getElementById('tvPin').value.trim();
+        const statusEl = document.getElementById('statusReport');
+
+        if (inputPin.length !== 4) {
+            statusEl.innerText = "❌ Enter a valid 4-digit PIN.";
+            statusEl.style.color = "#dc2626";
+            return;
+        }
+
+        statusEl.innerText = "Connecting directly to TV...";
+        statusEl.style.color = "#2563eb";
+
+        // Establish a direct link straight to the TV screen ID
+        const conn = peer.connect('tv-mgt-system-' + inputPin);
+
+        conn.on('open', () => {
+            statusEl.innerText = "🚀 Connected! Syncing data...";
+            statusEl.style.color = "#16a34a";
+
+            // Ship configuration directly to TV
+            conn.send({
+                authPin: inputPin,
+                ticker: document.getElementById('tickerText').value,
+                imgUrl: document.getElementById('imgUrl').value
+            });
+        });
+
+        conn.on('error', (err) => {
+            statusEl.innerText = "❌ Connection failed. Check your Wi-Fi or PIN.";
+            statusEl.style.color = "#dc2626";
+        });
+    }
+</script>
+</body>
+</html>
         .form-group { margin-bottom: 15px; }
         label { display: block; font-weight: 600; margin-bottom: 6px; color: #475569; font-size: 14px; }
         input { width: 100%; padding: 14px; border: 2px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
