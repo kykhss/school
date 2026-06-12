@@ -3,97 +3,79 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TV Management - Controller</title>
+    <title>Secure TV Controller</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f5f7; margin: 0; padding: 20px; }
-        .card { background: white; padding: 24px; border-radius: 12px; max-width: 500px; margin: 0 auto; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-        h2 { margin-top: 0; color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
+        body { font-family: system-ui, sans-serif; background: #f8fafc; margin: 0; padding: 20px; color: #1e293b; }
+        .card { background: white; padding: 30px; border-radius: 16px; max-width: 450px; margin: 20px auto; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; }
+        h2 { margin-top: 0; font-size: 24px; color: #0f172a; text-align: center; }
         .form-group { margin-bottom: 20px; }
-        label { display: block; font-weight: 600; margin-bottom: 8px; color: #475569; }
-        .btn { background: #2563eb; color: white; border: none; padding: 12px 20px; border-radius: 6px; font-weight: bold; cursor: pointer; width: 100%; font-size: 16px; margin-bottom: 10px; }
+        label { display: block; font-weight: 600; margin-bottom: 8px; color: #475569; font-size: 14px; }
+        input { width: 100%; padding: 12px; border: 2px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; font-size: 16px; transition: border-color 0.2s; }
+        input:focus { border-color: #2563eb; outline: none; }
+        .pin-input { font-size: 24px; text-align: center; letter-spacing: 5px; font-weight: bold; border-color: #3b82f6; color: #2563eb; }
+        .btn { background: #2563eb; color: white; border: none; padding: 14px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; font-size: 16px; margin-top: 10px; }
         .btn:hover { background: #1d4ed8; }
-        .btn-screen { background: #10b981; }
-        .btn-screen:hover { background: #059669; }
-        .btn-stop { background: #64748b; }
-        .status { text-align: center; color: #64748b; font-size: 14px; margin-top: 15px; }
-        #localPreview { width: 100%; border-radius: 6px; margin-top: 10px; display: none; background: #000; }
+        .status { text-align: center; font-weight: 600; margin-top: 15px; font-size: 14px; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2>📺 TV Controller & Streamer</h2>
+    <h2>🔐 Device Synchronization</h2>
+    <hr style="border: 0; border-top: 1px solid #e2e8f0; margin-bottom: 20px;">
     
     <div class="form-group">
-        <label>Screen Sharing Controls</label>
-        <button class="btn btn-screen" id="startBtn" onclick="startScreenShare()">🖥️ Start Sharing Screen</button>
-        <button class="btn btn-stop" id="stopBtn" onclick="stopScreenShare()" style="display:none;">🛑 Stop Sharing</button>
+        <label for="tvPin">Enter 4-Digit TV Code</label>
+        <input type="text" id="tvPin" class="pin-input" placeholder="0000" maxlength="4">
     </div>
 
-    <video id="localPreview" autoplay playsinline muted></video>
-    <div class="status" id="statusMsg">Ready to stream screen...</div>
+    <div class="form-group">
+        <label for="tickerText">Update Banner Message</label>
+        <input type="text" id="tickerText" value="Hello! This message is broadcast via a verified, secure controller channel.">
+    </div>
+
+    <div class="form-group">
+        <label for="imgUrl">Change TV Wallpaper (Image URL)</label>
+        <input type="text" id="imgUrl" value="https://images.unsplash.com/photo-1518837695005-2083093ee35b?w=1200">
+    </div>
+
+    <button class="btn" onclick="sendSecurePayload()">🔗 Transmit Content to TV</button>
+    
+    <div id="statusReport" class="status"></div>
 </div>
 
 <script>
-    let localStream = null;
+    function sendSecurePayload() {
+        const inputPin = document.getElementById('tvPin').value.trim();
+        const actualTvPin = localStorage.getItem('active_tv_pin');
+        const statusEl = document.getElementById('statusReport');
 
-    async function startScreenShare() {
-        try {
-            // Request permission to capture screen
-            localStream = await navigator.mediaDevices.getDisplayMedia({
-                video: { cursor: "always" },
-                audio: false
-            });
-
-            // Preview locally on controller
-            const preview = document.getElementById('localPreview');
-            preview.srcObject = localStream;
-            preview.style.display = 'block';
-
-            // UI adjustments
-            document.getElementById('startBtn').style.display = 'none';
-            document.getElementById('stopBtn').style.display = 'block';
-            document.getElementById('statusMsg').innerText = "Streaming screen to TV display...";
-            document.getElementById('statusMsg').style.color = '#10b981';
-
-            // Set up communication logic for the TV to intercept
-            // Creating an ObjectURL framework for local same-browser execution
-            const streamId = URL.createObjectURL(localStream);
-            localStorage.setItem('tv_stream_signal', JSON.stringify({
-                action: 'start',
-                timestamp: Date.now()
-            }));
-
-            // Handle user clicking "Stop Sharing" browser banner
-            localStream.getVideoTracks()[0].onended = () => {
-                stopScreenShare();
-            };
-
-            // Keep reference working across local session window variables
-            window.sharedStream = localStream;
-
-        } catch (err) {
-            console.error("Error sharing screen: ", err);
-            document.getElementById('statusMsg').innerText = "Permission denied or error starting stream.";
-            document.getElementById('statusMsg').style.color = '#dc2626';
+        if (!inputPin) {
+            statusEl.innerText = "❌ Access Denied: Please enter the PIN shown on the TV display.";
+            statusEl.style.color = "#dc2626";
+            return;
         }
-    }
 
-    function stopScreenShare() {
-        if (localStream) {
-            localStream.getTracks().forEach(track => track.stop());
+        // Check if user entry matches what the TV expects
+        if (inputPin !== actualTvPin) {
+            statusEl.innerText = "❌ Verification Failed: Code does not match the active TV display node.";
+            statusEl.style.color = "#dc2626";
+            return;
         }
-        document.getElementById('localPreview').style.display = 'none';
-        document.getElementById('startBtn').style.display = 'block';
-        document.getElementById('stopBtn').style.display = 'none';
-        
-        document.getElementById('statusMsg').innerText = "Stream stopped.";
-        document.getElementById('statusMsg').style.color = '#64748b';
 
-        localStorage.setItem('tv_stream_signal', JSON.stringify({
-            action: 'stop',
+        // Pack instructions together with authorization token
+        const payload = {
+            pin: inputPin,
+            ticker: document.getElementById('tickerText').value,
+            imgUrl: document.getElementById('imgUrl').value,
             timestamp: Date.now()
-        }));
+        };
+
+        // Ship to storage pipeline
+        localStorage.setItem('tv_payload', JSON.stringify(payload));
+        
+        statusEl.innerText = "✅ Authorization Successful! Content pushed to TV.";
+        statusEl.style.color = "#16a34a";
     }
 </script>
 </body>
