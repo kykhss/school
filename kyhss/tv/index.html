@@ -7,91 +7,121 @@
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #020617; font-family: system-ui, sans-serif; color: white; }
         .layer { position: absolute; top:0; left:0; width:100%; height:100%; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
-        .pin-box { font-size: 80px; font-weight: 900; background: #1e293b; padding: 20px 60px; border-radius: 16px; border: 4px solid #10b981; color: #10b981; letter-spacing: 10px; margin: 20px 0; box-shadow: 0 0 40px rgba(16, 185, 129, 0.3); }
+        .pin-box { font-size: 80px; font-weight: 900; background: #1e293b; padding: 20px 60px; border-radius: 16px; border: 4px solid #10b981; color: #10b981; letter-spacing: 10px; margin: 20px 0; }
         
-        /* Universal Shared Area Matrix Container */
-        #sharedArea { width: 100%; height: 100%; display: none; box-sizing: border-box; background: #000; position: relative; }
+        #sharedArea { width: 100%; height: 100%; display: none; background: #000; position: relative; }
         .tv-media { width: 100%; height: 100%; object-fit: contain; border: none; display: none; background: #000; position: absolute; top: 0; left: 0; }
         
-        /* PDF Dedicated Iframe Slot Framework matching TV resolution dimensions */
-        #tvIframeContainer { width: 100%; height: 100%; display: none; position: absolute; top: 0; left: 0; overflow: auto; background: #fff; -webkit-overflow-scrolling: touch; }
-        #tvIframeContainer iframe { width: 100%; height: 100%; border: none; min-height: 100vh; }
+        #tvPdfWrapper { width: 100%; height: 100%; overflow: hidden; display: none; position: absolute; top: 0; left: 0; background: #0f172a; }
+        #tvPdfCanvas { display: block; margin: 0 auto; max-width: 100%; height: 100vh; object-fit: contain; }
     </style>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
 </head>
 <body>
 
 <div id="setupScreen" class="layer">
     <div style="font-size: 32px; color: #94a3b8; font-weight: bold;">📺 TV Media Node Active</div>
-    <div style="font-size: 18px; color: #64748b; margin-top: 10px;">Connect phone to Hotspot/Wi-Fi and enter this PIN:</div>
+    <div style="font-size: 18px; color: #64748b; margin-top: 10px;">Enter this PIN on your mobile device:</div>
     <div class="pin-box" id="tvPin">----</div>
-    <div style="font-size: 16px; color: #475569;" id="status">Initializing network pipeline...</div>
 </div>
 
 <div id="sharedArea">
     <img id="tvImage" class="tv-media" alt="Mirrored Frame Target">
     <video id="tvVideo" class="tv-media" playsinline></video>
-    <div id="tvIframeContainer">
-        <iframe id="tvPdfFrame"></iframe>
+    
+    <div id="tvPdfWrapper">
+        <canvas id="tvPdfCanvas"></canvas>
     </div>
 </div>
 
 <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+
     const secretPin = Math.floor(1000 + Math.random() * 9000).toString();
-    document.getElementById('tvPin').innerText = secretPin;
+    document.getElementById('generatedPin').innerText = secretPin;
 
     const peer = new Peer('tv-core-mgt-' + secretPin);
     const tvVideo = document.getElementById('tvVideo');
-    const tvIframeContainer = document.getElementById('tvIframeContainer');
-
-    peer.on('open', () => {
-        document.getElementById('status').innerText = "📡 Antenna Online. Awaiting controller payload...";
-    });
+    const tvPdfWrapper = document.getElementById('tvPdfWrapper');
+    let tvPdfDoc = null;
 
     peer.on('connection', (conn) => {
         conn.on('data', (data) => {
-            // Hide connection setup UI layer instantly upon receiving first structural signal packet
             document.getElementById('setupScreen').style.display = 'none';
             document.getElementById('sharedArea').style.display = 'block';
 
-            // Check for Incoming Functional Remote Interaction Command Loops
+            // Handle Remote Page Control Changes
             if (data.type === 'control_cmd') {
-                if (data.action === 'play') { tvVideo.play(); }
-                else if (data.action === 'pause') { tvVideo.pause(); }
-                else if (data.action === 'mute') { tvVideo.muted = true; }
-                else if (data.action === 'unmute') { tvVideo.muted = false; }
-                else if (data.action === 'volume') { tvVideo.volume = data.value; }
-                else if (data.action === 'scroll') {
-                    // Sync up scrolling matrix to calculate correct placement inside documents container framework
-                    const scrollHeight = tvIframeContainer.scrollHeight - tvIframeContainer.clientHeight;
-                    tvIframeContainer.scrollTop = data.value * scrollHeight;
+                if (data.action === 'play') tvVideo.play();
+                else if (data.action === 'pause') tvVideo.pause();
+                else if (data.action === 'pdf_page' && tvPdfDoc) {
+                    renderTvPage(data.value);
                 }
                 return;
             }
 
-            // Check for Incoming Media Deploy Payloads (Image, Video, PDF)
-            document.querySelectorAll('.tv-media').forEach(el => el.style.display = 'none');
-            tvIframeContainer.style.display = 'none';
-            tvVideo.pause();
-
-            if (data.fileMime.startsWith('image/')) {
-                const img = document.getElementById('tvImage');
-                img.src = data.fileBinary;
-                img.style.display = 'block';
-            } 
-            else if (data.fileMime.startsWith('video/')) {
-                tvVideo.src = data.fileBinary;
-                tvVideo.style.display = 'block';
-                tvVideo.muted = data.isMuted;
-                tvVideo.play().catch(e => console.log("Auto-play blocked, awaiting mobile interaction initialization rule."));
-            } 
-            else if (data.fileMime === 'application/pdf') {
-                tvIframeContainer.style.display = 'block';
-                // Directly map data base64 raw parameters into iframe viewer container matching screen bounds
-                document.getElementById('tvPdfFrame').src = data.fileBinary;
+            // Handle Text/PDF Payload Deliveries
+            if (data.fileMime === 'application/pdf') {
+                document.querySelectorAll('.tv-media').forEach(el => el.style.display = 'none');
+                tvPdfWrapper.style.display = 'block';
+                tvVideo.pause();
+                
+                pdfjsLib.getDocument(data.fileBinary).promise.then((pdf) => {
+                    tvPdfDoc = pdf;
+                    renderTvPage(1);
+                });
             }
         });
     });
+
+    // CRITICAL UPDATE: Handles heavy images and videos via chunks/media streams safely
+    peer.on('call', (call) => {
+        document.getElementById('setupScreen').style.display = 'none';
+        document.getElementById('sharedArea').style.display = 'block';
+        document.querySelectorAll('.tv-media').forEach(el => el.style.display = 'none');
+        tvPdfWrapper.style.display = 'none';
+
+        call.answer();
+        call.on('stream', (remoteStream) => {
+            // Check the metadata sent alongside the stream header
+            const metadata = call.metadata;
+            
+            if (metadata && metadata.type.startsWith('video/')) {
+                tvVideo.srcObject = remoteStream;
+                tvVideo.style.display = 'block';
+                tvVideo.muted = false; // Restores audio capabilities to the TV channel
+                tvVideo.play().catch(e => console.log("Awaiting play interaction command."));
+            } 
+            else if (metadata && metadata.type.startsWith('image/')) {
+                // For images sent via media stream tracks, capture the frame onto the image component
+                const img = document.getElementById('tvImage');
+                
+                // Creates a virtual canvas frame capture loop to paint the heavy image instantly
+                const videoTrack = remoteStream.getVideoTracks()[0];
+                const imageCapture = new ImageCapture(videoTrack);
+                imageCapture.grabFrame().then(imageBitmap => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = imageBitmap.width;
+                    canvas.height = imageBitmap.height;
+                    canvas.getContext('2d').drawImage(imageBitmap, 0, 0);
+                    img.src = canvas.toDataURL();
+                    img.style.display = 'block';
+                });
+            }
+        });
+    });
+
+    function renderTvPage(num) {
+        tvPdfDoc.getPage(num).then((page) => {
+            const canvas = document.getElementById('tvPdfCanvas');
+            const ctx = canvas.getContext('2d');
+            const viewport = page.getViewport({ scale: 2.0 });
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+            page.render({ canvasContext: ctx, viewport: viewport });
+        });
+    }
 </script>
 </body>
 </html>
