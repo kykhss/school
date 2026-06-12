@@ -3,52 +3,92 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TV Synchronized Display</title>
+    <title>TV Display Receiver Node</title>
     <style>
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #020617; font-family: system-ui, sans-serif; color: white; overflow: hidden; }
-        
-        .setup-screen { display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100%; text-align: center; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #020617; font-family: system-ui, sans-serif; color: white; }
+        .layer { position: absolute; top:0; left:0; width:100%; height:100%; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
         .pin-box { font-size: 80px; font-weight: 900; background: #1e293b; padding: 20px 60px; border-radius: 16px; border: 4px solid #10b981; color: #10b981; letter-spacing: 10px; margin: 20px 0; box-shadow: 0 0 40px rgba(16, 185, 129, 0.3); }
         
-        /* The mirrored display output canvas zone */
-        #sharedArea { width: 100%; height: 100%; display: none; box-sizing: border-box; padding: 0; margin: 0; background: #000; }
+        /* Universal Shared Area Matrix Container */
+        #sharedArea { width: 100%; height: 100%; display: none; box-sizing: border-box; background: #000; position: relative; }
+        .tv-media { width: 100%; height: 100%; object-fit: contain; border: none; display: none; background: #000; position: absolute; top: 0; left: 0; }
         
-        /* Styling rules for inside the sync target so files fit beautifully */
-        #sharedArea img, #sharedArea video, #sharedArea iframe { width: 100%; height: 100%; object-fit: contain; border: none; background: #000; }
+        /* PDF Dedicated Iframe Slot Framework matching TV resolution dimensions */
+        #tvIframeContainer { width: 100%; height: 100%; display: none; position: absolute; top: 0; left: 0; overflow: auto; background: #fff; -webkit-overflow-scrolling: touch; }
+        #tvIframeContainer iframe { width: 100%; height: 100%; border: none; min-height: 100vh; }
     </style>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 <body>
 
-<div id="setupScreen" class="setup-screen">
-    <div style="font-size: 32px; color: #94a3b8; font-weight: bold;">📺 System Target Node Ready</div>
+<div id="setupScreen" class="layer">
+    <div style="font-size: 32px; color: #94a3b8; font-weight: bold;">📺 TV Media Node Active</div>
     <div style="font-size: 18px; color: #64748b; margin-top: 10px;">Connect phone to Hotspot/Wi-Fi and enter this PIN:</div>
     <div class="pin-box" id="tvPin">----</div>
-    <div style="font-size: 16px; color: #475569;" id="status">Initializing network antenna...</div>
+    <div style="font-size: 16px; color: #475569;" id="status">Initializing network pipeline...</div>
 </div>
 
-<div id="sharedArea"></div>
+<div id="sharedArea">
+    <img id="tvImage" class="tv-media" alt="Mirrored Frame Target">
+    <video id="tvVideo" class="tv-media" playsinline></video>
+    <div id="tvIframeContainer">
+        <iframe id="tvPdfFrame"></iframe>
+    </div>
+</div>
 
 <script>
     const secretPin = Math.floor(1000 + Math.random() * 9000).toString();
     document.getElementById('tvPin').innerText = secretPin;
 
-    const peer = new Peer('tv-div-sync-' + secretPin);
+    const peer = new Peer('tv-core-mgt-' + secretPin);
+    const tvVideo = document.getElementById('tvVideo');
+    const tvIframeContainer = document.getElementById('tvIframeContainer');
 
     peer.on('open', () => {
-        document.getElementById('status').innerText = "📡 Online. Awaiting file initialization handshake...";
+        document.getElementById('status').innerText = "📡 Antenna Online. Awaiting controller payload...";
     });
 
     peer.on('connection', (conn) => {
         conn.on('data', (data) => {
-            if (data.htmlContent !== undefined) {
-                document.getElementById('setupScreen').style.display = 'none';
-                
-                const tvCanvas = document.getElementById('sharedArea');
-                tvCanvas.style.display = 'block';
-                
-                // Mount the incoming phone element tree into the TV monitor DOM
-                tvCanvas.innerHTML = data.htmlContent;
+            // Hide connection setup UI layer instantly upon receiving first structural signal packet
+            document.getElementById('setupScreen').style.display = 'none';
+            document.getElementById('sharedArea').style.display = 'block';
+
+            // Check for Incoming Functional Remote Interaction Command Loops
+            if (data.type === 'control_cmd') {
+                if (data.action === 'play') { tvVideo.play(); }
+                else if (data.action === 'pause') { tvVideo.pause(); }
+                else if (data.action === 'mute') { tvVideo.muted = true; }
+                else if (data.action === 'unmute') { tvVideo.muted = false; }
+                else if (data.action === 'volume') { tvVideo.volume = data.value; }
+                else if (data.action === 'scroll') {
+                    // Sync up scrolling matrix to calculate correct placement inside documents container framework
+                    const scrollHeight = tvIframeContainer.scrollHeight - tvIframeContainer.clientHeight;
+                    tvIframeContainer.scrollTop = data.value * scrollHeight;
+                }
+                return;
+            }
+
+            // Check for Incoming Media Deploy Payloads (Image, Video, PDF)
+            document.querySelectorAll('.tv-media').forEach(el => el.style.display = 'none');
+            tvIframeContainer.style.display = 'none';
+            tvVideo.pause();
+
+            if (data.fileMime.startsWith('image/')) {
+                const img = document.getElementById('tvImage');
+                img.src = data.fileBinary;
+                img.style.display = 'block';
+            } 
+            else if (data.fileMime.startsWith('video/')) {
+                tvVideo.src = data.fileBinary;
+                tvVideo.style.display = 'block';
+                tvVideo.muted = data.isMuted;
+                tvVideo.play().catch(e => console.log("Auto-play blocked, awaiting mobile interaction initialization rule."));
+            } 
+            else if (data.fileMime === 'application/pdf') {
+                tvIframeContainer.style.display = 'block';
+                // Directly map data base64 raw parameters into iframe viewer container matching screen bounds
+                document.getElementById('tvPdfFrame').src = data.fileBinary;
             }
         });
     });
