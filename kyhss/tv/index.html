@@ -3,43 +3,46 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TV Stream Receiver</title>
+    <title>TV Tab Sync Receiver</title>
     <style>
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #020617; font-family: system-ui, sans-serif; color: white; }
-        .waiting-layer { display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100%; position: absolute; top:0; left:0; z-index: 1; text-align: center; }
-        .pin-box { font-size: 80px; font-weight: 900; background: #1e293b; padding: 20px 60px; border-radius: 16px; border: 4px solid #3b82f6; color: #3b82f6; letter-spacing: 10px; margin: 20px 0; }
-        #tvFeed { width: 100%; height: 100%; object-fit: contain; position: absolute; top:0; left:0; z-index: 2; display: none; background: #000; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #0f172a; font-family: system-ui, sans-serif; color: white; }
+        .setup-screen { display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100%; text-align: center; }
+        .pin-box { font-size: 75px; font-weight: 900; background: #1e293b; padding: 15px 50px; border-radius: 16px; border: 4px solid #a855f7; color: #a855f7; letter-spacing: 8px; margin: 20px 0; box-shadow: 0 0 40px rgba(168, 85, 247, 0.3); }
+        #displayFrame { width: 100%; height: 100%; border: none; display: none; background: white; }
     </style>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 <body>
 
-<div id="waitingScreen" class="waiting-layer">
-    <div style="font-size: 32px; color: #94a3b8; font-weight: bold;">📺 TV Mobile Receiver Ready</div>
-    <div style="font-size: 18px; color: #64748b; margin-top: 10px;">Enter this PIN into your mobile browser:</div>
-    <div class="pin-box" id="generatedPin">----</div>
-    <div style="font-size: 16px; color: #475569;" id="statusMsg">Connecting to local network...</div>
+<div id="setupScreen" class="setup-screen">
+    <div style="font-size: 32px; color: #94a3b8; font-weight: bold;">📺 TV Mobile Tab Sync</div>
+    <div style="font-size: 18px; color: #64748b; margin-top: 10px;">Ready to clone your mobile browser tab. Your TV Code is:</div>
+    <div class="pin-box" id="tvPin">----</div>
+    <div style="font-size: 14px; color: #475569;" id="status">Connecting to local network...</div>
 </div>
 
-<video id="tvFeed" autoplay playsinline></video>
+<iframe id="displayFrame" src=""></iframe>
 
 <script>
+    // Generate a fixed random room pin for the TV node
     const secretPin = Math.floor(1000 + Math.random() * 9000).toString();
-    document.getElementById('generatedPin').innerText = secretPin;
+    document.getElementById('tvPin').innerText = secretPin;
 
-    const peer = new Peer('tv-mgt-system-' + secretPin);
+    const peer = new Peer('tv-tab-sync-' + secretPin);
 
     peer.on('open', () => {
-        document.getElementById('statusMsg').innerText = "🟢 Ready. Awaiting mobile broadcast...";
+        document.getElementById('status').innerText = "🟢 Active. Ready to instantly mirror your phone's active tab!";
     });
 
-    peer.on('call', (call) => {
-        call.answer();
-        call.on('stream', (remoteStream) => {
-            const video = document.getElementById('tvFeed');
-            video.srcObject = remoteStream;
-            video.style.display = 'block';
-            document.getElementById('waitingScreen').style.display = 'none';
+    // Listen for the phone to send over the active web link
+    peer.on('connection', (conn) => {
+        conn.on('data', (data) => {
+            if (data.syncUrl) {
+                const iframe = document.getElementById('displayFrame');
+                iframe.src = data.syncUrl;
+                iframe.style.display = 'block';
+                document.getElementById('setupScreen').style.display = 'none';
+            }
         });
     });
 </script>
