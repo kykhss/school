@@ -3,45 +3,67 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TV Tab Sync Receiver</title>
+    <title>Universal TV Receiver</title>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #0f172a; font-family: system-ui, sans-serif; color: white; }
-        .setup-screen { display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100%; text-align: center; }
-        .pin-box { font-size: 75px; font-weight: 900; background: #1e293b; padding: 15px 50px; border-radius: 16px; border: 4px solid #a855f7; color: #a855f7; letter-spacing: 8px; margin: 20px 0; box-shadow: 0 0 40px rgba(168, 85, 247, 0.3); }
-        #displayFrame { width: 100%; height: 100%; border: none; display: none; background: white; }
+        .waiting-layer { display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100%; position: absolute; top:0; left:0; z-index: 1; text-align: center; }
+        .pin-box { font-size: 80px; font-weight: 900; background: #1e293b; padding: 20px 60px; border-radius: 16px; border: 4px solid #3b82f6; color: #3b82f6; letter-spacing: 10px; margin: 20px 0; box-shadow: 0 0 40px rgba(59, 130, 246, 0.3); }
+        
+        /* Dynamic Content Slots */
+        .content-slot { width: 100%; height: 100%; border: none; position: absolute; top:0; left:0; z-index: 2; display: none; background: black; object-fit: contain; }
     </style>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 <body>
 
-<div id="setupScreen" class="setup-screen">
-    <div style="font-size: 32px; color: #94a3b8; font-weight: bold;">📺 TV Mobile Tab Sync</div>
-    <div style="font-size: 18px; color: #64748b; margin-top: 10px;">Ready to clone your mobile browser tab. Your TV Code is:</div>
-    <div class="pin-box" id="tvPin">----</div>
-    <div style="font-size: 14px; color: #475569;" id="status">Connecting to local network...</div>
+<div id="waitingScreen" class="waiting-layer">
+    <div style="font-size: 32px; color: #94a3b8; font-weight: bold;">📺 TV File Receiver Node</div>
+    <div style="font-size: 18px; color: #64748b; margin-top: 10px;">Enter this PIN on your phone to link:</div>
+    <div class="pin-box" id="generatedPin">----</div>
+    <div style="font-size: 16px; color: #475569;" id="statusMsg">Connecting to local channel...</div>
 </div>
 
-<iframe id="displayFrame" src=""></iframe>
+<img id="tvImage" class="content-slot" alt="Casted Image">
+<video id="tvVideo" class="content-slot" controls autoplay></video>
+<iframe id="tvDocument" class="content-slot"></iframe>
 
 <script>
-    // Generate a fixed random room pin for the TV node
     const secretPin = Math.floor(1000 + Math.random() * 9000).toString();
-    document.getElementById('tvPin').innerText = secretPin;
+    document.getElementById('generatedPin').innerText = secretPin;
 
-    const peer = new Peer('tv-tab-sync-' + secretPin);
+    const peer = new Peer('tv-mgt-system-' + secretPin);
 
     peer.on('open', () => {
-        document.getElementById('status').innerText = "🟢 Active. Ready to instantly mirror your phone's active tab!";
+        document.getElementById('statusMsg').innerText = "🟢 Ready! Awaiting files from mobile phone...";
     });
 
-    // Listen for the phone to send over the active web link
     peer.on('connection', (conn) => {
         conn.on('data', (data) => {
-            if (data.syncUrl) {
-                const iframe = document.getElementById('displayFrame');
-                iframe.src = data.syncUrl;
-                iframe.style.display = 'block';
-                document.getElementById('setupScreen').style.display = 'none';
+            // Hide the main pairing screen and clear previous slots
+            document.getElementById('waitingScreen').style.display = 'none';
+            document.querySelectorAll('.content-slot').forEach(el => el.style.display = 'none');
+
+            const imgEl = document.getElementById('tvImage');
+            const videoEl = document.getElementById('tvVideo');
+            const docEl = document.getElementById('tvDocument');
+
+            // Route file data based on type
+            if (data.fileType.startsWith('image/')) {
+                imgEl.src = data.fileData;
+                imgEl.style.display = 'block';
+            } 
+            else if (data.fileType.startsWith('video/')) {
+                videoEl.src = data.fileData;
+                videoEl.style.display = 'block';
+            } 
+            else if (data.fileType === 'application/pdf' || data.fileType.includes('officedocument') || data.fileName.endsWith('.docx')) {
+                // PDFs and web-compatible docs display beautifully inside the system iframe container
+                docEl.src = data.fileData;
+                docEl.style.display = 'block';
+            } else {
+                // Fallback for raw text/unknown structural assets
+                docEl.src = data.fileData;
+                docEl.style.display = 'block';
             }
         });
     });
