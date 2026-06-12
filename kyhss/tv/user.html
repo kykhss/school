@@ -5,91 +5,84 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Mobile Control Deck</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; background: #0f172a; margin: 0; padding: 15px; color: #f8fafc; text-align: center; overflow-x: hidden; }
-        .card { background: #1e293b; padding: 20px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); border: 1px solid #334155; box-sizing: border-box; margin-bottom: 15px; }
-        h2 { margin: 0 0 15px 0; color: #38bdf8; font-size: 22px; }
+        body { font-family: -apple-system, system-ui, sans-serif; background: #0f172a; margin: 0; padding: 15px; color: #f8fafc; text-align: center; }
+        .card { background: #1e293b; padding: 20px; border-radius: 16px; border: 1px solid #334155; box-sizing: border-box; margin-bottom: 15px; }
         .pin-input { font-size: 28px; text-align: center; letter-spacing: 8px; font-weight: bold; border: 2px solid #38bdf8; color: #38bdf8; border-radius: 12px; padding: 12px; width: 100%; box-sizing: border-box; background: #0f172a; margin-bottom: 15px; }
-        .btn { background: #0284c7; color: white; border: none; padding: 16px; border-radius: 12px; font-weight: bold; font-size: 16px; cursor: pointer; width: 100%; transition: background 0.2s; }
-        .btn:active { background: #0369a1; }
+        .btn { background: #0284c7; color: white; border: none; padding: 16px; border-radius: 12px; font-weight: bold; font-size: 16px; width: 100%; }
         
-        /* Master Sync Container */
-        #sharingContentDiv { display: none; margin-top: 10px; }
-        
-        /* Swipe Area Shell Panel */
-        #sharedArea { background: #0f172a; border-radius: 14px; padding: 10px; min-height: 260px; border: 2px dashed #38bdf8; margin-top: 15px; display: flex; flex-direction: column; justify-content: center; align-items: center; box-sizing: border-box; position: relative; touch-action: none; }
-        #sharedArea img, #sharedArea video { max-width: 100%; max-height: 240px; object-fit: contain; border-radius: 8px; }
-        #mobilePdfContainer { width: 100%; height: 240px; overflow-y: auto; background: white; border-radius: 8px; display: none; }
-        #mobilePdfContainer iframe { width: 100%; height: 100%; border: none; }
+        #sharingContentDiv { display: none; }
+        #sharedArea { background: #0f172a; border-radius: 14px; padding: 10px; min-height: 260px; border: 2px dashed #38bdf8; margin-top: 15px; display: flex; flex-direction: column; justify-content: center; align-items: center; box-sizing: border-box; position: relative; }
+        #sharedArea img, #sharedArea video { max-width: 100%; max-height: 240px; object-fit: contain; }
+        #mobilePdfWrapper { width: 100%; display: none; background: #0f172a; }
+        #mobileCanvas { max-width: 100%; height: auto; background: white; border-radius: 8px; }
 
-        /* Media Controller Panel Interlocks */
         .controls-matrix { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; margin-top: 15px; }
-        .ctrl-btn { padding: 12px; font-weight: bold; border-radius: 8px; border: none; color: white; background: #475569; font-size: 14px; }
-        .ctrl-btn:active { background: #334155; }
-        .vol-slider { grid-column: span 2; width: 100%; margin-top: 8px; }
+        .ctrl-btn { padding: 14px; font-weight: bold; border-radius: 8px; border: none; color: white; background: #475569; font-size: 15px; }
         .queue-badge { position: absolute; top: 10px; right: 10px; background: #38bdf8; color: #0f172a; padding: 3px 8px; border-radius: 20px; font-size: 12px; font-weight: bold; }
     </style>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
 </head>
 <body>
 
 <div class="card" id="connectionPanel">
-    <h2>🔒 Link Display System</h2>
+    <h3 style="margin-top:0;">🔒 Link Display System</h3>
     <input type="number" id="tvPin" class="pin-input" placeholder="0000" pattern="\d*">
     <button class="btn" onclick="connectToTVReceiver()">📡 Initialize Secure Handshake</button>
-    <div id="status" style="margin-top:12px; font-size:13px; color:#94a3b8; font-weight:600;">Status: Awaiting Configuration</div>
 </div>
 
 <div id="sharingContentDiv">
     <div class="card">
-        <h3 style="margin: 0 0 10px 0; font-size:16px;">📂 File Queue Deck</h3>
         <input type="file" id="filePicker" multiple style="display:none;" onchange="handleFileSelection(this.files)">
         <button class="btn" style="background:#10b981;" onclick="document.getElementById('filePicker').click()">➕ Load Files Into Queue</button>
     </div>
 
     <div id="sharedArea">
         <div class="queue-badge" id="queueIndexDisplay">0 / 0</div>
-        <div id="placeholder" style="color:#64748b; font-size:14px; padding:20px;">Queue Empty. Load assets and swipe horizontally left/right to browse files on the TV.</div>
+        <div id="placeholder" style="color:#64748b; font-size:14px; padding:20px;">Queue Empty. Swipe to change files.</div>
         
-        <img id="mobileImage" style="display:none;" alt="Local Asset Node">
-        <video id="mobileVideo" style="display:none;" playsinline muted></video>
-        <div id="mobilePdfContainer"><iframe id="mobilePdfFrame"></iframe></div>
+        <img id="mobileImage" style="display:none;" alt="Local Asset">
+        <video id="mobileVideo" style="display:none;" muted controls></video>
+        
+        <div id="mobilePdfWrapper">
+            <canvas id="mobileCanvas"></canvas>
+        </div>
     </div>
 
     <div class="card" id="mediaControlsPanel" style="display:none; margin-top:15px;">
-        <h4 style="margin:0 0 10px 0; font-size:14px; color:#94a3b8;">🎛️ Live Parameter Controls</h4>
-        <div class="controls-matrix">
+        <div class="controls-matrix" id="videoControls" style="display:none;">
             <button class="ctrl-btn" id="playPauseBtn" onclick="triggerPlayPause()">▶️ Play</button>
-            <button class="ctrl-btn" id="muteBtn" onclick="triggerMuteToggle()">🔊 Mute</button>
-            <input type="range" class="vol-slider" id="volSlider" min="0" max="1" step="0.1" value="0.8" oninput="triggerVolumeChange(this.value)">
+        </div>
+        <div class="controls-matrix" id="pdfControls" style="display:none;">
+            <button class="ctrl-btn" onclick="changePage(-1)">⏮️ Previous</button>
+            <button class="ctrl-btn" onclick="changePage(1)">Next ⏭️</button>
         </div>
     </div>
 </div>
 
 <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+
     const peer = new Peer();
     let tvConn = null;
     let fileQueue = [];
     let currentQueueIndex = 0;
     let isVideoPlaying = false;
-    let isVideoMuted = true;
+    
+    let localPdfDoc = null;
+    let currentPdfPage = 1;
 
-    // Swipe Track State Variables
     let touchStartX = 0;
     let touchEndX = 0;
 
     function connectToTVReceiver() {
         const inputPin = document.getElementById('tvPin').value.trim();
-        const status = document.getElementById('status');
-
-        if (inputPin.length !== 4) { alert("Invalid Code format."); return; }
-
-        status.innerText = "Transmitting authentication keys...";
-        status.style.color = "#38bdf8";
-
+        if (inputPin.length !== 4) return;
+        
+        // Setup control connection data port
         tvConn = peer.connect('tv-core-mgt-' + inputPin);
-
+        
         tvConn.on('open', () => {
-            // Hide connection frame panel interface safely once data channel hooks open successfully
             document.getElementById('connectionPanel').style.display = 'none';
             document.getElementById('sharingContentDiv').style.display = 'block';
             setupSwipeGestures();
@@ -97,28 +90,13 @@
     }
 
     function handleFileSelection(files) {
-        if (files.length === 0) return;
-        
-        fileQueue = []; // Reset queue
+        fileQueue = [];
         currentQueueIndex = 0;
         
-        let loadedCount = 0;
         for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = function(e) {
-                fileQueue.push({
-                    name: file.name,
-                    mime: file.type,
-                    binary: e.target.result
-                });
-                loadedCount++;
-                if (loadedCount === files.length) {
-                    deployQueueItem(currentQueueIndex);
-                }
-            };
+            fileQueue.push(files[i]); // Keep raw file references instead of creating massive strings immediately
         }
+        deployQueueItem(0);
     }
 
     function deployQueueItem(index) {
@@ -127,109 +105,113 @@
         document.getElementById('placeholder').style.display = 'none';
         document.getElementById('mobileImage').style.display = 'none';
         document.getElementById('mobileVideo').style.display = 'none';
-        document.getElementById('mobilePdfContainer').style.display = 'none';
+        document.getElementById('mobilePdfWrapper').style.display = 'none';
         document.getElementById('mediaControlsPanel').style.display = 'none';
+        document.getElementById('videoControls').style.display = 'none';
+        document.getElementById('pdfControls').style.display = 'none';
 
         document.getElementById('queueIndexDisplay').innerText = `${index + 1} / ${fileQueue.length}`;
-        const item = fileQueue[index];
-        
-        // Broadcast complete structural configurations down the wire pipeline to TV receiver
-        tvConn.send({
-            fileBinary: item.binary,
-            fileMime: item.mime,
-            isMuted: isVideoMuted
-        });
+        const file = fileQueue[index];
+        const inputPin = document.getElementById('tvPin').value.trim();
 
-        // Mirror layout directly within phone's sharedArea container block
-        if (item.mime.startsWith('image/')) {
-            const img = document.getElementById('mobileImage');
-            img.src = item.binary;
-            img.style.display = 'block';
-        } 
-        else if (item.mime.startsWith('video/')) {
-            const video = document.getElementById('mobileVideo');
-            document.getElementById('mediaControlsPanel').style.display = 'block';
-            document.getElementById('playPauseBtn').style.display = 'inline-block';
-            document.getElementById('muteBtn').style.display = 'inline-block';
-            document.getElementById('volSlider').style.display = 'inline-block';
+        // SCENARIO A: If file is an Image or Video, capture it as a stream channel block
+        if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
+            const tempVideo = document.createElement('video');
+            tempVideo.src = URL.createObjectURL(file);
+            tempVideo.muted = true;
+            tempVideo.playsInline = true;
             
-            video.src = item.binary;
-            video.style.display = 'block';
-            video.play(); // Play localized muted preview frame loop
-            isVideoPlaying = true;
-            document.getElementById('playPauseBtn').innerText = "⏸️ Pause";
+            tempVideo.onloadedmetadata = () => {
+                tempVideo.play();
+                
+                // Capture the direct hardware rendering stream
+                let stream;
+                if (tempVideo.captureStream) {
+                    stream = tempVideo.captureStream();
+                } else if (tempVideo.mozCaptureStream) {
+                    stream = tempVideo.mozCaptureStream();
+                }
+
+                // Show local controller views
+                if (file.type.startsWith('image/')) {
+                    const img = document.getElementById('mobileImage');
+                    img.src = tempVideo.src;
+                    img.style.display = 'block';
+                } else {
+                    const video = document.getElementById('mobileVideo');
+                    document.getElementById('mediaControlsPanel').style.display = 'block';
+                    document.getElementById('videoControls').style.display = 'grid';
+                    video.src = tempVideo.src;
+                    video.style.display = 'block';
+                    video.play();
+                    isVideoPlaying = true;
+                }
+
+                // Fire the call pipeline straight to the TV without payload data barriers
+                peer.call('tv-core-mgt-' + inputPin, stream, { metadata: { type: file.type } });
+            };
         } 
-        else if (item.mime === 'application/pdf') {
-            document.getElementById('mobilePdfContainer').style.display = 'block';
-            document.getElementById('mobilePdfFrame').src = item.binary;
+        // SCENARIO B: If file is a PDF, continue using the lightweight reader loop
+        else if (file.type === 'application/pdf') {
+            document.getElementById('mediaControlsPanel').style.display = 'block';
+            document.getElementById('pdfControls').style.display = 'grid';
+            document.getElementById('mobilePdfWrapper').style.display = 'block';
+            
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = function(e) {
+                tvConn.send({ fileBinary: e.target.result, fileMime: file.type });
+                
+                pdfjsLib.getDocument(e.target.result).promise.then((pdf) => {
+                    localPdfDoc = pdf;
+                    currentPdfPage = 1;
+                    renderMobilePage(1);
+                });
+            };
         }
     }
 
-    // Interactive Controller Commands To TV Monitor Node Pipelines
+    function renderMobilePage(num) {
+        localPdfDoc.getPage(num).then((page) => {
+            const canvas = document.getElementById('mobileCanvas');
+            const ctx = canvas.getContext('2d');
+            const viewport = page.getViewport({ scale: 1.0 });
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+            page.render({ canvasContext: ctx, viewport: viewport }).promise.then(() => {
+                tvConn.send({ type: 'control_cmd', action: 'pdf_page', value: num });
+            });
+        });
+    }
+
+    function changePage(direction) {
+        if (!localPdfDoc) return;
+        let targetPage = currentPdfPage + direction;
+        if (targetPage >= 1 && targetPage <= localPdfDoc.numPages) {
+            currentPdfPage = targetPage;
+            renderMobilePage(currentPdfPage);
+        }
+    }
+
     function triggerPlayPause() {
         isVideoPlaying = !isVideoPlaying;
+        document.getElementById('playPauseBtn').innerText = isVideoPlaying ? "⏸️ Pause" : "▶️ Play";
         const video = document.getElementById('mobileVideo');
-        if (isVideoPlaying) {
-            video.play();
-            document.getElementById('playPauseBtn').innerText = "⏸️ Pause";
-            tvConn.send({ type: 'control_cmd', action: 'play' });
-        } else {
-            video.pause();
-            document.getElementById('playPauseBtn').innerText = "▶️ Play";
-            tvConn.send({ type: 'control_cmd', action: 'pause' });
-        }
+        if (isVideoPlaying) video.play(); else video.pause();
+        tvConn.send({ type: 'control_cmd', action: isVideoPlaying ? 'play' : 'pause' });
     }
 
-    function triggerMuteToggle() {
-        isVideoMuted = !isVideoMuted;
-        document.getElementById('muteBtn').innerText = isVideoMuted ? "🔊 Unmute" : "🔇 Mute";
-        tvConn.send({ type: 'control_cmd', action: isVideoMuted ? 'mute' : 'unmute' });
-    }
-
-    function triggerVolumeChange(val) {
-        tvConn.send({ type: 'control_cmd', action: 'volume', value: parseFloat(val) });
-    }
-
-    // Track scroll events inside mobile PDF container to match ratio positions across screens
-    document.getElementById('mobilePdfContainer').addEventListener('scroll', (e) => {
-        if (!tvConn) return;
-        const t = e.target;
-        const ratio = t.scrollTop / (t.scrollHeight - t.clientHeight);
-        tvConn.send({ type: 'control_cmd', action: 'scroll', value: ratio });
-    });
-
-    // Mobile Swipe Gesture Event Listeners
     function setupSwipeGestures() {
         const zone = document.getElementById('sharedArea');
-        
-        zone.addEventListener('touchstart', e => {
-            touchStartX = e.changedTouches[0].screenX;
-        }, false);
-        
+        zone.addEventListener('touchstart', e => touchStartX = e.changedTouches[0].screenX, false);
         zone.addEventListener('touchend', e => {
             touchEndX = e.changedTouches[0].screenX;
-            handleSwipeDirection();
+            if (touchStartX - touchEndX > 60 && currentQueueIndex < fileQueue.length - 1) {
+                currentQueueIndex++; deployQueueItem(currentQueueIndex);
+            } else if (touchEndX - touchStartX > 60 && currentQueueIndex > 0) {
+                currentQueueIndex--; deployQueueItem(currentQueueIndex);
+            }
         }, false);
-    }
-
-    function handleSwipeDirection() {
-        if (fileQueue.length <= 1) return;
-        const thresholds = 60; // minimum touch pixel variance parameter
-        
-        if (touchStartX - touchEndX > thresholds) {
-            // Swiped Left -> Move to Next File
-            if (currentQueueIndex < fileQueue.length - 1) {
-                currentQueueIndex++;
-                deployQueueItem(currentQueueIndex);
-            }
-        }
-        if (touchEndX - touchStartX > thresholds) {
-            // Swiped Right -> Move to Previous File
-            if (currentQueueIndex > 0) {
-                currentQueueIndex--;
-                deployQueueItem(currentQueueIndex);
-            }
-        }
     }
 </script>
 </body>
