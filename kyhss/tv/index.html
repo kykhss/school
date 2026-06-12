@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TV Main Display</title>
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; font-family: sans-serif; background: #0b0f19; color: white; }
+        
+        .placeholder-screen { display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100%; }
+        .radar { border: 4px solid rgba(255,255,255,0.1); border-radius: 50%; border-top: 4px solid #3b82f6; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 20px; }
+        
+        #tvVideo { width: 100%; height: 100%; object-fit: contain; display: none; background: #000; }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Default Waiting Screen -->
+<div id="waitingScreen" class="placeholder-screen">
+    <div class="radar"></div>
+    <div style="font-size: 24px; color: #94a3b8;">TV Display Online</div>
+    <div style="font-size: 16px; color: #64748b; margin-top: 8px;">Waiting for User Screen Share signal...</div>
+</div>
+
+<!-- Active Screen Share Player -->
+<video id="tvVideo" autoplay playsinline></video>
+
+<script>
+    function listenForSignals() {
+        const signalRaw = localStorage.getItem('tv_stream_signal');
+        if (!signalRaw) return;
+
+        const signal = JSON.parse(signalRaw);
+        const videoElement = document.getElementById('tvVideo');
+        const waitingScreen = document.getElementById('waitingScreen');
+
+        if (signal.action === 'start') {
+            // When opened on the exact same browser context path, we can map across shared windows safely
+            if (window.opener && window.opener.sharedStream) {
+                videoElement.srcObject = window.opener.sharedStream;
+                videoElement.style.display = 'block';
+                waitingScreen.style.display = 'none';
+            } else if (window.parent && window.parent.sharedStream) {
+                videoElement.srcObject = window.parent.sharedStream;
+                videoElement.style.display = 'block';
+                waitingScreen.style.display = 'none';
+            } else {
+                // If tabs are completely disconnected standalone files, instruct fallback
+                document.querySelector('#waitingScreen div:last-child').innerText = 
+                    "Signal found! To stream video directly across tabs, open user.html and run: window.open('tv.html')";
+            }
+        } else if (signal.action === 'stop') {
+            videoElement.srcObject = null;
+            videoElement.style.display = 'none';
+            waitingScreen.style.display = 'flex';
+            document.querySelector('#waitingScreen div:last-child').innerText = "Waiting for User Screen Share signal...";
+        }
+    }
+
+    window.addEventListener('storage', listenForSignals);
+    setInterval(listenForSignals, 1000); 
+</script>
+</body>
+</html>
