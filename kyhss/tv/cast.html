@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobile Tab Sync Remote</title>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; background: #f8fafc; margin: 0; padding: 20px; color: #1e293b; text-align: center; }
+        .card { background: white; padding: 25px; border-radius: 16px; max-width: 100%; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; box-sizing: border-box; }
+        .pin-input { font-size: 28px; text-align: center; letter-spacing: 8px; font-weight: bold; border: 2px solid #a855f7; color: #7e22ce; border-radius: 8px; padding: 10px; width: 90%; margin-bottom: 20px; }
+        .url-input { width: 90%; padding: 14px; font-size: 16px; border: 2px solid #cbd5e1; border-radius: 8px; margin-bottom: 15px; box-sizing: border-box; }
+        .btn { background: #a855f7; color: white; border: none; padding: 16px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; font-size: 18px; box-shadow: 0 4px 6px -1px rgba(168, 85, 247, 0.4); }
+        .btn:active { background: #9333ea; }
+        .status { margin-top: 15px; font-weight: 600; color: #64748b; }
+    </style>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+</head>
+<body>
+
+<div class="card">
+    <h2>📱 Link Phone Tab to TV</h2>
+    <p style="color: #64748b; font-size: 14px; margin-top:-5px;">Beam whatever page you are currently viewing to the big screen</p>
+    
+    <input type="number" id="tvPin" class="pin-input" placeholder="0000" pattern="\d*">
+    
+    <div style="text-align: left; width: 90%; margin: 0 auto;">
+        <label style="font-weight: 600; font-size: 14px; color:#475569;">Current Tab URL to Send:</label>
+    </div>
+    <input type="url" id="currentTabUrl" class="url-input" value="https://en.wikipedia.org/wiki/Main_Page">
+    
+    <button class="btn" onclick="syncActiveTab()">⚡ Sync Current Tab to TV</button>
+    
+    <div id="statusLabel" class="status">Disconnected</div>
+</div>
+
+<script>
+    const peer = new Peer();
+
+    // Auto-detect if this page itself was navigated to pass along the active link
+    window.onload = function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('target')) {
+            document.getElementById('currentTabUrl').value = urlParams.get('target');
+        }
+    }
+
+    function syncActiveTab() {
+        const inputPin = document.getElementById('tvPin').value.trim();
+        const urlToSend = document.getElementById('currentTabUrl').value.trim();
+        const statusLabel = document.getElementById('statusLabel');
+
+        if (inputPin.length !== 4) {
+            statusLabel.innerText = "❌ Please enter the 4-digit PIN showing on your TV.";
+            statusLabel.style.color = "#dc2626";
+            return;
+        }
+
+        statusLabel.innerText = "Syncing browser data...";
+        statusLabel.style.color = "#a855f7";
+
+        // Create a secure direct data link to the TV node
+        const conn = peer.connect('tv-tab-sync-' + inputPin);
+
+        conn.on('open', () => {
+            statusLabel.innerText = "🚀 Tab synced successfully to TV!";
+            statusLabel.style.color = "#16a34a";
+
+            // Pass the data across the local socket instantly
+            conn.send({
+                syncUrl: urlToSend
+            });
+        });
+
+        conn.on('error', (err) => {
+            statusLabel.innerText = "❌ Sync failed. Check Wi-Fi or PIN.";
+            statusLabel.style.color = "#dc2626";
+        });
+    }
+</script>
+</body>
+</html>
