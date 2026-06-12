@@ -6,69 +6,64 @@
     <title>Secure TV Display</title>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #0f172a; font-family: system-ui, sans-serif; color: white; }
-        
-        /* Pairing Screen Layout */
         .pairing-container { display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100%; text-align: center; }
-        .pin-box { font-size: 72px; font-weight: 900; background: #1e293b; padding: 20px 50px; border-radius: 16px; border: 3px solid #3b82f6; color: #3b82f6; letter-spacing: 10px; margin: 20px 0; box-shadow: 0 0 30px rgba(59, 130, 246, 0.3); }
-        
-        /* Active Protected Content Layout */
+        .pin-box { font-size: 80px; font-weight: 900; background: #1e293b; padding: 20px 60px; border-radius: 16px; border: 4px solid #3b82f6; color: #3b82f6; letter-spacing: 10px; margin: 20px 0; box-shadow: 0 0 40px rgba(59, 130, 246, 0.4); }
         #tvContent { width: 100%; height: 100%; display: none; background: #000; position: absolute; top: 0; left: 0; }
-        #displayImage { width: 100%; height: calc(100% - 60px); object-fit: cover; }
-        .ticker-bar { position: absolute; bottom: 0; left: 0; width: 100%; height: 60px; background: #111827; display: flex; align-items: center; overflow: hidden; font-size: 24px; font-weight: bold; color: #f59e0b; }
+        #displayImage { width: 100%; height: calc(100% - 70px); object-fit: cover; width: 100%; }
+        .ticker-bar { position: absolute; bottom: 0; left: 0; width: 100%; height: 70px; background: #111827; display: flex; align-items: center; overflow: hidden; font-size: 28px; font-weight: bold; color: #f59e0b; border-top: 3px solid #1e293b; }
         .ticker-text { display: inline-block; white-space: nowrap; padding-left: 100%; animation: marquee 15s linear infinite; }
-
         @keyframes marquee { 0% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(-100%, 0, 0); } }
     </style>
+    <script src="https://cdn.pubnub.com/sdk/javascript/pubnub.7.2.2.min.js"></script>
 </head>
 <body>
 
 <div id="pairingScreen" class="pairing-container">
-    <div style="font-size: 28px; color: #94a3b8;">🔒 TV Access Locked</div>
-    <div style="font-size: 18px; color: #64748b; margin-top: 10px;">Enter this authorization code on your device to unlock control:</div>
+    <div style="font-size: 32px; color: #94a3b8; font-weight: bold;">🔒 TV Access Locked</div>
+    <div style="font-size: 20px; color: #64748b; margin-top: 10px;">Enter this code on your mobile phone to connect:</div>
     <div class="pin-box" id="generatedPin">0000</div>
-    <div style="font-size: 14px; color: #475569;">Waiting for secure handshake...</div>
+    <div style="font-size: 16px; color: #475569;" id="cloudStatus">Connecting to cloud secure channel...</div>
 </div>
 
 <div id="tvContent">
     <img id="displayImage" src="https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200" alt="TV Media">
     <div class="ticker-bar">
-        <div class="ticker-text" id="tickerMsg">Secure link established. Awaiting controller instructions...</div>
+        <div class="ticker-text" id="tickerMsg">Paired successfully! Awaiting commands from mobile device...</div>
     </div>
 </div>
 
 <script>
-    // 1. Generate a random 4-digit PIN when the TV screen turns on
+    // 1. Generate a completely random 4-digit security PIN
     const secretPin = Math.floor(1000 + Math.random() * 9000).toString();
     document.getElementById('generatedPin').innerText = secretPin;
 
-    // Save the active PIN securely in storage so the system can validate against it
-    localStorage.setItem('active_tv_pin', secretPin);
-    localStorage.removeItem('tv_payload'); // Clear previous sessions
+    // 2. Initialize connection to public cloud broker
+    const pubnub = new PubNub({
+        publishKey: 'pub-c-cb6df645-ec05-4f4f-b672-ecdb92b95c02', // Shared demo keys
+        subscribeKey: 'sub-c-57697b0a-be75-11e4-b333-02ee2ddab7fe',
+        userId: "tv_display_node"
+    });
 
-    function listenForSecurePairing() {
-        const payloadRaw = localStorage.getItem('tv_payload');
-        if (!payloadRaw) return;
+    // Subscribe to a unique channel based purely on this TV's unique pin code
+    pubnub.subscribe({ channels: ['tv_channel_' + secretPin] });
+    
+    document.getElementById('cloudStatus').innerText = "🟢 Ready! Waiting for phone authentication...";
 
-        const payload = JSON.parse(payloadRaw);
+    // 3. Listen for incoming wireless transmissions from the mobile phone
+    pubnub.addListener({
+        message: function(event) {
+            const data = event.message;
+            
+            // Double check code match for extreme safety
+            if (data.pin === secretPin) {
+                document.getElementById('pairingScreen').style.display = 'none';
+                document.getElementById('tvContent').style.display = 'block';
 
-        // Verify if the input code sent from the user matches the TV's generated code
-        if (payload.pin === secretPin) {
-            // Success! Access granted. Swap out the lock screen for content.
-            document.getElementById('pairingScreen').style.display = 'none';
-            document.getElementById('tvContent').style.display = 'block';
-
-            if (payload.ticker) {
-                document.getElementById('tickerMsg').innerText = payload.ticker;
-            }
-            if (payload.imgUrl) {
-                document.getElementById('displayImage').src = payload.imgUrl;
+                if (data.ticker) document.getElementById('tickerMsg').innerText = data.ticker;
+                if (data.imgUrl) document.getElementById('displayImage').src = data.imgUrl;
             }
         }
-    }
-
-    // Check for updates instantly via browser storage changes
-    window.addEventListener('storage', listenForSecurePairing);
-    setInterval(listenForSecurePairing, 1000);
+    });
 </script>
 </body>
 </html>
