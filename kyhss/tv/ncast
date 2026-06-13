@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>MirrorCast — Controller</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #020617; --surface: #0f172a; --card: #1e293b; --border: #1e3a5f;
+    --accent: #38bdf8; --green: #10b981; --amber: #f59e0b; --red: #ef4444;
+    --muted: #64748b; --text: #f1f5f9; --subtext: #94a3b8; --radius: 16px;
+  }
+  html, body {
+    width:100%; min-height:100%; background:var(--bg);
+    font-family:-apple-system,'SF Pro Text',system-ui,sans-serif;
+    color:var(--text); -webkit-tap-highlight-color:transparent; overscroll-behavior:none;
+  }
+  .page { padding:16px 14px 40px; display:flex; flex-direction:column; gap:14px; max-width:480px; margin:0 auto; }
+
+  /* Top bar */
+  .topbar { display:flex; align-items:center; justify-content:space-between; padding:4px 0 4px; }
+  .logo { display:flex; align-items:center; gap:8px; }
+  .logo-dot { width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s ease-in-out infinite; }
+  .logo-name { font-size:16px;font-weight:800;letter-spacing:.05em;color:var(--accent); }
+  .conn-badge {
+    font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    padding:5px 12px;border-radius:100px;
+    background:rgba(245,158,11,.15);color:var(--amber);border:1px solid rgba(245,158,11,.25);
+  }
+  .conn-badge.live { background:rgba(16,185,129,.15);color:var(--green);border-color:rgba(16,185,129,.3); }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.75)} }
+
+  /* Card */
+  .card { background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1); }
+  .card-label { font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:14px;border-left:3px solid var(--accent);padding-left:8px;line-height:1; }
+
+  /* PIN */
+  .pin-row { display:flex;gap:8px; }
+  .pin-input {
+    flex:1;font-size:24px;font-weight:800;text-align:center;letter-spacing:6px;padding:12px;
+    background:var(--surface);color:var(--accent);border:2px solid var(--border);
+    border-radius:12px;outline:none;-webkit-appearance:none;
+  }
+  .connect-btn {
+    flex-shrink:0;padding:0 22px;font-size:14px;font-weight:700;
+    background:var(--green);color:#020617;border:none;border-radius:12px;
+    cursor:pointer;white-space:nowrap;
+  }
+
+  /* Drop zone */
+  .drop-zone {
+    width:100%;padding:24px;border:2px dashed var(--border);border-radius:12px;
+    background:var(--surface);color:var(--subtext);font-size:13px;text-align:center;position:relative;
+  }
+  .drop-zone input { position:absolute;inset:0;opacity:0;cursor:pointer;width:100%; }
+  .drop-icon { font-size:32px;margin-bottom:6px; }
+
+  /* Queue chips */
+  .queue-scroll { display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;margin-top:14px; }
+  .queue-scroll::-webkit-scrollbar { display:none; }
+  .q-chip {
+    flex-shrink:0;padding:6px 14px;font-size:12px;font-weight:600;border-radius:100px;
+    border:1px solid var(--border);background:var(--surface);color:var(--subtext);
+    cursor:pointer;white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis;
+  }
+  .q-chip.active { background:var(--accent);color:#020617;border-color:var(--accent);font-weight:700; }
+
+  /* Preview */
+  #previewWrap {
+    width:100%;aspect-ratio:16/9;background:#000;border-radius:14px;
+    position:relative;overflow:hidden;border:2px solid var(--border);touch-action:none;
+  }
+  #previewCanvas, #previewVideo { width:100%;height:100%;display:none;object-fit:contain; }
+  #previewEmpty  { position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:8px;font-size:13px;color:var(--muted); }
+  .empty-icon { font-size:32px; }
+
+  .preview-meta { position:absolute;bottom:8px;left:8px;right:8px;display:flex;justify-content:space-between;pointer-events:none;z-index:10; }
+  .meta-chip { padding:4px 8px;font-size:10px;font-weight:800;border-radius:6px;background:rgba(2,6,23,.85);backdrop-filter:blur(6px); }
+  .fps-badge { color:var(--green); }
+  .live-dot { width:6px;height:6px;border-radius:50%;background:var(--red);display:inline-block;margin-right:4px;animation:pulse 1s infinite; }
+
+  .tv-only-overlay {
+    position:absolute;inset:0;display:none;flex-direction:column;
+    justify-content:center;align-items:center;gap:6px;
+    background:rgba(2,6,23,.7);backdrop-filter:blur(4px);pointer-events:none;z-index:5;
+  }
+  .tv-only-overlay .icon { font-size:36px; }
+  .tv-only-overlay .label { font-size:12px;font-weight:700;color:var(--subtext);text-transform:uppercase; }
+
+  /* Controls */
+  .ctrl-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:8px; }
+  .ctrl-btn {
+    padding:12px 6px;font-size:12px;font-weight:700;border-radius:10px;
+    border:1px solid var(--border);background:var(--surface);color:var(--text);
+    cursor:pointer;transition:all .1s;display:flex;flex-direction:column;align-items:center;gap:4px;
+  }
+  .ctrl-btn .icon { font-size:16px;line-height:1; }
+  .ctrl-btn:active { background:var(--border);transform:scale(.96); }
+  .ctrl-btn.danger  { color:var(--red);border-color:rgba(239,68,68,.25); }
+  .ctrl-btn.success { color:var(--green);border-color:rgba(16,185,129,.25); }
+  .ctrl-btn.primary { color:var(--accent);border-color:rgba(56,189,248,.25); }
+  .ctrl-btn.active-state { background:rgba(56,189,248,.15);border-color:var(--accent);color:var(--accent); }
+
+  /* Sliders */
+  .slider-row { display:flex;align-items:center;gap:12px;margin-top:10px; }
+  .slider-label { font-size:12px;font-weight:700;color:var(--subtext);white-space:nowrap;min-width:70px; }
+  input[type=range] { flex:1;-webkit-appearance:none;height:6px;background:var(--surface);border:1px solid var(--border);border-radius:4px;outline:none; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--accent);cursor:pointer; }
+  .slider-val { font-size:11px;font-weight:700;color:var(--accent);min-width:40px;text-align:right; }
+
+  .vid-grid { display:grid;grid-template-columns:1fr 1fr;gap:8px; }
+  .swipe-hint { text-align:center;font-size:11px;font-weight:600;color:var(--muted);padding:2px 0;letter-spacing:.04em;text-transform:uppercase; }
+  #disconnectBtn { position:static !important; width:100%; padding:12px !important; text-align:center; margin-bottom:4px; }
+
+  .hidden { display:none !important; }
+</style>
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+</head>
+<body>
+
+<div class="page">
+  <button id="disconnectBtn" class="connect-btn danger" style="display:none">Disconnect Control Connection</button>
+
+  <div class="topbar">
+    <div class="logo"><div class="logo-dot"></div><div class="logo-name">MirrorCast</div></div>
+    <div class="conn-badge" id="connBadge">Disconnected</div>
+  </div>
+
+  <div class="card" id="connectCard">
+    <div class="card-label">Connect to TV Display</div>
+    <div class="pin-row">
+      <input type="number" id="tvPin" class="pin-input" placeholder="0000" inputmode="numeric" maxlength="4">
+      <button class="connect-btn" onclick="connectToTV()">Connect →</button>
+    </div>
+  </div>
+
+  <div class="card hidden" id="uploadCard">
+    <div class="card-label">Media Queue</div>
+    <div class="drop-zone">
+      <input type="file" id="filePicker" multiple accept=".png,.jpg,.jpeg,.gif,.webp,.mp4,.mov,.webm,.pdf" onchange="handleFiles(this.files)">
+      <div class="drop-icon">📂</div>
+      <div>Tap to load items</div>
+    </div>
+    <div class="queue-scroll" id="queueChips"></div>
+  </div>
+
+  <div id="previewWrap" class="hidden">
+    <canvas id="previewCanvas"></canvas>
+    <video id="previewVideo" playsinline muted></video>
+    <div id="previewEmpty"><div class="empty-icon">🖥️</div><div>No active media</div></div>
+    <div class="tv-only-overlay" id="tvOnlyOverlay">
+      <div class="icon">📺</div>
+      <div class="label">Playing on TV Only</div>
+    </div>
+    <div class="preview-meta">
+      <div class="meta-chip" id="metaType" style="display:none;"></div>
+      <div class="meta-chip fps-badge" id="metaFps" style="display:none;"></div>
+    </div>
+  </div>
+  <div class="swipe-hint hidden" id="swipeHint">← Swipe preview to change items →</div>
+
+  <div class="card hidden" id="pdfLayoutCard">
+    <div class="card-label">PDF Fit & Manual Scroll</div>
+    <div class="vid-grid" style="margin-bottom:12px;">
+      <button id="btnFitContain" class="ctrl-btn active-state" onclick="changePdfScaling('contain')"><span class="icon">🖼️</span>Fit Page</button>
+      <button id="btnFitFill" class="ctrl-btn" onclick="changePdfScaling('fill')"><span class="icon">📺</span>Fill Screen</button>
+    </div>
+    <div class="vid-grid" style="margin-bottom:16px;">
+      <button class="ctrl-btn primary" onclick="scrollTvPdf(-150)"><span class="icon">🔼</span>Scroll Up</button>
+      <button class="ctrl-btn primary" onclick="scrollTvPdf(150)"><span class="icon">🔽</span>Scroll Down</button>
+    </div>
+
+    <div class="card-label">PDF Engine Auto-Scroll</div>
+    <div class="vid-grid">
+      <button id="btnAutoScroll" class="ctrl-btn" onclick="toggleAutoScroll()"><span class="icon">🔄</span>Auto Scroll: OFF</button>
+    </div>
+    <div class="slider-row">
+  <div class="slider-label">Scroll Speed</div>
+  <input type="range" id="scrollSpeedSlider" min="0.1" max="5" step="0.1" value="1" oninput="onSpeedSlider(this.value)">
+  <div class="slider-val" id="scrollSpeedVal">1.0</div>
+</div>
+  </div>
+
+  <div class="card hidden" id="transformCard">
+    <div class="card-label">Transforms</div>
+    <div class="ctrl-grid">
+      <button class="ctrl-btn primary" onclick="doZoom(0.2)"><span class="icon">🔍</span>Zoom In</button>
+      <button class="ctrl-btn primary" onclick="doZoom(-0.2)"><span class="icon">🔎</span>Zoom Out</button>
+      <button class="ctrl-btn" onclick="doReset()"><span class="icon">↺</span>Reset</button>
+      <button class="ctrl-btn" onclick="doRotate(-90)"><span class="icon">↺</span>Rotate ←</button>
+      <button class="ctrl-btn" onclick="doRotate(90)"><span class="icon">↻</span>Rotate →</button>
+      <button class="ctrl-btn" onclick="doRotate(180)"><span class="icon">🔃</span>Flip 180°</button>
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">Zoom Factor</div>
+      <input type="range" id="zoomSlider" min="0.1" max="5" step="0.05" value="1" oninput="onZoomSlider(this.value)">
+      <div class="slider-val" id="zoomVal">1.00×</div>
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">Brightness</div>
+      <input type="range" id="brightnessSlider" min="0.2" max="2" step="0.05" value="1" oninput="onFilterChange()">
+      <div class="slider-val" id="brightnessVal">1.00</div>
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">Contrast</div>
+      <input type="range" id="contrastSlider" min="0.2" max="2" step="0.05" value="1" oninput="onFilterChange()">
+      <div class="slider-val" id="contrastVal">1.00</div>
+    </div>
+  </div>
+
+  <div class="card hidden" id="pdfCard">
+    <div class="card-label">PDF Pages</div>
+    <div class="ctrl-grid">
+      <button class="ctrl-btn" onclick="shiftPdf(-1)"><span class="icon">‹</span>Prev</button>
+      <button class="ctrl-btn success" style="pointer-events:none;">
+        <span class="icon">📄</span><span id="pdfPageLabel">1 / 1</span>
+      </button>
+      <button class="ctrl-btn" onclick="shiftPdf(1)"><span class="icon">›</span>Next</button>
+    </div>
+  </div>
+
+  <div class="card hidden" id="videoCard">
+    <div class="card-label">Video Playback</div>
+    <div class="vid-grid">
+      <button class="ctrl-btn success" onclick="vidCmd('play')"><span class="icon">▶</span>Play</button>
+      <button class="ctrl-btn danger"  onclick="vidCmd('pause')"><span class="icon">⏸</span>Pause</button>
+      <button class="ctrl-btn" onclick="vidCmd('mute')"><span class="icon">🔇</span>Mute TV</button>
+      <button class="ctrl-btn primary" onclick="vidCmd('unmute')"><span class="icon">🔊</span>Unmute TV</button>
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">Volume Level</div>
+      <input type="range" id="volSlider" min="0" max="1" step="0.05" value="0.8" oninput="onVolume(this.value)">
+      <div class="slider-val" id="volVal">80%</div>
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">Timeline</div>
+      <input type="range" id="seekSlider" min="0" max="100" step="0.5" value="0" onchange="vidCmd('seek', this.value)">
+      <div class="slider-val" id="seekVal">0%</div>
+    </div>
+  </div>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+
+const peer    = new Peer({ debug: 0 });
+let tvConn    = null;
+let fileQueue = [], qIdx = 0;
+let currentPdfFitMode = 'contain';
+let isSettingUpVideo = false;
+let autoScrollActive = false;
+let autoScrollSpeed = 3;
+
+let imgEl = null, activePdf = null, pdfPage = 1;
+let currentZoom = 1.0, currentRotate = 0, brightness = 1.0, contrast = 1.0;
+
+const workCanvas = document.createElement('canvas');
+const workCtx    = workCanvas.getContext('2d', { alpha: false });
+
+let pdfCanvasCache = null, pdfLastPage = -1, pdfRenderPending = false;
+let rafId = null, frameCount = 0, lastFpsTime = performance.now();
+let touchStartX = 0;
+
+function connectToTV() {
+  const pin = document.getElementById('tvPin').value.trim();
+  if (pin.length < 4) { alert('Enter the 4-digit PIN from the TV screen.'); return; }
+  tvConn = peer.connect('tv-canvas-mirror-' + pin, { reliable: false });
+  tvConn.on('open', () => {
+    document.getElementById('connBadge').textContent = 'Connected ✓';
+    document.getElementById('connBadge').classList.add('live');
+    document.getElementById('connectCard').classList.add('hidden');
+    document.getElementById('uploadCard').classList.remove('hidden');
+    document.getElementById('previewWrap').classList.remove('hidden');
+    document.getElementById('swipeHint').classList.remove('hidden');
+    document.getElementById('disconnectBtn').style.display = 'block';
+  });
+  tvConn.on('error', e => { alert('Connection failed.'); });
+}
+
+function handleFiles(files) {
+  if (!files.length) return;
+  fileQueue = Array.from(files);
+  qIdx = 0;
+  renderQueueChips();
+  loadItem(0);
+}
+
+function renderQueueChips() {
+  const wrap = document.getElementById('queueChips');
+  wrap.innerHTML = '';
+  fileQueue.forEach((f, i) => {
+    const c = document.createElement('div');
+    c.className = 'q-chip' + (i === qIdx ? ' active' : '');
+    c.textContent = f.name;
+    c.onclick = () => loadItem(i);
+    wrap.appendChild(c);
+  });
+}
+
+function refreshChips() {
+  document.querySelectorAll('.q-chip').forEach((c, i) => c.classList.toggle('active', i === qIdx));
+}
+
+function loadItem(index) {
+  qIdx = index;
+  refreshChips();
+  stopLoop();
+  disableAutoScrollMode();
+
+  const file    = fileQueue[index];
+  const canvas  = document.getElementById('previewCanvas');
+  const video   = document.getElementById('previewVideo');
+  const overlay = document.getElementById('tvOnlyOverlay');
+
+  canvas.style.display = 'none';
+  video.style.display  = 'none';
+  video.pause();
+  video.removeAttribute('src');
+  video.load();
+  overlay.style.display = 'none';
+  document.getElementById('previewEmpty').style.display = 'flex';
+  ['transformCard','pdfCard','videoCard','pdfLayoutCard'].forEach(id => document.getElementById(id).classList.add('hidden'));
+  document.getElementById('metaType').style.display = 'none';
+  document.getElementById('metaFps').style.display  = 'none';
+
+  currentZoom = 1.0; currentRotate = 0; brightness = 1.0; contrast = 1.0;
+  imgEl = null; activePdf = null; pdfPage = 1;
+  pdfCanvasCache = null; pdfLastPage = -1;
+  syncSliders();
+
+  const blobUrl = URL.createObjectURL(file);
+  const type    = file.type;
+
+  if (type.startsWith('image/')) {
+    setMeta('IMG', '#38bdf8');
+    document.getElementById('transformCard').classList.remove('hidden');
+    canvas.style.display = 'block';
+    document.getElementById('previewEmpty').style.display = 'none';
+    imgEl = new Image();
+    imgEl.src = blobUrl;
+    imgEl.onload = () => startLoop('image');
+
+  } else if (type.startsWith('video/')) {
+    isSettingUpVideo = true;
+    setMeta('VIDEO', '#f43f5e');
+    document.getElementById('videoCard').classList.remove('hidden');
+    document.getElementById('previewEmpty').style.display = 'none';
+
+    video.muted  = false;
+    video.volume = 1.0;
+    video.style.display = 'block';
+    video.src = blobUrl;
+    video.load();
+
+    const onReady = () => {
+      video.oncanplay = null;
+      video.onloadedmetadata = null;
+
+      const captureFn = video.captureStream ? video.captureStream.bind(video) : (video.mozCaptureStream ? video.mozCaptureStream.bind(video) : null);
+      if (!captureFn) return;
+
+      const stream = captureFn(60);
+      video.volume = 0;
+      overlay.style.display = 'flex';
+
+      const pin = document.getElementById('tvPin').value.trim();
+      peer.call('tv-canvas-mirror-' + pin, stream, {
+        sdpTransform: (sdp) => {
+          return sdp.replace(/a=mid:video\r\n/g, 'a=mid:video\r\nb=AS:8000\r\n')
+                    .replace(/useinbandfec=1/g, 'useinbandfec=1;stereo=1');
+        }
+      });
+
+      video.play().then(() => {
+        isSettingUpVideo = false;
+      }).catch(()=>{ isSettingUpVideo = false; });
+
+      video.ontimeupdate = () => {
+        if (!video.duration || isSettingUpVideo) return;
+        const pct = (video.currentTime / video.duration) * 100;
+        document.getElementById('seekSlider').value = pct.toFixed(1);
+        document.getElementById('seekVal').textContent = Math.round(pct) + '%';
+      };
+
+      send({ type: 'meta', mediaType: 'VIDEO', queueInfo: (qIdx+1)+' / '+fileQueue.length });
+    };
+
+    video.oncanplay = onReady;
+    video.onloadedmetadata = onReady;
+
+  } else if (type === 'application/pdf') {
+    setMeta('PDF', '#f59e0b');
+    document.getElementById('transformCard').classList.remove('hidden');
+    document.getElementById('pdfCard').classList.remove('hidden');
+    document.getElementById('pdfLayoutCard').classList.remove('hidden');
+    canvas.style.display = 'block';
+    document.getElementById('previewEmpty').style.display = 'none';
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = e => {
+      pdfjsLib.getDocument(e.target.result).promise.then(pdf => {
+        activePdf = pdf; pdfPage = 1;
+        updatePdfLabel();
+        send({ type: 'pdf_fit_mode', mode: currentPdfFitMode });
+        startLoop('pdf');
+      });
+    };
+  }
+}
+
+function changePdfScaling(mode) {
+  currentPdfFitMode = mode;
+  document.getElementById('btnFitContain').classList.toggle('active-state', mode === 'contain');
+  document.getElementById('btnFitFill').classList.toggle('active-state', mode === 'fill');
+  send({ type: 'pdf_fit_mode', mode: mode });
+}
+
+function scrollTvPdf(pixels) {
+  send({ type: 'pdf_scroll', offset: pixels });
+}
+
+function toggleAutoScroll() {
+  autoScrollActive = !autoScrollActive;
+  const btn = document.getElementById('btnAutoScroll');
+  btn.classList.toggle('active-state', autoScrollActive);
+  btn.innerHTML = autoScrollActive ? '<span class="icon">⏸</span>Auto Scroll: ON' : '<span class="icon">🔄</span>Auto Scroll: OFF';
+  send({ type: 'pdf_autoscroll_toggle', active: autoScrollActive, speed: autoScrollSpeed });
+}
+
+function disableAutoScrollMode() {
+  autoScrollActive = false;
+  const btn = document.getElementById('btnAutoScroll');
+  if (btn) {
+    btn.classList.remove('active-state');
+    btn.innerHTML = '<span class="icon">🔄</span>Auto Scroll: OFF';
+  }
+}
+
+function onSpeedSlider(val) {
+  autoScrollSpeed = parseFloat(val); // Changed from parseInt to parseFloat
+  document.getElementById('scrollSpeedVal').textContent = parseFloat(val).toFixed(1);
+  if (autoScrollActive) {
+    send({ type: 'pdf_autoscroll_toggle', active: true, speed: autoScrollSpeed });
+  }
+}
+
+function setMeta(label, color) {
+  const el = document.getElementById('metaType');
+  el.textContent = label; el.style.color = color; el.style.display = '';
+}
+
+function startLoop(mode) {
+  if (rafId) cancelAnimationFrame(rafId);
+  function tick() {
+    renderFrame(mode);
+    frameCount++;
+    const now = performance.now();
+    if (now - lastFpsTime >= 1000) {
+      const fpsEl = document.getElementById('metaFps');
+      fpsEl.style.display = '';
+      fpsEl.innerHTML = `<span class="live-dot"></span>${frameCount} fps`;
+      frameCount = 0; lastFpsTime = now;
+    }
+    rafId = requestAnimationFrame(tick);
+  }
+  rafId = requestAnimationFrame(tick);
+}
+
+function stopLoop() { if (rafId) cancelAnimationFrame(rafId); }
+
+function renderFrame(mode) {
+  if (mode === 'image') renderImage();
+  if (mode === 'pdf') renderPdf();
+}
+
+function buildTransformedCanvas(srcW, srcH, drawSource) {
+  const rad = currentRotate * Math.PI / 180;
+  const cos = Math.abs(Math.cos(rad)), sin = Math.abs(Math.sin(rad));
+  const bw = Math.round(srcW * cos + srcH * sin);
+  const bh = Math.round(srcW * sin + srcH * cos);
+
+  workCanvas.width  = bw;
+  workCanvas.height = bh;
+  workCtx.clearRect(0, 0, bw, bh);
+  workCtx.save();
+  workCtx.filter = `brightness(${brightness}) contrast(${contrast})`;
+  workCtx.translate(bw / 2, bh / 2);
+  workCtx.rotate(rad);
+  workCtx.scale(currentZoom, currentZoom);
+  drawSource(workCtx, srcW, srcH);
+  workCtx.restore();
+  return workCanvas;
+}
+
+function renderImage() {
+  if (!imgEl || !tvConn) return;
+  const c = buildTransformedCanvas(imgEl.naturalWidth, imgEl.naturalHeight, (ctx, w, h) => ctx.drawImage(imgEl, -w/2, -h/2, w, h));
+  pushFrame(c, 'IMAGE');
+  const pv = document.getElementById('previewCanvas');
+  pv.width  = c.width; pv.height = c.height;
+  pv.getContext('2d').drawImage(c, 0, 0);
+}
+
+function renderPdf() {
+  if (!activePdf || !tvConn) return;
+  if (pdfPage !== pdfLastPage || !pdfCanvasCache) {
+    if (!pdfRenderPending) {
+      pdfRenderPending = true;
+      activePdf.getPage(pdfPage).then(page => {
+        const vp = page.getViewport({ scale: 2.5 }); 
+        const oc = document.createElement('canvas');
+        oc.width = vp.width; oc.height = vp.height;
+        page.render({ canvasContext: oc.getContext('2d'), viewport: vp }).promise.then(() => {
+          pdfCanvasCache  = oc;
+          pdfLastPage     = pdfPage;
+          pdfRenderPending = false;
+        });
+      });
+    }
+    return;
+  }
+  const sw = pdfCanvasCache.width, sh = pdfCanvasCache.height;
+  const c  = buildTransformedCanvas(sw, sh, (ctx) => ctx.drawImage(pdfCanvasCache, -sw/2, -sh/2));
+  pushFrame(c, 'PDF');
+
+  const pv = document.getElementById('previewCanvas');
+  pv.width  = c.width; pv.height = c.height;
+  pv.getContext('2d').drawImage(c, 0, 0);
+}
+
+function pushFrame(canvas, mediaType) {
+  if (!tvConn) return;
+  const dc = tvConn.dataChannel;
+  if (dc && dc.bufferedAmount > 65536) return;
+  const b64 = canvas.toDataURL('image/jpeg', 0.92);
+  try {
+    tvConn.send({ type:'frame_update', base64Frame:b64, mediaType, queueInfo:(qIdx+1)+' / '+fileQueue.length });
+  } catch(e) {}
+}
+
+function send(obj) { try { if (tvConn) tvConn.send(obj); } catch(e){} }
+
+function doZoom(d)     { currentZoom = Math.max(0.1, Math.min(6, currentZoom + d)); syncSliders(); }
+function onZoomSlider(v) { currentZoom = parseFloat(v); document.getElementById('zoomVal').textContent = parseFloat(v).toFixed(2)+'×'; }
+function doRotate(d)   { currentRotate = (currentRotate + d + 360) % 360; pdfCanvasCache = null; }
+function doReset()     { currentZoom=1;currentRotate=0;brightness=1;contrast=1;pdfCanvasCache=null;syncSliders(); }
+function onFilterChange() {
+  brightness = parseFloat(document.getElementById('brightnessSlider').value);
+  contrast   = parseFloat(document.getElementById('contrastSlider').value);
+  document.getElementById('brightnessVal').textContent = brightness.toFixed(2);
+  document.getElementById('contrastVal').textContent   = contrast.toFixed(2);
+}
+function syncSliders() {
+  document.getElementById('zoomSlider').value       = currentZoom;
+  document.getElementById('zoomVal').textContent    = currentZoom.toFixed(2)+'×';
+  document.getElementById('brightnessSlider').value = brightness;
+  document.getElementById('brightnessVal').textContent = brightness.toFixed(2);
+  document.getElementById('contrastSlider').value   = contrast;
+  document.getElementById('contrastVal').textContent = contrast.toFixed(2);
+}
+
+function shiftPdf(dir) {
+  if (!activePdf) return;
+  const t = pdfPage + dir;
+  if (t >= 1 && t <= activePdf.numPages) { 
+    pdfPage = t; 
+    pdfCanvasCache = null; 
+    updatePdfLabel();
+    send({ type: 'pdf_page_changed' }); // Commands TV to clear scroll metrics instantly
+  }
+}
+
+// Fired programmatically by TV when auto-scroll triggers page completion bounds
+function shiftPdfAutoNext() {
+  if (!activePdf) return;
+  const t = pdfPage + 1;
+  if (t <= activePdf.numPages) {
+    pdfPage = t;
+    pdfCanvasCache = null;
+    updatePdfLabel();
+  } else {
+    // If it's the absolute last page, turn off scroll task cleanly
+    disableAutoScrollMode();
+    send({ type: 'pdf_autoscroll_toggle', active: false, speed: 3 });
+  }
+}
+
+function updatePdfLabel() {
+  if (activePdf) document.getElementById('pdfPageLabel').textContent = pdfPage+' / '+activePdf.numPages;
+}
+
+function vidCmd(action, value = null) {
+  if (isSettingUpVideo) return;
+  const video = document.getElementById('previewVideo');
+  if (action === 'play')  video.play().catch(()=>{});
+  if (action === 'pause') video.pause();
+  if (action === 'seek' && video.duration) {
+    video.currentTime = (parseFloat(value) / 100) * video.duration;
+  }
+  send({ type: 'video_cmd', action, value });
+}
+function onVolume(v) {
+  document.getElementById('volVal').textContent = Math.round(v*100)+'%';
+  send({ type:'video_cmd', action:'volume', value:v });
+}
+
+// TV structural channel callbacks interceptor
+peer.on('connection', conn => {
+  conn.on('data', data => {
+    if (data.type === 'tv_triggered_next_page') {
+      shiftPdfAutoNext();
+    }
+  });
+});
+
+const previewEl = document.getElementById('previewWrap');
+previewEl.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; }, { passive:true });
+previewEl.addEventListener('touchend',   e => {
+  const d = touchStartX - e.changedTouches[0].screenX;
+  if (d >  55 && qIdx < fileQueue.length-1) loadItem(qIdx+1);
+  if (d < -55 && qIdx > 0)                  loadItem(qIdx-1);
+}, { passive:true });
+
+window.addEventListener('load', () => {
+  document.getElementById('disconnectBtn').onclick = () => {
+    if (window.tvConn) { try { tvConn.close(); } catch(e){} }
+    location.reload();
+  };
+});
+</script>
+</body>
+</html>
