@@ -1,137 +1,277 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TV Display Receiver Node</title>
-    <style>
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #020617; font-family: system-ui, sans-serif; color: white; }
-        .layer { position: absolute; top:0; left:0; width:100%; height:100%; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
-        .pin-box { font-size: 80px; font-weight: 900; background: #1e293b; padding: 20px 60px; border-radius: 16px; border: 4px solid #10b981; color: #10b981; letter-spacing: 10px; margin: 20px 0; box-shadow: 0 0 40px rgba(16, 185, 129, 0.3); }
-        
-        /* Universal Shared Area Matrix Container */
-        #sharedArea { width: 100%; height: 100%; display: none; box-sizing: border-box; background: #000; position: relative; }
-        .tv-media { width: 100%; height: 100%; object-fit: contain; border: none; display: none; background: #000; position: absolute; top: 0; left: 0; }
-        
-        /* Fixed Safe PDF Viewport Container */
-        #tvPdfWrapper { width: 100%; height: 100%; overflow: hidden; display: none; position: absolute; top: 0; left: 0; background: #0f172a; }
-        #tvPdfCanvas { display: block; margin: 0 auto; max-width: 100%; height: 100vh; object-fit: contain; }
-    </style>
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MirrorCast — TV Display</title>
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  html, body {
+    width:100%; height:100%; overflow:hidden;
+    background:#020617; font-family:'SF Pro Display',-apple-system,system-ui,sans-serif; color:#f8fafc;
+  }
+
+  #setupScreen {
+    position:fixed; inset:0; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:24px;
+    background:radial-gradient(ellipse at 50% 30%, #0f2a4a 0%, #020617 70%); z-index:100; transition:opacity .6s ease;
+  }
+  #setupScreen.hidden { opacity:0; pointer-events:none; }
+  .brand-mark { display:flex; align-items:center; gap:12px; font-size:14px; font-weight:700; letter-spacing:.18em; text-transform:uppercase; color:#38bdf8; }
+  .brand-dot  { width:10px; height:10px; border-radius:50%; background:#10b981; box-shadow:0 0 12px #10b981; animation:pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.8)} }
+
+  .headline { font-size:clamp(28px,5vw,56px); font-weight:800; text-align:center; }
+  .headline span { color:#38bdf8; }
+  .pin-wrapper { display:flex; flex-direction:column; align-items:center; gap:12px; }
+  .pin-display { font-size:clamp(56px,11vw,104px); font-weight:900; letter-spacing:.15em; color:#10b981; text-shadow:0 0 50px rgba(16,185,129,.45); }
+
+  #statusBar {
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+    display:flex; align-items:center; gap:8px; background:rgba(30,41,59,.9); backdrop-filter:blur(12px);
+    border:1px solid #1e3a5f; border-radius:100px; padding:8px 18px; font-size:13px; color:#64748b; z-index:200;
+  }
+  .status-dot { width:8px; height:8px; border-radius:50%; background:#f59e0b; }
+  .status-dot.live { background:#10b981; box-shadow:0 0 8px #10b981; animation:pulse 1.5s infinite; }
+
+  #tvCanvas {
+    position:fixed; top:0; left:0; width:100vw; height:100vh;
+    display:none; background:#000; will-change:contents;
+    transform:translateZ(0); backface-visibility:hidden;
+  }
+  #tvVideo {
+    position:fixed; inset:0; width:100%!important; height:100%!important;
+    object-fit:contain!important; display:none; background:#000;
+    transform:translateZ(0); backface-visibility:hidden;
+  }
+
+  #hud { position:fixed; top:16px; right:20px; display:none; flex-direction:column; align-items:flex-end; gap:6px; z-index:300; }
+  .hud-chip { background:rgba(2,6,23,.75); backdrop-filter:blur(8px); border:1px solid #1e3a5f; border-radius:8px; padding:4px 10px; font-size:11px; color:#38bdf8; font-weight:600; }
+  .status-toast { position:fixed; top:12px; left:50%; transform:translateX(-50%); background:#0f172a; color:#fff; padding:10px 16px; border-radius:999px; z-index:999; font-size:13px; font-weight:600; }
+</style>
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 <body>
 
-<div id="setupScreen" class="layer">
-    <div style="font-size: 32px; color: #94a3b8; font-weight: bold;">📺 TV Media Node Active</div>
-    <div style="font-size: 18px; color: #64748b; margin-top: 10px;">Connect phone to Hotspot/Wi-Fi and enter this PIN:</div>
-    <div class="pin-box" id="tvPin">----</div>
-    <div style="font-size: 16px; color: #475569;" id="status">Initializing network pipeline...</div>
+<button id="disconnectBtn" style="position:fixed;top:18px;left:18px;z-index:999;padding:10px 16px;border:none;border-radius:12px;background:#ef4444;color:white;font-weight:700;display:none">
+Disconnect TV
+</button>
+
+<div id="setupScreen">
+  <div class="brand-mark"><div class="brand-dot"></div>MirrorCast Display</div>
+  <div class="headline">Ready to<br><span>receive your screen</span></div>
+  <div class="pin-wrapper">
+    <div class="pin-display" id="tvPin">----</div>
+  </div>
 </div>
 
-<div id="sharedArea">
-    <img id="tvImage" class="tv-media" alt="Mirrored Frame Target">
-    <video id="tvVideo" class="tv-media" playsinline></video>
-    
-    <div id="tvPdfWrapper">
-        <canvas id="tvPdfCanvas"></canvas>
-    </div>
+<div id="statusBar">
+  <div class="status-dot" id="statusDot"></div>
+  <span id="statusText">Waiting for connection…</span>
 </div>
+
+<div id="hud">
+  <div class="hud-chip" id="hudType">—</div>
+  <div class="hud-chip" id="hudInfo">—</div>
+</div>
+
+<div class="status-toast">Ready • Awaiting Remote Media</div>
+
+<canvas id="tvCanvas"></canvas>
+<video id="tvVideo" playsinline></video>
 
 <script>
-    // Point PDF.js to its required web worker script
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+(function(){
+  const pin = Math.floor(1000 + Math.random() * 9000).toString();
+  document.getElementById('tvPin').textContent = pin;
 
-    // FIX: Generate PIN and assign it to the matching 'tvPin' HTML ID element
-    const secretPin = Math.floor(1000 + Math.random() * 9000).toString();
-    document.getElementById('tvPin').innerText = secretPin;
+  const peer     = new Peer('tv-canvas-mirror-' + pin, { debug: 0 });
+  const canvas   = document.getElementById('tvCanvas');
+  const ctx      = canvas.getContext('2d', { alpha: false });
+  const tvVideo  = document.getElementById('tvVideo');
+  const setupScr = document.getElementById('setupScreen');
+  const statusDt = document.getElementById('statusDot');
+  const statusTx = document.getElementById('statusText');
+  const hud      = document.getElementById('hud');
+  const hudType  = document.getElementById('hudType');
+  const hudInfo  = document.getElementById('hudInfo');
 
-    const peer = new Peer('tv-core-mgt-' + secretPin);
-    const tvVideo = document.getElementById('tvVideo');
-    const tvPdfWrapper = document.getElementById('tvPdfWrapper');
-    let tvPdfDoc = null;
+  const frameImg = new Image();
+  let globalPdfFitMode = 'contain';
+  let pdfScrollOffsetY = 0;
+  
+  let isAutoScrolling = false;
+  let scrollSpeedStep = 1.0;
+  let scrollIntervalTimer = null;
 
-    peer.on('open', () => {
-        document.getElementById('status').innerText = "📡 Antenna Online. Awaiting controller payload...";
+  function goLive(type) {
+    setupScr.classList.add('hidden');
+    statusDt.classList.add('live');
+    statusTx.textContent = 'Live · ' + type;
+    hud.style.display = 'flex';
+  }
+
+  peer.on('connection', conn => {
+    conn.on('close', () => {
+      setupScr.classList.remove('hidden');
+      statusDt.classList.remove('live');
+      hud.style.display = 'none';
+      stopTvAutoScrollLoop();
     });
 
-    // Channel handler for lightweight metadata & PDF transfers
-    peer.on('connection', (conn) => {
-        conn.on('data', (data) => {
-            document.getElementById('setupScreen').style.display = 'none';
-            document.getElementById('sharedArea').style.display = 'block';
+    conn.on('data', data => {
+      if (data.type === 'pdf_fit_mode') {
+        globalPdfFitMode = data.mode;
+        pdfScrollOffsetY = 0;
+        if (frameImg.src) frameImg.onload();
+        return;
+      }
 
-            // Handle Remote Page/Video Control Changes from Mobile Phone
-            if (data.type === 'control_cmd') {
-                if (data.action === 'play') tvVideo.play();
-                else if (data.action === 'pause') tvVideo.pause();
-                else if (data.action === 'pdf_page' && tvPdfDoc) {
-                    renderTvPage(data.value);
+      if (data.type === 'pdf_page_changed') {
+        pdfScrollOffsetY = 0; // Fixes page change snapping back to top
+        if (frameImg.src) frameImg.onload();
+        return;
+      }
+
+      if (data.type === 'pdf_scroll') {
+        pdfScrollOffsetY += data.offset;
+        if (frameImg.src) frameImg.onload();
+        return;
+      }
+
+      if (data.type === 'pdf_autoscroll_toggle') {
+        isAutoScrolling = data.active;
+        scrollSpeedStep = parseFloat(data.speed); // Floating-point support (0.5, etc.)
+        if (isAutoScrolling) {
+          startTvAutoScrollLoop(conn);
+        } else {
+          stopTvAutoScrollLoop();
+        }
+        return;
+      }
+
+      if (data.type === 'video_cmd') {
+        if (data.action === 'play'){
+          // CRITICAL REPLAY TV SIDE FIX: If track is done, rewind locally before unmuting
+          if (tvVideo.ended || tvVideo.currentTime >= tvVideo.duration - 0.2) {
+            tvVideo.currentTime = 0;
+          }
+          tvVideo.muted = false;
+          tvVideo.play().catch(()=>{});
+        }
+        if (data.action === 'pause')  tvVideo.pause();
+        if (data.action === 'mute')   tvVideo.muted = true;
+        if (data.action === 'unmute') tvVideo.muted = false;
+        if (data.action === 'volume') tvVideo.volume = Math.min(1, Math.max(0, parseFloat(data.value)));
+        if (data.action === 'seek' && tvVideo.duration)
+          tvVideo.currentTime = (parseFloat(data.value) / 100) * tvVideo.duration;
+        return;
+      }
+
+      if (data.type === 'meta') {
+        if (data.mediaType) hudType.textContent = data.mediaType;
+        if (data.queueInfo) hudInfo.textContent = data.queueInfo;
+        goLive(data.mediaType || '');
+        return;
+      }
+
+      if (data.type === 'frame_update') {
+        if (tvVideo.style.display !== 'none') {
+          tvVideo.style.display = 'none';
+          canvas.style.display  = 'block';
+          tvVideo.pause();
+        }
+
+        if (data.mediaType) hudType.textContent = data.mediaType;
+        if (data.queueInfo) hudInfo.textContent = data.queueInfo;
+
+        frameImg.onload = () => {
+          const displayW = window.innerWidth;
+          const displayH = window.innerHeight;
+
+          if (canvas.width !== displayW || canvas.height !== displayH) {
+            canvas.width = displayW; canvas.height = displayH;
+          }
+
+          ctx.fillStyle = '#000000';
+          ctx.fillRect(0, 0, displayW, displayH);
+
+          const imgW = frameImg.naturalWidth;
+          const imgH = frameImg.naturalHeight;
+
+          if (data.mediaType === 'PDF') {
+            if (globalPdfFitMode === 'contain') {
+              const scale = Math.min(displayW / imgW, displayH / imgH);
+              const targetW = imgW * scale; const targetH = imgH * scale;
+              ctx.drawImage(frameImg, (displayW - targetW) / 2, (displayH - targetH) / 2, targetW, targetH);
+            } else {
+              const scale = displayW / imgW;
+              const targetW = displayW;
+              const targetH = imgH * scale;
+              
+              const maxScroll = Math.max(0, targetH - displayH);
+              if (pdfScrollOffsetY < 0) pdfScrollOffsetY = 0;
+              
+              // 2px Safety Buffer boundary checks to bypass sub-pixel stalling
+              if (pdfScrollOffsetY >= (maxScroll - 2) && maxScroll > 0) {
+                pdfScrollOffsetY = maxScroll;
+                if (isAutoScrolling) {
+                  stopTvAutoScrollLoop();
+                  pdfScrollOffsetY = 0; // Pre-align tracking index back to top floor
+                  conn.send({ type: 'tv_triggered_next_page' });
                 }
-                return;
-            }
+              }
 
-            // Handle Lightweight Text/PDF Payload Deliveries
-            if (data.fileMime === 'application/pdf') {
-                document.querySelectorAll('.tv-media').forEach(el => el.style.display = 'none');
-                tvPdfWrapper.style.display = 'block';
-                tvVideo.pause();
-                
-                pdfjsLib.getDocument(data.fileBinary).promise.then((pdf) => {
-                    tvPdfDoc = pdf;
-                    renderTvPage(1);
-                });
+              ctx.drawImage(frameImg, 0, -pdfScrollOffsetY, targetW, targetH);
             }
-        });
+          } else {
+            const scale = Math.min(displayW / imgW, displayH / imgH);
+            const targetW = imgW * scale; const targetH = imgH * scale;
+            ctx.drawImage(frameImg, (displayW - targetW) / 2, (displayH - targetH) / 2, targetW, targetH);
+          }
+        };
+        frameImg.src = data.base64Frame;
+        goLive(data.mediaType || 'LIVE');
+      }
     });
+  });
 
-    // Channel handler for heavy media stream loops (Images and Videos)
-    peer.on('call', (call) => {
-        document.getElementById('setupScreen').style.display = 'none';
-        document.getElementById('sharedArea').style.display = 'block';
-        document.querySelectorAll('.tv-media').forEach(el => el.style.display = 'none');
-        tvPdfWrapper.style.display = 'none';
+  function startTvAutoScrollLoop(conn) {
+    stopTvAutoScrollLoop();
+    scrollIntervalTimer = setInterval(() => {
+      if (!isAutoScrolling) return;
+      pdfScrollOffsetY += scrollSpeedStep;
+      if (frameImg.src) frameImg.onload();
+    }, 30);
+  }
 
-        call.answer();
-        call.on('stream', (remoteStream) => {
-            const metadata = call.metadata;
-            
-            if (metadata && metadata.type.startsWith('video/')) {
-                tvVideo.srcObject = remoteStream;
-                tvVideo.style.display = 'block';
-                tvVideo.muted = false; // Ensures full audio is received by the TV
-                tvVideo.play().catch(e => console.log("Awaiting play command from phone."));
-            } 
-            else if (metadata && metadata.type.startsWith('image/')) {
-                const img = document.getElementById('tvImage');
-                
-                // Grab the live stream frame and render it onto a canvas to bypass memory crashes
-                const videoTrack = remoteStream.getVideoTracks()[0];
-                const imageCapture = new ImageCapture(videoTrack);
-                imageCapture.grabFrame().then(imageBitmap => {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = imageBitmap.width;
-                    canvas.height = imageBitmap.height;
-                    canvas.getContext('2d').drawImage(imageBitmap, 0, 0);
-                    img.src = canvas.toDataURL();
-                    img.style.display = 'block';
-                }).catch(err => console.error("Error drawing image stream frame:", err));
-            }
-        });
-    });
-
-    // Renders custom high-definition PDF frames natively without opening print menus
-    function renderTvPage(num) {
-        if (!tvPdfDoc) return;
-        tvPdfDoc.getPage(num).then((page) => {
-            const canvas = document.getElementById('tvPdfCanvas');
-            const ctx = canvas.getContext('2d');
-            const viewport = page.getViewport({ scale: 2.0 }); 
-            canvas.height = viewport.height;
-            canvas.width = viewport.width;
-            page.render({ canvasContext: ctx, viewport: viewport });
-        });
+  function stopTvAutoScrollLoop() {
+    if (scrollIntervalTimer) {
+      clearInterval(scrollIntervalTimer);
+      scrollIntervalTimer = null;
     }
+  }
+
+  peer.on('call', call => {
+    canvas.style.display  = 'none';
+    tvVideo.style.display = 'block';
+    hudType.textContent   = 'VIDEO';
+    call.answer();
+
+    call.on('stream', remoteStream => {
+      tvVideo.srcObject = remoteStream;
+      tvVideo.muted = true; 
+      tvVideo.volume = 0.8;
+      tvVideo.play().then(() => {}).catch(() => {});
+      goLive('VIDEO');
+    });
+  });
+
+  peer.on('error', e => { console.error(e); });
+  window.addEventListener('load', () => {
+    document.getElementById('disconnectBtn').onclick = () => { location.reload(); };
+    setTimeout(() => { document.getElementById('disconnectBtn').style.display = 'block'; }, 1000);
+  });
+})();
 </script>
 </body>
-</html>
+</html> 
