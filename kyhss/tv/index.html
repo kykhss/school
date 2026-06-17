@@ -3,42 +3,55 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MirrorCast Canvas Core — TV Display</title>
+<title>MirrorCast — Native Reader TV Core</title>
 <style>
   *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
-  html, body { width:100%; height:100%; overflow:hidden; background:#000000; font-family:-apple-system,system-ui,sans-serif; color:#f8fafc; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#000000; font-family:-apple-system,system-ui,sans-serif; }
   
-  #tvCanvas {
-    position:fixed; inset:0; width:100vw; height:100vh; display:block;
-    will-change:transform; transform-origin: top center;
-  }
+  /* Master container supporting orientation rotations */
+  #rotationWrapper { width: 100vw; height: 100vh; transform-origin: center center; transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); position: relative; }
+  
+  /* Native Element Viewports */
+  canvas, video, #tvPdfObject { position:absolute; inset:0; width:100% !important; height:100% !important; border:none; display:none; background:#000; }
+  video { object-fit: contain; }
 
-  #setupScreen { position:fixed; inset:0; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:20px; background:radial-gradient(ellipse at 50% 30%, #0f2a4a 0%, #020617 70%); z-index:100; }
-  #setupScreen.hidden { display:none; }
+  /* Smooth scroll support for the native embedded object element frame */
+  #tvPdfObject { display: none; overflow: auto; -webkit-overflow-scrolling: touch; }
+
+  #setupScreen { position:fixed; inset:0; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:20px; background:radial-gradient(ellipse at 50% 30%, #0f2a4a 0%, #020617 70%); z-index:100; color:#fff; }
+  #setupScreen.hidden { display:none !important; }
   .headline { font-size:32px; font-weight:800; color:#38bdf8; text-transform:uppercase; text-align:center; }
-  .code-badge-panel { font-size:64px; font-weight:900; color:#10b981; background:rgba(16,185,129,0.1); padding:10px 40px; border-radius:16px; border:2px dashed rgba(16,185,129,0.3); text-shadow:0 0 30px rgba(16,185,129,0.4); font-variant-numeric: tabular-nums; margin-top:10px; letter-spacing:4px; }
-  .status-toast { position:fixed; top:12px; left:50%; transform:translateX(-50%); background:#0f172a; border:1px solid #1e3a5f; color:#38bdf8; padding:10px 20px; border-radius:999px; z-index:999; font-size:14px; font-weight:700; }
+  .code-badge-panel { font-size:64px; font-weight:900; color:#10b981; background:rgba(16,185,129,0.1); padding:10px 40px; border-radius:16px; border:2px dashed rgba(16,185,129,0.3); text-shadow:0 0 30px rgba(16,185,129,0.4); letter-spacing:4px; margin-top:10px; }
+  
+  .loader-panel { width:80%; max-width:400px; background:rgba(255,255,255,0.05); border:1px solid #1e3a5f; border-radius:12px; padding:6px; margin-top:14px; display:none; flex-direction:column; gap:8px; align-items:center; }
+  .progress-rail { width:100%; height:8px; background:#0f172a; border-radius:99px; overflow:hidden; }
+  .progress-bar-fill { width:0%; height:100%; background:linear-gradient(90deg, #38bdf8, #10b981); transition: width 0.1s; }
+  .percent-text { font-size:16px; font-weight:800; color:#10b981; }
 </style>
-
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
 </head>
 <body>
 
 <div id="setupScreen">
-  <div class="headline">MirrorCast Pure Canvas Active</div>
-  <div style="color:#64748b; font-weight:600;">Select this Code on your controller dashboard app:</div>
+  <div class="headline" id="uiMainHeading">MirrorCast Monitor</div>
+  <div id="uiSubHeading" style="color:#64748b; font-weight:600;">Select this Code on your controller app dashboard:</div>
   <div class="code-badge-panel" id="tvPinDisplay">----</div>
+  <div class="loader-panel" id="uiLoaderContainer">
+    <div class="progress-rail"><div class="progress-bar-fill" id="uiBarFill"></div></div>
+    <div class="percent-text" id="uiPercentText">0%</div>
+  </div>
 </div>
 
-<div class="status-toast" id="toastNotification">Initializing Canvas Layout Core Engines...</div>
-
-<canvas id="tvCanvas"></canvas>
+<div id="rotationWrapper">
+  <canvas id="tvCanvas"></canvas>
+  
+  <object id="tvPdfObject" type="application/pdf" data=""></object>
+  
+  <video id="tvVideoPlayer" playsinline loop></video>
+</div>
 
 <script>
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
-
 const firebaseConfig = {
   apiKey: "AIzaSyAu5TDMWepJX7naoG5H3WpGJ1yxAu01whg",
   authDomain: "timetables-470dd.firebaseapp.com",
@@ -49,190 +62,175 @@ const firebaseConfig = {
   measurementId: "G-N7ND4LPL9W"
 };
 
-// ⚠️ MUST PASTE THE EXACT SAME APPS SCRIPT WEBAPP URL HERE TO BYPASS CORS ON DRIVE
-const APPS_SCRIPT_PROXY_URL = "https://script.google.com/macros/s/AKfycbymm-tJsqG69GLs_QIGF96B-FIcMDJHXBrogbA8tRxF0wr8qEsV_Z8T1gPqx9g9QiXf2g/exec";
+// ⚠️ PASTE YOUR COPIED APPS SCRIPT WEB APP URL HERE EXACTLY
+const APPS_SCRIPT_PROXY_URL = "https://script.google.com/macros/s/AKfycbwyvWGro9E7q3s2j9dg71B-6cUURJ1jq4uEqXsnBXbZrpHzELjQtjPPy4EAXX9Te7Lw/exec";
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
-const canvas = document.getElementById('tvCanvas');
-const ctx = canvas.getContext('2d', { alpha: false });
+const canvas = document.getElementById('tvCanvas'), ctx = canvas.getContext('2d', { alpha: false });
+const pdfObject = document.getElementById('tvPdfObject'), videoPlayer = document.getElementById('tvVideoPlayer');
+const rotationWrapper = document.getElementById('rotationWrapper'), setupScreen = document.getElementById('setupScreen');
 
-let screenUniqueKey = localStorage.getItem('mirror_cast_tv_pin');
-if (!screenUniqueKey || screenUniqueKey.length !== 4 || isNaN(screenUniqueKey)) {
-  screenUniqueKey = Math.floor(1000 + Math.random() * 9000).toString();
-  localStorage.setItem('mirror_cast_tv_pin', screenUniqueKey);
-}
-
+let screenUniqueKey = localStorage.getItem('mirror_cast_tv_pin') || Math.floor(1000 + Math.random() * 9000).toString();
+localStorage.setItem('mirror_cast_tv_pin', screenUniqueKey);
 document.getElementById('tvPinDisplay').textContent = screenUniqueKey;
-document.getElementById('toastNotification').textContent = `Screen Key ID: [${screenUniqueKey}] Connected`;
 
-// Layout Parameters
-let activeSourceTrack = null; 
-let activeMediaType = "";     
-let canvasRenderCache = null;  
-let zoomFactor = 1.0;
-let scrollOffsetY = 0;
-let autoScrollActive = false;
-let scrollSpeed = 1.0;
-let drawLoopId = null;
+let activeSourceTrack = null, activeMediaType = "", zoomFactor = 1.0, scrollOffsetY = 0, autoScrollActive = false, scrollSpeed = 1.5, drawLoopId = null, scrollIntervalId = null;
 
-// Register screen into target cluster index row
-db.collection("tv").doc("smrtv").collection("registeredtv").doc(screenUniqueKey).set({
-  status: "online",
-  last_active: firebase.firestore.FieldValue.serverTimestamp()
-});
+db.collection("tv").doc("smrtv").collection("registeredtv").doc(screenUniqueKey).set({ status: "online", last_active: firebase.firestore.FieldValue.serverTimestamp() });
 
-// Realtime snapshot control handler
+// ── LAYER 1: LISTEN FOR ASSET CASTS ──
 db.collection("tv").doc("smrtv").collection("active_states").doc(screenUniqueKey).onSnapshot(doc => {
-  if (!doc.exists || !doc.data().drive_id) return;
-  const data = doc.data();
-  
-  zoomFactor = data.zoom || 1.0;
-  autoScrollActive = data.auto_scroll || false;
-  scrollSpeed = data.scroll_speed || 1.0;
-
-  if (data.type === 'reset_media') {
-    zoomFactor = 1.0; scrollOffsetY = 0; autoScrollActive = false;
-    return;
+  if (doc.exists && doc.data().drive_id) {
+    fetchMediaPackageBytes(doc.data().drive_id, doc.data().mime_type);
   }
-
-  document.getElementById('setupScreen').classList.add('hidden');
-  fetchSafeDrivePayload(data.drive_id, data.mime_type);
 });
 
-// Requests the Apps Script proxy to fetch and convert the file into a base64 string
-function fetchSafeDrivePayload(fileId, mimeType) {
-  document.getElementById('toastNotification').textContent = "Bypassing Cross-Origin Polices via Script Proxy...";
-  
-  fetch(APPS_SCRIPT_PROXY_URL, {
-    method: "POST",
-    body: JSON.stringify({ action: "fetch_drive_blob", fileId: fileId })
-  })
-  .then(res => res.json())
-  .then(response => {
-    if (!response.success) throw new Error(response.error);
+// ── LAYER 2: LISTEN FOR REMOTES (ZOOM / SCROLL / ROTATE) ──
+db.collection("tv").doc("smrtv").collection("controls").doc(screenUniqueKey).onSnapshot(doc => {
+  if (doc.exists) {
+    const data = doc.data();
+    zoomFactor = data.zoom || 1.0;
+    autoScrollActive = data.auto_scroll || false;
+    scrollSpeed = data.scroll_speed || 1.5;
     
-    // Construct local data URI string out of clean base64 data stream byte arrays
-    const base64Uri = `data:${mimeType};base64,${response.base64Data}`;
-    processBytesToCanvasContext(mimeType, base64Uri);
-  })
-  .catch(err => {
-    document.getElementById('toastNotification').textContent = "Proxy stream connection block.";
+    rotationWrapper.style.transform = `rotate(${data.rotation || 0}deg)`;
+    
+    // Manage dynamic scrolling loops on the fly based on incoming states
+    manageSystemScrollingPipelines();
+
+    if (activeMediaType === "video") {
+      data.video_play ? videoPlayer.play().catch(()=>{}) : videoPlayer.pause();
+    }
+  }
+});
+
+async function fetchMediaPackageBytes(fileId, mimeType) {
+  setupScreen.classList.remove('hidden');
+  document.getElementById('uiMainHeading').textContent = "Synchronizing Media...";
+  document.getElementById('uiSubHeading').textContent = "Downloading complete workspace data packaging elements from network proxy channel...";
+  
+  const loaderContainer = document.getElementById('uiLoaderContainer'), barFill = document.getElementById('uiBarFill'), percentText = document.getElementById('uiPercentText');
+  loaderContainer.style.display = 'flex'; barFill.style.width = '0%'; percentText.textContent = '0%';
+
+  try {
+    const response = await fetch(`${APPS_SCRIPT_PROXY_URL}?action=fetch_drive_blob&fileId=${encodeURIComponent(fileId)}`);
+    const reader = response.body.getReader();
+    const contentLength = +response.headers.get('Content-Length') || 25 * 1024 * 1024;
+    
+    let receivedLength = 0, chunks = [];
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value); receivedLength += value.length;
+      let pct = Math.min(100, Math.round((receivedLength / contentLength) * 100));
+      barFill.style.width = `${pct}%`; percentText.textContent = `${pct}%`;
+    }
+
+    let completeBinary = new Uint8Array(receivedLength), offset = 0;
+    for (let chunk of chunks) { completeBinary.set(chunk, offset); offset += chunk.length; }
+
+    const parsedData = JSON.parse(new TextDecoder("utf-8").decode(completeBinary));
+    if (!parsedData.success) throw new Error(parsedData.error);
+
+    const binaryChars = atob(parsedData.base64Data), byteArr = new Uint8Array(binaryChars.length);
+    for (let i = 0; i < binaryChars.length; i++) byteArr[i] = binaryChars.charCodeAt(i);
+
+    loaderContainer.style.display = 'none';
+    setupScreen.classList.add('hidden');
+    
+    executeViewportAssignments(mimeType, byteArr);
+  } catch (err) {
+    loaderContainer.style.display = 'none';
+    document.getElementById('uiMainHeading').textContent = "MirrorCast Unit Display Alert";
+    document.getElementById('uiSubHeading').textContent = "Error parsing network byte pipelines. Verify script proxy bindings.";
     console.error(err);
-  });
+  }
 }
 
-function processBytesToCanvasContext(mimeType, dataUri) {
-  // Reset structural tracking parameters cleanly
+function executeViewportAssignments(mimeType, byteArray) {
   if (drawLoopId) cancelAnimationFrame(drawLoopId);
-  if (activeMediaType === "video" && activeSourceTrack) {
-    activeSourceTrack.pause(); activeSourceTrack.removeAttribute('src'); activeSourceTrack.load();
-  }
+  if (scrollIntervalId) clearInterval(scrollIntervalId);
   
-  canvasRenderCache = null;
+  videoPlayer.pause(); videoPlayer.removeAttribute('src'); videoPlayer.load();
+  canvas.style.display = 'none'; videoPlayer.style.display = 'none'; pdfObject.style.display = 'none';
+  
+  pdfObject.data = ""; // Clear old container source traces
+  scrollOffsetY = 0; 
+  activeSourceTrack = null;
 
+  const blobUrl = URL.createObjectURL(new Blob([byteArray], { type: mimeType }));
+
+  // ── CASE 1: IMAGES ──────────────────
   if (mimeType.startsWith('image/')) {
-    activeMediaType = "image";
-    document.getElementById('toastNotification').textContent = "Painting image layers...";
-    activeSourceTrack = new Image();
-    activeSourceTrack.src = dataUri;
-    activeSourceTrack.onload = () => { triggerCanvasRenderPipeline(); };
+    canvas.style.display = 'block'; activeMediaType = "image";
+    activeSourceTrack = new Image(); 
+    activeSourceTrack.src = blobUrl;
+    activeSourceTrack.onload = () => triggerCanvasRenderPipeline();
   } 
+  // ── CASE 2: NATIVE MULTI-PAGE PDF READER VIEW LAYER ──────────────────
   else if (mimeType === 'application/pdf') {
-    activeMediaType = "pdf";
-    document.getElementById('toastNotification').textContent = "Unpacking PDF vector sheets...";
+    pdfObject.style.display = 'block'; activeMediaType = "pdf";
     
-    pdfjsLib.getDocument(dataUri).promise.then(pdf => {
-      return pdf.getPage(1);
-    }).then(page => {
-      const viewport = page.getViewport({ scale: 2.5 });
-      const internalBufferCanvas = document.createElement('canvas');
-      internalBufferCanvas.width = viewport.width;
-      internalBufferCanvas.height = viewport.height;
-      
-      page.render({ canvasContext: internalBufferCanvas.getContext('2d'), viewport: viewport }).promise.then(() => {
-        canvasRenderCache = internalBufferCanvas;
-        triggerCanvasRenderPipeline();
-      });
-    });
-  } 
-  else if (mimeType.startsWith('video/')) {
-    activeMediaType = "video";
-    document.getElementById('toastNotification').textContent = "Decoding compressed native video track...";
+    // #toolbar=0 & navpanes=0 strips layout borders out entirely
+    // #view=FitH forces the PDF layout engine to fit perfectly to the TV screen width
+    pdfObject.data = blobUrl + `#toolbar=0&navpanes=0&scrollbar=0&view=FitH&zoom=${zoomFactor * 100}`;
     
-    activeSourceTrack = document.createElement('video');
-    activeSourceTrack.src = dataUri;
-    activeSourceTrack.playsInline = true;
-    activeSourceTrack.loop = true;
-    activeSourceTrack.muted = false; // Directly plays audio clearly
-    
-    activeSourceTrack.play().then(() => {
-      triggerCanvasRenderPipeline();
-    }).catch(() => {
-      // Force programmatic fallback bypass if TV requires gesture confirmation
-      activeSourceTrack.muted = true;
-      activeSourceTrack.play().then(() => { triggerCanvasRenderPipeline(); });
-    });
+    // Delay slightly to give the native browser object context time to settle, then mount scrollers
+    setTimeout(() => { manageSystemScrollingPipelines(); }, 800);
   }
+  // ── CASE 3: VIDEOS ──────────────────
+  else if (mimeType.startsWith('video/')) {
+    videoPlayer.style.display = 'block'; activeMediaType = "video";
+    videoPlayer.src = blobUrl;
+    videoPlayer.play().catch(() => { videoPlayer.muted = true; videoPlayer.play(); });
+  }
+}
+
+// ── NATIVE AUTO SCROLL FRAME PIPELINE ──
+function manageSystemScrollingPipelines() {
+  if (scrollIntervalId) clearInterval(scrollIntervalId);
+  if (activeMediaType !== "pdf" || !autoScrollActive) return;
+
+  // Set standard intervals running at 60 FPS frame refresh marks (approx 16ms)
+  scrollIntervalId = setInterval(() => {
+    // Scroll the entire window element frame downward progressively
+    scrollOffsetY += (scrollSpeed * 0.5);
+    window.scrollTo(0, scrollOffsetY);
+
+    // Loop logic check: If window cannot scroll downward anymore, reset frame to 0
+    if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight) {
+      scrollOffsetY = 0;
+      window.scrollTo(0, 0);
+    }
+  }, 16);
 }
 
 function triggerCanvasRenderPipeline() {
   if (drawLoopId) cancelAnimationFrame(drawLoopId);
 
   function frameTick() {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-
-    if (canvas.width !== w || canvas.height !== h) {
-      canvas.width = w; canvas.height = h;
-    }
-
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, w, h);
-
-    let naturalW = 0, naturalH = 0;
-    let sourceElement = null;
+    const w = window.innerWidth, h = window.innerHeight;
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+    ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, w, h);
 
     if (activeMediaType === "image" && activeSourceTrack) {
-      naturalW = activeSourceTrack.naturalWidth;
-      naturalH = activeSourceTrack.naturalHeight;
-      sourceElement = activeSourceTrack;
-    } else if (activeMediaType === "pdf" && canvasRenderCache) {
-      naturalW = canvasRenderCache.width;
-      naturalH = canvasRenderCache.height;
-      sourceElement = canvasRenderCache;
-    } else if (activeMediaType === "video" && activeSourceTrack) {
-      naturalW = activeSourceTrack.videoWidth;
-      naturalH = activeSourceTrack.videoHeight;
-      sourceElement = activeSourceTrack;
-    }
-
-    if (naturalW && naturalH && sourceElement) {
-      const scaleRatio = Math.min(w / naturalW, h / naturalH) * zoomFactor;
-      const targetWidth = naturalW * scaleRatio;
-      const targetHeight = naturalH * scaleRatio;
+      const sRatio = Math.min(w / activeSourceTrack.naturalWidth, h / activeSourceTrack.naturalHeight) * zoomFactor;
+      const tw = activeSourceTrack.naturalWidth * sRatio, th = activeSourceTrack.naturalHeight * sRatio;
 
       if (autoScrollActive) {
         scrollOffsetY += scrollSpeed;
-        const totalScrollableHeight = Math.max(0, targetHeight - h);
-        if (scrollOffsetY > totalScrollableHeight) scrollOffsetY = 0;
+        if (scrollOffsetY > Math.max(0, th - h)) scrollOffsetY = 0;
       }
-
-      const drawX = (w - targetWidth) / 2;
-      const drawY = ((h - targetHeight) / 2) - scrollOffsetY;
-
-      ctx.drawImage(sourceElement, drawX, drawY, targetWidth, targetHeight);
+      ctx.drawImage(activeSourceTrack, (w - tw)/2, ((h - th)/2) - scrollOffsetY, tw, th);
     }
-
     drawLoopId = requestAnimationFrame(frameTick);
   }
   drawLoopId = requestAnimationFrame(frameTick);
 }
 
-window.onbeforeunload = function() {
-  db.collection("tv").doc("smrtv").collection("registeredtv").doc(screenUniqueKey).set({ status: "offline" });
-};
+window.onbeforeunload = function() { db.collection("tv").doc("smrtv").collection("registeredtv").doc(screenUniqueKey).set({ status: "offline" }); };
 </script>
 </body>
 </html>
