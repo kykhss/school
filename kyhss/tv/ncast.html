@@ -3,51 +3,53 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>MirrorCast — Controller</title>
+<title>MirrorCast — Ultimate Controller</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
-    --bg: #020617; --surface: #0f172a; --card: #1e293b; --border: #1e3a5f;
+    --bg: #090d16; --surface: #111827; --card: #1f2937; --border: #374151;
     --accent: #38bdf8; --green: #10b981; --amber: #f59e0b; --red: #ef4444;
-    --muted: #64748b; --text: #f1f5f9; --subtext: #94a3b8; --radius: 16px;
+    --muted: #6b7280; --text: #f3f4f6; --subtext: #9ca3af; --radius: 16px;
   }
-  body { width:100%; min-height:100%; background:var(--bg); font-family:-apple-system,system-ui,sans-serif; color:var(--text); }
-  .page { padding:16px 14px 40px; display:flex; flex-direction:column; gap:14px; max-width:480px; margin:0 auto; }
-  .topbar { display:flex; align-items:center; justify-content:space-between; padding:4px 0; }
-  .logo { font-weight:800; color:var(--accent); display:flex; align-items:center; gap:6px; }
-  .card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:16px; box-shadow:0 4px 6px rgba(0,0,0,0.1); }
+  body { width:100%; min-height:100%; background:var(--bg); font-family:-apple-system,system-ui,sans-serif; color:var(--text); padding-bottom: 40px; }
+  .page { padding:16px 14px; display:flex; flex-direction:column; gap:16px; max-width:500px; margin:0 auto; }
+  .topbar { display:flex; align-items:center; justify-content:space-between; padding:4px 0; border-bottom: 1px solid var(--border); padding-bottom: 12px;}
+  .logo { font-size: 18px; font-weight:800; color:var(--accent); display:flex; align-items:center; gap:6px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:16px; box-shadow:0 10px 15px -3px rgba(0,0,0,0.3); }
   .card-label { font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--accent); margin-bottom:14px; border-left:3px solid var(--accent); padding-left:8px; line-height:1; }
   
   .form-group { display:flex; flex-direction:column; gap:6px; margin-bottom:12px; }
   .form-group label { font-size:12px; font-weight:600; color:var(--subtext); }
-  select, input[type="text"] { width:100%; padding:10px 12px; background:var(--surface); border:1px solid var(--border); border-radius:10px; color:var(--text); font-size:14px; outline:none; }
+  select, input[type="text"] { width:100%; padding:12px; background:var(--surface); border:1px solid var(--border); border-radius:10px; color:var(--text); font-size:14px; outline:none; transition: border 0.2s; }
+  select:focus, input[type="text"]:focus { border-color:var(--accent); }
 
   .tv-list-container { display:flex; flex-direction:column; gap:8px; }
-  .tv-item { display:flex; align-items:center; justify-content:space-between; padding:12px 14px; background:var(--surface); border:1px solid var(--border); border-radius:12px; cursor:pointer; }
-  .tv-item.selected { border-color:var(--green); background:rgba(16,185,129,0.04); }
-  .tv-name { font-size:14px; font-weight:700; display:flex; align-items:center; gap:8px; }
-  .tv-badge { font-size:11px; font-weight:700; padding:3px 10px; border-radius:100px; background:rgba(56,189,248,0.1); color:var(--accent); }
-  .tv-item.selected .tv-badge { background:var(--green); color:#020617; }
+  .tv-item { display:flex; align-items:center; justify-content:space-between; padding:14px; background:var(--surface); border:1px solid var(--border); border-radius:12px; cursor:pointer; }
+  .tv-item.selected { border-color:var(--green); background:rgba(16,185,129,0.06); }
+  .tv-name { font-size:14px; font-weight:700; }
+  .tv-badge { font-size:11px; font-weight:700; padding:4px 12px; border-radius:100px; background:rgba(56,189,248,0.1); color:var(--accent); }
+  .tv-item.selected .tv-badge { background:var(--green); color:#090d16; }
 
-  .drop-zone { width:100%; padding:20px; border:2px dashed var(--border); border-radius:12px; background:var(--surface); color:var(--subtext); font-size:13px; text-align:center; position:relative; }
+  .drop-zone { width:100%; padding:24px; border:2px dashed var(--border); border-radius:12px; background:var(--surface); color:var(--subtext); font-size:13px; text-align:center; position:relative; margin-top: 6px;}
   .drop-zone input { position:absolute; inset:0; opacity:0; cursor:pointer; }
-  .btn { width:100%; padding:12px; font-size:14px; font-weight:700; background:var(--green); color:#020617; border:none; border-radius:12px; cursor:pointer; }
-  .btn:disabled { background:var(--muted); color:var(--text); cursor:not-allowed; }
+  .btn { width:100%; padding:14px; font-size:14px; font-weight:700; background:var(--green); color:#090d16; border:none; border-radius:12px; cursor:pointer; box-shadow: 0 4px 6px -1px rgba(16,185,129,0.2); }
+  .btn:disabled { background:var(--muted); color:var(--text); cursor:not-allowed; box-shadow:none; }
 
-  .media-list { display:flex; flex-direction:column; gap:8px; max-height:200px; overflow-y:auto; margin-top:10px; }
-  .media-item { padding:12px; background:var(--surface); border:1px solid var(--border); border-radius:10px; cursor:pointer; }
+  .media-list { display:flex; flex-direction:column; gap:8px; max-height:220px; overflow-y:auto; margin-top:10px; padding-right:4px; }
+  .media-item { padding:14px; background:var(--surface); border:1px solid var(--border); border-radius:10px; cursor:pointer; }
   .media-item:hover { border-color:var(--accent); background:rgba(56,189,248,0.02); }
-  .media-title { font-size:14px; font-weight:700; }
-  .media-path { font-size:11px; color:var(--muted); text-transform:uppercase; }
+  .media-title { font-size:14px; font-weight:700; margin-bottom: 2px; }
+  .media-path { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing: 0.5px; }
 
-  .ctrl-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-  .ctrl-btn { padding:12px 6px; font-size:13px; font-weight:700; border-radius:10px; border:1px solid var(--border); background:var(--surface); color:var(--text); cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .ctrl-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px; }
+  .ctrl-btn { padding:14px 8px; font-size:13px; font-weight:700; border-radius:10px; border:1px solid var(--border); background:var(--surface); color:var(--text); cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; transition: all 0.2s; }
+  .ctrl-btn:active { transform: scale(0.97); }
   .ctrl-btn.active-state { background:rgba(56,189,248,.15); border-color:var(--accent); color:var(--accent); }
-  .slider-row { display:flex; align-items:center; gap:12px; margin-top:10px; }
-  .slider-label { font-size:12px; font-weight:700; color:var(--subtext); min-width:70px; }
-  input[type=range] { flex:1; -webkit-appearance:none; height:6px; background:var(--surface); border:1px solid var(--border); border-radius:4px; outline:none; }
-  input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:18px; height:18px; border-radius:50%; background:var(--accent); cursor:pointer; }
-  .slider-val { font-size:11px; font-weight:700; color:var(--accent); min-width:30px; text-align:right; }
+  .slider-row { display:flex; align-items:center; gap:12px; margin-top:12px; background: var(--surface); padding: 12px; border-radius: 10px; border: 1px solid var(--border); }
+  .slider-label { font-size:12px; font-weight:700; color:var(--subtext); min-width:80px; }
+  input[type=range] { flex:1; -webkit-appearance:none; height:6px; background:var(--card); border-radius:4px; outline:none; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:20px; height:20px; border-radius:50%; background:var(--accent); cursor:pointer; }
+  .slider-val { font-size:12px; font-weight:700; color:var(--accent); min-width:30px; text-align:right; }
   .hidden { display:none !important; }
 </style>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -57,70 +59,86 @@
 
 <div class="page">
   <div class="topbar">
-    <div class="logo">MirrorCast Cloud Studio</div>
-    <div id="statusIndicator" style="font-size:12px; font-weight:700; color:var(--amber);">Awaiting Screen Selection</div>
+    <div class="logo">🖥️ MirrorCast Hub</div>
+    <div id="statusIndicator" style="font-size:12px; font-weight:700; color:var(--amber);">Select Screen</div>
   </div>
 
   <div class="card">
-    <div class="card-label">Select Active Screen Node</div>
+    <div class="card-label">Active Classroom Screens</div>
     <div class="tv-list-container" id="tvSelectorWrapper">
-      <div class="loader-spinner">📡 Querying active screens subcollection...</div>
+      <div style="font-size: 13px; color: var(--muted);">Syncing channels...</div>
+    </div>
+  </div>
+
+  <div class="card hidden" id="controlSurfaceCard">
+    <div class="card-label">Live Deck Controls</div>
+    <div class="ctrl-grid">
+      <button class="ctrl-btn" onclick="sendControlAction('zoom', 'in')">🔍 Zoom In</button>
+      <button class="ctrl-btn" onclick="sendControlAction('zoom', 'out')">🔎 Zoom Out</button>
+    </div>
+    <div class="ctrl-grid">
+      <button id="btnAutoScroll" class="ctrl-btn" onclick="toggleControlState('auto_scroll')">🔄 Scroll: OFF</button>
+      <button id="btnPlayPause" class="ctrl-btn" onclick="toggleControlState('video_play')">⏸ Video: Play</button>
+    </div>
+    
+    <div class="form-group" style="margin-top: 10px;">
+      <label>Display Orientation Rotation</label>
+      <select id="ctrlRotation" onchange="sendControlAction('rotation', this.value)">
+        <option value="0">0° Normal Layout</option>
+        <option value="90">90° Vertical Clockwise</option>
+        <option value="180">180° Inverted Upside Down</option>
+        <option value="270">270° Vertical Counter-Clockwise</option>
+      </select>
+    </div>
+
+    <div class="slider-row">
+      <div class="slider-label">Scroll Speed</div>
+      <input type="range" id="scrollSpeedSlider" min="0.5" max="8" step="0.5" value="1.5" oninput="updateSpeedValue(this.value)">
+      <div class="slider-val" id="scrollSpeedVal">1.5</div>
     </div>
   </div>
 
   <div class="card hidden" id="uploadManagementCard">
-    <div class="card-label">Drive Upload Gateway</div>
+    <div class="card-label">Asset Gateway Manager</div>
     <div class="form-group">
-      <label>Target Class</label>
+      <label>Target Class Node</label>
       <select id="uploadClass">
-        <option value="Class_1">Class 1</option>
-        <option value="Class_2">Class 2</option>
-        <option value="Class_5">Class 5</option>
-        <option value="Class_10">Class 10</option>
+        <option value="LKG">LKG</option><option value="UKG">UKG</option>
+        <option value="Class_1">Class 1</option><option value="Class_2">Class 2</option>
+        <option value="Class_3">Class 3</option><option value="Class_4">Class 4</option>
+        <option value="Class_5">Class 5</option><option value="Class_6">Class 6</option>
+        <option value="Class_7">Class 7</option><option value="Class_8">Class 8</option>
+        <option value="Class_9">Class 9</option><option value="Class_10">Class 10</option>
+        <option value="Class_11">Class 11</option><option value="Class_12">Class 12</option>
       </select>
     </div>
     <div class="form-group">
-      <label>Subject Layer</label>
+      <label>Subject Topic Filter</label>
       <select id="uploadSubject">
-        <option value="Physics">Physics</option>
-        <option value="Chemistry">Chemistry</option>
-        <option value="Mathematics">Mathematics</option>
-        <option value="Biology">Biology</option>
+        <option value="English">English</option><option value="Hindi">Hindi</option>
+        <option value="Malayalam">Malayalam</option><option value="Arabic">Arabic</option>
+        <option value="Mathematics">Mathematics</option><option value="EVS">EVS</option>
+        <option value="General_Knowledge">General Knowledge</option><option value="Social_Science">Social Science</option>
+        <option value="Basic_Science">Basic Science</option><option value="Physical_Education">Physical Education</option>
+        <option value="AI">Artificial Intelligence (AI)</option><option value="IT">Information Technology (IT)</option>
       </select>
     </div>
     <div class="form-group">
-      <label>Display File Title</label>
-      <input type="text" id="customFileName" placeholder="e.g., Mitosis Slide deck">
+      <label>Custom Presentation Title</label>
+      <input type="text" id="customFileName" placeholder="e.g., Chapter 2 Vector Diagrams">
     </div>
     <div class="drop-zone">
       <input type="file" id="fileSelector">
-      <div id="dropLabel">Tap to Select Local File</div>
+      <div id="dropLabel">Tap to Select Presentation File</div>
     </div>
-    <div id="uploadStatus" style="font-size:12px; color:var(--amber); margin-top:8px; text-align:center; font-weight:600;"></div>
-    <button class="btn" id="uploadBtn" style="margin-top:10px;" onclick="uploadToGoogleDrive()">Upload to Drive & Index</button>
+    <div id="uploadStatus" style="font-size:12px; color:var(--amber); margin-top:10px; text-align:center; font-weight:600;"></div>
+    <button class="btn" id="uploadBtn" style="margin-top:10px;" onclick="uploadToGoogleDrive()">Upload File & Sync Index</button>
   </div>
 
   <div class="card hidden" id="mediaLibraryCard">
-    <div class="card-label">Target Screen Asset Index</div>
-    <input type="text" id="searchFilter" class="search-input" placeholder="🔍 Search cataloged files..." oninput="renderFilteredLibrary()">
+    <div class="card-label">Target Asset Index</div>
+    <input type="text" id="searchFilter" placeholder="🔍 Search cataloged presentations..." oninput="renderFilteredLibrary()">
     <div class="media-list" id="libraryContainer"></div>
-  </div>
-
-  <div class="card hidden" id="controlSurfaceCard">
-    <div class="card-label">Active Cast Commands</div>
-    <div class="ctrl-grid" style="margin-bottom:12px;">
-      <button class="ctrl-btn" onclick="adjustZoom(0.2)"><span class="icon">🔍</span>Zoom In</button>
-      <button class="ctrl-btn" onclick="adjustZoom(-0.2)"><span class="icon">🔎</span>Zoom Out</button>
-    </div>
-    <div class="ctrl-grid">
-      <button id="btnAutoScroll" class="ctrl-btn" onclick="toggleAutoScroll()"><span class="icon">🔄</span>Auto Scroll: OFF</button>
-      <button class="ctrl-btn" onclick="sendTvCommand({type:'reset_media'})"><span class="icon">↺</span>Reset View</button>
-    </div>
-    <div class="slider-row">
-      <div class="slider-label">Scroll Speed</div>
-      <input type="range" id="scrollSpeedSlider" min="0.1" max="5" step="0.1" value="1.0" oninput="updateScrollSpeed(this.value)">
-      <div class="slider-val" id="scrollSpeedVal">1.0</div>
-    </div>
   </div>
 </div>
 
@@ -135,170 +153,118 @@ const firebaseConfig = {
   measurementId: "G-N7ND4LPL9W"
 };
 
-// Paste your exact published Google Apps Script Web App URL here
-const APPS_SCRIPT_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbymm-tJsqG69GLs_QIGF96B-FIcMDJHXBrogbA8tRxF0wr8qEsV_Z8T1gPqx9g9QiXf2g/exec";
+const APPS_SCRIPT_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwyvWGro9E7q3s2j9dg71B-6cUURJ1jq4uEqXsnBXbZrpHzELjQtjPPy4EAXX9Te7Lw/exec";
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
-let activeSubTvKey = null;
-let fullMediaLibraryCache = [];
-let zoomFactor = 1.0;
-let isScrollingActive = false;
-let scrollSpeed = 1.0;
+let activeSubTvKey = null, fullMediaLibraryCache = [], ctrlState = { zoom: 1.0, auto_scroll: false, video_play: true, scroll_speed: 1.5, rotation: 0 };
 
-document.getElementById('fileSelector').addEventListener('change', function(e){
+document.getElementById('fileSelector').addEventListener('change', e => {
   if(e.target.files.length) document.getElementById('dropLabel').textContent = e.target.files[0].name;
 });
 
 db.collection("tv").doc("smrtv").collection("registeredtv").onSnapshot(snapshot => {
-  const wrapper = document.getElementById('tvSelectorWrapper');
-  wrapper.innerHTML = '';
-  let connectedTvFound = false;
-
+  const wrapper = document.getElementById('tvSelectorWrapper'); wrapper.innerHTML = '';
   snapshot.forEach(doc => {
-    const data = doc.data();
-    if (data.status === "offline") return;
-
-    connectedTvFound = true;
+    if (doc.data().status === "offline") return;
     const item = document.createElement('div');
     item.className = 'tv-item' + (activeSubTvKey === doc.id ? ' selected' : '');
-    item.innerHTML = `
-      <div class="tv-name">📺 Smart TV [Code: ${doc.id}]</div>
-      <div class="tv-badge">${activeSubTvKey === doc.id ? 'Controlled' : 'Select'}</div>
-    `;
-    item.onclick = () => selectActiveScreenNode(doc.id, `Smart TV (${doc.id})`);
+    item.innerHTML = `<div class="tv-name">📺 Smart TV Panel [${doc.id}]</div><div class="tv-badge">Select</div>`;
+    item.onclick = () => connectToTargetTvNode(doc.id);
     wrapper.appendChild(item);
   });
-
-  if(!connectedTvFound) {
-    wrapper.innerHTML = `<div class="loader-spinner" style="color:var(--muted)">No screens online. Open a TV display unit window.</div>`;
-  }
 });
 
-function selectActiveScreenNode(subKey, tvName) {
-  activeSubTvKey = subKey;
-  document.querySelectorAll('.tv-item').forEach(el => el.classList.remove('selected'));
-  
-  document.getElementById('statusIndicator').textContent = "Connected: " + tvName;
+function connectToTargetTvNode(tvId) {
+  activeSubTvKey = tvId;
+  document.getElementById('statusIndicator').textContent = `Connected to: [${tvId}]`;
   document.getElementById('statusIndicator').style.color = "var(--green)";
+  ['uploadManagementCard','mediaLibraryCard','controlSurfaceCard'].forEach(id => document.getElementById(id).classList.remove('hidden'));
   
-  ['uploadManagementCard','mediaLibraryCard','controlSurfaceCard'].forEach(id => {
-    document.getElementById(id).classList.remove('hidden');
+  // Listen directly to its dynamic sub-collection controls path template
+  db.collection("tv").doc("smrtv").collection("controls").doc(activeSubTvKey).onSnapshot(doc => {
+    if(doc.exists) {
+      ctrlState = doc.data();
+      document.getElementById('btnAutoScroll').classList.toggle('active-state', ctrlState.auto_scroll);
+      document.getElementById('btnAutoScroll').textContent = ctrlState.auto_scroll ? "⏸ Scroll: ON" : "🔄 Scroll: OFF";
+      document.getElementById('btnPlayPause').classList.toggle('active-state', !ctrlState.video_play);
+      document.getElementById('btnPlayPause').textContent = ctrlState.video_play ? "⏸ Video: Playing" : "▶️ Video: Paused";
+      document.getElementById('scrollSpeedSlider').value = ctrlState.scroll_speed;
+      document.getElementById('scrollSpeedVal').textContent = ctrlState.scroll_speed;
+      document.getElementById('ctrlRotation').value = ctrlState.rotation || 0;
+    }
   });
 
-  db.collection("tv").doc("smrtv").collection("file_catalog")
-    .orderBy("created_at", "desc")
-    .onSnapshot(snapshot => {
-      fullMediaLibraryCache = [];
-      snapshot.forEach(doc => {
-        fullMediaLibraryCache.push({ id: doc.id, ...doc.data() });
-      });
-      renderFilteredLibrary();
-    });
+  db.collection("tv").doc("smrtv").collection("file_catalog").orderBy("created_at", "desc").onSnapshot(s => {
+    fullMediaLibraryCache = [];
+    s.forEach(d => fullMediaLibraryCache.push({ id: d.id, ...d.data() }));
+    renderFilteredLibrary();
+  });
+}
+
+function sendControlAction(type, value) {
+  if(!activeSubTvKey) return;
+  if(type === 'zoom') ctrlState.zoom = value === 'in' ? Math.min(4, ctrlState.zoom + 0.2) : Math.max(0.5, ctrlState.zoom - 0.2);
+  if(type === 'rotation') ctrlState.rotation = parseInt(value, 10);
+  db.collection("tv").doc("smrtv").collection("controls").doc(activeSubTvKey).set(ctrlState, { merge: true });
+}
+
+function toggleControlState(field) {
+  ctrlState[field] = !ctrlState[field];
+  db.collection("tv").doc("smrtv").collection("controls").doc(activeSubTvKey).set(ctrlState, { merge: true });
+}
+
+function updateSpeedValue(val) {
+  ctrlState.scroll_speed = parseFloat(val);
+  document.getElementById('scrollSpeedVal').textContent = val;
+  db.collection("tv").doc("smrtv").collection("controls").doc(activeSubTvKey).set(ctrlState, { merge: true });
 }
 
 function uploadToGoogleDrive() {
   const fileInput = document.getElementById('fileSelector');
   const customName = document.getElementById('customFileName').value.trim();
-  const targetClass = document.getElementById('uploadClass').value;
-  const targetSubject = document.getElementById('uploadSubject').value;
   const statusEl = document.getElementById('uploadStatus');
   const btn = document.getElementById('uploadBtn');
+  if(!fileInput.files.length || !customName) return alert("Please fill out all fields.");
 
-  if(!fileInput.files.length || !customName || !activeSubTvKey) {
-    alert("Incomplete form data.");
-    return;
-  }
-
-  const targetFile = fileInput.files[0];
+  btn.disabled = true; statusEl.textContent = "Processing and conversion processing...";
+  const file = fileInput.files[0];
   const reader = new FileReader();
-  btn.disabled = true;
-  statusEl.textContent = "Packing content stream...";
-
+  
   reader.onload = function(e) {
     const base64String = e.target.result.split(',')[1];
-    const packet = {
-      base64Data: base64String,
-      fileName: targetFile.name,
-      mimeType: targetFile.type,
-      customName: customName,
-      className: targetClass,
-      subjectName: targetSubject
-    };
-
-    fetch(APPS_SCRIPT_WEBAPP_URL, { method: "POST", body: JSON.stringify(packet) })
-    .then(() => {
+    fetch(APPS_SCRIPT_WEBAPP_URL, {
+      method: "POST",
+      body: JSON.stringify({
+        base64Data: base64String, fileName: file.name, mimeType: file.type, customName: customName,
+        className: document.getElementById('uploadClass').value, subjectName: document.getElementById('uploadSubject').value
+      })
+    }).then(() => {
       statusEl.textContent = "Uploaded and indexed successfully!";
-      fileInput.value = '';
-      document.getElementById('customFileName').value = '';
-      document.getElementById('dropLabel').textContent = "Tap to Select Local File";
-      btn.disabled = false;
-    })
-    .catch(() => {
-      statusEl.textContent = "Upload synced successfully.";
-      btn.disabled = false;
+      btn.disabled = false; fileInput.value = ''; document.getElementById('customFileName').value = '';
     });
   };
-  reader.readAsDataURL(targetFile);
+  reader.readAsDataURL(file);
 }
 
 function renderFilteredLibrary() {
   const filter = document.getElementById('searchFilter').value.toLowerCase();
-  const container = document.getElementById('libraryContainer');
-  container.innerHTML = '';
-  const matchedItems = fullMediaLibraryCache.filter(item => item.file_name.toLowerCase().includes(filter));
-
-  if(!matchedItems.length) {
-    container.innerHTML = `<div class="loader-spinner" style="color:var(--muted)">No mapped elements found.</div>`;
-    return;
-  }
-
-  matchedItems.forEach(item => {
-    const row = document.createElement('div');
-    row.className = 'media-item';
-    row.innerHTML = `
-      <div class="media-title">${item.file_name}</div>
-      <div class="media-path">${item.class_node} · ${item.subject_node}</div>
-    `;
-    row.onclick = () => castMediaAssetToTV(item);
+  const container = document.getElementById('libraryContainer'); container.innerHTML = '';
+  fullMediaLibraryCache.filter(i => i.file_name.toLowerCase().includes(filter)).forEach(item => {
+    const row = document.createElement('div'); row.className = 'media-item';
+    row.innerHTML = `<div class="media-title">${item.file_name}</div><div class="media-path">${item.class_node} · ${item.subject_node}</div>`;
+    row.onclick = () => {
+      // Trigger media switch and reset base configuration tracking collections parameters natively
+      db.collection("tv").doc("smrtv").collection("controls").doc(activeSubTvKey).set({
+        zoom: 1.0, auto_scroll: false, video_play: true, scroll_speed: 1.5, rotation: ctrlState.rotation || 0
+      });
+      db.collection("tv").doc("smrtv").collection("active_states").doc(activeSubTvKey).set({
+        drive_id: item.file_url, mime_type: item.mime_type, trigger: Math.random()
+      });
+    };
     container.appendChild(row);
   });
-}
-
-function castMediaAssetToTV(item) {
-  zoomFactor = 1.0;
-  isScrollingActive = false;
-  document.getElementById('btnAutoScroll').classList.remove('active-state');
-  document.getElementById('btnAutoScroll').innerHTML = '<span class="icon">🔄</span>Auto Scroll: OFF';
-
-  db.collection("tv").doc("smrtv").collection("active_states").doc(activeSubTvKey).set({
-    drive_id: item.file_url, 
-    mime_type: item.mime_type,
-    zoom: zoomFactor,
-    auto_scroll: isScrollingActive,
-    scroll_speed: scrollSpeed,
-    command_nonce: Math.random().toString()
-  });
-}
-
-function sendTvCommand(props) {
-  if(!activeSubTvKey) return;
-  db.collection("tv").doc("smrtv").collection("active_states").doc(activeSubTvKey).set(props, { merge: true });
-}
-
-function adjustZoom(delta) { zoomFactor = Math.max(0.5, Math.min(5, zoomFactor + delta)); sendTvCommand({ zoom: zoomFactor }); }
-function toggleAutoScroll() {
-  isScrollingActive = !isScrollingActive;
-  const btn = document.getElementById('btnAutoScroll');
-  btn.classList.toggle('active-state', isScrollingActive);
-  btn.innerHTML = isScrollingActive ? '<span class="icon">⏸</span>Auto Scroll: ON' : '<span class="icon">🔄</span>Auto Scroll: OFF';
-  sendTvCommand({ auto_scroll: isScrollingActive, scroll_speed: scrollSpeed });
-}
-function updateScrollSpeed(val) {
-  scrollSpeed = parseFloat(val);
-  document.getElementById('scrollSpeedVal').textContent = scrollSpeed.toFixed(1);
-  if (isScrollingActive) sendTvCommand({ auto_scroll: isScrollingActive, scroll_speed: scrollSpeed });
 }
 </script>
 </body>
