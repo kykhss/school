@@ -64,7 +64,7 @@ function loadParamsFromBase64Url() {
     return localStorage.getItem('userId') || 'defaultUser';
 }
 
-            setBase64ParamsInUrl('kyhss-ELECTION-26');
+            //setBase64ParamsInUrl('kyhss-ELECTION-26');
            // let appId = "timetableData"
             // Later in your app, decode from URL or localStorage
             const currentUserId= loadParamsFromBase64Url();
