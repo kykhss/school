@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fest Management System</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- FontAwesome 6 -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bs-primary-rgb: 13, 110, 253;
+        }
+        body {
+            background-color: #f8f9fa;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            min-height: 100vh;
+        }
+        .color-dot-display {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 6px;
+            vertical-align: middle;
+        }
+        .ui-card {
+            background: #ffffff;
+            border-radius: 0.5rem;
+            border: 1px solid #dee2e6;
+            padding: 1.25rem;
+            margin-bottom: 1.25rem;
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.05);
+        }
+        .ui-card-stat {
+            display: flex;
+            align-items: center;
+            padding: 1.25rem;
+            background: #ffffff;
+            border-radius: 0.5rem;
+            border: 1px solid #dee2e6;
+        }
+        .stat-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            color: #ffffff;
+            margin-right: 1rem;
+            flex-shrink: 0;
+        }
+        .stat-number {
+            font-size: 1.5rem;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+        .stat-label {
+            color: #6c757d;
+            font-size: 0.875rem;
+        }
+        .section-header {
+            font-size: 1.15rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: #212529;
+            display: flex;
+            align-items: center;
+        }
+        .toast-container {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 1090;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Main Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top shadow-sm" id="app-navbar">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="#">
+                <i class="fas fa-trophy text-warning me-2"></i>Fest Manager
+            </a>
+            
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navbarContent">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0" id="nav-role-links">
+                    <!-- Dynamic links inject here -->
+                </ul>
+                
+                <div class="d-flex align-items-center gap-2">
+                    <!-- Academic Year Selector -->
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-secondary text-white border-0">
+                            <i class="fas fa-calendar-alt"></i>
+                        </span>
+                        <select id="global-academic-year-select" class="form-select form-select-sm bg-dark text-white border-secondary">
+                            <option value="">Loading Years...</option>
+                        </select>
+                    </div>
+
+                    <!-- Role / Session Information -->
+                    <span id="user-badge" class="badge bg-secondary p-2">Guest</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Master Screen Container -->
+    <div id="main-app" class="container-fluid py-4">
+        <main id="main-content">
+            <div class="vh-100 d-flex align-items-center justify-content-center">
+                <div class="spinner-border text-primary" role="status"></div>
+                <p class="ms-3 mb-0 fs-5">Initializing Fest System...</p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Alert / Toast Container -->
+    <div class="toast-container" id="toast-placement"></div>
+
+    <!-- Reusable Dynamic Global Modal -->
+    <div class="modal fade" id="global-modal" tabindex="-1" aria-labelledby="globalModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold" id="globalModalLabel">System Prompt</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="global-modal-body"></div>
+                <div class="modal-footer" id="global-modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3rd Party Core Libraries -->
+    <!-- Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- jsPDF & AutoTable -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    <!-- QRCode.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- PapaParse for CSV Uploads -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <!-- Global Helpers & Module Bootstrapper -->
+    <script>
+        function ensureToastPlacement() {
+            let placement = document.getElementById('toast-placement');
+            if (!placement) {
+                placement = document.createElement('div');
+                placement.id = 'toast-placement';
+                placement.className = 'toast-container';
+                document.body.appendChild(placement);
+            }
+            return placement;
+        }
+
+        function ensureGlobalModal() {
+            let modal = document.getElementById('global-modal');
+            if (!modal) {
+                document.body.insertAdjacentHTML('beforeend', `
+                    <div class="modal fade" id="global-modal" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered modal-lg">
+                            <div class="modal-content">
+                                <div class="modal-header"><h5 class="modal-title fw-bold" id="globalModalLabel">System Prompt</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+                                <div class="modal-body" id="global-modal-body"></div>
+                                <div class="modal-footer" id="global-modal-footer"></div>
+                            </div>
+                        </div>
+                    </div>
+                `);
+                modal = document.getElementById('global-modal');
+            }
+            return modal;
+        }
+
+        // System-wide Toast Notification Dispatcher
+        window.showAlert = function(message, type = 'info') {
+            const toastId = 'toast-' + Date.now();
+            const toastHtml = `
+                <div id="${toastId}" class="toast align-items-center text-white bg-${type === 'danger' ? 'danger' : type === 'success' ? 'success' : type === 'warning' ? 'warning text-dark' : 'primary'} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="d-flex">
+                        <div class="toast-body">${message}</div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                </div>
+            `;
+            ensureToastPlacement().insertAdjacentHTML('beforeend', toastHtml);
+            const toastElement = document.getElementById(toastId);
+            const toast = new bootstrap.Toast(toastElement, { delay: 3500 });
+            toast.show();
+            toastElement.addEventListener('hidden.bs.toast', () => toastElement.remove());
+        };
+
+        // Standardized Global Modal Controller
+        window.showGlobalModal = function(title, bodyHtml, footerHtml = null) {
+            const modalElement = ensureGlobalModal();
+            document.getElementById('globalModalLabel').textContent = title;
+            document.getElementById('global-modal-body').innerHTML = bodyHtml;
+            const footer = document.getElementById('global-modal-footer');
+            if (footerHtml !== null) {
+                footer.innerHTML = footerHtml;
+                footer.classList.remove('d-none');
+            } else {
+                footer.classList.add('d-none');
+            }
+            const modalInstance = new bootstrap.Modal(modalElement);
+            modalInstance.show();
+            return modalInstance;
+        };
+
+        // Window Print Engine
+        window.printReport = function({ contentHtml, title, extraCss = '', pageSize = 'A4 portrait', onLoadCallback = null }) {
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>${title}</title>
+                    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+                    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
+                    <style>
+                        @page { size: ${pageSize}; margin: 10mm; }
+                        body { font-family: sans-serif; background: #fff; color: #000; padding: 10px; }
+                        @media print { .no-print { display: none !important; } }
+                        ${extraCss}
+                    </style>
+                </head>
+                <body>
+                    ${contentHtml}
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
+            printWindow.focus();
+
+            setTimeout(() => {
+                if (typeof onLoadCallback === 'function') {
+                    onLoadCallback(printWindow);
+                }
+                setTimeout(() => {
+                    printWindow.print();
+                    printWindow.close();
+                }, 750);
+            }, 500);
+        };
+    </script>
+
+    <!-- App Scripts Setup (ES Modules) -->
+    <script type="module">
+        import { initializeAppState, switchAcademicYear, state } from './app-state.js';
+
+        function waitForRouteHandler(handlerName, timeout = 5000) {
+            return new Promise(resolve => {
+                const startedAt = Date.now();
+                const check = () => {
+                    if (typeof window[handlerName] === 'function') {
+                        resolve(window[handlerName]);
+                        return;
+                    }
+                    if (Date.now() - startedAt >= timeout) {
+                        resolve(null);
+                        return;
+                    }
+                    setTimeout(check, 25);
+                };
+                check();
+            });
+        }
+
+        async function init() {
+            // 1. Intercept specialized URL modes before main dashboard loads
+            if (window.location.hash.startsWith('#fest-judge')) {
+                const handler = await waitForRouteHandler('checkForJudgingMode');
+                if (handler) {
+                    const handled = await handler();
+                    if (handled) return;
+                }
+            } else if (window.location.hash.startsWith('#fest-entry')) {
+                const handler = await waitForRouteHandler('checkForDataEntryMode');
+                if (handler) {
+                    const handled = await handler();
+                    if (handled) return;
+                }
+            } else if (window.location.hash.startsWith('#fest-admin')) {
+                const handler = await waitForRouteHandler('checkForAdminMode');
+                if (handler) {
+                    const handled = await handler();
+                    if (handled) return;
+                }
+            } else {
+                const handler = await waitForRouteHandler('checkForAdminMode');
+                if (handler) {
+                    const handled = await handler();
+                    if (handled) return;
+                }
+            }
+            // 2. Initialize application data collections
+            await initializeAppState();
+
+            // 3. Render Academic Year Dropdown
+            const yearSelector = document.getElementById('global-academic-year-select');
+            if (state.academicYears && state.academicYears.length > 0) {
+                yearSelector.innerHTML = state.academicYears.map(year => 
+                    `<option value="${year.id}" ${year.id === state.activeYear?.id ? 'selected' : ''}>${year.label || year.id}</option>`
+                ).join('');
+            } else {
+                yearSelector.innerHTML = '<option value="">No Years Configured</option>';
+            }
+
+            yearSelector.addEventListener('change', async (e) => {
+                if (e.target.value) {
+                    await switchAcademicYear(e.target.value);
+                    if (typeof window.renderFestManagement === 'function') {
+                        window.renderFestManagement();
+                    }
+                }
+            });
+
+            // 4. Default execution into the main Fest Management interface
+            if (typeof window.renderFestManagement === 'function') {
+                window.renderFestManagement();
+            }
+        }
+        
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+
+    <!-- Feature Modules -->
+    <script type="module" src="./fest-admin.js"></script>
+    <script type="module" src="./fest-entry.js"></script>
+    <script type="module" src="./fest-judge.js"></script>
+    <script type="module" src="./fest-reports.js"></script>
+</body>
+</html>
