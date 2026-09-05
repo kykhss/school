@@ -173,6 +173,25 @@ window.renderFestReportsTab = function() {
                     </div>
                 </div>
             </div>
+
+            <div class="col-12">
+                <div class="ui-card">
+                    <h6 class="fw-bold mb-1"><i class="fas fa-certificate text-warning me-2"></i>Certificate Entry - Event Winners</h6>
+                    <p class="small text-muted mb-3">Select finalized events to prepare certificate entries ranked by position.</p>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-9">
+                            <label class="small fw-bold" for="certificate-events">Finalized Events</label>
+                            <select id="certificate-events" class="form-select form-select-sm" multiple size="4">
+                                ${events.filter(event => state.festResults.some(result => result.eventId === event.id)).map(event => `<option value="${event.id}">${event.name} (${event.category})</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="col-md-3 d-grid">
+                            <button class="btn btn-sm btn-warning" type="button" onclick="window.printCertificateEntries()"><i class="fas fa-file-signature me-1"></i>Print Certificate Entry</button>
+                        </div>
+                    </div>
+                    <div id="certificate-entry-preview" class="table-responsive mt-3"></div>
+                </div>
+            </div>
         </div>
     `;
 
@@ -182,6 +201,47 @@ window.renderFestReportsTab = function() {
         const filtered = cat === 'all' ? events : events.filter(ev => ev.category === cat);
         selector.innerHTML = filtered.map(ev => `<option value="${ev.id}">${ev.name} (${ev.category})</option>`).join('');
     });
+    document.getElementById('certificate-events')?.addEventListener('change', window.renderCertificateEntryPreview);
+};
+
+function getCertificateWinnerRows(eventIds) {
+    const fest = state.managingFest;
+    const rows = [];
+    state.festResults.filter(result => result.festId === fest.id && eventIds.includes(result.eventId)).forEach(result => {
+        const event = state.festEvents.find(item => item.id === result.eventId);
+        (result.results || []).sort((a, b) => Number(a.position) - Number(b.position)).forEach(standing => {
+            if (standing.groupId) {
+                const group = state.festGroups.find(item => item.id === standing.groupId);
+                (group?.members || []).forEach(member => {
+                    const student = state.students.find(item => item.id === member.studentId);
+                    const house = state.festHouses.find(item => item.id === group.houseId);
+                    rows.push({ event, rank: standing.position, admissionNumber: student?.admissionNumber || '', name: student?.name || member.studentId, className: getStudentClassName(student?.classId, student?.division), division: student?.division || '', score: standing.points || 0, house: house?.name || group.houseId || '' });
+                });
+            } else if (standing.studentId) {
+                const student = state.students.find(item => item.id === standing.studentId);
+                const registration = state.festRegistrations.find(item => item.festId === fest.id && item.studentId === standing.studentId);
+                const house = state.festHouses.find(item => item.id === (registration?.houseId || student?.houseId));
+                rows.push({ event, rank: standing.position, admissionNumber: student?.admissionNumber || '', name: student?.name || registration?.studentName || standing.studentId, className: getStudentClassName(student?.classId, student?.division), division: student?.division || '', score: standing.points || 0, house: house?.name || registration?.houseId || '' });
+            }
+        });
+    });
+    return rows.sort((a, b) => Number(a.rank) - Number(b.rank) || a.event.name.localeCompare(b.event.name) || a.name.localeCompare(b.name));
+}
+
+window.renderCertificateEntryPreview = function() {
+    const eventIds = Array.from(document.getElementById('certificate-events')?.selectedOptions || []).map(option => option.value);
+    const rows = getCertificateWinnerRows(eventIds);
+    const preview = document.getElementById('certificate-entry-preview');
+    if (!preview) return;
+    preview.innerHTML = rows.length ? `<table class="table table-sm table-bordered align-middle"><thead class="table-light"><tr><th>Rank</th><th>Event</th><th>Admission No</th><th>Name</th><th>Class</th><th>Division</th><th>Score</th><th>House</th></tr></thead><tbody>${rows.map(row => `<tr><td><strong>${row.rank}</strong></td><td>${row.event.name}</td><td>${row.admissionNumber}</td><td>${row.name}</td><td>${row.className}</td><td>${row.division}</td><td>${row.score}</td><td>${row.house}</td></tr>`).join('')}</tbody></table>` : '<div class="small text-muted border rounded p-3">Select one or more finalized events to preview certificate entries.</div>';
+};
+
+window.printCertificateEntries = function() {
+    const eventIds = Array.from(document.getElementById('certificate-events')?.selectedOptions || []).map(option => option.value);
+    const rows = getCertificateWinnerRows(eventIds);
+    if (!rows.length) return window.showAlert('Select at least one finalized event.', 'warning');
+    const tableRows = rows.map(row => `<tr><td>${row.rank}</td><td>${row.event.name}</td><td>${row.admissionNumber}</td><td>${row.name}</td><td>${row.className}</td><td>${row.division}</td><td>${row.score}</td><td>${row.house}</td></tr>`).join('');
+    window.printReport({ contentHtml: `<h2>${state.managingFest.name} - Certificate Entry</h2><table class="table table-bordered table-sm"><thead><tr><th>Rank</th><th>Event</th><th>Admission No</th><th>Name</th><th>Class</th><th>Division</th><th>Score</th><th>House</th></tr></thead><tbody>${tableRows}</tbody></table>`, title: `Certificate_Entry_${state.managingFest.name}`, pageSize: 'A4 landscape' });
 };
 
 // --- 2. HOUSE CHAMPIONSHIP STANDINGS ---
