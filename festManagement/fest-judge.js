@@ -78,6 +78,21 @@ window.checkForJudgingMode = async function() {
         const groups = groupsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
         const participants = regSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
+        if (eventData.cancelled === true) {
+            document.body.innerHTML = `
+                <div class="container py-5 text-center">
+                    <div class="card shadow-sm border-0 mx-auto" style="max-width: 560px;">
+                        <div class="card-body p-5">
+                            <div class="text-secondary mb-3"><i class="fas fa-ban fa-3x"></i></div>
+                            <h4 class="fw-bold">Programme Cancelled</h4>
+                            <p class="text-muted mb-0">${eventData.name} is cancelled. Marks cannot be uploaded for this event.</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            return true;
+        }
+
         renderJudgingSheet(festData, eventData, participants, houses, groups, secretCode);
         return true;
     } catch (err) {
@@ -96,9 +111,16 @@ async function renderJudgingSheet(fest, event, participants, houses, groups, pre
     
     // Check if event results are already finalized
     const resultSnap = await getDoc(doc(db, `academicYears/${yearId}/festResults`, resultDocId));
+
+    if (event.cancelled === true) {
+        document.body.innerHTML = `<div class="container py-5 text-center"><div class="alert alert-secondary"><i class="fas fa-ban me-2"></i><strong>${event.name}</strong> is cancelled. Marks cannot be uploaded.</div></div>`;
+        return;
+    }
     
     if (resultSnap.exists()) {
-        const finalResults = resultSnap.data().results || [];
+        const resultData = resultSnap.data();
+        const finalResults = resultData.results || [];
+        const uploadedAt = resultData.judgedAt?.toDate ? resultData.judgedAt.toDate().toLocaleString() : 'Recorded';
         document.body.innerHTML = `
             <div class="container py-5">
                 <div class="card shadow-sm border-0 mx-auto" style="max-width: 600px;">
@@ -106,6 +128,12 @@ async function renderJudgingSheet(fest, event, participants, houses, groups, pre
                         <div class="text-success mb-3"><i class="fas fa-check-circle fa-3x"></i></div>
                         <h4 class="fw-bold mb-1">Results Finalized</h4>
                         <p class="text-muted small">${event.name} (${fest.name})</p>
+                        <div class="alert alert-success text-start py-2 mb-3">
+                            <div class="fw-bold"><i class="fas fa-cloud-arrow-up me-1"></i>Marks Uploaded</div>
+                            <div class="small">Judge: ${resultData.judgeName || 'Unknown'} (${resultData.judgedBy || 'N/A'})</div>
+                            <div class="small">Signature: ${resultData.judgeSignature || resultData.judgeName || 'Recorded judge'}</div>
+                            <div class="small text-muted">Uploaded: ${uploadedAt}</div>
+                        </div>
                         <hr>
                         <div class="list-group list-group-flush text-start">
                             ${finalResults.map(r => {
@@ -206,6 +234,9 @@ async function renderJudgingSheet(fest, event, participants, houses, groups, pre
             <div class="card shadow-sm border-0 p-3">
                 <div class="row g-2 align-items-center justify-content-end">
                     <div class="col-auto">
+                        <span class="badge bg-warning text-dark"><i class="fas fa-cloud-arrow-up me-1"></i>Marks not uploaded</span>
+                    </div>
+                    <div class="col-auto">
                         <label class="small fw-bold">Judge Security Code:</label>
                     </div>
                     <div class="col-auto">
@@ -287,6 +318,8 @@ async function commitJudgingResults(fest, event, participants, houses, groups) {
         eventId: event.id,
         judgedBy: authorized.code,
         judgeName: authorized.name,
+        judgeSignature: authorized.name,
+        marksUploaded: true,
         judgedAt: serverTimestamp(),
         results: rankedResults.sort((a, b) => a.position - b.position)
     };
