@@ -723,6 +723,17 @@ window.deleteGroup = async function(groupId) {
 function renderRosterSummaryTab(fest, house) {
     const container = document.getElementById('tab-view-summary');
     const registrations = state.festRegistrations.filter(r => r.festId === fest.id && r.houseId === house.id);
+    const events = state.festEvents.filter(event => event.festId === fest.id);
+    const completedEventIds = new Set(state.festResults.filter(result => result.festId === fest.id).map(result => result.eventId));
+    const stages = fest.stages?.length ? fest.stages : ['Main Stage'];
+    const eventSummaries = events.map(event => {
+        const eventRegistrations = registrations.filter(registration => registration.events?.includes(event.id));
+        const groups = state.festGroups.filter(group => group.festId === fest.id && group.eventId === event.id && group.houseId === house.id);
+        const participantCount = event.isGroupEvent
+            ? groups.reduce((total, group) => total + (group.members?.length || 0), 0)
+            : eventRegistrations.length;
+        return { event, participantCount, cancelled: event.cancelled === true, completed: event.cancelled !== true && completedEventIds.has(event.id) };
+    });
 
     container.innerHTML = `
         <h6 class="fw-bold mb-3">All Active House Registrations (${registrations.length})</h6>
@@ -753,5 +764,33 @@ function renderRosterSummaryTab(fest, house) {
                 </tbody>
             </table>
         </div>
+        <hr class="my-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h6 class="fw-bold mb-1"><i class="fas fa-calendar-check me-2"></i>Event Entry Preview</h6>
+                <div class="small text-muted">Green means judging entry received. Amber means pending catch-up.</div>
+            </div>
+            <button class="btn btn-sm btn-outline-warning" type="button" onclick="window.filterHouseEventPreview('pending')"><i class="fas fa-hourglass-half me-1"></i>Pending</button>
+        </div>
+        <div class="row g-2" id="house-event-preview">
+            ${eventSummaries.map(item => `
+                <div class="col-md-6 col-xl-4 house-event-preview-card" data-entry-status="${item.cancelled ? 'cancelled' : item.completed ? 'completed' : 'pending'}">
+                    <div class="border rounded p-3 h-100 ${item.cancelled ? 'border-secondary bg-light' : item.completed ? 'border-success bg-success-subtle' : 'border-warning bg-warning-subtle'}">
+                        <div class="d-flex justify-content-between gap-2">
+                            <strong>${item.event.name}</strong>
+                            <span class="badge ${item.cancelled ? 'bg-secondary' : item.completed ? 'bg-success' : 'bg-warning text-dark'}">${item.cancelled ? 'Cancelled' : item.completed ? 'Entered' : 'Pending'}</span>
+                        </div>
+                        <div class="small text-muted mt-1">${item.event.category || 'General'} &bull; ${item.event.isGroupEvent ? 'Group' : 'Solo'} &bull; ${item.event.stage || stages[0]}</div>
+                        <div class="small fw-bold mt-2">${item.cancelled ? 'Programme cancelled' : `${item.participantCount} house participant${item.participantCount === 1 ? '' : 's'}`}</div>
+                    </div>
+                </div>
+            `).join('') || '<div class="col-12"><div class="text-muted small">No events available.</div></div>'}
+        </div>
     `;
 }
+
+window.filterHouseEventPreview = function(status) {
+    document.querySelectorAll('.house-event-preview-card').forEach(card => {
+        card.classList.toggle('d-none', card.dataset.entryStatus !== status);
+    });
+};
