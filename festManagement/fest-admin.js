@@ -17,6 +17,7 @@ import {
     selectFest, 
     unselectFest, 
     loadAllYearData,
+    loadAcademicYears,
     initializeAppState,
     getStudentClassName,
     getStudentCategory,
@@ -29,6 +30,8 @@ import {
     writeBatch, 
     serverTimestamp 
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+import { setActiveYear } from "./firebase-config.js";
 
 window.checkForAdminMode = async function() {
     const hash = window.location.hash;
@@ -43,23 +46,44 @@ window.checkForAdminMode = async function() {
         return true;
     }
 
+    try {
+        await loadAcademicYears();
+    } catch (error) {
+        console.error("Unable to load academic years:", error);
+    }
+
+    const activeYear = state.academicYears.find(year => year.status === 'active' || year.active);
+    const selectedYearId = activeYear?.id || state.academicYears[0]?.id || '';
+    if (selectedYearId) setActiveYear(selectedYearId);
+
     document.body.innerHTML = `
         <div class="vh-100 d-flex align-items-center justify-content-center bg-light">
             <div class="card shadow border-0" style="max-width: 410px; width: 100%;"><div class="card-body p-4">
                 <h4 class="fw-bold mb-1"><i class="fas fa-lock text-primary me-2"></i>Fest Admin Portal</h4>
                 <p class="text-muted small">Sign in with an administrator account from festUsers.</p>
                 <form id="fest-admin-login-form">
+                    <label for="fest-admin-year" class="form-label small fw-bold">Academic Year</label>
+                    <select id="fest-admin-year" class="form-select mb-3" ${state.academicYears.length ? '' : 'disabled'} required>
+                        ${state.academicYears.length
+                            ? state.academicYears.map(year => `<option value="${year.id}" ${year.id === selectedYearId ? 'selected' : ''}>${year.label || year.id}</option>`).join('')
+                            : '<option value="">No academic years available</option>'}
+                    </select>
                     <input id="fest-admin-username" class="form-control mb-2" placeholder="Username" autocomplete="username" required>
                     <input id="fest-admin-password" type="password" class="form-control mb-3" placeholder="Password" autocomplete="current-password" required>
                     <label class="form-check small mb-3"><input id="fest-admin-remember" type="checkbox" class="form-check-input me-1" checked> Remember this device</label>
-                    <button class="btn btn-primary w-100" type="submit">Sign In</button>
+                    <button class="btn btn-primary w-100" type="submit" ${state.academicYears.length ? '' : 'disabled'}>Sign In</button>
                 </form>
                 <div id="fest-admin-login-error" class="small text-danger mt-3"></div>
             </div></div>
         </div>`;
 
+    document.getElementById('fest-admin-year').addEventListener('change', event => {
+        setActiveYear(event.target.value);
+    });
+
     document.getElementById('fest-admin-login-form').addEventListener('submit', async event => {
         event.preventDefault();
+        setActiveYear(document.getElementById('fest-admin-year').value);
         const remember = document.getElementById('fest-admin-remember').checked;
         const result = await loginWithUsername(document.getElementById('fest-admin-username').value, document.getElementById('fest-admin-password').value, remember);
         if (!result.success) {
@@ -299,6 +323,57 @@ function renderDashboardTab() {
     const participants = state.festRegistrations.filter(r => r.festId === fest.id);
     const events = state.festEvents.filter(e => e.festId === fest.id);
     const houses = state.festHouses;
+    const stages = fest.stages?.length ? fest.stages : ['Main Stage'];
+    const finalizedResults = state.festResults.filter(result => result.festId === fest.id && events.some(event => event.id === result.eventId && event.cancelled !== true));
+    const completedEventIds = new Set(finalizedResults.map(result => result.eventId));
+    const housePoints = new Map(houses.map(house => [house.id, { house, points: 0, wins: 0 }]));
+    const resultWinners = new Map();
+
+    finalizedResults.forEach(result => {
+        const event = events.find(item => item.id === result.eventId);
+        const winners = [];
+        (result.results || []).forEach(standing => {
+            const group = standing.groupId ? state.festGroups.find(item => item.id === standing.groupId) : null;
+            const registration = standing.studentId ? participants.find(item => item.studentId === standing.studentId) : null;
+            const student = standing.studentId ? state.students.find(item => item.id === standing.studentId) : null;
+            const houseId = group?.houseId || registration?.houseId || student?.houseId;
+            const houseScore = housePoints.get(houseId);
+            const points = Number(standing.points) || 0;
+
+            if (houseScore) {
+                houseScore.points += points;
+                if (Number(standing.position) === 1) houseScore.wins += 1;
+            }
+            if (Number(standing.position) <= 3) {
+                winners.push({
+                    position: standing.position,
+                    name: group?.name || registration?.studentName || student?.name || 'Participant',
+                    house: houseScore?.house
+                });
+            }
+        });
+        resultWinners.set(result.eventId, winners.sort((a, b) => a.position - b.position));
+    });
+
+    const houseRanking = [...housePoints.values()].sort((a, b) => b.points - a.points || b.wins - a.wins || a.house.name.localeCompare(b.house.name));
+    const eventSummaries = events.map(event => {
+        const registrations = participants.filter(registration => registration.events?.includes(event.id));
+        const groups = state.festGroups.filter(group => group.festId === fest.id && group.eventId === event.id);
+        const participantCount = event.isGroupEvent
+            ? groups.reduce((total, group) => total + (group.members?.length || 0), 0)
+            : registrations.length;
+        return {
+            event,
+            groups,
+            participantCount,
+            registrationCount: event.isGroupEvent ? groups.length : registrations.length,
+            cancelled: event.cancelled === true,
+            completed: event.cancelled !== true && completedEventIds.has(event.id),
+            winners: resultWinners.get(event.id) || []
+        };
+    });
+    const completedCount = eventSummaries.filter(item => item.completed).length;
+    const pendingSummaries = eventSummaries.filter(item => !item.completed && !item.cancelled);
 
     container.innerHTML = `
         <div class="row g-3">
@@ -339,8 +414,108 @@ function renderDashboardTab() {
                 </div>
             </div>
         </div>
+
+        <div class="ui-card mt-4 mb-0">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                <div>
+                    <h5 class="section-header mb-1"><i class="fas fa-timeline me-2"></i>Live Event Preview</h5>
+                    <div class="small text-muted">${completedCount} of ${events.length} events have entries. Pending events are ready for catch-up.</div>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-outline-warning" type="button" onclick="window.filterDashboardEvents('pending')">
+                        <i class="fas fa-hourglass-half me-1"></i>Pending (${pendingSummaries.length})
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" type="button" onclick="window.filterDashboardEvents('all')">
+                        <i class="fas fa-list me-1"></i>All Events
+                    </button>
+                    <button class="btn btn-sm btn-outline-primary" type="button" onclick="window.refreshDashboardPreview()" title="Refresh event counts and result status">
+                        <i class="fas fa-arrows-rotate"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="row g-3" id="dashboard-event-grid">
+                ${eventSummaries.map(item => `
+                    <div class="col-md-6 col-xl-4 dashboard-event-card" data-entry-status="${item.cancelled ? 'cancelled' : item.completed ? 'completed' : 'pending'}">
+                        <div class="card h-100 border-${item.cancelled ? 'secondary' : item.completed ? 'success' : 'warning'} ${item.cancelled ? 'bg-light' : item.completed ? 'bg-success-subtle' : 'bg-warning-subtle'} shadow-sm">
+                            <div class="card-body d-flex flex-column">
+                                <div class="d-flex justify-content-between align-items-start gap-2">
+                                    <div>
+                                        <h6 class="fw-bold mb-1">${item.event.name}</h6>
+                                        <div class="small text-muted">${item.event.category || 'General'} &bull; ${item.event.isGroupEvent ? 'Group' : 'Solo'} &bull; ${item.event.type || 'Event'}</div>
+                                    </div>
+                                    <span class="badge ${item.cancelled ? 'bg-secondary' : item.completed ? 'bg-success' : 'bg-warning text-dark'}">
+                                        <i class="fas ${item.cancelled ? 'fa-ban' : item.completed ? 'fa-check' : 'fa-clock'} me-1"></i>${item.cancelled ? 'Cancelled' : item.completed ? 'Entered' : 'Pending'}
+                                    </span>
+                                </div>
+                                <div class="row g-2 my-3">
+                                    <div class="col-6"><div class="border rounded p-2 bg-white"><div class="h5 mb-0 fw-bold">${item.participantCount}</div><div class="small text-muted">Participants</div></div></div>
+                                    <div class="col-6"><div class="border rounded p-2 bg-white"><div class="h5 mb-0 fw-bold">${item.registrationCount}</div><div class="small text-muted">${item.event.isGroupEvent ? 'Teams' : 'Entries'}</div></div></div>
+                                </div>
+                                <div class="mt-auto">
+                                    <div class="small"><strong>Stage / Venue:</strong> ${item.event.stage || stages[0]}</div>
+                                    ${item.winners.length && !item.cancelled ? `<div class="small mt-2"><strong>Winners</strong>${item.winners.map(winner => `<div><span class="me-1">${winner.position}.</span><span class="color-dot-display" style="background-color: ${winner.house?.color || '#6c757d'}"></span>${winner.name} <span class="text-muted">(${winner.house?.name || 'House'})</span></div>`).join('')}</div>` : ''}
+                                    ${item.cancelled ? '<div class="small text-secondary mt-2"><i class="fas fa-ban me-1"></i>Programme cancelled</div>' : item.completed ? '<div class="small text-success mt-2"><i class="fas fa-circle-check me-1"></i>Judging entry received</div>' : '<div class="small text-warning-emphasis mt-2"><i class="fas fa-triangle-exclamation me-1"></i>Pending judging entry</div>'}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('') || '<div class="col-12"><div class="alert alert-light border mb-0">No events have been created for this fest.</div></div>'}
+            </div>
+        </div>
+
+        <div class="ui-card mt-4 mb-0">
+            <h5 class="section-header mb-3"><i class="fas fa-ranking-star me-2"></i>House-wise Ranking</h5>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead class="table-light"><tr><th>Rank</th><th>House</th><th>1st Place Wins</th><th class="text-end">Total Points</th></tr></thead>
+                    <tbody>
+                        ${houseRanking.map((item, index) => `
+                            <tr>
+                                <td><strong>${item.points > 0 ? index + 1 : '-'}</strong></td>
+                                <td><span class="color-dot-display" style="background-color: ${item.house.color || '#6c757d'}"></span><strong>${item.house.name}</strong></td>
+                                <td>${item.wins}</td>
+                                <td class="text-end"><span class="badge ${index === 0 && item.points > 0 ? 'bg-success' : 'bg-primary'}">${item.points}</span></td>
+                            </tr>
+                        `).join('') || '<tr><td colspan="4" class="text-muted">No houses configured.</td></tr>'}
+                    </tbody>
+                </table>
+            </div>
+        </div>
     `;
 }
+
+window.filterDashboardEvents = function(status) {
+    document.querySelectorAll('.dashboard-event-card').forEach(card => {
+        card.classList.toggle('d-none', status !== 'all' && card.dataset.entryStatus !== status);
+    });
+};
+
+window.refreshDashboardPreview = async function() {
+    try {
+        await loadAllYearData(true);
+        renderDashboardTab();
+        window.showAlert('Event preview refreshed.', 'success');
+    } catch (error) {
+        console.error(error);
+        window.showAlert('Unable to refresh event preview.', 'danger');
+    }
+};
+
+window.saveDashboardEventStage = async function(eventId, button) {
+    const event = state.festEvents.find(item => item.id === eventId);
+    const row = button.closest('.input-group');
+    const stage = row?.querySelector('.dashboard-event-stage')?.value;
+    if (!event || !stage) return window.showAlert('Choose a valid stage.', 'warning');
+
+    try {
+        await updateScopedDoc('festEvents', eventId, { stage });
+        event.stage = stage;
+        window.showAlert('Event stage saved.', 'success');
+    } catch (error) {
+        console.error(error);
+        window.showAlert('Failed to save event stage.', 'danger');
+    }
+};
 
 function renderSetupTab() {
     const container = document.getElementById('tab-setup');
@@ -692,19 +867,47 @@ function renderEventsTab() {
 
             <div class="col-lg-7">
                 <div class="ui-card">
-                    <h5 class="section-header"><i class="fas fa-list me-2"></i>Active Events (${events.length})</h5>
+                    <h5 class="section-header"><i class="fas fa-list me-2"></i>Events (${events.length})</h5>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-5">
+                            <label class="small fw-bold" for="event-search">Search</label>
+                            <input id="event-search" class="form-control form-control-sm" placeholder="Event name, category, stage...">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="small fw-bold" for="event-filter-category">Category</label>
+                            <select id="event-filter-category" class="form-select form-select-sm"><option value="all">All categories</option>${[...new Set(events.map(event => event.category).filter(Boolean))].map(category => `<option value="${category}">${category}</option>`).join('')}</select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="small fw-bold" for="event-filter-type">Type</label>
+                            <select id="event-filter-type" class="form-select form-select-sm"><option value="all">All types</option><option value="onStage">On-stage</option><option value="offStage">Off-stage</option></select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="small fw-bold" for="event-filter-status">Status</label>
+                            <select id="event-filter-status" class="form-select form-select-sm"><option value="all">All</option><option value="scheduled">Scheduled</option><option value="cancelled">Cancelled</option></select>
+                        </div>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <button class="btn btn-sm btn-outline-success" type="button" onclick="window.exportEventsCsv()"><i class="fas fa-file-excel me-1"></i>Excel CSV</button>
+                        <button class="btn btn-sm btn-outline-danger" type="button" onclick="window.exportEventsPdf()"><i class="fas fa-file-pdf me-1"></i>PDF</button>
+                        <button class="btn btn-sm btn-outline-primary" type="button" onclick="document.getElementById('event-import-file').click()"><i class="fas fa-file-import me-1"></i>Import CSV</button>
+                        <button class="btn btn-sm btn-outline-secondary" type="button" onclick="window.downloadEventImportDemo()"><i class="fas fa-download me-1"></i>Demo CSV</button>
+                        <input id="event-import-file" type="file" accept=".csv,text/csv" class="d-none">
+                    </div>
                     <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
-                        <table class="table table-sm table-hover">
+                        <table class="table table-sm table-hover" id="events-management-table">
                             <thead class="table-light"><tr><th>Event</th><th>Category</th><th>Stage</th><th>Type</th><th>Mode</th><th></th></tr></thead>
-                            <tbody>
+                            <tbody id="events-management-body">
                                 ${events.map(ev => `
-                                    <tr>
-                                        <td><strong>${ev.name}</strong></td>
+                                    <tr data-event-search="${`${ev.name} ${ev.category || ''} ${ev.stage || ''}`.toLowerCase()}" data-event-category="${ev.category || ''}" data-event-type="${ev.type || ''}" data-event-status="${ev.cancelled ? 'cancelled' : 'scheduled'}">
+                                        <td><strong>${ev.name}</strong><div class="mt-1"><span class="badge ${ev.cancelled ? 'bg-secondary' : 'bg-success-subtle text-success-emphasis'}">${ev.cancelled ? 'Cancelled' : 'Scheduled'}</span></div></td>
                                         <td><span class="badge bg-secondary">${ev.category}</span></td>
                                         <td><span class="badge bg-primary">${ev.stage || 'Main Stage'}</span></td>
                                         <td>${ev.type}</td>
                                         <td>${ev.isGroupEvent ? '<span class="badge bg-info">Group</span>' : 'Solo'}</td>
                                         <td class="text-end">
+                                            <button class="btn btn-xs ${ev.cancelled ? 'btn-outline-success' : 'btn-outline-warning'}" onclick="window.toggleEventCancellation('${ev.id}')" title="${ev.cancelled ? 'Restore event' : 'Mark programme cancelled'}">
+                                                <i class="fas ${ev.cancelled ? 'fa-rotate-left' : 'fa-ban'}"></i>
+                                            </button>
                                             <button class="btn btn-xs btn-outline-danger" onclick="window.deleteEventById('${ev.id}')">
                                                 <i class="fas fa-trash"></i>
                                             </button>
@@ -720,7 +923,85 @@ function renderEventsTab() {
     `;
 
     document.getElementById('create-event-form')?.addEventListener('submit', handleEventCreate);
+    const applyEventFilters = () => {
+        const search = document.getElementById('event-search').value.trim().toLowerCase();
+        const category = document.getElementById('event-filter-category').value;
+        const type = document.getElementById('event-filter-type').value;
+        const status = document.getElementById('event-filter-status').value;
+        document.querySelectorAll('#events-management-body tr').forEach(row => {
+            const visible = (!search || row.dataset.eventSearch.includes(search)) && (category === 'all' || row.dataset.eventCategory === category) && (type === 'all' || row.dataset.eventType === type) && (status === 'all' || row.dataset.eventStatus === status);
+            row.classList.toggle('d-none', !visible);
+        });
+    };
+    ['event-search', 'event-filter-category', 'event-filter-type', 'event-filter-status'].forEach(id => document.getElementById(id)?.addEventListener('input', applyEventFilters));
+    document.getElementById('event-import-file')?.addEventListener('change', event => window.importEventsCsv(event.target.files[0]));
 }
+
+function downloadTextFile(filename, content, type = 'text/csv;charset=utf-8') {
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([content], { type }));
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(link.href);
+}
+
+function csvCell(value) {
+    return `"${String(value ?? '').replace(/"/g, '""')}"`;
+}
+
+window.exportEventsCsv = function() {
+    const events = state.festEvents.filter(event => event.festId === state.managingFest.id);
+    const headers = ['name', 'category', 'type', 'gender', 'stage', 'isGroupEvent', 'cancelled'];
+    const rows = events.map(event => headers.map(header => csvCell(event[header])).join(','));
+    downloadTextFile(`events_${state.managingFest.name.replace(/\s+/g, '_')}.csv`, [headers.join(','), ...rows].join('\n'));
+};
+
+window.downloadEventImportDemo = function() {
+    const demo = [
+        'name,category,type,gender,stage,isGroupEvent,cancelled',
+        'Classical Dance,General,onStage,Common,Main Stage,false,false',
+        'Quiz Competition,Senior,offStage,Common,Room 1,false,false'
+    ].join('\n');
+    downloadTextFile('event_import_demo.csv', demo);
+};
+
+window.importEventsCsv = function(file) {
+    if (!file) return;
+    Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: async results => {
+            const fest = state.managingFest;
+            const items = results.data.map((row, index) => ({
+                id: `EVT_IMPORT_${Date.now()}_${index}`,
+                festId: fest.id,
+                name: row.name?.trim(),
+                category: row.category?.trim() || 'General',
+                type: row.type?.trim() || 'onStage',
+                gender: row.gender?.trim() || 'Common',
+                stage: row.stage?.trim() || 'Main Stage',
+                isGroupEvent: String(row.isGroupEvent).toLowerCase() === 'true',
+                cancelled: String(row.cancelled).toLowerCase() === 'true'
+            })).filter(event => event.name);
+            if (!items.length) return window.showAlert('No valid event rows found. Use the Demo CSV format.', 'warning');
+            try {
+                await batchWriteScoped('festEvents', items);
+                await loadAllYearData(true);
+                renderEventsTab();
+                window.showAlert(`${items.length} event(s) imported.`, 'success');
+            } catch (error) {
+                console.error(error);
+                window.showAlert('Event import failed.', 'danger');
+            }
+        }
+    });
+};
+
+window.exportEventsPdf = function() {
+    const events = state.festEvents.filter(event => event.festId === state.managingFest.id);
+    const rows = events.map(event => `<tr><td>${event.name}</td><td>${event.category || ''}</td><td>${event.stage || 'Main Stage'}</td><td>${event.type || ''}</td><td>${event.isGroupEvent ? 'Group' : 'Solo'}</td><td>${event.cancelled ? 'Cancelled' : 'Scheduled'}</td></tr>`).join('');
+    window.printReport({ contentHtml: `<h2>${state.managingFest.name} - Event List</h2><table class="table table-bordered table-sm"><thead><tr><th>Event</th><th>Category</th><th>Stage</th><th>Type</th><th>Mode</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`, title: `Events_${state.managingFest.name}`, pageSize: 'A4 landscape' });
+};
 
 async function handleEventCreate(e) {
     e.preventDefault();
@@ -749,8 +1030,10 @@ async function handleEventCreate(e) {
                 type,
                 gender: g,
                 stage,
-                isGroupEvent
+                isGroupEvent,
+                cancelled: false
             });
+
         });
     });
 
@@ -764,6 +1047,27 @@ async function handleEventCreate(e) {
         window.showAlert('Failed to save events.', 'danger');
     }
 }
+
+window.toggleEventCancellation = async function(eventId) {
+    const event = state.festEvents.find(item => item.id === eventId);
+    if (!event) return window.showAlert('Event not found.', 'danger');
+    const cancelled = event.cancelled !== true;
+    const prompt = cancelled
+        ? 'Mark this programme as cancelled? Judges will not be able to upload marks.'
+        : 'Restore this programme and allow judging again?';
+    if (!confirm(prompt)) return;
+
+    try {
+        await updateScopedDoc('festEvents', eventId, { cancelled });
+        event.cancelled = cancelled;
+        window.showAlert(cancelled ? 'Programme marked as cancelled.' : 'Programme restored.', 'success');
+        renderEventsTab();
+        renderDashboardTab();
+    } catch (error) {
+        console.error(error);
+        window.showAlert('Failed to update programme status.', 'danger');
+    }
+};
 
 window.deleteEventById = async function(eventId) {
     if (!confirm('Permanently remove this event? Existing participant registrations will be affected.')) return;
