@@ -123,6 +123,60 @@ window.renderFestReportsTab = function() {
 
             <div class="col-12">
                 <div class="ui-card">
+                    <h6 class="fw-bold mb-1"><i class="fas fa-id-badge text-primary me-2"></i>Chest Number Cards</h6>
+                    <p class="small text-muted mb-3">Print four chest cards per A4 page for participants with assigned chest numbers.</p>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-6">
+                            <label class="small fw-bold" for="chest-house-filter">House</label>
+                            <select id="chest-house-filter" class="form-select form-select-sm">
+                                <option value="ALL">All Houses</option>
+                                ${houses.map(house => `<option value="${house.id}">${house.name}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="col-md-3 d-grid">
+                            <button class="btn btn-sm btn-outline-primary" type="button" onclick="window.printChestNumbers()">
+                                <i class="fas fa-print me-1"></i>Print Chest Cards
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12">
+                <div class="ui-card">
+                    <h6 class="fw-bold mb-1"><i class="fas fa-gavel text-dark me-2"></i>Judge Cards</h6>
+                    <p class="small text-muted mb-3">Print four judge cards per A4 page with judge codes, assigned events, and halls.</p>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-3">
+                            <label class="small fw-bold" for="judge-card-category">Category</label>
+                            <select id="judge-card-category" class="form-select form-select-sm">
+                                <option value="ALL">All Categories</option>
+                                ${categories.map(category => `<option value="${category}">${category}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="small fw-bold" for="judge-card-event">Event</label>
+                            <select id="judge-card-event" class="form-select form-select-sm">
+                                <option value="ALL">All Events</option>
+                                ${events.map(event => `<option value="${event.id}">${event.name} (${event.category})</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="col-md-2 d-grid">
+                            <button class="btn btn-sm btn-outline-dark" type="button" onclick="window.printJudgeCards()">
+                            <i class="fas fa-print me-1"></i>Print Judge Cards
+                            </button>
+                        </div>
+                        <div class="col-md-3 d-grid">
+                            <button class="btn btn-sm btn-outline-success" type="button" onclick="window.downloadJudgeList()">
+                                <i class="fas fa-download me-1"></i>Download Judge List
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12">
+                <div class="ui-card">
                     <h6 class="fw-bold mb-1"><i class="fas fa-file-signature text-success me-2"></i>Blank Registration Roll Card</h6>
                     <p class="small text-muted mb-3">Print a category-wise sheet for house leaders to write participant details and tick event choices before online entry.</p>
                     <div class="row g-2 align-items-end">
@@ -200,6 +254,12 @@ window.renderFestReportsTab = function() {
         const selector = document.getElementById('report-ev-id');
         const filtered = cat === 'all' ? events : events.filter(ev => ev.category === cat);
         selector.innerHTML = filtered.map(ev => `<option value="${ev.id}">${ev.name} (${ev.category})</option>`).join('');
+    });
+    document.getElementById('judge-card-category')?.addEventListener('change', (e) => {
+        const category = e.target.value;
+        const selector = document.getElementById('judge-card-event');
+        const filtered = category === 'ALL' ? events : events.filter(event => event.category === category);
+        selector.innerHTML = `<option value="ALL">All Events</option>${filtered.map(event => `<option value="${event.id}">${event.name} (${event.category})</option>`).join('')}`;
     });
     document.getElementById('certificate-events')?.addEventListener('change', window.renderCertificateEntryPreview);
 };
@@ -414,6 +474,264 @@ window.printIndividualChampionships = function() {
         title: `Individual_Champions_${fest.name}`,
         pageSize: 'A4 portrait'
     });
+};
+
+/**
+ * Generates and prints compact chest-number cards for assigned participants.
+ */
+window.printChestNumbers = function() {
+    if (!state.managingFest) return window.showAlert('No fest selected.', 'warning');
+
+    const festId = state.managingFest.id;
+    const houseFilter = document.getElementById('chest-house-filter')?.value || 'ALL';
+    const participants = state.festRegistrations
+        .filter(registration => registration.festId === festId && registration.chestNo && (houseFilter === 'ALL' || registration.houseId === houseFilter))
+        .sort((a, b) => String(a.chestNo || '').localeCompare(String(b.chestNo || ''), undefined, { numeric: true }));
+
+    if (participants.length === 0) {
+        return window.showAlert('No participants with chest numbers found for this fest.', 'info');
+    }
+
+    const schoolName = window.schoolDetails?.name || 'KYHSS ATHAVANAD';
+    const cardHtml = participants.map(registration => {
+        const student = state.students.find(item => item.id === registration.studentId);
+        if (!student) return '';
+        const house = state.festHouses.find(item => item.id === registration.houseId);
+
+        const eventNames = (registration.events || [])
+            .map(eventId => state.festEvents.find(event => event.id === eventId)?.name)
+            .filter(Boolean)
+            .join(', ');
+
+        return `
+            <div class="chest-no-slip">
+                <div class="chest-header">${schoolName}</div>
+                <div class="fest-name">${state.managingFest.name}</div>
+                <div class="chest-house-name">${house?.name || 'House not assigned'}</div>
+                <div class="chest-number">${registration.chestNo}</div>
+                <div class="chest-student-name">${student.name}</div>
+                <small class="text-muted">${getStudentClassName(student.classId, student.division)}</small>
+                <div class="chest-events">${eventNames || 'No events assigned'}</div>
+            </div>`;
+    }).filter(Boolean);
+
+    if (cardHtml.length === 0) {
+        return window.showAlert('No matching student records found for the assigned chest numbers.', 'info');
+    }
+
+    const contentHtml = [];
+    for (let index = 0; index < cardHtml.length; index += 4) {
+        contentHtml.push(`
+            <section class="chest-card-page">
+                ${cardHtml.slice(index, index + 4).join('')}
+            </section>`);
+    }
+
+    const extraCss = `
+        @page {
+            size: A4 landscape;
+            margin: 2mm;
+        }
+        .chest-card-page {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+            gap: 4mm;
+            width: 100%;
+            height: calc(210mm - 16mm);
+            box-sizing: border-box;
+            page-break-after: always;
+            break-after: page;
+        }
+        .chest-card-page:last-child {
+            page-break-after: auto;
+            break-after: auto;
+        }
+        .chest-no-slip {
+            width: 100%;
+            height: 100%;
+            padding: 4mm;
+            border: 1px dashed #777;
+            border-radius: 4px;
+            box-sizing: border-box;
+            text-align: center;
+            page-break-inside: avoid;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .chest-header { font-size: 1.1em; font-weight: bold; text-transform: uppercase; }
+        .fest-name { font-size: 0.85em; color: #555; }
+        .chest-house-name { font-size: 1em; font-weight: 600; color: #333; margin-top: 2px; }
+        .chest-number { font-size: 4em; font-weight: bold; margin: 4px 0; line-height: 1; }
+        .chest-student-name { font-size: 1.2em; font-weight: 600; }
+        .chest-events { font-size: 0.75em; color: #444; margin-top: 4px; line-height: 1.2; max-height: 2.4em; overflow: hidden; }
+    `;
+
+    window.printReport({
+        contentHtml: contentHtml.join(''),
+        title: `Chest_Numbers_${festId}`,
+        extraCss,
+        pageSize: 'A4 landscape'
+    });
+};
+
+/**
+ * Generates and prints judge cards with assigned events and halls.
+ */
+window.printJudgeCards = function() {
+    if (!state.managingFest) return window.showAlert('No fest selected.', 'warning');
+
+    const fest = state.managingFest;
+    const judges = fest.judgeCodes || [];
+    const events = getFilteredJudgeEvents(fest);
+
+    if (judges.length === 0) {
+        return window.showAlert('No judges found for this fest.', 'info');
+    }
+
+    const schoolName = window.schoolDetails?.name || 'KYHSS ATHAVANAD';
+    const selectedCategory = document.getElementById('judge-card-category')?.value || 'ALL';
+    const selectedEvent = document.getElementById('judge-card-event')?.value || 'ALL';
+    const cardHtml = judges.filter(judge => selectedCategory === 'ALL' && selectedEvent === 'ALL'
+        ? true
+        : events.some(event => (event.judgeIds || []).includes(judge.code))
+    ).map(judge => {
+        const assignedEvents = events.filter(event => (event.judgeIds || []).includes(judge.code));
+        const eventRows = assignedEvents.length
+            ? assignedEvents.map(event => `
+                <div class="judge-event-row">
+                    <span>${event.name}</span>
+                    <strong>${event.stage || 'Hall not assigned'}</strong>
+                </div>`).join('')
+            : '<div class="judge-no-events">No events assigned</div>';
+
+        return `
+            <div class="judge-card">
+                <div class="judge-card-header">${schoolName}</div>
+                <div class="judge-card-fest">${fest.name}</div>
+                <div class="judge-card-name">${judge.name}</div>
+                <div class="judge-card-code">Code: <strong>${judge.code}</strong></div>
+                <div class="judge-events-title">Assigned Events & Halls</div>
+                <div class="judge-events-list">${eventRows}</div>
+            </div>`;
+    });
+
+    if (cardHtml.length === 0) {
+        return window.showAlert('No judges are assigned to the selected category or event.', 'info');
+    }
+
+    const contentHtml = [];
+    for (let index = 0; index < cardHtml.length; index += 4) {
+        contentHtml.push(`
+            <section class="judge-card-page">
+                ${cardHtml.slice(index, index + 4).join('')}
+            </section>`);
+    }
+
+    const extraCss = `
+        @page {
+            size: A4 landscape;
+            margin: 2mm;
+        }
+        .judge-card-page {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+            gap: 4mm;
+            width: 100%;
+            height: calc(210mm - 16mm);
+            box-sizing: border-box;
+            page-break-after: always;
+            break-after: page;
+        }
+        .judge-card-page:last-child {
+            page-break-after: auto;
+            break-after: auto;
+        }
+        .judge-card {
+            width: 100%;
+            height: 100%;
+            padding: 5mm;
+            border: 1px dashed #777;
+            border-radius: 4px;
+            box-sizing: border-box;
+            text-align: center;
+            page-break-inside: avoid;
+            overflow: hidden;
+        }
+        .judge-card-header { font-size: 1.1em; font-weight: bold; text-transform: uppercase; }
+        .judge-card-fest { font-size: 0.85em; color: #555; }
+        .judge-card-name { font-size: 1.6em; font-weight: 700; margin-top: 5px; }
+        .judge-card-code { font-size: 1em; margin-bottom: 8px; }
+        .judge-events-title { font-size: 0.85em; font-weight: 700; border-bottom: 1px solid #aaa; padding-bottom: 3px; }
+        .judge-events-list { text-align: left; font-size: 0.8em; margin-top: 5px; }
+        .judge-event-row { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px solid #eee; padding: 3px 0; }
+        .judge-event-row strong { white-space: nowrap; }
+        .judge-no-events { color: #666; text-align: center; margin-top: 8px; }
+    `;
+
+    window.printReport({
+        contentHtml: contentHtml.join(''),
+        title: `Judge_Cards_${fest.id}`,
+        extraCss,
+        pageSize: 'A4 landscape'
+    });
+};
+
+function getFilteredJudgeEvents(fest) {
+    const category = document.getElementById('judge-card-category')?.value || 'ALL';
+    const eventId = document.getElementById('judge-card-event')?.value || 'ALL';
+
+    return state.festEvents.filter(event => event.festId === fest.id
+        && (category === 'ALL' || event.category === category)
+        && (eventId === 'ALL' || event.id === eventId));
+}
+
+function csvCell(value) {
+    return `"${String(value ?? '').replace(/"/g, '""')}"`;
+}
+
+window.downloadJudgeList = function() {
+    if (!state.managingFest) return window.showAlert('No fest selected.', 'warning');
+
+    const fest = state.managingFest;
+    const judges = fest.judgeCodes || [];
+    const events = getFilteredJudgeEvents(fest);
+    const rows = [];
+
+    events.forEach(event => {
+        (event.judgeIds || []).forEach(judgeCode => {
+            const judge = judges.find(item => item.code === judgeCode);
+            rows.push([
+                event.name,
+                event.category || '',
+                event.stage || 'Hall not assigned',
+                judge?.name || 'Unknown judge',
+                judgeCode
+            ]);
+        });
+    });
+
+    if (rows.length === 0) {
+        return window.showAlert('No judge assignments found for the selected category or event.', 'info');
+    }
+
+    const csv = [
+        ['Event Name', 'Category', 'Hall', 'Judge Name', 'Judge Code'],
+        ...rows
+    ].map(row => row.map(csvCell).join(',')).join('\r\n');
+    const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Judge_List_${fest.id}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
 };
 
 // --- 4. JUDGE SCORECARD WITH QR CODE ---
