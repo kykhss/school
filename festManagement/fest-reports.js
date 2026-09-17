@@ -781,11 +781,17 @@ window.printRollCallSheet = function() {
 
     let registrations = state.festRegistrations.filter(r => r.festId === fest.id);
     if (houseFilter !== 'ALL') registrations = registrations.filter(r => r.houseId === houseFilter);
+    if (catFilter !== 'ALL') {
+        registrations = registrations.filter(registration => {
+            const student = state.students.find(item => item.id === registration.studentId);
+            return getStudentCategory(student) === catFilter;
+        });
+    }
 
     const tableRows = registrations.map(reg => {
         const student = state.students.find(s => s.id === reg.studentId);
         const house = state.festHouses.find(h => h.id === reg.houseId);
-
+       
         const checkCells = events.map(ev => {
             const hasEvent = reg.events.includes(ev.id);
             return `<td style="text-align: center; width: 30px;">${hasEvent ? '&#10003;' : ''}</td>`;
@@ -838,7 +844,6 @@ window.printRollCallSheet = function() {
         pageSize: 'A4 landscape'
     });
 };
-
 window.printBlankRegistrationForm = function() {
     const fest = state.managingFest;
     const categoryFilter = document.getElementById('blank-reg-cat')?.value || 'ALL';
