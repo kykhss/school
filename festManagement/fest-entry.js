@@ -43,6 +43,67 @@ function houseEventGroupCount(festId, houseId, eventId, excludeGroupId = null) {
     return state.festGroups.filter(group => group.festId === festId && group.houseId === houseId && group.id !== excludeGroupId && group.eventId === eventId).length;
 }
 
+// Inject lightweight mobile helper styles once
+function ensurePortalMobileStyles() {
+    if (document.getElementById('fest-portal-mobile-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'fest-portal-mobile-styles';
+    style.textContent = `
+        .fest-scroll-tabs {
+            display: flex;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: thin;
+            gap: 0.35rem;
+            padding-bottom: 4px;
+        }
+        .fest-scroll-tabs::-webkit-scrollbar {
+            height: 4px;
+        }
+        .fest-scroll-tabs::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .fest-scroll-tabs .nav-link {
+            white-space: nowrap;
+            font-size: 0.85rem;
+            padding: 0.45rem 0.75rem;
+            border-radius: 50rem;
+        }
+        @media (max-width: 767.98px) {
+            .table-mobile-responsive {
+                font-size: 0.82rem;
+            }
+            .table-mobile-responsive td, .table-mobile-responsive th {
+                padding: 0.45rem 0.4rem;
+            }
+            .portal-container {
+                padding-left: 0.5rem !important;
+                padding-right: 0.5rem !important;
+            }
+            .modal-col-border {
+                border-right: none !important;
+                border-bottom: 1px solid #dee2e6;
+                margin-bottom: 1rem;
+                padding-bottom: 1rem;
+            }
+            .btn-touch {
+                min-height: 38px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
+        }
+        @media (min-width: 768px) {
+            .modal-col-border {
+                border-right: 1px solid #dee2e6;
+            }
+        }
+    `;
+    document.head.appendChild(style);
+}
+
 // --- 1. ENTRY ROUTE INTERCEPTOR ---
 
 /**
@@ -50,6 +111,7 @@ function houseEventGroupCount(festId, houseId, eventId, excludeGroupId = null) {
  */
 window.checkForDataEntryMode = async function() {
     if (!window.location.hash.startsWith('#fest-entry')) return false;
+    ensurePortalMobileStyles();
 
     const queryParams = new URLSearchParams(window.location.hash.split('?')[1]);
     const yearId = queryParams.get('year') || systemContext.activeYearId;
@@ -57,7 +119,7 @@ window.checkForDataEntryMode = async function() {
     const houseId = queryParams.get('house');
 
     if (!festId || !houseId) {
-        document.body.innerHTML = `<div class="alert alert-danger m-5">Invalid entry portal parameters provided.</div>`;
+        document.body.innerHTML = `<div class="container py-4"><div class="alert alert-danger shadow-sm">Invalid entry portal parameters provided.</div></div>`;
         return true;
     }
 
@@ -66,19 +128,18 @@ window.checkForDataEntryMode = async function() {
     localStorage.setItem('activeYearId', yearId);
 
     document.body.innerHTML = `
-        <div class="vh-100 d-flex align-items-center justify-content-center">
-            <div class="spinner-border text-primary"></div>
-            <p class="ms-3 mb-0">Connecting to Fest House Portal...</p>
+        <div class="vh-100 d-flex flex-column align-items-center justify-content-center p-3 text-center">
+            <div class="spinner-border text-primary mb-3" role="status"></div>
+            <p class="mb-0 text-muted fw-semibold fs-6">Connecting to Fest House Portal...</p>
         </div>
     `;
 
     try {
-        // Direct fetch of fest and house references without requiring full admin state
         const festSnap = await getDoc(doc(db, `academicYears/${yearId}/fests`, festId));
         const houseSnap = await getDoc(doc(db, `academicYears/${yearId}/festHouses`, houseId));
 
         if (!festSnap.exists() || !houseSnap.exists()) {
-            document.body.innerHTML = `<div class="alert alert-danger m-5">Target Fest or House record does not exist.</div>`;
+            document.body.innerHTML = `<div class="container py-4"><div class="alert alert-danger shadow-sm">Target Fest or House record does not exist.</div></div>`;
             return true;
         }
 
@@ -89,7 +150,7 @@ window.checkForDataEntryMode = async function() {
         return true;
     } catch (err) {
         console.error("Portal error:", err);
-        document.body.innerHTML = `<div class="alert alert-danger m-5">Connection failed. Check network stability.</div>`;
+        document.body.innerHTML = `<div class="container py-4"><div class="alert alert-danger shadow-sm">Connection failed. Check network stability.</div></div>`;
         return true;
     }
 };
@@ -98,19 +159,19 @@ window.checkForDataEntryMode = async function() {
 
 function renderHousePortalLogin(fest, house) {
     document.body.innerHTML = `
-        <div class="vh-100 d-flex align-items-center justify-content-center bg-light">
-            <div class="card shadow-lg border-0" style="max-width: 420px; width: 100%;">
+        <div class="min-vh-100 d-flex align-items-center justify-content-center bg-light p-3">
+            <div class="card shadow-sm border-0 w-100" style="max-width: 400px; border-radius: 1rem;">
                 <div class="card-body p-4 text-center">
-                    <div class="mb-3">
-                        <span class="color-dot-display p-3" style="background-color: ${house.color || '#0d6efd'};"></span>
+                    <div class="mb-3 d-flex justify-content-center">
+                        <span class="rounded-circle d-inline-block shadow-sm" style="background-color: ${house.color || '#0d6efd'}; width: 48px; height: 48px;"></span>
                     </div>
-                    <h4 class="fw-bold mb-1">${house.name} Entry</h4>
-                    <p class="text-muted small">${fest.name}</p>
-                    <form id="house-portal-login-form" class="mt-4">
+                    <h4 class="fw-bold mb-1 fs-5">${house.name} Entry</h4>
+                    <p class="text-muted small mb-3">${fest.name}</p>
+                    <form id="house-portal-login-form">
                         <div class="mb-3">
-                            <input type="password" id="house-secret-key" class="form-control text-center" placeholder="Enter House Password" required autocomplete="current-password">
+                            <input type="password" id="house-secret-key" class="form-control form-control-lg text-center fs-6 py-2" placeholder="Enter House Password" required autocomplete="current-password">
                         </div>
-                        <button type="submit" class="btn btn-primary w-100 fw-bold">Enter Dashboard</button>
+                        <button type="submit" class="btn btn-primary w-100 fw-bold py-2 btn-touch">Enter Dashboard</button>
                     </form>
                 </div>
             </div>
@@ -127,7 +188,6 @@ function renderHousePortalLogin(fest, house) {
             state.managingFest = fest;
             state.loggedInHouseId = house.id;
 
-            // Load data collections using cache engine
             await loadAllYearData();
             bootstrapHouseCaptainWorkspace(fest, house);
         } else {
@@ -137,51 +197,53 @@ function renderHousePortalLogin(fest, house) {
 }
 
 function bootstrapHouseCaptainWorkspace(fest, house) {
+    ensurePortalMobileStyles();
     const isRegistrationOpen = fest.registrationOpen === true;
 
     document.body.innerHTML = `
-        <nav class="navbar navbar-dark bg-dark px-3 sticky-top shadow-sm">
-            <span class="navbar-brand mb-0 h6">
-                <span class="color-dot-display" style="background-color: ${house.color};"></span>
-                ${house.name} &bull; <small class="text-muted">${fest.name}</small>
-            </span>
-            <span class="badge ${isRegistrationOpen ? 'bg-success' : 'bg-danger'}">
-                ${isRegistrationOpen ? 'Registration Open' : 'Registration Closed'}
-            </span>
+        <nav class="navbar navbar-dark bg-dark px-3 py-2 sticky-top shadow-sm">
+            <div class="container-fluid px-0 d-flex justify-content-between align-items-center flex-nowrap">
+                <div class="navbar-brand mb-0 d-flex align-items-center text-truncate me-2" style="font-size: 0.95rem;">
+                    <span class="rounded-circle me-2 flex-shrink-0" style="background-color: ${house.color || '#0d6efd'}; width: 14px; height: 14px; display: inline-block;"></span>
+                    <span class="fw-bold text-truncate">${house.name}</span>
+                    <span class="text-white-50 ms-1 d-none d-sm-inline text-truncate">&bull; ${fest.name}</span>
+                </div>
+                <span class="badge ${isRegistrationOpen ? 'bg-success' : 'bg-danger'} flex-shrink-0" style="font-size: 0.72rem; padding: 0.4em 0.6em;">
+                    ${isRegistrationOpen ? 'Open' : 'Closed'}
+                </span>
+            </div>
         </nav>
 
-        <div class="container-fluid py-3">
-            <ul class="nav nav-pills mb-3" id="captain-tabs">
-             <li class="nav-item">
-                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-eventwise-reg">
-                        <i class="fas fa-calendar-check me-1"></i>Event-wise Registration
+        <div class="container-fluid portal-container py-3">
+            <!-- Scrollable mobile friendly pills navigation -->
+            <ul class="nav nav-pills fest-scroll-tabs mb-3" id="captain-tabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-eventwise-reg" type="button" role="tab">
+                        <i class="fas fa-calendar-check me-1"></i>Event-wise
                     </button>
                 </li>
-                
-                <li class="nav-item">
-                    <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tab-solo-reg">
-                        <i class="fas fa-user-edit me-1"></i>Solo Registrations
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tab-solo-reg" type="button" role="tab">
+                        <i class="fas fa-user-edit me-1"></i>Solo Entries
                     </button>
                 </li>
-               
-               
-                <li class="nav-item">
-                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-group-reg">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-group-reg" type="button" role="tab">
                         <i class="fas fa-users me-1"></i>Group Teams
                     </button>
                 </li>
-                <li class="nav-item">
-                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-view-summary">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-view-summary" type="button" role="tab">
                         <i class="fas fa-list-check me-1"></i>Roster Summary
                     </button>
                 </li>
             </ul>
 
-            <div class="tab-content card p-3 shadow-sm border-0">
-                <div class="tab-pane fade show active" id="tab-solo-reg"></div>
-                <div class="tab-pane fade" id="tab-eventwise-reg"></div>
-                <div class="tab-pane fade" id="tab-group-reg"></div>
-                <div class="tab-pane fade" id="tab-view-summary"></div>
+            <div class="tab-content card p-2 p-md-3 shadow-sm border-0">
+                <div class="tab-pane fade show active" id="tab-solo-reg" role="tabpanel"></div>
+                <div class="tab-pane fade" id="tab-eventwise-reg" role="tabpanel"></div>
+                <div class="tab-pane fade" id="tab-group-reg" role="tabpanel"></div>
+                <div class="tab-pane fade" id="tab-view-summary" role="tabpanel"></div>
             </div>
         </div>
     `;
@@ -201,27 +263,27 @@ function renderSoloRegistrationTab(fest, house, isRegistrationOpen) {
 
     container.innerHTML = `
         <div class="row g-2 mb-3 align-items-center">
-            <div class="col-md-5">
-                <input type="text" id="captain-student-search" class="form-control form-control-sm" placeholder="Search by name or admission no...">
+            <div class="col-12 col-md-5">
+                <input type="search" id="captain-student-search" class="form-control form-control-sm" placeholder="Search by student name or admission no...">
             </div>
-            <div class="col-md-4">
+            <div class="col-7 col-md-4">
                 <select id="captain-class-filter" class="form-select form-select-sm">
                     <option value="all">All Classes</option>
                     ${classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
                 </select>
             </div>
-            <div class="col-md-3 text-end text-muted small">
-                Total House Strength: <strong>${houseStudents.length}</strong>
+            <div class="col-5 col-md-3 text-end text-muted small">
+                Strength: <strong>${houseStudents.length}</strong>
             </div>
         </div>
 
-        <div class="table-responsive" style="max-height: 550px; overflow-y: auto;">
-            <table class="table table-sm table-hover align-middle" id="house-solo-table">
+        <div class="table-responsive table-mobile-responsive" style="max-height: 60vh; overflow-y: auto;">
+            <table class="table table-sm table-hover align-middle mb-0" id="house-solo-table">
                 <thead class="table-light sticky-top">
                     <tr>
-                        <th>Student Information</th>
-                        <th>Registered Events</th>
-                        <th class="text-end">Actions</th>
+                        <th style="min-width: 140px;">Student</th>
+                        <th style="min-width: 150px;">Registered Events</th>
+                        <th class="text-end" style="width: 80px;">Action</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
@@ -236,14 +298,14 @@ function renderSoloRegistrationTab(fest, house, isRegistrationOpen) {
 
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
-            filtered = filtered.filter(s => s.name.toLowerCase().includes(term) || String(s.admissionNumber).includes(term));
+            filtered = filtered.filter(s => s.name.toLowerCase().includes(term) || String(s.admissionNumber || '').includes(term));
         }
         if (classFilter !== 'all') {
             filtered = filtered.filter(s => s.classId === classFilter);
         }
 
         if (filtered.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="3" class="text-center text-muted p-4">No matching students found in your house.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="3" class="text-center text-muted p-4 small">No matching students found in your house.</td></tr>`;
             return;
         }
 
@@ -257,26 +319,32 @@ function renderSoloRegistrationTab(fest, house, isRegistrationOpen) {
                 const ev = state.festEvents.find(e => e.id === id);
                 if (!ev) return '';
                 const limit = eventHouseLimit(fest, ev, 'solo');
-                const count = houseEventSoloCount(fest.id, house.id, ev.id);
-                const invalid = count > limit;
-                return `<span class="badge ${invalid ? 'bg-danger' : 'bg-light text-dark'} border me-1" title="${invalid ? `House limit exceeded: ${count}/${limit}` : `House entries: ${count}/${limit}`} ">${ev.name} ${count}/${limit}</span>`;
+                const evCount = houseEventSoloCount(fest.id, house.id, ev.id);
+                const invalid = evCount > limit;
+                return `<span class="badge ${invalid ? 'bg-danger' : 'bg-light text-dark'} border me-1 mb-1" style="font-size: 0.72rem;" title="${invalid ? `House limit exceeded: ${evCount}/${limit}` : `House entries: ${evCount}/${limit}`}">${ev.name} <small class="opacity-75">(${evCount}/${limit})</small></span>`;
             }).join('');
+
             const invalidCount = events.filter(id => {
                 const ev = state.festEvents.find(e => e.id === id);
                 return ev && houseEventSoloCount(fest.id, house.id, ev.id) > eventHouseLimit(fest, ev, 'solo');
             }).length;
 
             return `
-                <tr data-studentid="${student.id}" data-events="${events.join(',')}" class="${invalidCount ? 'table-danger' : ''}">
+                <tr data-studentid="${student.id}" class="${invalidCount ? 'table-danger' : ''}">
                     <td>
-                        <strong class="text-dark">${student.name}</strong> 
-                        <span class="badge bg-secondary-subtle text-secondary small ms-1">${getStudentCategory(student)}</span>
-                        <div class="small text-muted">Adm: ${student.admissionNumber} | Class: ${getStudentClassName(student.classId, student.division)}</div>
+                        <strong class="text-dark d-block text-truncate" style="max-width: 170px;">${student.name}</strong> 
+                        <div class="d-flex flex-wrap align-items-center gap-1 mt-0">
+                            <span class="badge bg-secondary-subtle text-secondary py-0 px-1" style="font-size: 0.68rem;">${getStudentCategory(student)}</span>
+                            <span class="text-muted small" style="font-size: 0.72rem;">Adm: ${student.admissionNumber || 'N/A'}</span>
+                        </div>
+                        <div class="text-muted small" style="font-size: 0.7rem;">${getStudentClassName(student.classId, student.division)}</div>
                     </td>
-                    <td>${badges || '<small class="text-muted">No events assigned</small>'}</td>
-                    <td class="text-end">
-                        <button class="btn ${invalidCount ? 'btn-danger' : 'btn-outline-primary'} btn-sm py-1" onclick="window.openEventAllocationModal('${student.id}')" ${!isRegistrationOpen ? 'disabled' : ''}>
-                            <i class="fas fa-edit me-1"></i>Manage
+                    <td>
+                        <div class="d-flex flex-wrap">${badges || '<span class="text-muted small fst-italic">None</span>'}</div>
+                    </td>
+                    <td class="text-end text-nowrap">
+                        <button class="btn ${invalidCount ? 'btn-danger' : 'btn-outline-primary'} btn-sm py-1 px-2 btn-touch" onclick="window.openEventAllocationModal('${student.id}')" ${!isRegistrationOpen ? 'disabled' : ''}>
+                            <i class="fas fa-edit me-1"></i><span class="d-none d-sm-inline">Manage</span>
                             <span class="badge bg-primary ms-1">${count}</span>
                         </button>
                     </td>
@@ -312,7 +380,6 @@ window.openEventAllocationModal = function(studentId) {
     const maxOnStage = fest.settings?.maxOnStageSoloEvents ?? 2;
     const maxOffStage = fest.settings?.maxOffStageSoloEvents ?? 1;
 
-    // Isolate solo events open to student's category and gender
     const eligibleEvents = state.festEvents.filter(e => {
         if (e.festId !== fest.id || e.isGroupEvent) return false;
         const matchesCategory = (e.category === 'General' || e.category === studentCat);
@@ -326,20 +393,25 @@ window.openEventAllocationModal = function(studentId) {
     const offStage = eligibleEvents.filter(e => e.type === 'offStage');
 
     const modalBody = `
-        <div class="mb-3">
-            <span class="badge bg-info">Category: ${studentCat}</span>
-            <p class="small text-muted mt-1 mb-0">Per-student limits: On-Stage (${maxOnStage}), Off-Stage (${maxOffStage}). Each event shows its house limit.</p>
+        <div class="mb-3 p-2 bg-light rounded border">
+            <div class="d-flex justify-content-between align-items-center">
+                <span class="badge bg-info text-dark">Category: ${studentCat}</span>
+                <span class="small text-muted">Gender: <strong>${student.gender || 'Common'}</strong></span>
+            </div>
+            <p class="small text-muted mt-1 mb-0" style="font-size: 0.76rem;">
+                Max Allowed: On-Stage (<strong>${maxOnStage}</strong>), Off-Stage (<strong>${maxOffStage}</strong>).
+            </p>
         </div>
-        <div class="row">
-            <div class="col-md-6 border-end">
-                <h6 class="fw-bold text-primary small">ON-STAGE EVENTS</h6>
-                <div class="d-flex flex-column gap-2" id="box-onstage">
+        <div class="row g-2">
+            <div class="col-12 col-md-6 modal-col-border">
+                <h6 class="fw-bold text-primary small mb-2"><i class="fas fa-microphone me-1"></i>ON-STAGE EVENTS</h6>
+                <div class="d-flex flex-column gap-1" id="box-onstage" style="max-height: 220px; overflow-y: auto;">
                     ${renderChecklist(onStage, selected, 'onStage')}
                 </div>
             </div>
-            <div class="col-md-6">
-                <h6 class="fw-bold text-primary small">OFF-STAGE EVENTS</h6>
-                <div class="d-flex flex-column gap-2" id="box-offstage">
+            <div class="col-12 col-md-6">
+                <h6 class="fw-bold text-primary small mb-2"><i class="fas fa-palette me-1"></i>OFF-STAGE EVENTS</h6>
+                <div class="d-flex flex-column gap-1" id="box-offstage" style="max-height: 220px; overflow-y: auto;">
                     ${renderChecklist(offStage, selected, 'offStage')}
                 </div>
             </div>
@@ -347,13 +419,12 @@ window.openEventAllocationModal = function(studentId) {
     `;
 
     const modalFooter = `
-        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-        <button class="btn btn-success btn-sm fw-bold" id="modal-save-solo-btn">Save Selections</button>
+        <button class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-success btn-sm fw-bold px-3 btn-touch" id="modal-save-solo-btn">Save Selections</button>
     `;
 
-    window.showGlobalModal(`Event Selection: ${student.name}`, modalBody, modalFooter);
+    window.showGlobalModal(`Solo Registration: ${student.name}`, modalBody, modalFooter);
 
-    // Live validation
     const checkboxes = document.querySelectorAll('.ev-select-cb');
     function applyLimits() {
         const onCount = document.querySelectorAll('.ev-select-cb[data-type="onStage"]:checked').length;
@@ -374,7 +445,7 @@ window.openEventAllocationModal = function(studentId) {
             item?.classList.toggle('text-danger', existingCount + (cb.checked ? 1 : 0) > limit);
             item?.querySelector('.event-limit-warning')?.remove();
             if (event) {
-                item?.querySelector('label')?.insertAdjacentHTML('beforeend', ` <span class="badge ${existingCount + (cb.checked ? 1 : 0) > limit ? 'bg-danger' : 'bg-light text-dark'} border event-limit-warning">House ${existingCount + (cb.checked ? 1 : 0)}/${limit}</span>`);
+                item?.querySelector('label')?.insertAdjacentHTML('beforeend', ` <span class="badge ${existingCount + (cb.checked ? 1 : 0) > limit ? 'bg-danger' : 'bg-light text-dark'} border event-limit-warning ms-1" style="font-size: 0.68rem;">House: ${existingCount + (cb.checked ? 1 : 0)}/${limit}</span>`);
             }
         });
     }
@@ -387,7 +458,6 @@ window.openEventAllocationModal = function(studentId) {
         const exceeded = checkedEvents.map(id => state.festEvents.find(event => event.id === id)).filter(event => event && houseEventSoloCount(fest.id, houseId, event.id, student.id) + 1 > eventHouseLimit(fest, event, 'solo'));
         if (exceeded.length) return window.showAlert(`House limit exceeded for: ${exceeded.map(event => event.name).join(', ')}`, 'danger');
         
-        // Preserve any group events this student belongs to
         const existingGroupEvents = (reg?.events || []).filter(id => {
             return state.festEvents.find(e => e.id === id)?.isGroupEvent;
         });
@@ -424,11 +494,13 @@ window.openEventAllocationModal = function(studentId) {
 };
 
 function renderChecklist(eventList, selectedSet, type) {
-    if (eventList.length === 0) return `<small class="text-muted">No eligible events.</small>`;
+    if (eventList.length === 0) return `<small class="text-muted p-1">No eligible events found.</small>`;
     return eventList.map(e => `
-        <div class="form-check">
-            <input class="form-check-input ev-select-cb" type="checkbox" value="${e.id}" data-type="${type}" id="cb-${e.id}" ${selectedSet.has(e.id) ? 'checked' : ''}>
-            <label class="form-check-label small" for="cb-${e.id}">${e.name}</label>
+        <div class="form-check p-2 rounded border bg-white mb-1">
+            <input class="form-check-input ev-select-cb ms-0 me-2" type="checkbox" value="${e.id}" data-type="${type}" id="cb-${e.id}" ${selectedSet.has(e.id) ? 'checked' : ''} style="cursor: pointer;">
+            <label class="form-check-label small fw-semibold text-dark w-100" for="cb-${e.id}" style="cursor: pointer;">
+                ${e.name}
+            </label>
         </div>
     `).join('');
 }
@@ -444,30 +516,28 @@ function eventwiseRegistrationTab(fest, house, isRegistrationOpen) {
     const categories = [...new Set(events.map(event => event.category || 'General'))];
 
     container.innerHTML = `
-        <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
             <div>
-                <h6 class="fw-bold mb-1"><i class="fas fa-calendar-check text-primary me-2"></i>Event-wise Registration</h6>
-                <div class="small text-muted">Click <strong>Assign Students</strong> to search and pick participants, or click any student badge to edit their full schedule.</div>
+                <h6 class="fw-bold mb-0 fs-6"><i class="fas fa-calendar-check text-primary me-2"></i>Event-wise Registration</h6>
+                <div class="text-muted small" style="font-size: 0.75rem;">Assign participants or tap any student tag to edit schedule.</div>
             </div>
-            <div class="d-flex align-items-center gap-2">
-                <span class="badge bg-secondary py-2">${houseStudents.length} House Students</span>
-            </div>
+            <span class="badge bg-secondary py-1 px-2" style="font-size: 0.75rem;">${houseStudents.length} House Members</span>
         </div>
 
         <div class="row g-2 mb-3">
-            <div class="col-md-4">
-                <label class="small fw-bold" for="eventwise-category-filter">Filter Category</label>
+            <div class="col-6 col-md-4">
+                <label class="small fw-semibold mb-1" style="font-size: 0.75rem;" for="eventwise-category-filter">Category</label>
                 <select id="eventwise-category-filter" class="form-select form-select-sm">
                     <option value="all">All Categories</option>
                     ${categories.map(category => `<option value="${category}">${category}</option>`).join('')}
                 </select>
             </div>
-            <div class="col-md-4">
-                <label class="small fw-bold" for="eventwise-event-search">Search Event</label>
-                <input id="eventwise-event-search" class="form-control form-control-sm" placeholder="Event name or stage...">
+            <div class="col-6 col-md-4">
+                <label class="small fw-semibold mb-1" style="font-size: 0.75rem;" for="eventwise-event-search">Search</label>
+                <input id="eventwise-event-search" type="search" class="form-control form-control-sm" placeholder="Event name...">
             </div>
-            <div class="col-md-4 d-flex align-items-end">
-                <div class="d-flex gap-2 align-items-center small">
+            <div class="col-12 col-md-4 d-flex align-items-end">
+                <div class="d-flex flex-wrap gap-1 align-items-center small" style="font-size: 0.7rem;">
                     <span class="badge bg-warning-subtle text-warning-emphasis border border-warning">Pending</span>
                     <span class="badge bg-success-subtle text-success-emphasis border border-success">Filled</span>
                     <span class="badge bg-danger text-white">Over Limit</span>
@@ -475,15 +545,15 @@ function eventwiseRegistrationTab(fest, house, isRegistrationOpen) {
             </div>
         </div>
 
-        <div class="table-responsive border rounded" style="max-height: 600px; overflow-y: auto;">
+        <div class="table-responsive table-mobile-responsive border rounded" style="max-height: 60vh; overflow-y: auto;">
             <table class="table table-sm table-hover align-middle mb-0" id="eventwise-registration-table">
                 <thead class="table-light sticky-top">
                     <tr>
-                        <th style="min-width: 180px;">Event</th>
-                        <th>Type</th>
-                        <th class="text-center" style="width: 110px;">House Capacity</th>
-                        <th style="min-width: 250px;">Registered Participants (Click to Edit)</th>
-                        <th class="text-end" style="width: 160px;">Action</th>
+                        <th style="min-width: 140px;">Event</th>
+                        <th style="width: 60px;">Type</th>
+                        <th class="text-center" style="width: 75px;">Capacity</th>
+                        <th style="min-width: 180px;">Registered</th>
+                        <th class="text-end" style="width: 100px;">Action</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
@@ -526,60 +596,57 @@ function eventwiseRegistrationTab(fest, house, isRegistrationOpen) {
             const rowClass = isOverLimit ? 'table-danger' : (isFull ? 'table-success-subtle' : (count > 0 ? 'table-warning-subtle' : ''));
 
             const statusBadge = isOverLimit 
-                ? `<span class="badge bg-danger text-white"><i class="fas fa-exclamation-circle me-1"></i>${count}/${limit}</span>`
+                ? `<span class="badge bg-danger text-white">${count}/${limit}</span>`
                 : (isFull 
-                    ? `<span class="badge bg-success"><i class="fas fa-check-circle me-1"></i>${count}/${limit}</span>`
+                    ? `<span class="badge bg-success">${count}/${limit}</span>`
                     : `<span class="badge bg-warning text-dark border">${count}/${limit}</span>`);
 
             const registeredHtml = registered.map(({ registration, student }) => `
-                <div class="d-inline-flex align-items-center bg-white border rounded-pill px-2 py-1 me-1 mb-1 shadow-sm">
-                    <span class="eventwise-student-chip text-primary fw-bold small me-2" role="button" data-student-id="${registration.studentId}" title="Click to view/edit all events for this student">
-                        <i class="fas fa-user-pen me-1 text-secondary"></i>${student?.name || registration.studentName}
+                <div class="d-inline-flex align-items-center bg-white border rounded-pill px-2 py-0 me-1 mb-1 shadow-sm" style="font-size: 0.75rem;">
+                    <span class="eventwise-student-chip text-primary fw-semibold me-1 py-1" role="button" data-student-id="${registration.studentId}" title="Tap to manage student events">
+                        <i class="fas fa-user-pen me-1 text-muted"></i>${student?.name || registration.studentName}
                     </span>
-                    <button type="button" class="btn-close btn-close-xs eventwise-clear-btn" data-registration-id="${registration.id}" data-event-id="${event.id}" title="Remove from this event" style="font-size: 0.65rem;"></button>
+                    <button type="button" class="btn-close btn-close-xs eventwise-clear-btn p-1 ms-1" data-registration-id="${registration.id}" data-event-id="${event.id}" title="Remove from event" style="font-size: 0.55rem;"></button>
                 </div>
-            `).join('') || '<span class="small text-muted fst-italic">No participants registered</span>';
+            `).join('') || '<span class="small text-muted fst-italic" style="font-size: 0.72rem;">No participants</span>';
 
             return `
                 <tr class="${rowClass}">
                     <td>
-                        <strong>${event.name}</strong>
-                        <div class="small text-muted">${event.category || 'General'} &bull; ${event.stage || 'Main Stage'}</div>
+                        <strong class="text-dark d-block text-truncate" style="max-width: 160px;">${event.name}</strong>
+                        <div class="text-muted small" style="font-size: 0.7rem;">${event.category || 'General'} &bull; ${event.stage || 'Main Stage'}</div>
                     </td>
                     <td>
-                        <span class="badge ${event.isGroupEvent ? 'bg-info' : 'bg-secondary'}">${event.isGroupEvent ? 'Group' : 'Solo'}</span>
+                        <span class="badge ${event.isGroupEvent ? 'bg-info' : 'bg-secondary'}" style="font-size: 0.68rem;">${event.isGroupEvent ? 'Group' : 'Solo'}</span>
                     </td>
                     <td class="text-center">${statusBadge}</td>
                     <td>${registeredHtml}</td>
                     <td class="text-end text-nowrap">
                         ${event.isGroupEvent
-                            ? '<span class="small text-muted fst-italic">Use Group Teams tab</span>'
-                            : `<button type="button" class="btn btn-sm ${isFull ? 'btn-outline-secondary' : 'btn-primary'} open-student-picker-btn" data-event-id="${event.id}" ${!isRegistrationOpen || isFull ? 'disabled' : ''}>
-                                 <i class="fas fa-user-plus me-1"></i>${isFull ? 'Full' : 'Assign Students'}
+                            ? '<span class="text-muted small fst-italic" style="font-size: 0.7rem;">Group Tab</span>'
+                            : `<button type="button" class="btn btn-sm ${isFull ? 'btn-outline-secondary' : 'btn-primary'} py-1 px-2 open-student-picker-btn btn-touch" data-event-id="${event.id}" ${!isRegistrationOpen || isFull ? 'disabled' : ''} style="font-size: 0.78rem;">
+                                 <i class="fas fa-user-plus me-1"></i>${isFull ? 'Full' : 'Assign'}
                                </button>`
                         }
                     </td>
                 </tr>
             `;
-        }).join('') || '<tr><td colspan="5" class="text-center text-muted p-4">No events found matching criteria.</td></tr>';
+        }).join('') || '<tr><td colspan="5" class="text-center text-muted p-4 small">No events found matching criteria.</td></tr>';
     }
 
     container.addEventListener('click', async e => {
-        // Open Student Selection Modal
         const pickerBtn = e.target.closest('.open-student-picker-btn');
         if (pickerBtn) {
             window.openEventStudentPickerModal(pickerBtn.dataset.eventId, house.id);
             return;
         }
 
-        // Open Individual Student Event Schedule Modal
         const studentChip = e.target.closest('.eventwise-student-chip');
         if (studentChip) {
             window.openEventAllocationModal(studentChip.dataset.studentId);
             return;
         }
 
-        // Remove Single Participant from Event
         const clearBtn = e.target.closest('.eventwise-clear-btn');
         if (!clearBtn) return;
 
@@ -626,7 +693,6 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
     const enrolledStudentIds = new Set(existingRegistrations.map(r => r.studentId));
     const availableSlots = Math.max(0, limit - enrolledStudentIds.size);
 
-    // Filter eligible pool
     const eligibleStudents = houseStudents.filter(student => {
         if (enrolledStudentIds.has(student.id)) return false;
         const catMatch = event.category === 'General' || getStudentCategory(student) === event.category;
@@ -639,39 +705,42 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
     const selectedStudentIds = new Set();
 
     const modalBody = `
-        <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-1 mb-2 p-2 bg-light rounded border">
             <div>
-                <h6 class="fw-bold mb-0 text-primary">${event.name}</h6>
-                <div class="small text-muted">${event.category || 'General'} &bull; ${event.type === 'offStage' ? 'Off-Stage' : 'On-Stage'}</div>
+                <h6 class="fw-bold mb-0 text-primary fs-6">${event.name}</h6>
+                <div class="small text-muted" style="font-size: 0.74rem;">${event.category || 'General'} &bull; ${event.type === 'offStage' ? 'Off-Stage' : 'On-Stage'}</div>
             </div>
-            <div class="text-end">
-                <span class="badge bg-light text-dark border">House Limit: <strong>${limit}</strong></span>
-                <span class="badge bg-info ms-1" id="picker-slots-badge">Remaining Slots: <strong>${availableSlots}</strong></span>
+            <div class="d-flex gap-1">
+                <span class="badge bg-white text-dark border" style="font-size: 0.72rem;">Limit: <strong>${limit}</strong></span>
+                <span class="badge bg-info text-dark" id="picker-slots-badge" style="font-size: 0.72rem;">Open: <strong>${availableSlots}</strong></span>
             </div>
         </div>
 
-        <div class="mb-3">
-            <input type="search" id="modal-student-search-input" class="form-control form-control-sm" placeholder="Search by name, admission no, or class...">
+        <div class="mb-2">
+            <input type="search" id="modal-student-search-input" class="form-control form-control-sm" placeholder="Search by name, admission no, class...">
         </div>
 
         <div class="row g-2">
-            <div class="col-md-7 border-end">
-                <label class="small fw-bold mb-1">Eligible Students (${eligibleStudents.length})</label>
-                <div class="list-group border rounded" id="modal-student-available-list" style="max-height: 280px; overflow-y: auto;"></div>
+            <div class="col-12 col-md-7 modal-col-border">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <label class="small fw-bold mb-0" style="font-size: 0.78rem;">Eligible Students (${eligibleStudents.length})</label>
+                    <span class="text-muted small" style="font-size: 0.7rem;">Tap to select</span>
+                </div>
+                <div class="list-group border rounded" id="modal-student-available-list" style="max-height: 220px; overflow-y: auto;"></div>
             </div>
-            <div class="col-md-5">
-                <label class="small fw-bold mb-1">Selected to Add (<span id="modal-selected-count">0</span>)</label>
-                <div class="border rounded p-2 bg-light" id="modal-selected-queue" style="max-height: 280px; overflow-y: auto;">
-                    <div class="text-muted small text-center py-4">Check students on the left to queue them here.</div>
+            <div class="col-12 col-md-5">
+                <label class="small fw-bold mb-1" style="font-size: 0.78rem;">Selected Queue (<span id="modal-selected-count">0</span>)</label>
+                <div class="border rounded p-2 bg-light" id="modal-selected-queue" style="max-height: 220px; overflow-y: auto;">
+                    <div class="text-muted small text-center py-3" style="font-size: 0.75rem;">Checked students will queue here.</div>
                 </div>
             </div>
         </div>
     `;
 
     const modalFooter = `
-        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-        <button class="btn btn-success btn-sm fw-bold" id="modal-commit-students-btn" disabled>
-            <i class="fas fa-save me-1"></i>Save Assignments
+        <button class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-success btn-sm fw-bold px-3 btn-touch" id="modal-commit-students-btn" disabled>
+            <i class="fas fa-save me-1"></i>Save
         </button>
     `;
 
@@ -693,7 +762,7 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
         });
 
         if (!filtered.length) {
-            availableContainer.innerHTML = `<div class="p-3 text-center text-muted small">No eligible students match your search.</div>`;
+            availableContainer.innerHTML = `<div class="p-3 text-center text-muted small" style="font-size: 0.75rem;">No matching eligible students.</div>`;
             return;
         }
 
@@ -702,11 +771,11 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
             const disableCheck = !isChecked && (selectedStudentIds.size >= availableSlots);
 
             return `
-                <label class="list-group-item list-group-item-action d-flex align-items-center py-2 px-3 small ${disableCheck ? 'opacity-50' : ''}">
-                    <input class="form-check-input me-2 modal-student-cb" type="checkbox" value="${student.id}" ${isChecked ? 'checked' : ''} ${disableCheck ? 'disabled' : ''}>
-                    <div class="flex-grow-1">
-                        <strong>${student.name}</strong>
-                        <div class="text-muted small">Adm: ${student.admissionNumber || 'N/A'} &bull; ${getStudentClassName(student.classId, student.division)}</div>
+                <label class="list-group-item list-group-item-action d-flex align-items-center py-2 px-2 small ${disableCheck ? 'opacity-50' : ''}" style="cursor: pointer;">
+                    <input class="form-check-input me-2 modal-student-cb flex-shrink-0" type="checkbox" value="${student.id}" ${isChecked ? 'checked' : ''} ${disableCheck ? 'disabled' : ''}>
+                    <div class="flex-grow-1 text-truncate">
+                        <strong class="d-block text-truncate" style="font-size: 0.82rem;">${student.name}</strong>
+                        <div class="text-muted" style="font-size: 0.7rem;">Adm: ${student.admissionNumber || 'N/A'} &bull; ${getStudentClassName(student.classId, student.division)}</div>
                     </div>
                 </label>
             `;
@@ -719,19 +788,18 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
         commitBtn.disabled = chosen.length === 0;
 
         if (!chosen.length) {
-            queueContainer.innerHTML = `<div class="text-muted small text-center py-4">Check students on the left to queue them here.</div>`;
+            queueContainer.innerHTML = `<div class="text-muted small text-center py-3" style="font-size: 0.75rem;">Checked students will queue here.</div>`;
             return;
         }
 
         queueContainer.innerHTML = chosen.map(student => `
             <div class="d-flex justify-content-between align-items-center bg-white border rounded p-1 px-2 mb-1 shadow-sm small">
-                <span class="text-truncate me-2"><strong>${student.name}</strong></span>
-                <button type="button" class="btn btn-xs btn-outline-danger modal-remove-queued-btn" data-id="${student.id}">&times;</button>
+                <span class="text-truncate me-2" style="font-size: 0.78rem;"><strong>${student.name}</strong></span>
+                <button type="button" class="btn btn-xs btn-outline-danger modal-remove-queued-btn py-0 px-2" data-id="${student.id}">&times;</button>
             </div>
         `).join('');
     }
 
-    // Checkbox toggling
     availableContainer.addEventListener('change', e => {
         const cb = e.target.closest('.modal-student-cb');
         if (!cb) return;
@@ -747,7 +815,6 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
         renderQueue();
     });
 
-    // Remove from queue
     queueContainer.addEventListener('click', e => {
         const removeBtn = e.target.closest('.modal-remove-queued-btn');
         if (!removeBtn) return;
@@ -758,11 +825,9 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
 
     searchInput.addEventListener('input', renderAvailableList);
 
-    // Initial render
     renderAvailableList();
     renderQueue();
 
-    // Commit & Batch Write
     commitBtn.addEventListener('click', async () => {
         if (!selectedStudentIds.size) return;
         commitBtn.disabled = true;
@@ -810,35 +875,38 @@ function renderGroupTeamTab(fest, house, isRegistrationOpen) {
     const groups = state.festGroups.filter(g => g.festId === fest.id && g.houseId === house.id);
 
     container.innerHTML = `
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h6 class="fw-bold mb-0">House Group Teams</h6>
-            <button class="btn btn-primary btn-sm" onclick="window.openGroupModal(null)" ${!isRegistrationOpen ? 'disabled' : ''}>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <h6 class="fw-bold mb-0 fs-6">House Group Teams</h6>
+            <button class="btn btn-primary btn-sm py-1 px-3 btn-touch" onclick="window.openGroupModal(null)" ${!isRegistrationOpen ? 'disabled' : ''}>
                 <i class="fas fa-plus me-1"></i>Create Group Team
             </button>
         </div>
 
-        <div class="row g-3" id="groups-list">
-            ${groups.length === 0 ? `<div class="col-12 text-center text-muted p-4">No groups formed yet.</div>` : ''}
+        <div class="row g-2 g-md-3" id="groups-list">
+            ${groups.length === 0 ? `<div class="col-12 text-center text-muted p-4 small">No groups formed yet.</div>` : ''}
             ${groups.map(g => {
                 const captain = g.members?.find(m => m.role === 'Captain');
                 const captainObj = state.students.find(s => s.id === captain?.studentId);
                 return `
-                    <div class="col-md-6">
-                        <div class="card border p-3">
-                            <div class="d-flex justify-content-between">
-                                <h6 class="fw-bold mb-1">${g.name}</h6>
-                                <span class="badge bg-secondary">${g.members?.length || 0} Members</span>
+                    <div class="col-12 col-md-6">
+                        <div class="card border p-3 h-100 shadow-sm">
+                            <div class="d-flex justify-content-between align-items-start gap-1">
+                                <h6 class="fw-bold mb-1 text-truncate fs-6">${g.name}</h6>
+                                <span class="badge bg-secondary flex-shrink-0" style="font-size: 0.7rem;">${g.members?.length || 0} Members</span>
                             </div>
-                            <p class="small text-muted mb-2">${g.category || 'General'} | ${state.festEvents.find(e => e.id === g.eventId)?.name || 'Event not recorded'}<br>Captain: <strong>${captainObj?.name || 'Unassigned'}</strong></p>
-                            <div class="d-flex justify-content-end gap-2 mt-2">
-                                <button class="btn btn-xs btn-outline-secondary" onclick="window.printGroupRollCard('${g.id}')">
+                            <p class="small text-muted mb-2" style="font-size: 0.75rem;">
+                                ${g.category || 'General'} &bull; ${state.festEvents.find(e => e.id === g.eventId)?.name || 'Event not recorded'}<br>
+                                Captain: <strong>${captainObj?.name || 'Unassigned'}</strong>
+                            </p>
+                            <div class="d-flex flex-wrap justify-content-end gap-1 mt-auto pt-2 border-top">
+                                <button class="btn btn-xs btn-outline-secondary py-1 px-2 btn-touch" onclick="window.printGroupRollCard('${g.id}')">
                                     <i class="fas fa-print me-1"></i>Roll Card
                                 </button>
-                                <button class="btn btn-xs btn-outline-primary" onclick="window.openGroupModal('${g.id}')" ${!isRegistrationOpen ? 'disabled' : ''}>
-                                    Edit Members
+                                <button class="btn btn-xs btn-outline-primary py-1 px-2 btn-touch" onclick="window.openGroupModal('${g.id}')" ${!isRegistrationOpen ? 'disabled' : ''}>
+                                    <i class="fas fa-users-gear me-1"></i>Edit
                                 </button>
-                                <button class="btn btn-xs btn-outline-danger" onclick="window.deleteGroup('${g.id}')" ${!isRegistrationOpen ? 'disabled' : ''}>
-                                    Delete
+                                <button class="btn btn-xs btn-outline-danger py-1 px-2 btn-touch" onclick="window.deleteGroup('${g.id}')" ${!isRegistrationOpen ? 'disabled' : ''}>
+                                    <i class="fas fa-trash me-1"></i>Delete
                                 </button>
                             </div>
                         </div>
@@ -861,43 +929,45 @@ window.openGroupModal = function(groupId) {
     let activeMembers = isEdit ? [...group.members] : [];
 
     const modalBody = `
-        <div class="mb-3">
-            <label class="form-label small fw-bold">Group / Team Name</label>
-            <input type="text" id="grp-name" class="form-control form-control-sm" value="${group?.name || ''}" placeholder="e.g., Patriotic Song Squad">
+        <div class="row g-2 mb-2">
+            <div class="col-12 col-md-6">
+                <label class="form-label small fw-bold mb-1">Group / Team Name</label>
+                <input type="text" id="grp-name" class="form-control form-control-sm" value="${group?.name || ''}" placeholder="e.g., Patriotic Song Squad">
+            </div>
+            <div class="col-12 col-md-6">
+                <label class="form-label small fw-bold mb-1">Category</label>
+                <select id="grp-category" class="form-select form-select-sm">
+                    <option value="">Choose category</option>
+                    ${categories.map(category => `<option value="${category}" ${group?.category === category ? 'selected' : ''}>${category}</option>`).join('')}
+                </select>
+            </div>
         </div>
-        <div class="mb-3">
-            <label class="form-label small fw-bold">Category</label>
-            <select id="grp-category" class="form-select form-select-sm">
-                <option value="">Choose category</option>
-                ${categories.map(category => `<option value="${category}" ${group?.category === category ? 'selected' : ''}>${category}</option>`).join('')}
-            </select>
-        </div>
-        <div class="mb-3">
-            <label class="form-label small fw-bold">Select Group Event</label>
+        <div class="mb-2">
+            <label class="form-label small fw-bold mb-1">Select Group Event</label>
             <select id="grp-event" class="form-select form-select-sm">
-                    <option value="">Choose event</option>
-                    ${groupEvents.map(e => `<option value="${e.id}" ${group?.eventId === e.id ? 'selected' : ''}>${e.name} (${e.category}) - House limit: ${eventHouseLimit(fest, e, 'group')}${e.maxParticipants ? `, max ${e.maxParticipants} members` : ''}</option>`).join('')}
+                <option value="">Choose event</option>
+                ${groupEvents.map(e => `<option value="${e.id}" ${group?.eventId === e.id ? 'selected' : ''}>${e.name} (${e.category}) - Limit: ${eventHouseLimit(fest, e, 'group')}${e.maxParticipants ? `, max ${e.maxParticipants} members` : ''}</option>`).join('')}
             </select>
         </div>
-            <div id="grp-validation" class="small mb-3"></div>
-        <div class="row">
-            <div class="col-md-6 border-end">
-                <label class="form-label small fw-bold">Available Students</label>
-                <input type="search" id="grp-student-search" class="form-control form-control-sm mb-2" placeholder="Search name or admission number">
-                <div class="list-group small" id="grp-pool" style="max-height: 250px; overflow-y: auto;">
-                    <small class="text-muted">Choose a category and event to load eligible students.</small>
+        <div id="grp-validation" class="small mb-2"></div>
+        <div class="row g-2">
+            <div class="col-12 col-md-6 modal-col-border">
+                <label class="form-label small fw-bold mb-1">Available Students</label>
+                <input type="search" id="grp-student-search" class="form-control form-control-sm mb-1" placeholder="Filter student name or admission...">
+                <div class="list-group small border rounded" id="grp-pool" style="max-height: 200px; overflow-y: auto;">
+                    <small class="text-muted p-2">Choose category & event to load eligible students.</small>
                 </div>
             </div>
-            <div class="col-md-6">
-                <label class="form-label small fw-bold">Chosen Roster</label>
-                <ul class="list-group small" id="grp-selected"></ul>
+            <div class="col-12 col-md-6">
+                <label class="form-label small fw-bold mb-1">Chosen Roster (<span id="grp-roster-count">${activeMembers.length}</span>)</label>
+                <ul class="list-group small border rounded" id="grp-selected" style="max-height: 200px; overflow-y: auto;"></ul>
             </div>
         </div>
     `;
 
     const modalFooter = `
-        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-        <button class="btn btn-primary btn-sm fw-bold" id="grp-save-btn">Commit Team</button>
+        <button class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary btn-sm fw-bold px-3 btn-touch" id="grp-save-btn">Commit Team</button>
     `;
 
     const modalInstance = window.showGlobalModal(isEdit ? 'Edit Team' : 'Assemble Team', modalBody, modalFooter);
@@ -924,10 +994,11 @@ window.openGroupModal = function(groupId) {
             return !searchTerm || student.name.toLowerCase().includes(searchTerm) || String(student.admissionNumber || '').toLowerCase().includes(searchTerm);
         });
         pool.innerHTML = eligibleStudents.map(student => `
-            <button type="button" class="list-group-item list-group-item-action py-1 pool-student-btn" data-id="${student.id}">
-                ${student.name} <small class="text-muted">(${getStudentClassName(student.classId, student.division)})</small>
+            <button type="button" class="list-group-item list-group-item-action py-2 px-2 text-start pool-student-btn" data-id="${student.id}">
+                <div class="fw-semibold text-truncate" style="font-size: 0.8rem;">${student.name}</div>
+                <small class="text-muted" style="font-size: 0.7rem;">Adm: ${student.admissionNumber || 'N/A'} &bull; ${getStudentClassName(student.classId, student.division)}</small>
             </button>
-        `).join('') || '<small class="text-muted">No students match this category and event gender.</small>';
+        `).join('') || '<div class="text-muted small p-2 text-center">No students match selection criteria.</div>';
         updateGroupValidation();
     }
 
@@ -937,21 +1008,24 @@ window.openGroupModal = function(groupId) {
 
     function updateRosterUI() {
         const list = document.getElementById('grp-selected');
+        const countSpan = document.getElementById('grp-roster-count');
+        if (countSpan) countSpan.textContent = activeMembers.length;
+
         list.innerHTML = activeMembers.map((m, index) => {
             const student = state.students.find(s => s.id === m.studentId);
             return `
-                <li class="list-group-item d-flex justify-content-between align-items-center py-1">
-                    <span>${student?.name}</span>
-                    <div>
-                        <select class="form-select form-select-sm d-inline-block w-auto py-0 me-1 role-select" data-index="${index}">
+                <li class="list-group-item d-flex justify-content-between align-items-center py-1 px-2">
+                    <span class="text-truncate me-1" style="font-size: 0.78rem;">${student?.name || 'Student'}</span>
+                    <div class="d-flex align-items-center gap-1 flex-shrink-0">
+                        <select class="form-select form-select-sm d-inline-block w-auto py-0 px-1 role-select" data-index="${index}" style="font-size: 0.72rem; height: 26px;">
                             <option value="Member" ${m.role === 'Member' ? 'selected' : ''}>Member</option>
                             <option value="Captain" ${m.role === 'Captain' ? 'selected' : ''} ${m.role !== 'Captain' && activeMembers.some(member => member.role === 'Captain') ? 'disabled' : ''}>Captain</option>
                         </select>
-                        <button class="btn btn-xs btn-outline-danger remove-roster-btn" data-index="${index}">&times;</button>
+                        <button class="btn btn-xs btn-outline-danger remove-roster-btn py-0 px-2" data-index="${index}">&times;</button>
                     </div>
                 </li>
             `;
-        }).join('') || `<li class="text-muted text-center py-2">Click students on the left to add.</li>`;
+        }).join('') || `<li class="text-muted text-center py-3 small" style="font-size: 0.75rem;">Tap students from list to add.</li>`;
         updateGroupValidation();
     }
 
@@ -995,7 +1069,7 @@ window.openGroupModal = function(groupId) {
             errors.push(`${selectedEvent.name} already has ${eventHouseCount}/${eventHouseLimitValue} group team(s) for this house.`);
         }
         if (selectedEvent.maxParticipants && activeMembers.length > selectedEvent.maxParticipants) {
-            errors.push(`${selectedEvent.name} allows ${selectedEvent.maxParticipants} members per team; this team has ${activeMembers.length}.`);
+            errors.push(`${selectedEvent.name} allows ${selectedEvent.maxParticipants} members; team has ${activeMembers.length}.`);
         }
 
         const captainId = activeMembers.find(member => member.role === 'Captain')?.studentId;
@@ -1011,8 +1085,8 @@ window.openGroupModal = function(groupId) {
         if (!validation) return;
         const errors = getGroupValidationErrors();
         validation.innerHTML = errors.length
-            ? `<div class="alert alert-danger py-2 mb-0"><strong>Cannot save:</strong><ul class="mb-0 ps-3">${errors.map(error => `<li>${error}</li>`).join('')}</ul></div>`
-            : '<div class="alert alert-success py-2 mb-0">Group details and participation limits are valid.</div>';
+            ? `<div class="alert alert-danger py-1 px-2 mb-0" style="font-size: 0.75rem;"><strong>Alert:</strong><ul class="mb-0 ps-3">${errors.map(error => `<li>${error}</li>`).join('')}</ul></div>`
+            : '<div class="alert alert-success py-1 px-2 mb-0" style="font-size: 0.75rem;"><i class="fas fa-check-circle me-1"></i>Configuration valid.</div>';
     }
 
     document.getElementById('grp-pool').addEventListener('click', (e) => {
@@ -1057,7 +1131,7 @@ window.openGroupModal = function(groupId) {
         const category = document.getElementById('grp-category').value.trim();
         const eventId = document.getElementById('grp-event').value;
         const captainCount = activeMembers.filter(member => member.role === 'Captain').length;
-        if (!name || !category || !eventId || activeMembers.length === 0) return window.showAlert('Please choose an event, fill category and name, and add members.', 'warning');
+        if (!name || !category || !eventId || activeMembers.length === 0) return window.showAlert('Please fill team name, category, event and members.', 'warning');
         if (!groupEvents.some(event => event.id === eventId)) return window.showAlert('Choose a valid group event.', 'warning');
         if (captainCount !== 1) return window.showAlert('Select exactly one captain for the group.', 'warning');
         const validationErrors = getGroupValidationErrors();
@@ -1077,7 +1151,6 @@ window.openGroupModal = function(groupId) {
         const batch = writeBatch(db);
         batch.set(getScopedDoc('festGroups', gId), payload);
 
-        // Bind event registration across all active members
         activeMembers.forEach(m => {
             const regId = `${fest.id}_${m.studentId}`;
             const studentObj = state.students.find(s => s.id === m.studentId);
@@ -1148,119 +1221,314 @@ window.deleteGroup = async function(groupId) {
 function renderRosterSummaryTab(fest, house) {
     const container = document.getElementById('tab-view-summary');
     const registrations = state.festRegistrations.filter(r => r.festId === fest.id && r.houseId === house.id);
-    const events = state.festEvents.filter(event => event.festId === fest.id);
+    const events = state.festEvents.filter(event => event.festId === fest.id && event.cancelled !== true);
     const completedEventIds = new Set(state.festResults.filter(result => result.festId === fest.id).map(result => result.eventId));
     const stages = fest.stages?.length ? fest.stages : ['Main Stage'];
+
     const eventSummaries = events.map(event => {
-        const eventRegistrations = registrations.filter(registration => registration.events?.includes(event.id));
-        const groups = state.festGroups.filter(group => group.festId === fest.id && group.eventId === event.id && group.houseId === house.id);
-        const participantCount = event.isGroupEvent
-            ? groups.reduce((total, group) => total + (group.members?.length || 0), 0)
-            : eventRegistrations.length;
-        return { event, participantCount, cancelled: event.cancelled === true, completed: event.cancelled !== true && completedEventIds.has(event.id) };
+        const isGroup = event.isGroupEvent;
+        const limit = eventHouseLimit(fest, event, isGroup ? 'group' : 'solo');
+        
+        let participants = [];
+        if (isGroup) {
+            const groups = state.festGroups.filter(g => g.festId === fest.id && g.eventId === event.id && g.houseId === house.id);
+            participants = groups.map(g => {
+                const captain = g.members?.find(m => m.role === 'Captain');
+                const captainStudent = state.students.find(s => s.id === captain?.studentId);
+                return {
+                    id: g.id,
+                    name: g.name,
+                    isTeam: true,
+                    memberCount: g.members?.length || 0,
+                    captainName: captainStudent?.name || 'Not assigned',
+                    members: (g.members || []).map(m => {
+                        const s = state.students.find(st => st.id === m.studentId);
+                        const reg = state.festRegistrations.find(r => r.festId === fest.id && r.studentId === m.studentId);
+                        return {
+                            name: s?.name || m.studentId,
+                            admission: s?.admissionNumber || '',
+                            className: getStudentClassName(s?.classId, s?.division),
+                            chestNo: reg?.chestNo || '',
+                            role: m.role
+                        };
+                    })
+                };
+            });
+        } else {
+            const eventRegs = registrations.filter(r => r.events?.includes(event.id));
+            participants = eventRegs.map(r => {
+                const s = state.students.find(st => st.id === r.studentId);
+                return {
+                    id: r.studentId,
+                    name: s?.name || r.studentName,
+                    isTeam: false,
+                    admission: s?.admissionNumber || '',
+                    className: getStudentClassName(s?.classId, s?.division),
+                    chestNo: r.chestNo || ''
+                };
+            });
+        }
+
+        const count = participants.length;
+        const isOver = count > limit;
+        const isFilled = count === limit && limit > 0;
+
+        return {
+            event,
+            limit,
+            count,
+            isOver,
+            isFilled,
+            participants,
+            participantTotal: isGroup ? participants.reduce((acc, p) => acc + p.memberCount, 0) : count,
+            completed: completedEventIds.has(event.id)
+        };
     });
 
     container.innerHTML = `
-        <h6 class="fw-bold mb-3">All Active House Registrations (${registrations.length})</h6>
-        <div class="table-responsive">
-            <table class="table table-sm table-striped small">
-                <thead>
-                    <tr>
-                        <th>Admission No</th>
-                        <th>Student Name</th>
-                        <th>Class</th>
-                        <th>Chest No</th>
-                        <th>Event Count</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${registrations.map(r => {
-                        const student = state.students.find(s => s.id === r.studentId);
-                        return `
-                            <tr>
-                                <td>${student?.admissionNumber || 'N/A'}</td>
-                                <td><strong>${r.studentName}</strong></td>
-                                <td>${getStudentClassName(student?.classId, student?.division)}</td>
-                                <td>${r.chestNo || '<span class="text-muted">Unassigned</span>'}</td>
-                                <td>${r.events?.length || 0}</td>
-                            </tr>
-                        `;
-                    }).join('')}
-                </tbody>
-            </table>
-        </div>
-        <hr class="my-4">
-        <div class="border rounded p-3 mb-3">
-            <div class="row g-2 align-items-end">
-                <div class="col-md-4">
-                    <label class="small fw-bold" for="house-event-category">Category</label>
-                    <select id="house-event-category" class="form-select form-select-sm"><option value="all">All categories</option>${[...new Set(events.map(event => event.category).filter(Boolean))].map(category => `<option value="${category}">${category}</option>`).join('')}</select>
-                </div>
-                <div class="col-md-5">
-                    <label class="small fw-bold" for="house-event-selector">Event</label>
-                    <select id="house-event-selector" class="form-select form-select-sm"></select>
-                </div>
-                <div class="col-md-3"><div id="house-event-limit-status" class="small"></div></div>
-            </div>
-            <div id="house-event-participants" class="table-responsive mt-3"></div>
-        </div>
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <div>
-                <h6 class="fw-bold mb-1"><i class="fas fa-calendar-check me-2"></i>Event Entry Preview</h6>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <ul class="nav nav-pills fest-scroll-tabs" id="roster-subtabs">
+                <li class="nav-item">
+                    <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#subtab-roster-events">
+                        <i class="fas fa-calendar-check me-1"></i>Event-Wise (${events.length})
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#subtab-roster-students">
+                        <i class="fas fa-user-graduate me-1"></i>Students (${registrations.length})
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#subtab-roster-status">
+                        <i class="fas fa-chart-pie me-1"></i>Status Cards
+                    </button>
+                </li>
+            </ul>
 
-                <div class="small text-muted">Green means judging entry received. Amber means pending catch-up.</div>
-            </div>
-            <button class="btn btn-sm btn-outline-warning" type="button" onclick="window.filterHouseEventPreview('pending')"><i class="fas fa-hourglass-half me-1"></i>Pending</button>
+            <button class="btn btn-sm btn-danger py-1 px-3 btn-touch" onclick="window.exportHouseEventRosterPdf()">
+                <i class="fas fa-file-pdf me-1"></i>Roster PDF
+            </button>
         </div>
-        <div class="row g-2" id="house-event-preview">
-            ${eventSummaries.map(item => `
-                <div class="col-md-6 col-xl-4 house-event-preview-card" data-entry-status="${item.cancelled ? 'cancelled' : item.completed ? 'completed' : 'pending'}">
-                    <div class="border rounded p-3 h-100 ${item.cancelled ? 'border-secondary bg-light' : item.completed ? 'border-success bg-success-subtle' : 'border-warning bg-warning-subtle'}">
-                        <div class="d-flex justify-content-between gap-2">
-                            <strong>${item.event.name}</strong>
-                            <span class="badge ${item.cancelled ? 'bg-secondary' : item.completed ? 'bg-success' : 'bg-warning text-dark'}">${item.cancelled ? 'Cancelled' : item.completed ? 'Entered' : 'Pending'}</span>
-                        </div>
-                        <div class="small text-muted mt-1">${item.event.category || 'General'} &bull; ${item.event.isGroupEvent ? 'Group' : 'Solo'} &bull; ${item.event.stage || stages[0]}</div>
-                        <div class="small fw-bold mt-2">${item.cancelled ? 'Programme cancelled' : `${item.participantCount} house participant${item.participantCount === 1 ? '' : 's'}`}</div>
+
+        <div class="tab-content border rounded p-2 p-md-3 bg-white">
+            <!-- 1. EVENT-WISE ROSTER TAB -->
+            <div class="tab-pane fade show active" id="subtab-roster-events">
+                <div class="row g-2 mb-3">
+                    <div class="col-12 col-md-5">
+                        <input id="roster-event-search" type="search" class="form-control form-control-sm" placeholder="Search event, category, stage...">
+                    </div>
+                    <div class="col-7 col-md-4">
+                        <select id="roster-event-cat" class="form-select form-select-sm">
+                            <option value="all">All Categories</option>
+                            ${[...new Set(events.map(e => e.category || 'General'))].map(c => `<option value="${c}">${c}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="col-5 col-md-3 text-end">
+                        <span class="badge bg-light text-dark border p-2 w-100" id="roster-event-counter" style="font-size: 0.75rem;">
+                            ${events.length} Events
+                        </span>
                     </div>
                 </div>
-            `).join('') || '<div class="col-12"><div class="text-muted small">No events available.</div></div>'}
+
+                <div class="table-responsive table-mobile-responsive border rounded" style="max-height: 55vh; overflow-y: auto;">
+                    <table class="table table-sm table-hover align-middle mb-0" id="roster-events-table">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th style="min-width: 140px;">Event</th>
+                                <th style="width: 60px;">Type</th>
+                                <th class="text-center" style="width: 75px;">Capacity</th>
+                                <th style="min-width: 180px;">Enrolled Roster</th>
+                            </tr>
+                        </thead>
+                        <tbody id="roster-events-body">
+                            ${eventSummaries.map(item => {
+                                const ev = item.event;
+                                const badges = item.participants.map(p => {
+                                    if (p.isTeam) {
+                                        return `
+                                            <div class="border rounded p-2 mb-1 bg-light">
+                                                <div class="d-flex justify-content-between align-items-center">
+                                                    <strong class="text-primary text-truncate" style="font-size: 0.8rem;">${p.name}</strong>
+                                                    <span class="badge bg-secondary flex-shrink-0 ms-1" style="font-size: 0.65rem;">${p.memberCount} members</span>
+                                                </div>
+                                                <div class="text-muted small" style="font-size: 0.7rem;">Captain: <strong>${p.captainName}</strong></div>
+                                                <div class="small mt-1 text-secondary" style="font-size: 0.68rem;">${p.members.map(m => `${m.name} (${m.className})`).join(', ')}</div>
+                                            </div>
+                                        `;
+                                    }
+                                    return `
+                                        <span class="badge bg-white text-dark border p-1 px-2 me-1 mb-1 shadow-sm d-inline-block" style="font-size: 0.72rem;">
+                                            <strong>${p.name}</strong> 
+                                            <span class="text-muted">(${p.className})</span>${p.chestNo ? `<span class="badge bg-primary-subtle text-primary ms-1">#${p.chestNo}</span>` : ''}
+                                        </span>
+                                    `;
+                                }).join('') || '<span class="text-muted small fst-italic" style="font-size: 0.72rem;">No participants</span>';
+
+                                return `
+                                    <tr class="${item.isOver ? 'table-danger' : (item.isFilled ? 'table-success-subtle' : '')}"
+                                        data-event-name="${`${ev.name.toLowerCase()} ${ev.category || ''} ${ev.stage || ''}`}"
+                                        data-event-category="${ev.category || 'General'}">
+                                        <td>
+                                            <strong class="text-dark d-block text-truncate" style="max-width: 160px;">${ev.name}</strong>
+                                            <div class="small text-muted" style="font-size: 0.7rem;">${ev.category || 'General'} &bull; ${ev.stage || 'Main Stage'}</div>
+                                        </td>
+                                        <td>
+                                            <span class="badge ${ev.isGroupEvent ? 'bg-info' : 'bg-secondary'}" style="font-size: 0.68rem;">
+                                                ${ev.isGroupEvent ? 'Group' : 'Solo'}
+                                            </span>
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="badge ${item.isOver ? 'bg-danger' : (item.isFilled ? 'bg-success' : 'bg-light text-dark border')}" style="font-size: 0.72rem;">
+                                                ${item.count} / ${item.limit}
+                                            </span>
+                                        </td>
+                                        <td>${badges}</td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 2. STUDENT-WISE ROSTER TAB -->
+            <div class="tab-pane fade" id="subtab-roster-students">
+                <div class="table-responsive table-mobile-responsive border rounded" style="max-height: 55vh; overflow-y: auto;">
+                    <table class="table table-sm table-striped align-middle mb-0">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th style="min-width: 120px;">Student</th>
+                                <th style="width: 70px;">Chest</th>
+                                <th class="text-center" style="width: 60px;">Total</th>
+                                <th style="min-width: 150px;">Events</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${registrations.map(r => {
+                                const student = state.students.find(s => s.id === r.studentId);
+                                const enrolledEventNames = (r.events || []).map(id => events.find(e => e.id === id)?.name).filter(Boolean);
+                                return `
+                                    <tr>
+                                        <td>
+                                            <strong class="d-block text-truncate" style="max-width: 150px;">${r.studentName}</strong>
+                                            <div class="text-muted" style="font-size: 0.7rem;">Adm: ${student?.admissionNumber || 'N/A'} &bull; ${getStudentClassName(student?.classId, student?.division)}</div>
+                                        </td>
+                                        <td>${r.chestNo ? `<span class="badge bg-primary" style="font-size: 0.7rem;">#${r.chestNo}</span>` : '<span class="text-muted" style="font-size: 0.7rem;">-</span>'}</td>
+                                        <td class="text-center"><strong>${r.events?.length || 0}</strong></td>
+                                        <td>
+                                            <div class="d-flex flex-wrap gap-1">
+                                                ${enrolledEventNames.map(name => `<span class="badge bg-light text-dark border" style="font-size: 0.7rem;">${name}</span>`).join('') || '<span class="text-muted small fst-italic">None</span>'}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                `;
+                            }).join('') || '<tr><td colspan="4" class="text-center text-muted p-4 small">No active registrations.</td></tr>'}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 3. LIVE STATUS CARDS TAB -->
+            <div class="tab-pane fade" id="subtab-roster-status">
+                <div class="row g-2">
+                    ${eventSummaries.map(item => `
+                        <div class="col-12 col-md-6 col-xl-4">
+                            <div class="border rounded p-2 p-md-3 h-100 shadow-sm ${item.completed ? 'border-success bg-success-subtle' : 'border-warning bg-warning-subtle'}">
+                                <div class="d-flex justify-content-between align-items-start gap-1">
+                                    <div class="text-truncate me-1">
+                                        <strong class="text-dark d-block text-truncate" style="font-size: 0.85rem;">${item.event.name}</strong>
+                                        <div class="text-muted" style="font-size: 0.72rem;">${item.event.category || 'General'} &bull; ${item.event.stage || stages[0]}</div>
+                                    </div>
+                                    <span class="badge ${item.completed ? 'bg-success' : 'bg-warning text-dark'} flex-shrink-0" style="font-size: 0.68rem;">
+                                        ${item.completed ? 'Entered' : 'Pending'}
+                                    </span>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top" style="font-size: 0.75rem;">
+                                    <span class="fw-semibold">${item.participantTotal} Member(s)</span>
+                                    <span class="badge ${item.isOver ? 'bg-danger' : (item.isFilled ? 'bg-success' : 'bg-secondary')}">
+                                        ${item.count} / ${item.limit} ${item.event.isGroupEvent ? 'Teams' : 'Entries'}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('') || '<div class="col-12 text-muted text-center p-3 small">No events to preview.</div>'}
+                </div>
+            </div>
         </div>
     `;
 
-    const categoryPicker = container.querySelector('#house-event-category');
-    const eventPicker = container.querySelector('#house-event-selector');
-    const participantBox = container.querySelector('#house-event-participants');
-    const limitStatus = container.querySelector('#house-event-limit-status');
-    function renderEventOptions() {
-        const filteredEvents = events.filter(event => categoryPicker.value === 'all' || event.category === categoryPicker.value);
-        eventPicker.innerHTML = filteredEvents.map(event => `<option value="${event.id}">${event.name} (${event.isGroupEvent ? 'Group' : 'Solo'})</option>`).join('') || '<option value="">No events</option>';
-        renderSelectedEvent();
+    const searchInput = container.querySelector('#roster-event-search');
+    const catSelect = container.querySelector('#roster-event-cat');
+    const counter = container.querySelector('#roster-event-counter');
+
+    function filterEventsTable() {
+        const query = searchInput.value.trim().toLowerCase();
+        const cat = catSelect.value;
+        let visibleCount = 0;
+
+        container.querySelectorAll('#roster-events-body tr').forEach(row => {
+            const matchesSearch = !query || row.dataset.eventName.includes(query);
+            const matchesCat = cat === 'all' || row.dataset.eventCategory === cat;
+            const isVisible = matchesSearch && matchesCat;
+            row.classList.toggle('d-none', !isVisible);
+            if (isVisible) visibleCount++;
+        });
+
+        if (counter) counter.textContent = `${visibleCount} Events`;
     }
-    function renderSelectedEvent() {
-        const event = events.find(item => item.id === eventPicker.value);
-        if (!event) {
-            limitStatus.innerHTML = '';
-            participantBox.innerHTML = '<div class="small text-muted">Choose an event to inspect its house entries.</div>';
-            return;
-        }
-        const mode = event.isGroupEvent ? 'group' : 'solo';
-        const limit = eventHouseLimit(fest, event, mode);
-        const entries = event.isGroupEvent
-            ? state.festGroups.filter(group => group.festId === fest.id && group.houseId === house.id && group.eventId === event.id)
-            : registrations.filter(registration => registration.events?.includes(event.id));
-        const exceeded = entries.length > limit;
-        limitStatus.innerHTML = `<span class="badge ${exceeded ? 'bg-danger' : 'bg-success'}">${entries.length}/${limit} ${mode} house limit</span>${exceeded ? '<div class="text-danger mt-1">Limit exceeded</div>' : ''}`;
-        participantBox.innerHTML = `<table class="table table-sm align-middle mb-0"><thead><tr><th>#</th><th>${mode === 'group' ? 'Team' : 'Student'}</th><th>Details</th><th>Status</th></tr></thead><tbody>${entries.map((entry, index) => {
-            const student = mode === 'group' ? null : state.students.find(item => item.id === entry.studentId);
-            const name = mode === 'group' ? entry.name : entry.studentName;
-            const details = mode === 'group' ? `${entry.members?.length || 0} members` : `${student?.admissionNumber || ''} | ${getStudentClassName(student?.classId, student?.division)}`;
-            return `<tr class="${exceeded ? 'table-danger' : ''}"><td>${index + 1}</td><td><strong>${name}</strong></td><td>${details}</td><td><span class="badge ${exceeded ? 'bg-danger' : 'bg-success'}">${exceeded ? 'Over limit' : 'Valid'}</span></td></tr>`;
-        }).join('') || '<tr><td colspan="4" class="text-muted">No participants selected for this event.</td></tr>'}</tbody></table>`;
-    }
-    categoryPicker.addEventListener('change', renderEventOptions);
-    eventPicker.addEventListener('change', renderSelectedEvent);
-    renderEventOptions();
+
+    searchInput.addEventListener('input', filterEventsTable);
+    catSelect.addEventListener('change', filterEventsTable);
+
+    window.exportHouseEventRosterPdf = function() {
+        const rows = eventSummaries.map((item, idx) => {
+            const ev = item.event;
+            const participantsText = item.participants.map(p => {
+                if (p.isTeam) {
+                    return `<strong>${p.name}</strong> (Capt: ${p.captainName}) - [${p.members.map(m => m.name).join(', ')}]`;
+                }
+                return `${p.name} (${p.className})${p.chestNo ? ` [Chest: ${p.chestNo}]` : ''}`;
+            }).join('<br>') || '<em>No participants</em>';
+
+            return `
+                <tr>
+                    <td style="text-align: center;">${idx + 1}</td>
+                    <td><strong>${ev.name}</strong><br><small>${ev.category || 'General'} | ${ev.stage || 'Main Stage'}</small></td>
+                    <td>${ev.isGroupEvent ? 'Group' : 'Solo'}</td>
+                    <td style="text-align: center;">${item.count} / ${item.limit}</td>
+                    <td>${participantsText}</td>
+                </tr>
+            `;
+        }).join('');
+
+        const contentHtml = `
+            <div style="text-align: center; margin-bottom: 16px;">
+                <h2 style="margin: 0;">${fest.name}</h2>
+                <h4 style="margin: 4px 0;">Official House Event Roster: <span style="color: ${house.color || '#000'}">${house.name}</span></h4>
+                <div style="font-size: 12px; color: #555;">Generated on: ${new Date().toLocaleDateString()} | Total Registrations: ${registrations.length}</div>
+            </div>
+            <table class="table table-bordered table-sm" style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                <thead style="background: #f0f0f0;">
+                    <tr>
+                        <th style="width: 35px; text-align: center;">#</th>
+                        <th style="width: 180px;">Event</th>
+                        <th style="width: 70px;">Mode</th>
+                        <th style="width: 80px; text-align: center;">Slots</th>
+                        <th>Registered Participants</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rows}
+                </tbody>
+            </table>
+        `;
+
+        window.printReport({
+            contentHtml,
+            title: `Event_Roster_${house.name.replace(/\s+/g, '_')}_${fest.name.replace(/\s+/g, '_')}`,
+            pageSize: 'A4 landscape'
+        });
+    };
 }
 
 window.filterHouseEventPreview = function(status) {
