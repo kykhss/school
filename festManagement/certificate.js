@@ -13,6 +13,7 @@ const DEFAULT_CERTIFICATE_SETTINGS = {
     }
 };
 
+
 function getCertificateSettings(fest) {
     const saved = fest.settings?.certificate || {};
     return {
