@@ -523,23 +523,40 @@ window.saveDashboardEventStage = async function(eventId, button) {
     }
 };
 
+// =========================================================================
+// --- FEST SETUP & RULES TAB ---
+// =========================================================================
+
 function renderSetupTab() {
     const container = document.getElementById('tab-setup');
     const fest = state.managingFest;
     const settings = fest.settings || {};
     const houses = state.festHouses;
     const stages = fest.stages?.length ? fest.stages : ['Main Stage'];
+    const houseLimits = settings.houseEventLimits || { onStage: { solo: 2, group: 1 }, offStage: { solo: 2, group: 1 } };
 
     container.innerHTML = `
         <div class="row g-4">
             <div class="col-lg-6">
+                <!-- Conduct Stages -->
                 <div class="ui-card">
                     <h5 class="section-header"><i class="fas fa-layer-group me-2"></i>Conduct Venues / Stages</h5>
-                    <div id="fest-stages-list" class="mb-2">${stages.map(stage => `<div class="input-group input-group-sm mb-1"><input class="form-control fest-stage-input" value="${stage}"><button class="btn btn-outline-danger" type="button" onclick="this.closest('.input-group').remove()">&times;</button></div>`).join('')}</div>
-                    <div class="input-group input-group-sm"><input id="new-fest-stage" class="form-control" placeholder="e.g. LP Hall, Main Stage"><button class="btn btn-outline-primary" onclick="window.addFestStage()">Add Venue / Stage</button></div>
+                    <div id="fest-stages-list" class="mb-2">
+                        ${stages.map(stage => `
+                            <div class="input-group input-group-sm mb-1">
+                                <input class="form-control fest-stage-input" value="${stage}">
+                                <button class="btn btn-outline-danger" type="button" onclick="this.closest('.input-group').remove()">&times;</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="input-group input-group-sm">
+                        <input id="new-fest-stage" class="form-control" placeholder="e.g. LP Hall, Main Stage">
+                        <button class="btn btn-outline-primary" onclick="window.addFestStage()">Add Venue / Stage</button>
+                    </div>
                     <button class="btn btn-success btn-sm mt-2" onclick="window.saveFestStages()"><i class="fas fa-save me-1"></i>Save Stages</button>
                 </div>
 
+                <!-- Registration Switch -->
                 <div class="ui-card">
                     <h5 class="section-header"><i class="fas fa-toggle-on me-2"></i>Registration Status</h5>
                     <div class="form-check form-switch mb-3">
@@ -549,29 +566,51 @@ function renderSetupTab() {
                     <p class="small text-muted mb-0">When deactivated, house captain portals cannot add, remove, or modify registrations.</p>
                 </div>
 
+                <!-- Global Default Limits -->
                 <div class="ui-card">
-                    <h5 class="section-header"><i class="fas fa-sliders-h me-2"></i>Per-Student Entry Limits</h5>
+                    <h5 class="section-header"><i class="fas fa-user-check me-2"></i>Default Per-Student Entry Limits</h5>
                     <div class="row g-2">
                         <div class="col-6">
                             <label class="small fw-bold">Max On-Stage (Solo)</label>
-                            <input type="number" id="limit-on-solo" class="form-control form-control-sm" value="${settings.maxOnStageSoloEvents ?? 2}">
+                            <input type="number" id="limit-on-solo" min="0" class="form-control form-control-sm" value="${settings.maxOnStageSoloEvents ?? 2}">
                         </div>
                         <div class="col-6">
                             <label class="small fw-bold">Max On-Stage (Group)</label>
-                            <input type="number" id="limit-on-group" class="form-control form-control-sm" value="${settings.maxOnStageGroupEvents ?? 2}">
+                            <input type="number" id="limit-on-group" min="0" class="form-control form-control-sm" value="${settings.maxOnStageGroupEvents ?? 2}">
                         </div>
                         <div class="col-6 mt-2">
                             <label class="small fw-bold">Max Off-Stage (Solo)</label>
-                            <input type="number" id="limit-off-solo" class="form-control form-control-sm" value="${settings.maxOffStageSoloEvents ?? 1}">
+                            <input type="number" id="limit-off-solo" min="0" class="form-control form-control-sm" value="${settings.maxOffStageSoloEvents ?? 1}">
                         </div>
                         <div class="col-6 mt-2">
                             <label class="small fw-bold">Max Off-Stage (Group)</label>
-                            <input type="number" id="limit-off-group" class="form-control form-control-sm" value="${settings.maxOffStageGroupEvents ?? 1}">
+                            <input type="number" id="limit-off-group" min="0" class="form-control form-control-sm" value="${settings.maxOffStageGroupEvents ?? 1}">
                         </div>
                     </div>
-                    <button class="btn btn-primary btn-sm mt-3" onclick="window.saveGeneralSettings()">Save Limits</button>
+
+                    <h5 class="section-header mt-4"><i class="fas fa-shield-alt me-2"></i>Default Per-House Event Limits</h5>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="small fw-bold">House On-Stage (Solo Entries)</label>
+                            <input type="number" id="house-limit-on-solo" min="0" class="form-control form-control-sm" value="${houseLimits.onStage?.solo ?? 2}">
+                        </div>
+                        <div class="col-6">
+                            <label class="small fw-bold">House On-Stage (Group Teams)</label>
+                            <input type="number" id="house-limit-on-group" min="0" class="form-control form-control-sm" value="${houseLimits.onStage?.group ?? 1}">
+                        </div>
+                        <div class="col-6 mt-2">
+                            <label class="small fw-bold">House Off-Stage (Solo Entries)</label>
+                            <input type="number" id="house-limit-off-solo" min="0" class="form-control form-control-sm" value="${houseLimits.offStage?.solo ?? 2}">
+                        </div>
+                        <div class="col-6 mt-2">
+                            <label class="small fw-bold">House Off-Stage (Group Teams)</label>
+                            <input type="number" id="house-limit-off-group" min="0" class="form-control form-control-sm" value="${houseLimits.offStage?.group ?? 1}">
+                        </div>
+                    </div>
+                    <button class="btn btn-primary btn-sm mt-3 w-100" onclick="window.saveGeneralSettings()">Save All Default Limits</button>
                 </div>
 
+                <!-- Houses Configuration -->
                 <div class="ui-card">
                     <h5 class="section-header"><i class="fas fa-shield-alt me-2"></i>Academic Year Houses (${houses.length})</h5>
                     <div class="table-responsive mb-3" style="max-height: 200px; overflow-y: auto;">
@@ -606,6 +645,7 @@ function renderSetupTab() {
                 </div>
             </div>
 
+            <!-- Categories Configuration -->
             <div class="col-lg-6">
                 <div class="ui-card">
                     <h5 class="section-header"><i class="fas fa-layer-group me-2"></i>Age / Class Categories</h5>
@@ -656,6 +696,33 @@ function renderSetupTab() {
     });
 }
 
+window.saveGeneralSettings = async function() {
+    const fest = state.managingFest;
+    const settings = {
+        ...(fest.settings || {}),
+        maxOnStageSoloEvents: parseInt(document.getElementById('limit-on-solo').value, 10) || 0,
+        maxOnStageGroupEvents: parseInt(document.getElementById('limit-on-group').value, 10) || 0,
+        maxOffStageSoloEvents: parseInt(document.getElementById('limit-off-solo').value, 10) || 0,
+        maxOffStageGroupEvents: parseInt(document.getElementById('limit-off-group').value, 10) || 0,
+        houseEventLimits: {
+            onStage: {
+                solo: parseInt(document.getElementById('house-limit-on-solo').value, 10) || 0,
+                group: parseInt(document.getElementById('house-limit-on-group').value, 10) || 0
+            },
+            offStage: {
+                solo: parseInt(document.getElementById('house-limit-off-solo').value, 10) || 0,
+                group: parseInt(document.getElementById('house-limit-off-group').value, 10) || 0
+            }
+        }
+    };
+
+    await updateScopedDoc('fests', fest.id, { settings });
+    fest.settings = settings;
+    await loadAllYearData(true);
+    state.managingFest = state.fests.find(item => item.id === fest.id) || fest;
+    renderSetupTab();
+    window.showAlert('Default student and house limits updated.', 'success');
+};
 window.addHouseDefinition = async function() {
     const id = document.getElementById('house-in-id').value.trim().toUpperCase();
     const name = document.getElementById('house-in-name').value.trim();
@@ -740,21 +807,6 @@ window.commitCategories = async function() {
     window.showAlert('Categories updated and saved.', 'success');
 };
 
-window.saveGeneralSettings = async function() {
-    const fest = state.managingFest;
-    const settings = {
-        ...(fest.settings || {}),
-        maxOnStageSoloEvents: parseInt(document.getElementById('limit-on-solo').value, 10) || 0,
-        maxOnStageGroupEvents: parseInt(document.getElementById('limit-on-group').value, 10) || 0,
-        maxOffStageSoloEvents: parseInt(document.getElementById('limit-off-solo').value, 10) || 0,
-        maxOffStageGroupEvents: parseInt(document.getElementById('limit-off-group').value, 10) || 0
-    };
-
-    await updateScopedDoc('fests', fest.id, { settings });
-    fest.settings = settings;
-    window.showAlert('Event limits updated.', 'success');
-};
-
 window.addFestStage = function() {
     const input = document.getElementById('new-fest-stage');
     const stage = input.value.trim();
@@ -811,8 +863,9 @@ window.saveEventStageAndJudges = async function(eventId, button) {
         window.showAlert('Failed to save event stage and judges.', 'danger');
     }
 };
-
-// --- 3. EVENT CREATION & DEFINITIONS ---
+// =========================================================================
+// --- EVENTS TAB (MAIN VIEW & FILTERING) ---
+// =========================================================================
 
 function renderEventsTab() {
     const container = document.getElementById('tab-events');
@@ -820,9 +873,11 @@ function renderEventsTab() {
     const categories = fest.settings?.categories || [];
     const stages = fest.stages?.length ? fest.stages : ['Main Stage'];
     const events = state.festEvents.filter(e => e.festId === fest.id);
+    const defaultHouseLimits = fest.settings?.houseEventLimits || { onStage: { solo: 2, group: 1 }, offStage: { solo: 2, group: 1 } };
 
     container.innerHTML = `
         <div class="row g-4">
+            <!-- Left: Create Event Form -->
             <div class="col-lg-5">
                 <div class="ui-card">
                     <h5 class="section-header"><i class="fas fa-calendar-plus me-2"></i>Create Event</h5>
@@ -841,7 +896,7 @@ function renderEventsTab() {
                         <div class="row g-2 mb-3">
                             <div class="col-6">
                                 <label class="form-label small fw-bold">Type</label>
-                                <select id="ev-type" class="form-select">
+                                <select id="ev-type" class="form-select" onchange="window.updateEventFormDefaults()">
                                     <option value="onStage">On-Stage</option>
                                     <option value="offStage">Off-Stage</option>
                                 </select>
@@ -855,7 +910,7 @@ function renderEventsTab() {
                                     <option value="Both">Split (Boys & Girls)</option>
                                 </select>
                             </div>
-                            <div class="col-6">
+                            <div class="col-12">
                                 <label class="form-label small fw-bold">Conduct Venue / Stage</label>
                                 <select id="ev-stage" class="form-select">
                                     ${stages.map(stage => `<option value="${stage}">${stage}</option>`).join('')}
@@ -863,35 +918,62 @@ function renderEventsTab() {
                             </div>
                         </div>
                         <div class="form-check mb-3">
-                            <input class="form-check-input" type="checkbox" id="ev-is-group">
+                            <input class="form-check-input" type="checkbox" id="ev-is-group" onchange="window.updateEventFormDefaults()">
                             <label class="form-check-label fw-bold small" for="ev-is-group">Group Event</label>
                         </div>
+
+                        <!-- Event Specific Limits Override -->
+                        <div class="border rounded p-3 mb-3 bg-light">
+                            <div class="small fw-bold mb-2 text-primary"><i class="fas fa-sliders-h me-1"></i>Event Limits Override</div>
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <label class="small fw-bold">Max Entries per House</label>
+                                    <input type="number" min="1" id="ev-house-limit" class="form-control form-control-sm" value="${defaultHouseLimits.onStage?.solo ?? 2}">
+                                    <div class="text-muted" style="font-size: 0.75rem;">Default from setup</div>
+                                </div>
+                                <div class="col-6">
+                                    <label class="small fw-bold">Max Members / Team</label>
+                                    <input type="number" min="1" id="ev-participant-limit" class="form-control form-control-sm" value="1" disabled>
+                                    <div class="text-muted" style="font-size: 0.75rem;">Only for group events</div>
+                                </div>
+                            </div>
+                        </div>
+
                         <button type="submit" class="btn btn-primary w-100">Save Event</button>
                     </form>
                 </div>
             </div>
 
+            <!-- Right: Event Roster & Actions -->
             <div class="col-lg-7">
                 <div class="ui-card">
                     <h5 class="section-header"><i class="fas fa-list me-2"></i>Events (${events.length})</h5>
                     <div class="row g-2 mb-3">
                         <div class="col-md-5">
-                            <label class="small fw-bold" for="event-search">Search</label>
-                            <input id="event-search" class="form-control form-control-sm" placeholder="Event name, category, stage...">
+                            <input id="event-search" class="form-control form-control-sm" placeholder="Search events...">
                         </div>
                         <div class="col-md-3">
-                            <label class="small fw-bold" for="event-filter-category">Category</label>
-                            <select id="event-filter-category" class="form-select form-select-sm"><option value="all">All categories</option>${[...new Set(events.map(event => event.category).filter(Boolean))].map(category => `<option value="${category}">${category}</option>`).join('')}</select>
+                            <select id="event-filter-category" class="form-select form-select-sm">
+                                <option value="all">All categories</option>
+                                ${[...new Set(events.map(event => event.category).filter(Boolean))].map(category => `<option value="${category}">${category}</option>`).join('')}
+                            </select>
                         </div>
                         <div class="col-md-2">
-                            <label class="small fw-bold" for="event-filter-type">Type</label>
-                            <select id="event-filter-type" class="form-select form-select-sm"><option value="all">All types</option><option value="onStage">On-stage</option><option value="offStage">Off-stage</option></select>
+                            <select id="event-filter-type" class="form-select form-select-sm">
+                                <option value="all">All types</option>
+                                <option value="onStage">On-stage</option>
+                                <option value="offStage">Off-stage</option>
+                            </select>
                         </div>
                         <div class="col-md-2">
-                            <label class="small fw-bold" for="event-filter-status">Status</label>
-                            <select id="event-filter-status" class="form-select form-select-sm"><option value="all">All</option><option value="scheduled">Scheduled</option><option value="cancelled">Cancelled</option></select>
+                            <select id="event-filter-status" class="form-select form-select-sm">
+                                <option value="all">All</option>
+                                <option value="scheduled">Scheduled</option>
+                                <option value="cancelled">Cancelled</option>
+                            </select>
                         </div>
                     </div>
+
                     <div class="d-flex flex-wrap gap-2 mb-3">
                         <button class="btn btn-sm btn-outline-success" type="button" onclick="window.exportEventsCsv()"><i class="fas fa-file-excel me-1"></i>Excel CSV</button>
                         <button class="btn btn-sm btn-outline-danger" type="button" onclick="window.exportEventsPdf()"><i class="fas fa-file-pdf me-1"></i>PDF</button>
@@ -899,27 +981,53 @@ function renderEventsTab() {
                         <button class="btn btn-sm btn-outline-secondary" type="button" onclick="window.downloadEventImportDemo()"><i class="fas fa-download me-1"></i>Demo CSV</button>
                         <input id="event-import-file" type="file" accept=".csv,text/csv" class="d-none">
                     </div>
+
                     <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
-                        <table class="table table-sm table-hover" id="events-management-table">
-                            <thead class="table-light"><tr><th>Event</th><th>Category</th><th>Stage</th><th>Type</th><th>Mode</th><th></th></tr></thead>
+                        <table class="table table-sm table-hover align-middle mb-0" id="events-management-table">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th>Event</th>
+                                    <th>Stage</th>
+                                    <th>Type</th>
+                                    <th>House Limit</th>
+                                    <th>Team Size</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
                             <tbody id="events-management-body">
-                                ${events.map(ev => `
-                                    <tr data-event-search="${`${ev.name} ${ev.category || ''} ${ev.stage || ''}`.toLowerCase()}" data-event-category="${ev.category || ''}" data-event-type="${ev.type || ''}" data-event-status="${ev.cancelled ? 'cancelled' : 'scheduled'}">
-                                        <td><strong>${ev.name}</strong><div class="mt-1"><span class="badge ${ev.cancelled ? 'bg-secondary' : 'bg-success-subtle text-success-emphasis'}">${ev.cancelled ? 'Cancelled' : 'Scheduled'}</span></div></td>
-                                        <td><span class="badge bg-secondary">${ev.category}</span></td>
-                                        <td><span class="badge bg-primary">${ev.stage || 'Main Stage'}</span></td>
-                                        <td>${ev.type}</td>
-                                        <td>${ev.isGroupEvent ? '<span class="badge bg-info">Group</span>' : 'Solo'}</td>
-                                        <td class="text-end">
-                                            <button class="btn btn-xs ${ev.cancelled ? 'btn-outline-success' : 'btn-outline-warning'}" onclick="window.toggleEventCancellation('${ev.id}')" title="${ev.cancelled ? 'Restore event' : 'Mark programme cancelled'}">
-                                                <i class="fas ${ev.cancelled ? 'fa-rotate-left' : 'fa-ban'}"></i>
-                                            </button>
-                                            <button class="btn btn-xs btn-outline-danger" onclick="window.deleteEventById('${ev.id}')">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                `).join('')}
+                                ${events.map(ev => {
+                                    const defaultHouseLimit = (defaultHouseLimits[ev.type] || {})[ev.isGroupEvent ? 'group' : 'solo'] ?? 1;
+                                    const actualHouseLimit = ev.customHouseLimit ?? defaultHouseLimit;
+                                    const participantLimit = ev.isGroupEvent ? (ev.maxParticipants || 'No limit') : '1 (Solo)';
+
+                                    return `
+                                        <tr data-event-search="${`${ev.name} ${ev.category || ''} ${ev.stage || ''}`.toLowerCase()}" data-event-category="${ev.category || ''}" data-event-type="${ev.type || ''}" data-event-status="${ev.cancelled ? 'cancelled' : 'scheduled'}">
+                                            <td>
+                                                <strong>${ev.name}</strong>
+                                                <div class="small text-muted">${ev.category || 'General'} | ${ev.isGroupEvent ? '<span class="badge bg-info">Group</span>' : 'Solo'}</div>
+                                            </td>
+                                            <td><span class="badge bg-primary">${ev.stage || 'Main Stage'}</span></td>
+                                            <td>${ev.type === 'onStage' ? 'On-Stage' : 'Off-Stage'}</td>
+                                            <td>
+                                                <span class="badge bg-light text-dark border">${actualHouseLimit}${ev.isGroupEvent ? 'Teams' : 'Entries'}</span>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-light text-dark border">${participantLimit}</span>
+                                            </td>
+                                            <td class="text-end text-nowrap">
+                                                <button class="btn btn-xs btn-outline-primary" onclick="window.editEventLimitsModal('${ev.id}')" title="Edit Event Limits">
+                                                    <i class="fas fa-sliders-h"></i>
+                                                </button>
+                                                <button class="btn btn-xs ${ev.cancelled ? 'btn-outline-success' : 'btn-outline-warning'}" onclick="window.toggleEventCancellation('${ev.id}')" title="${ev.cancelled ? 'Restore' : 'Cancel'}">
+                                                    <i class="fas ${ev.cancelled ? 'fa-rotate-left' : 'fa-ban'}"></i>
+                                                </button>
+                                                <button class="btn btn-xs btn-outline-danger" onclick="window.deleteEventById('${ev.id}')">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    `;
+                                }).join('') || '<tr><td colspan="6" class="text-center text-muted p-3">No events found.</td></tr>'}
                             </tbody>
                         </table>
                     </div>
@@ -929,20 +1037,138 @@ function renderEventsTab() {
     `;
 
     document.getElementById('create-event-form')?.addEventListener('submit', handleEventCreate);
+    document.getElementById('event-import-file')?.addEventListener('change', event => window.importEventsCsv(event.target.files[0]));
+
     const applyEventFilters = () => {
         const search = document.getElementById('event-search').value.trim().toLowerCase();
         const category = document.getElementById('event-filter-category').value;
         const type = document.getElementById('event-filter-type').value;
         const status = document.getElementById('event-filter-status').value;
         document.querySelectorAll('#events-management-body tr').forEach(row => {
-            const visible = (!search || row.dataset.eventSearch.includes(search)) && (category === 'all' || row.dataset.eventCategory === category) && (type === 'all' || row.dataset.eventType === type) && (status === 'all' || row.dataset.eventStatus === status);
+            const visible = (!search || row.dataset.eventSearch?.includes(search)) &&
+                (category === 'all' || row.dataset.eventCategory === category) &&
+                (type === 'all' || row.dataset.eventType === type) &&
+                (status === 'all' || row.dataset.eventStatus === status);
             row.classList.toggle('d-none', !visible);
         });
     };
     ['event-search', 'event-filter-category', 'event-filter-type', 'event-filter-status'].forEach(id => document.getElementById(id)?.addEventListener('input', applyEventFilters));
-    document.getElementById('event-import-file')?.addEventListener('change', event => window.importEventsCsv(event.target.files[0]));
 }
 
+
+// =========================================================================
+// --- EVENT ACTIONS, MODALS & STATUS ---
+// =========================================================================
+
+window.updateEventFormDefaults = function() {
+    const isGroup = document.getElementById('ev-is-group').checked;
+    const type = document.getElementById('ev-type').value;
+    const defaults = state.managingFest?.settings?.houseEventLimits || { onStage: { solo: 2, group: 1 }, offStage: { solo: 2, group: 1 } };
+    
+    document.getElementById('ev-house-limit').value = defaults[type]?.[isGroup ? 'group' : 'solo'] ?? 1;
+    
+    const partInput = document.getElementById('ev-participant-limit');
+    partInput.disabled = !isGroup;
+    if (!isGroup) partInput.value = '1';
+    else if (partInput.value === '1') partInput.value = '6';
+};
+
+window.editEventLimitsModal = function(eventId) {
+    const event = state.festEvents.find(item => item.id === eventId);
+    if (!event) return;
+
+    const defaults = state.managingFest.settings?.houseEventLimits || { onStage: { solo: 2, group: 1 }, offStage: { solo: 2, group: 1 } };
+    const defaultHouseLimit = (defaults[event.type] || {})[event.isGroupEvent ? 'group' : 'solo'] ?? 1;
+    const currentHouseLimit = event.customHouseLimit ?? defaultHouseLimit;
+    const currentParticipantLimit = event.maxParticipants ?? (event.isGroupEvent ? 6 : 1);
+
+    window.showGlobalModal(`Edit Limits: ${event.name}`, `
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="small fw-bold">Max Allowed Entries per House</label>
+                <input type="number" min="1" id="edit-event-house-limit" class="form-control form-control-sm" value="${currentHouseLimit}">
+                <div class="text-muted small">Controls how many ${event.isGroupEvent ? 'teams' : 'solo participants'} each house can register.</div>
+            </div>
+            ${event.isGroupEvent ? `
+                <div class="col-12">
+                    <label class="small fw-bold">Max Members per Team</label>
+                    <input type="number" min="2" id="edit-event-participant-limit" class="form-control form-control-sm" value="${currentParticipantLimit}">
+                    <div class="text-muted small">Max students allowed inside a single group submission.</div>
+                </div>
+            ` : ''}
+        </div>
+    `, `
+        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="save-event-limits-btn">Save Changes</button>
+    `);
+
+    document.getElementById('save-event-limits-btn').addEventListener('click', async () => {
+        const customHouseLimit = parseInt(document.getElementById('edit-event-house-limit').value, 10) || 1;
+        const updatePayload = { customHouseLimit };
+
+        if (event.isGroupEvent) {
+            updatePayload.maxParticipants = parseInt(document.getElementById('edit-event-participant-limit').value, 10) || null;
+            event.maxParticipants = updatePayload.maxParticipants;
+        }
+
+        try {
+            await updateScopedDoc('festEvents', eventId, updatePayload);
+            event.customHouseLimit = customHouseLimit;
+            bootstrap.Modal.getInstance(document.getElementById('global-modal'))?.hide();
+            renderEventsTab();
+            window.showAlert('Event limits updated.', 'success');
+        } catch (error) {
+            console.error(error);
+            window.showAlert('Failed to update event limits.', 'danger');
+        }
+    });
+};
+
+window.toggleEventCancellation = async function(eventId) {
+    const event = state.festEvents.find(item => item.id === eventId);
+    if (!event) return window.showAlert('Event not found.', 'danger');
+    const cancelled = event.cancelled !== true;
+    const prompt = cancelled
+        ? 'Mark this programme as cancelled? Judges will not be able to upload marks.'
+        : 'Restore this programme and allow judging again?';
+    if (!confirm(prompt)) return;
+
+    try {
+        await updateScopedDoc('festEvents', eventId, { cancelled });
+        event.cancelled = cancelled;
+        window.showAlert(cancelled ? 'Programme marked as cancelled.' : 'Programme restored.', 'success');
+        renderEventsTab();
+        if (typeof renderDashboardTab === 'function') renderDashboardTab();
+    } catch (error) {
+        console.error(error);
+        window.showAlert('Failed to update programme status.', 'danger');
+    }
+};
+
+window.deleteEventById = async function(eventId) {
+    if (!confirm('Permanently remove this event? Existing participant registrations will be affected.')) return;
+    try {
+        await deleteScopedDoc('festEvents', eventId);
+        window.showAlert('Event deleted.', 'success');
+        await loadAllYearData(true);
+        renderEventsTab();
+    } catch (err) {
+        console.error(err);
+        window.showAlert('Failed to delete event.', 'danger');
+    }
+};
+window.updateEventFormDefaults = function() {
+    const isGroup = document.getElementById('ev-is-group').checked;
+    const type = document.getElementById('ev-type').value;
+    const defaults = state.managingFest?.settings?.houseEventLimits || { onStage: { solo: 2, group: 1 }, offStage: { solo: 2, group: 1 } };
+    
+    document.getElementById('ev-house-limit').value = defaults[type]?.[isGroup ? 'group' : 'solo'] ?? 1;
+    
+    const partInput = document.getElementById('ev-participant-limit');
+    partInput.disabled = !isGroup;
+    if (!isGroup) partInput.value = '1';
+    else if (partInput.value === '1') partInput.value = '6';
+};
 function downloadTextFile(filename, content, type = 'text/csv;charset=utf-8') {
     const link = document.createElement('a');
     link.href = URL.createObjectURL(new Blob([content], { type }));
@@ -1018,6 +1244,8 @@ async function handleEventCreate(e) {
     const gender = document.getElementById('ev-gender').value;
     const stage = document.getElementById('ev-stage').value;
     const isGroupEvent = document.getElementById('ev-is-group').checked;
+    const customHouseLimit = Number(document.getElementById('ev-house-limit').value) || 0;
+    const maxParticipants = isGroupEvent ? (Number(document.getElementById('ev-participant-limit').value) || null) : null;
 
     const genders = gender === 'Both' ? ['Male', 'Female'] : [gender];
     const baseId = `EVT_${Date.now()}`;
@@ -1037,6 +1265,8 @@ async function handleEventCreate(e) {
                 gender: g,
                 stage,
                 isGroupEvent,
+                customHouseLimit,
+                ...(isGroupEvent && maxParticipants ? { maxParticipants } : {}),
                 cancelled: false
             });
 
@@ -1053,6 +1283,31 @@ async function handleEventCreate(e) {
         window.showAlert('Failed to save events.', 'danger');
     }
 }
+
+window.editEventHouseLimits = function(eventId) {
+    const event = state.festEvents.find(item => item.id === eventId);
+    if (!event) return;
+    const defaults = state.managingFest.settings?.houseEventLimits || { onStage: { solo: 2, group: 1 }, offStage: { solo: 2, group: 1 } };
+    const limits = event.houseLimits || defaults;
+    window.showGlobalModal(`House limits: ${event.name}`, `
+        <div class="row g-2">
+            <div class="col-6"><label class="small fw-bold">On-stage solo</label><input type="number" min="0" id="edit-limit-on-solo" class="form-control form-control-sm" value="${limits.onStage?.solo ?? 0}"></div>
+            <div class="col-6"><label class="small fw-bold">On-stage group</label><input type="number" min="0" id="edit-limit-on-group" class="form-control form-control-sm" value="${limits.onStage?.group ?? 0}"></div>
+            <div class="col-6"><label class="small fw-bold">Off-stage solo</label><input type="number" min="0" id="edit-limit-off-solo" class="form-control form-control-sm" value="${limits.offStage?.solo ?? 0}"></div>
+            <div class="col-6"><label class="small fw-bold">Off-stage group</label><input type="number" min="0" id="edit-limit-off-group" class="form-control form-control-sm" value="${limits.offStage?.group ?? 0}"></div>
+        </div>`, `<button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary btn-sm" id="save-event-limits">Save limits</button>`);
+    document.getElementById('save-event-limits').addEventListener('click', async () => {
+        const houseLimits = {
+            onStage: { solo: Number(document.getElementById('edit-limit-on-solo').value) || 0, group: Number(document.getElementById('edit-limit-on-group').value) || 0 },
+            offStage: { solo: Number(document.getElementById('edit-limit-off-solo').value) || 0, group: Number(document.getElementById('edit-limit-off-group').value) || 0 }
+        };
+        await updateScopedDoc('festEvents', eventId, { houseLimits });
+        event.houseLimits = houseLimits;
+        bootstrap.Modal.getInstance(document.getElementById('global-modal'))?.hide();
+        renderEventsTab();
+        window.showAlert('Event house limits saved.', 'success');
+    });
+};
 
 window.toggleEventCancellation = async function(eventId) {
     const event = state.festEvents.find(item => item.id === eventId);
