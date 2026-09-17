@@ -157,6 +157,7 @@ export async function loadAllYearData(forceRefresh = false) {
         window.festRegistrations = state.festRegistrations;
         window.festGroups = state.festGroups;
         window.festResults = state.festResults;
+        window.schoolDetails = state.schoolDetails || {schoolName: "KYHSS ATHAVANAD ", schoolLogoUrl: ""};
 
     } catch (error) {
         console.error("Failed to load year collections:", error);
