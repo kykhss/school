@@ -259,7 +259,7 @@ async function renderJudgingSheet(fest, event, participants, houses, groups, pre
 }
 
 /**
- * Validates ranks, checks duplicate awards, checks judge access code,
+ * Validates ranks, checks judge access code,
  * and saves rankings with calculated points to festResults.
  */
 async function commitJudgingResults(fest, event, participants, houses, groups) {
@@ -270,18 +270,11 @@ async function commitJudgingResults(fest, event, participants, houses, groups) {
         return window.showAlert('Invalid Judge Security Code.', 'danger');
     }
 
-    const assignedRanks = new Set();
     const rankedResults = [];
-    let duplicateDetected = false;
 
     document.querySelectorAll('#judging-table tbody tr').forEach(tr => {
         const position = parseInt(tr.querySelector('.rank-select').value, 10);
         if (position > 0) {
-            if (assignedRanks.has(position)) {
-                duplicateDetected = true;
-            }
-            assignedRanks.add(position);
-
             const isGroup = tr.dataset.isGroup === 'true';
             const id = tr.dataset.id;
 
@@ -301,9 +294,6 @@ async function commitJudgingResults(fest, event, participants, houses, groups) {
         }
     });
 
-    if (duplicateDetected) {
-        return window.showAlert('Positions must be unique. Multiple identical ranks detected.', 'danger');
-    }
     if (rankedResults.length === 0) {
         return window.showAlert('Assign at least one position (1st, 2nd, or 3rd) before submitting.', 'warning');
     }
