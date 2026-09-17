@@ -212,6 +212,8 @@ function renderFestWorkspace() {
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-reports"><i class="fas fa-print me-2"></i>Reports</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-csv"><i class="fas fa-file-csv me-2"></i>Bulk Ingestion</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-links"><i class="fas fa-link me-2"></i>Portals & Users</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-certificate"><i class="fas fa-certificate me-2"></i>Certificate</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-result-entry"><i class="fas fa-square-poll-vertical me-2"></i>Result Entry</button></li>
         </ul>
 
         <div class="tab-content card border-top-0 rounded-bottom p-4" id="festAdminTabsContent">
@@ -223,6 +225,8 @@ function renderFestWorkspace() {
             <div class="tab-pane fade" id="tab-reports"></div>
             <div class="tab-pane fade" id="tab-csv"></div>
             <div class="tab-pane fade" id="tab-links"></div>
+            <div class="tab-pane fade" id="tab-certificate"></div>
+            <div class="tab-pane fade" id="tab-result-entry"></div>
         </div>
     `;
 
@@ -236,6 +240,8 @@ function renderFestWorkspace() {
     }
     renderCsvUploadTab();
     renderAccessLinksTab();
+    if (typeof window.renderCertificateTab === 'function') window.renderCertificateTab();
+    if (typeof window.renderResultEntryTab === 'function') window.renderResultEntryTab();
 }
 
 // --- 2. FEST CRUD & SETUP TAB ---
@@ -1406,11 +1412,19 @@ function renderSubTabChestNumbers() {
                     <label class="small fw-bold">Start Number</label>
                     <input type="number" id="chest-start-no" class="form-control form-control-sm" value="101">
                 </div>
+                <div class="col-md-3">
+                    <label class="small fw-bold">Next generation mode</label>
+                    <select id="chest-generation-mode" class="form-select form-select-sm">
+                        <option value="missing">Continue: only students without chest numbers</option>
+                        <option value="all">New: generate for all selected students</option>
+                    </select>
+                </div>
                 <div class="col-md-3 d-flex gap-1">
                     <button class="btn btn-primary btn-sm w-100" onclick="window.generateChestNumbers()"><i class="fas fa-magic me-1"></i>Generate</button>
                     <button class="btn btn-outline-danger btn-sm" onclick="window.clearChestNumbers()"><i class="fas fa-eraser"></i></button>
                 </div>
             </div>
+            <div id="chest-number-preview" class="alert alert-info py-2 mt-3 mb-0 small"></div>
         </div>
 
         <div class="table-responsive border rounded" style="max-height: 450px; overflow-y: auto;">
@@ -1443,18 +1457,58 @@ function renderSubTabChestNumbers() {
             </table>
         </div>
     `;
+
+    ['chest-house-picker', 'chest-prefix', 'chest-start-no', 'chest-generation-mode'].forEach(id => {
+        document.getElementById(id)?.addEventListener('input', updateChestNumberPreview);
+        document.getElementById(id)?.addEventListener('change', updateChestNumberPreview);
+    });
+    updateChestNumberPreview();
+}
+
+function getChestNumberInfo() {
+    const fest = state.managingFest;
+    const targetHouse = document.getElementById('chest-house-picker')?.value || '';
+    const prefix = document.getElementById('chest-prefix')?.value.trim().toUpperCase() || '';
+    const selected = state.festRegistrations.filter(reg => reg.festId === fest.id && (!targetHouse || reg.houseId === targetHouse));
+    const assigned = selected.filter(reg => reg.chestNo);
+    const matchingNumbers = assigned.map(reg => {
+        const value = String(reg.chestNo).trim().toUpperCase();
+        if (prefix && !value.startsWith(prefix)) return null;
+        const number = Number(value.slice(prefix.length));
+        return Number.isFinite(number) ? number : null;
+    }).filter(number => number !== null);
+    const lastNumber = matchingNumbers.length ? Math.max(...matchingNumbers) : null;
+    return { targetHouse, prefix, selected, assigned, missing: selected.filter(reg => !reg.chestNo), lastNumber };
+}
+
+function updateChestNumberPreview() {
+    const preview = document.getElementById('chest-number-preview');
+    if (!preview) return;
+    const info = getChestNumberInfo();
+    const house = state.festHouses.find(item => item.id === info.targetHouse);
+    const last = info.lastNumber === null ? 'None' : `${info.prefix}${info.lastNumber}`;
+    const next = info.lastNumber === null ? (parseInt(document.getElementById('chest-start-no')?.value, 10) || 101) : info.lastNumber + 1;
+    preview.innerHTML = `<strong>${house?.name || 'All houses'}</strong> | Selected: ${info.selected.length} | Already assigned: ${info.assigned.length} | Without chest: ${info.missing.length} | Prefix: <strong>${info.prefix || '(none)'}</strong> | Last assigned: <strong>${last}</strong> | Next suggested: <strong>${info.prefix}${next}</strong>`;
 }
 
 window.generateChestNumbers = async function() {
     const fest = state.managingFest;
-    const targetHouse = document.getElementById('chest-house-picker').value;
-    const prefix = document.getElementById('chest-prefix').value.trim().toUpperCase();
-    let counter = parseInt(document.getElementById('chest-start-no').value, 10) || 101;
+    const info = getChestNumberInfo();
+    const targetHouse = info.targetHouse;
+    const prefix = info.prefix;
+    const mode = document.getElementById('chest-generation-mode').value;
+    const requestedStart = parseInt(document.getElementById('chest-start-no').value, 10) || 101;
+    let counter = mode === 'missing' && info.lastNumber !== null ? info.lastNumber + 1 : requestedStart;
 
-    let targetRegs = state.festRegistrations.filter(r => r.festId === fest.id && (!targetHouse || r.houseId === targetHouse));
+    let targetRegs = mode === 'all' ? info.selected : info.missing;
     if (targetRegs.length === 0) return window.showAlert('No registered participants match the criteria.', 'warning');
 
-    targetRegs.sort((a, b) => a.studentName.localeCompare(b.studentName));
+    if (mode === 'all' && info.assigned.length > 0) {
+        const confirmed = confirm(`This will replace ${info.assigned.length} existing chest numbers for ${targetHouse || 'all houses'}. Continue with a new sequence?`);
+        if (!confirmed) return;
+    }
+
+    targetRegs = [...targetRegs].sort((a, b) => (a.studentName || '').localeCompare(b.studentName || ''));
 
     const batch = writeBatch(db);
     targetRegs.forEach(reg => {
@@ -1468,7 +1522,7 @@ window.generateChestNumbers = async function() {
 
     try {
         await batch.commit();
-        window.showAlert(`Assigned chest numbers to ${targetRegs.length} students.`, 'success');
+        window.showAlert(`${mode === 'all' ? 'Generated new' : 'Continued'} chest numbers for ${targetRegs.length} students.`, 'success');
         renderSubTabChestNumbers();
     } catch (err) {
         console.error(err);
