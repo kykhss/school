@@ -199,7 +199,7 @@ export async function updateScopedDoc(collectionName, docId, data) {
  * @param {string} collectionName 
  * @param {string} docId 
  */
-export async function DeleteScopedDoc(collectionName, docId) {
+export async function deleteScopedDoc(collectionName, docId) {
     const docRef = getScopedDoc(collectionName, docId);
     
     // Write soft-delete flag to Firestore
