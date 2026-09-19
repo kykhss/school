@@ -199,7 +199,7 @@ export async function updateScopedDoc(collectionName, docId, data) {
  * @param {string} collectionName 
  * @param {string} docId 
  */
-export async function softDeleteScopedDoc(collectionName, docId) {
+export async function DeleteScopedDoc(collectionName, docId) {
     const docRef = getScopedDoc(collectionName, docId);
     
     // Write soft-delete flag to Firestore
@@ -225,7 +225,7 @@ export async function softDeleteScopedDoc(collectionName, docId) {
 /**
  * Bulk soft-delete a list of document IDs
  */
-export async function batchSoftDeleteScoped(collectionName, docIds) {
+export async function batchDeleteScoped(collectionName, docIds) {
     const CHUNK_SIZE = 450;
     const chunks = [];
 
