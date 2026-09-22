@@ -59,7 +59,69 @@ window.copyJudgeScannerLink = copyJudgeScannerLink;
 
 export async function handleHashRoute() {
     const hash = window.location.hash || '';
+    // Handle short token route: #j/TOKEN
+    if (hash.startsWith('#j/')) {
+        // Strip prefix and split by slash
+        const rawPath = hash.replace('#j/', '').trim();
+        const parts = rawPath.split('/').filter(Boolean);
 
+        let targetYearId = '';
+        let targetToken = '';
+
+        if (parts.length >= 2) {
+            // Format: #j/2026-27/A7X
+            targetYearId = decodeURIComponent(parts[0]);
+            targetToken = decodeURIComponent(parts[1]).toUpperCase();
+        } else if (parts.length === 1) {
+            // Legacy / Short Format: #j/A7X
+            targetToken = decodeURIComponent(parts[0]).toUpperCase();
+            targetYearId = systemContext?.activeYearId || localStorage.getItem('activeYearId') || '';
+        }
+
+        if (!targetYearId) {
+            window.showAlert?.('Academic year not identified in link.', 'danger');
+            return;
+        }
+
+        // Anchor active academic year context immediately
+        if (typeof setActiveYear === 'function') {
+            setActiveYear(targetYearId);
+        } else {
+            if (systemContext) systemContext.activeYearId = targetYearId;
+            localStorage.setItem('activeYearId', targetYearId);
+        }
+
+        try {
+            const tokenRef = doc(db, `academicYears/${targetYearId}/festTokens`, targetToken);
+            const tokenSnap = await getDoc(tokenRef);
+
+            if (tokenSnap.exists()) {
+                const tokenData = tokenSnap.data();
+                const resolvedYearId = tokenData.yearId || targetYearId;
+                const festId = tokenData.festId || '';
+                const eventId = tokenData.eventId || '';
+                const judgeCode = tokenData.judgeCode || '';
+                const codeParam = judgeCode ? `&code=${encodeURIComponent(judgeCode)}` : '';
+
+                // Seamlessly routes into full judging mode
+                window.location.hash = `#fest-judge?year=${encodeURIComponent(resolvedYearId)}&fest=${encodeURIComponent(festId)}&event=${encodeURIComponent(eventId)}${codeParam}`;
+
+                if (typeof window.checkForJudgingMode === 'function') {
+                    await window.checkForJudgingMode();
+                } else if (typeof window.waitForRouteHandler === 'function') {
+                    const handler = await window.waitForRouteHandler('checkForJudgingMode');
+                    if (handler) await handler();
+                }
+                return;
+            } else {
+                window.showAlert?.(`Invalid or expired token: ${targetToken}`, 'danger');
+            }
+        } catch (err) {
+            console.error("Token resolution error:", err);
+            window.showAlert?.('Failed to resolve event token from database.', 'danger');
+        }
+        return;
+    }
     // Route: #fest-scan
     if (hash.startsWith('#fest-scan')) {
         openQrScannerModal();
