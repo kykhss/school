@@ -13,7 +13,7 @@ import {
     doc, 
     getDoc, 
     getDocs, 
-    collection, 
+    collection,  
     query, 
     where, 
     serverTimestamp 
