@@ -70,11 +70,18 @@ window.renderFestReportsTab = function() {
                             </select>
                         </div>
                         <div class="col-md-5">
-                            <label class="small fw-bold">Select Event</label>
-                            <select id="report-ev-id" class="form-select form-select-sm">
-                                ${events.map(e => `<option value="${e.id}">${e.name} (${e.category})</option>`).join('')}
-                            </select>
-                        </div>
+    <label class="small fw-bold">Select Events</label>
+    <select id="report-ev-id" class="form-select form-select-sm" multiple size="6">
+        ${[...new Map(events.map(e => [e.id, e])).values()]
+            .map(e => `
+                <option value="${e.id}">
+                    ${e.name} (${e.category})
+                </option>
+            `)
+            .join('')}
+    </select>
+    <small class="text-muted">Hold Ctrl and select multiple events</small>
+</div>
                         <div class="col-md-3 d-grid">
                             <button class="btn btn-sm btn-success" onclick="window.printEventScorecard()">
                                 <i class="fas fa-print me-1"></i>Generate Scorecard
@@ -685,92 +692,383 @@ window.downloadJudgeList = function() {
 // --- 4. JUDGE SCORECARD WITH QR CODE ---
 
 window.printEventScorecard = function() {
+
     const fest = state.managingFest;
-    const eventId = document.getElementById('report-ev-id')?.value;
-    const event = state.festEvents.find(e => e.id === eventId);
-    if (!event) return;
 
-    const participants = state.festRegistrations.filter(r => r.festId === fest.id && r.events.includes(eventId));
-    let rowsHtml = '';
+    // Get multiple selected events
+    const select = document.getElementById('report-ev-id');
+    const selectedEventIds = Array.from(select.selectedOptions)
+        .map(option => option.value);
 
-    if (event.isGroupEvent) {
-        const groups = state.festGroups.filter(g => g.festId === fest.id && g.members.some(m => participants.some(p => p.studentId === m.studentId)));
-        rowsHtml = groups.map(g => {
-            const house = state.festHouses.find(h => h.id === g.houseId);
-            const captain = g.members?.find(member => member.role === 'Captain');
-            const captainName = state.students.find(student => student.id === captain?.studentId)?.name || 'Not assigned';
-            return `
-                <tr style="height: 40px;">
-                    <td><strong>${g.name}</strong><div class="small text-muted">Captain: ${captainName}</div></td>
-                    <td>${house?.name || 'N/A'}</td>
-                    <td></td>
-                    <td></td>
-                </tr>
-            `;
-        }).join('');
-    } else {
-        const sorted = participants.sort((a, b) => (a.chestNo || a.studentName).toString().localeCompare((b.chestNo || b.studentName).toString(), undefined, { numeric: true }));
-        rowsHtml = sorted.map(p => {
-            const house = state.festHouses.find(h => h.id === p.houseId);
-            return `
-                <tr style="height: 35px;">
-                    <td class="text-center"><strong>${p.chestNo || 'N/A'}</strong></td>
-                    <td>${p.studentName}</td>
-                    <td>${house?.name || 'N/A'}</td>
-                    <td></td>
-                    <td></td>
-                </tr>
-            `;
-        }).join('');
+    if (!selectedEventIds.length) {
+        alert('Please select at least one event.');
+        return;
+    }
+
+    // Remove duplicate event IDs
+    const uniqueEventIds = [...new Set(selectedEventIds)];
+
+    const selectedEvents = uniqueEventIds
+        .map(id => state.festEvents.find(e => e.id === id))
+        .filter(Boolean);
+
+    if (!selectedEvents.length) {
+        alert('No valid events selected.');
+        return;
     }
 
     const rootUrl = window.location.href.split('#')[0];
-    const judgeUrl = `${rootUrl}#fest-judge?year=${systemContext.activeYearId}&fest=${fest.id}&event=${event.id}`;
 
-    const contentHtml = `
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 15px;">
-            <div>
-                <h2 style="margin: 0;">${fest.name}</h2>
-                <h3 style="margin: 4px 0 0 0; color: #444;">Score Sheet: ${event.name}</h3>
-                <small>Venue / Stage: ${event.stage || 'Main Stage'} &bull; Type: ${event.type} &bull; Category: ${event.category} &bull; Mode: ${event.isGroupEvent ? 'Group' : 'Solo'}</small>
+    // Generate ONE complete page for each event
+    const pagesHtml = selectedEvents.map((event, eventIndex) => {
+
+        const participants = state.festRegistrations.filter(
+            r =>
+                r.festId === fest.id &&
+                Array.isArray(r.events) &&
+                r.events.includes(event.id)
+        );
+
+        let rowsHtml = '';
+
+        // =========================
+        // GROUP EVENT
+        // =========================
+        if (event.isGroupEvent) {
+
+            const groups = state.festGroups.filter(g =>
+                g.festId === fest.id &&
+                g.members?.some(member =>
+                    participants.some(p => p.studentId === member.studentId)
+                )
+            );
+
+            rowsHtml = groups.map(g => {
+
+                const house = state.festHouses.find(
+                    h => h.id === g.houseId
+                );
+
+                const captain = g.members?.find(
+                    member => member.role === 'Captain'
+                );
+
+                const captainName =
+                    state.students.find(
+                        student => student.id === captain?.studentId
+                    )?.name || 'Not assigned';
+
+                return `
+                    <tr style="height: 40px;">
+                        <td>
+                            <strong>${g.name}</strong>
+                            <div class="small text-muted">
+                                Captain: ${captainName}
+                            </div>
+                        </td>
+
+                        <td>${house?.name || 'N/A'}</td>
+
+                        <td style="text-align:center;"></td>
+
+                        <td></td>
+                    </tr>
+                `;
+
+            }).join('');
+
+        }
+
+        // =========================
+        // INDIVIDUAL EVENT
+        // =========================
+        else {
+
+            const sorted = [...participants].sort((a, b) =>
+                (a.chestNo || a.studentName)
+                    .toString()
+                    .localeCompare(
+                        (b.chestNo || b.studentName).toString(),
+                        undefined,
+                        { numeric: true }
+                    )
+            );
+
+            rowsHtml = sorted.map(p => {
+
+                const house = state.festHouses.find(
+                    h => h.id === p.houseId
+                );
+
+                return `
+                    <tr style="height: 35px;">
+
+                        <td class="text-center">
+                            <strong>${p.chestNo || 'N/A'}</strong>
+                        </td>
+
+                        <td>${p.studentName}</td>
+
+                        <td>${house?.name || 'N/A'}</td>
+
+                        <td style="text-align:center;"></td>
+
+                        <td></td>
+
+                    </tr>
+                `;
+
+            }).join('');
+        }
+
+        // =========================
+        // QR CODE URL
+        // =========================
+
+        const judgeUrl =
+            `${rootUrl}#fest-judge` +
+            `?year=${systemContext.activeYearId}` +
+            `&fest=${encodeURIComponent(fest.id)}` +
+            `&event=${encodeURIComponent(event.id)}`;
+
+        // Unique QR target for every event
+        const qrId = `qr-target-${eventIndex}`;
+
+        // =========================
+        // EVENT PAGE
+        // =========================
+
+        return `
+            <div class="judge-scorecard-page"
+                 data-qr="${qrId}"
+                 data-url="${judgeUrl}"
+                 style="
+                    width: 100%;
+                    min-height: 270mm;
+                    box-sizing: border-box;
+                    ${eventIndex > 0 ? 'page-break-before: always;' : ''}
+                 ">
+
+                <!-- HEADER -->
+
+                <div style="
+                    display:flex;
+                    justify-content:space-between;
+                    align-items:center;
+                    border-bottom:2px solid #000;
+                    padding-bottom:10px;
+                    margin-bottom:15px;
+                ">
+
+                    <div>
+
+                        <h2 style="margin:0;">
+                            ${fest.name}
+                        </h2>
+
+                        <h3 style="
+                            margin:4px 0 0 0;
+                            color:#444;
+                        ">
+                            Score Sheet: ${event.name}
+                        </h3>
+
+                        <small>
+                            Venue / Stage:
+                            ${event.stage || 'Main Stage'}
+                            &bull;
+
+                            Type:
+                            ${event.type || 'N/A'}
+                            &bull;
+
+                            Category:
+                            ${event.category || 'N/A'}
+                            &bull;
+
+                            Mode:
+                            ${event.isGroupEvent ? 'Group' : 'Solo'}
+                        </small>
+
+                    </div>
+
+
+                    <!-- QR -->
+
+                    <div style="
+                        text-align:center;
+                        min-width:100px;
+                    ">
+
+                        <div id="${qrId}"></div>
+
+                        <small style="font-size:8pt;">
+                            Scan to Score
+                        </small>
+
+                    </div>
+
+                </div>
+
+
+                <!-- PARTICIPANT TABLE -->
+
+                <table
+                    class="table table-bordered"
+                    style="
+                        width:100%;
+                        border-collapse:collapse;
+                    "
+                >
+
+                    <thead class="table-light">
+
+                        <tr>
+
+                            ${
+                                event.isGroupEvent
+
+                                ? `
+                                    <th style="width:40%;">
+                                        Group / Captain
+                                    </th>
+
+                                    <th>
+                                        House
+                                    </th>
+                                `
+
+                                : `
+                                    <th style="
+                                        width:15%;
+                                        text-align:center;
+                                    ">
+                                        Chest No
+                                    </th>
+
+                                    <th style="width:35%;">
+                                        Participant Name
+                                    </th>
+
+                                    <th>
+                                        House
+                                    </th>
+                                `
+                            }
+
+                            <th style="
+                                width:15%;
+                                text-align:center;
+                            ">
+                                Position
+                            </th>
+
+                            <th style="
+                                width:20%;
+                                text-align:center;
+                            ">
+                                Remarks / Marks
+                            </th>
+
+                        </tr>
+
+                    </thead>
+
+                    <tbody>
+
+                        ${
+                            rowsHtml ||
+
+                            `
+                            <tr>
+                                <td
+                                    colspan="${event.isGroupEvent ? 4 : 5}"
+                                    class="text-center"
+                                >
+                                    No enrolled participants.
+                                </td>
+                            </tr>
+                            `
+                        }
+
+                    </tbody>
+
+                </table>
+
+
+                <!-- SIGNATURE -->
+
+                <div style="
+                    margin-top:60px;
+                    display:flex;
+                    justify-content:space-around;
+                ">
+
+                    <div>
+                        Judge Name: _____________________
+                    </div>
+
+                    <div>
+                        Judge Signature: _____________________
+                    </div>
+
+                </div>
+
             </div>
-            <div id="scorecard-qr-box" style="text-align: center;">
-                <div id="qr-target"></div>
-                <small style="font-size: 8pt;">Scan to Score</small>
-            </div>
-        </div>
+        `;
 
-        <table class="table table-bordered" style="width: 100%; border-collapse: collapse;">
-            <thead class="table-light">
-                <tr>
-                    ${event.isGroupEvent ? '<th style="width: 40%;">Group / Captain</th><th>House</th>' : '<th style="width: 15%; text-align: center;">Chest No</th><th style="width: 35%;">Participant Name</th><th>House</th>'}
-                    <th style="width: 15%; text-align: center;">Position</th>
-                    <th style="width: 20%; text-align: center;">Remarks / Marks</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${rowsHtml || '<tr><td colspan="5" class="text-center">No enrolled participants.</td></tr>'}
-            </tbody>
-        </table>
+    }).join('');
 
-        <div style="margin-top: 60px; display: flex; justify-content: space-around;">
-            <div>Judge Name: _____________________</div>
-            <div>Judge Signature: _____________________</div>
-        </div>
-    `;
+
+    // =========================
+    // PRINT ALL SELECTED EVENTS
+    // =========================
+
+    const contentHtml = pagesHtml;
 
     window.printReport({
+
         contentHtml,
-        title: `ScoreSheet_${event.name}`,
+
+        title: `JudgeScoreSheets_${fest.name}`,
+
         pageSize: 'A4 portrait',
+
         onLoadCallback: (pWindow) => {
-            new pWindow.QRCode(pWindow.document.getElementById('qr-target'), {
-                text: judgeUrl,
-                width: 90,
-                height: 90,
-                correctLevel: pWindow.QRCode.CorrectLevel.M
-            });
+
+            // Generate QR for every event page
+
+            pWindow.document
+                .querySelectorAll('.judge-scorecard-page')
+                .forEach(page => {
+
+                    const qrTarget =
+                        page.querySelector('[id^="qr-target-"]');
+
+                    const judgeUrl =
+                        page.getAttribute('data-url');
+
+                    if (qrTarget && judgeUrl) {
+
+                        new pWindow.QRCode(qrTarget, {
+
+                            text: judgeUrl,
+
+                            width: 90,
+
+                            height: 90,
+
+                            correctLevel:
+                                pWindow.QRCode.CorrectLevel.M
+
+                        });
+
+                    }
+
+                });
+
         }
+
     });
 };
 
