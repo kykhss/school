@@ -782,69 +782,139 @@ window.printRollCallSheet = function() {
     const houseFilter = document.getElementById('roll-house')?.value || 'ALL';
     const typeFilter = document.getElementById('roll-type')?.value || 'ALL';
 
-    let events = state.festEvents.filter(e => e.festId === fest.id);
-    if (catFilter !== 'ALL') events = events.filter(e => e.category === catFilter);
-    if (typeFilter !== 'ALL') events = events.filter(e => (e.type || 'onStage') === typeFilter);
+    // 1. Filter raw events for this fest
+    let rawEvents = state.festEvents.filter(e => e.festId === fest.id);
+    if (catFilter !== 'ALL') rawEvents = rawEvents.filter(e => e.category === catFilter);
+    if (typeFilter !== 'ALL') rawEvents = rawEvents.filter(e => (e.type || 'onStage') === typeFilter);
 
-    let registrations = state.festRegistrations.filter(r => r.festId === fest.id);
-    if (houseFilter !== 'ALL') registrations = registrations.filter(r => r.houseId === houseFilter);
-    if (catFilter !== 'ALL') {
-        registrations = registrations.filter(registration => {
-            const student = state.students.find(item => item.id === registration.studentId);
-            return getStudentCategory(student) === catFilter;
-        });
+    // 2. Group events by clean name so duplicate names across categories get ONE column
+    const uniqueEventsMap = new Map();
+    rawEvents.forEach(e => {
+        const cleanName = (e.name || '').trim();
+        if (!cleanName) return;
+
+        const nameKey = cleanName.toLowerCase();
+        if (!uniqueEventsMap.has(nameKey)) {
+            uniqueEventsMap.set(nameKey, {
+                displayName: cleanName,
+                eventIds: new Set([e.id])
+            });
+        } else {
+            uniqueEventsMap.get(nameKey).eventIds.add(e.id);
+        }
+    });
+
+    // Sort unique event columns alphabetically
+    const events = Array.from(uniqueEventsMap.values()).sort((a, b) => 
+        a.displayName.localeCompare(b.displayName, undefined, { numeric: true, sensitivity: 'base' })
+    );
+
+    // 3. Filter and enrich participant records
+    let registrations = state.festRegistrations.filter(r => r.festId === fest.id && !r.isDeleted);
+    if (houseFilter !== 'ALL') {
+        registrations = registrations.filter(r => r.houseId === houseFilter);
     }
 
-    const tableRows = registrations.map(reg => {
+    let enriched = registrations.map(reg => {
         const student = state.students.find(s => s.id === reg.studentId);
         const house = state.festHouses.find(h => h.id === reg.houseId);
-       
-        const checkCells = events.map(ev => {
-            const hasEvent = reg.events.includes(ev.id);
-            return `<td style="text-align: center; width: 30px;">${hasEvent ? '&#10003;' : ''}</td>`;
+        const category = student ? (getStudentCategory(student) || 'General') : 'General';
+        return { reg, student, house, category };
+    });
+
+    if (catFilter !== 'ALL') {
+        enriched = enriched.filter(item => item.category === catFilter);
+    }
+
+    // 4. Sort: Category -> Chest Number (natural numeric) -> Student Name
+    enriched.sort((a, b) => {
+        const catCmp = a.category.localeCompare(b.category);
+        if (catCmp !== 0) return catCmp;
+
+        const chestA = String(a.reg.chestNo || '').trim();
+        const chestB = String(b.reg.chestNo || '').trim();
+        if (chestA && chestB) {
+            return chestA.localeCompare(chestB, undefined, { numeric: true, sensitivity: 'base' });
+        }
+        if (chestA && !chestB) return -1;
+        if (!chestA && chestB) return 1;
+
+        return (a.student?.name || a.reg.studentName || '').localeCompare(b.student?.name || b.reg.studentName || '');
+    });
+
+    // 5. Build Table Rows with Category Divider Rows
+    let currentCategory = null;
+    const totalColumns = 4 + events.length; // Chest + Name + Class + House + Events
+
+    let tableRows = '';
+    enriched.forEach(item => {
+        const { reg, student, house, category } = item;
+
+        // Insert full-width category divider when grouping shifts
+        if (category !== currentCategory) {
+            currentCategory = category;
+            tableRows += `
+                <tr style="background-color: #f1f3f5; font-weight: bold;">
+                    <td colspan="${totalColumns}" style="padding: 6px 10px; text-transform: uppercase; font-size: 8pt; letter-spacing: 0.5px; border-top: 2px solid #ced4da; border-bottom: 2px solid #ced4da; color: #212529;">
+                        Category: ${currentCategory}
+                    </td>
+                </tr>
+            `;
+        }
+
+        // Match if student is registered for ANY ID under this unique event name
+        const checkCells = events.map(evGroup => {
+            const hasEvent = (reg.events || []).some(id => evGroup.eventIds.has(id));
+            return `<td style="text-align: center; width: 26px; font-weight: bold; color: ${hasEvent ? '#000' : 'transparent'}; border-left: 1px solid #dee2e6;">${hasEvent ? '&#10003;' : ''}</td>`;
         }).join('');
 
-        return `
+        tableRows += `
             <tr>
-                <td style="text-align: center;">${reg.chestNo || '-'}</td>
-                <td><strong>${reg.studentName}</strong></td>
-                <td>${getStudentClassName(student?.classId, student?.division)}</td>
-                <td>${house?.name || 'N/A'}</td>
+                <td style="text-align: center; font-weight: 600; white-space: nowrap;">${reg.chestNo || '-'}</td>
+                <td style="white-space: nowrap;"><strong>${student?.name || reg.studentName || 'Unknown'}</strong></td>
+                <td style="white-space: nowrap; text-align: center;">${getStudentClassName(student?.classId, student?.division) || '-'}</td>
+                <td style="white-space: nowrap;">${house?.name || 'N/A'}</td>
                 ${checkCells}
             </tr>
         `;
-    }).join('');
+    });
 
-    const eventHeadersold = events.map(e => `
-        <th style="height: 140px; vertical-align: bottom; padding: 4px;">
-            <div style="writing-mode: vertical-rl; transform: rotate(180deg); font-size: 8pt; white-space: nowrap;">
-                ${e.name}
+    if (enriched.length === 0) {
+        tableRows = `<tr><td colspan="${totalColumns}" style="text-align: center; padding: 24px; color: #6c757d;">No participants match the selected criteria.</td></tr>`;
+    }
+
+    // 6. Vertical Column Headers for Event Names
+    const eventHeaders = events.map(e => `
+        <th style="height: 140px; vertical-align: bottom; padding: 4px 2px; width: 26px; min-width: 26px; border-left: 1px solid #dee2e6;">
+            <div style="writing-mode: vertical-rl; transform: rotate(180deg); font-size: 7.5pt; white-space: nowrap; line-height: 1; max-height: 130px; overflow: hidden; text-overflow: ellipsis;" title="${e.displayName}">
+                ${e.displayName}
             </div>
         </th>
     `).join('');
-    const eventHeaders = [...new Map(events.map(e => [e.name, e])).values()]
-    .map(e => `
-        <th style="height: 140px; vertical-align: bottom; padding: 4px;">
-            <div style="writing-mode: vertical-rl; transform: rotate(180deg); font-size: 8pt; white-space: nowrap;">
-                ${e.name}
-            </div>
-        </th>
-    `)
-    .join('');
 
+    const targetHouse = state.festHouses.find(h => h.id === houseFilter);
+
+    // 7. Render Printable Output
     const contentHtml = `
-        <div style="text-align: center; margin-bottom: 15px;">
-            <h2 style="margin: 0;">${fest.name}</h2>
-            <h4 style="margin: 4px 0; color: #555;">Participant Event Enrollment Roll Matrix</h4>
-            <small>Category: ${catFilter} | House: ${houseFilter} | Type: ${typeFilter}</small>
+        <div style="text-align: center; margin-bottom: 12px;">
+            <h2 style="margin: 0; font-size: 16pt;">${fest.name}</h2>
+            <h4 style="margin: 3px 0; color: #495057; font-size: 10.5pt;">Participant Event Enrollment Roll Matrix</h4>
+            <div style="font-size: 8pt; color: #6c757d; margin-top: 3px;">
+                <strong>Category:</strong> ${catFilter} | 
+                <strong>House:</strong> ${targetHouse?.name || houseFilter} | 
+                <strong>Stage Type:</strong> ${typeFilter} | 
+                <strong>Total Students:</strong> ${enriched.length} | 
+                <strong>Unique Events:</strong> ${events.length}
+            </div>
         </div>
-        <table class="table table-bordered table-sm" style="width: 100%; border-collapse: collapse; font-size: 9pt;">
+
+        <table class="table table-bordered table-sm" style="width: 100%; border-collapse: collapse; font-size: 8pt;">
             <thead class="table-light">
                 <tr>
-                    <th style="width: 60px; text-align: center;">Chest</th>
-                    <th>Name</th>
-                    <th>Class</th>
-                    <th>House</th>
+                    <th style="width: 55px; text-align: center; vertical-align: middle;">Chest</th>
+                    <th style="min-width: 140px; vertical-align: middle;">Name</th>
+                    <th style="width: 60px; text-align: center; vertical-align: middle;">Class</th>
+                    <th style="width: 80px; vertical-align: middle;">House</th>
                     ${eventHeaders}
                 </tr>
             </thead>
@@ -856,10 +926,11 @@ window.printRollCallSheet = function() {
 
     window.printReport({
         contentHtml,
-        title: `RollCall_${fest.name}`,
+        title: `RollCall_${fest.name.replace(/\s+/g, '_')}_${catFilter}`,
         pageSize: 'A4 landscape'
     });
 };
+
 window.printBlankRegistrationForm = function() {
     const fest = state.managingFest;
     const categoryFilter = document.getElementById('blank-reg-cat')?.value || 'ALL';
