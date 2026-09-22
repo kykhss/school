@@ -23,7 +23,8 @@ import {
     getStudentCategory,
     hashPassword,
     loginWithUsername,
-    logoutUser
+    logoutUser,
+    eventHouseLimit
 } from "./app-state.js";
 
 import { 
@@ -1546,13 +1547,17 @@ function renderSubTabRegistrations(isRegistrationOpen) {
     const container = document.getElementById('subtab-registrations');
     const classes = state.classes;
     const houses = state.festHouses;
+    const fest = state.managingFest;
+
+    // Maintain current sub-view state: 'students' or 'events'
+    let currentViewMode = 'students';
 
     container.innerHTML = `
         <div class="row g-2 mb-3 align-items-center">
             <div class="col-md-4">
-                <input type="text" id="admin-reg-search" class="form-control form-control-sm" placeholder="Search by name / admission no...">
+                <input type="text" id="admin-reg-search" class="form-control form-control-sm" placeholder="Search by name, adm no, or event...">
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2" id="admin-class-filter-container">
                 <select id="admin-reg-class" class="form-select form-select-sm">
                     <option value="">All Classes</option>
                     ${classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
@@ -1564,38 +1569,69 @@ function renderSubTabRegistrations(isRegistrationOpen) {
                     ${houses.map(h => `<option value="${h.id}">${h.name}</option>`).join('')}
                 </select>
             </div>
-            <div class="col-md-2 text-end">
-                <span class="badge bg-secondary py-2 w-100" id="admin-reg-total-count">0 Records</span>
+            <div class="col-md-3 d-flex gap-1 justify-content-end align-items-center">
+                <!-- Toggle View Mode (Student-wise vs Event-wise) -->
+                <div class="btn-group btn-group-sm w-100" id="reg-view-toggle-group" role="group">
+                    <input type="radio" class="btn-check" name="adminViewType" id="view-student-wise" value="students" checked>
+                    <label class="btn btn-outline-primary" for="view-student-wise"><i class="fas fa-user me-1"></i>Students</label>
+
+                    <input type="radio" class="btn-check" name="adminViewType" id="view-event-wise" value="events">
+                    <label class="btn btn-outline-primary" for="view-event-wise" id="view-event-wise-lbl" title="Select a house to view event-wise allocation"><i class="fas fa-calendar-check me-1"></i>Events</label>
+                </div>
             </div>
         </div>
 
-        <div class="table-responsive border rounded" style="max-height: 500px; overflow-y: auto;">
+        <div class="d-flex justify-content-between align-items-center mb-2 px-1">
+            <span class="badge bg-secondary py-2" id="admin-reg-total-count">0 Records</span>
+            <div id="event-mode-legend" class="small text-muted d-none">
+                <span class="badge bg-success-subtle text-success border border-success-subtle me-1">Available</span>
+                <span class="badge bg-warning-subtle text-warning-emphasis border border-warning me-1">Full</span>
+                <span class="badge bg-danger text-white">Over Limit</span>
+            </div>
+        </div>
+
+        <div class="table-responsive border rounded bg-white" style="max-height: 520px; overflow-y: auto;">
             <table class="table table-sm table-hover align-middle mb-0" id="admin-participants-table">
-                <thead class="table-light sticky-top">
-                    <tr>
-                        <th>Student Information</th>
-                        <th>House</th>
-                        <th>Enrolled Events</th>
-                        <th class="text-end">Manage</th>
-                    </tr>
+                <thead class="table-light sticky-top shadow-sm" id="admin-table-head">
+                    <!-- Populated dynamically based on view -->
                 </thead>
-                <tbody></tbody>
+                <tbody id="admin-table-body"></tbody>
             </table>
         </div>
     `;
 
-    function updateTable() {
-        const term = document.getElementById('admin-reg-search').value.toLowerCase();
-        const classFilter = document.getElementById('admin-reg-class').value;
-        const houseFilter = document.getElementById('admin-reg-house').value;
+    const searchInput = document.getElementById('admin-reg-search');
+    const classFilter = document.getElementById('admin-reg-class');
+    const houseFilter = document.getElementById('admin-reg-house');
+    const totalCountBadge = document.getElementById('admin-reg-total-count');
+    const tableHead = document.getElementById('admin-table-head');
+    const tbody = document.getElementById('admin-table-body');
+    const legend = document.getElementById('event-mode-legend');
+    const classContainer = document.getElementById('admin-class-filter-container');
+
+    function renderStudentsView(term, selectedClass, selectedHouse) {
+        tableHead.innerHTML = `
+            <tr>
+                <th style="min-width: 200px;">Student Information</th>
+                <th style="min-width: 120px;">House</th>
+                <th style="min-width: 250px;">Enrolled Events</th>
+                <th class="text-end" style="width: 110px;">Manage</th>
+            </tr>
+        `;
+        legend.classList.add('d-none');
+        classContainer.classList.remove('d-none');
 
         let students = state.students;
-        if (classFilter) students = students.filter(s => s.classId === classFilter);
-        if (houseFilter) students = students.filter(s => s.houseId === houseFilter);
-        if (term) students = students.filter(s => s.name.toLowerCase().includes(term) || String(s.admissionNumber).includes(term));
+        if (selectedClass) students = students.filter(s => s.classId === selectedClass);
+        if (selectedHouse) students = students.filter(s => s.houseId === selectedHouse);
+        if (term) {
+            students = students.filter(s => 
+                (s.name && s.name.toLowerCase().includes(term)) || 
+                String(s.admissionNumber || '').toLowerCase().includes(term)
+            );
+        }
 
-        document.getElementById('admin-reg-total-count').textContent = `${students.length} Students`;
-        const tbody = document.querySelector('#admin-participants-table tbody');
+        totalCountBadge.textContent = `${students.length} Students`;
 
         if (students.length === 0) {
             tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted p-4">No matching students found.</td></tr>`;
@@ -1603,29 +1639,36 @@ function renderSubTabRegistrations(isRegistrationOpen) {
         }
 
         tbody.innerHTML = students.map(s => {
-            const regId = `${state.managingFest.id}_${s.id}`;
+            const regId = `${fest.id}_${s.id}`;
             const reg = state.festRegistrations.find(r => r.id === regId);
             const events = reg?.events || [];
-            const house = state.festHouses.find(h => h.id === s.houseId);
+            const house = houses.find(h => h.id === s.houseId);
 
             const badges = events.map(id => {
                 const ev = state.festEvents.find(e => e.id === id);
-                return ev ? `<span class="badge bg-light text-dark border me-1">${ev.name}</span>` : '';
+                return ev ? `<span class="badge bg-light text-dark border me-1 mb-1">${ev.name}</span>` : '';
             }).join('');
 
             return `
                 <tr>
-                    <td>
-                        <strong>${s.name}</strong> 
-                        <span class="badge bg-secondary-subtle text-secondary small ms-1">${getStudentCategory(s)}</span>
-                        <div class="small text-muted">Adm: ${s.admissionNumber} | Class: ${getStudentClassName(s.classId, s.division)}</div>
+                    <td class="py-2">
+                        <strong class="text-dark d-block">${s.name}</strong>
+                        <div class="d-flex flex-wrap align-items-center gap-1 mt-1">
+                            <span class="badge bg-secondary-subtle text-secondary py-0 px-1" style="font-size: 0.7rem;">${getStudentCategory(s)}</span>
+                            <span class="text-muted small" style="font-size: 0.72rem;">Adm: ${s.admissionNumber || 'N/A'}</span>
+                            <span class="text-muted small" style="font-size: 0.72rem;">| ${getStudentClassName(s.classId, s.division)}</span>
+                        </div>
                     </td>
                     <td>
-                        ${house ? `<span class="color-dot-display" style="background-color:${house.color}"></span>${house.name}` : '<span class="text-muted small">None</span>'}
+                        ${house ? `<span class="badge bg-light text-dark border"><span class="color-dot-display me-1" style="background-color:${house.color}"></span>${house.name}</span>` : '<span class="text-muted small">None</span>'}
                     </td>
-                    <td>${badges || '<small class="text-muted">No events</small>'}</td>
+                    <td>
+                        <div class="d-flex flex-wrap align-items-center py-1">
+                            ${badges || '<small class="text-muted fst-italic">No events</small>'}
+                        </div>
+                    </td>
                     <td class="text-end">
-                        <button class="btn btn-outline-primary btn-sm py-0" onclick="window.openEventAllocationModal('${s.id}')">
+                        <button class="btn btn-outline-primary btn-sm py-1 px-2" onclick="window.openEventAllocationModal('${s.id}')" ${!isRegistrationOpen ? 'disabled' : ''}>
                             <i class="fas fa-edit me-1"></i>Events (${events.length})
                         </button>
                     </td>
@@ -1634,11 +1677,127 @@ function renderSubTabRegistrations(isRegistrationOpen) {
         }).join('');
     }
 
-    document.getElementById('admin-reg-search').addEventListener('input', updateTable);
-    document.getElementById('admin-reg-class').addEventListener('change', updateTable);
-    document.getElementById('admin-reg-house').addEventListener('change', updateTable);
+    function renderEventsView(term, selectedHouse) {
+        if (!selectedHouse) {
+            tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted p-4"><i class="fas fa-info-circle me-1"></i>Please select a specific House from the dropdown above to view and assign event-wise participants.</td></tr>`;
+            totalCountBadge.textContent = `Select a house`;
+            return;
+        }
 
-    updateTable();
+        tableHead.innerHTML = `
+            <tr>
+                <th style="min-width: 220px; width: 30%;">Event Details</th>
+                <th style="min-width: 100px; width: 15%;">House Limit</th>
+                <th style="min-width: 300px; width: 45%;">Registered Participants</th>
+                <th class="text-end" style="width: 10%;">Action</th>
+            </tr>
+        `;
+        legend.classList.remove('d-none');
+        classContainer.classList.add('d-none');
+
+        // Filter events for this fest
+        let events = state.festEvents.filter(e => e.festId === fest.id);
+        if (term) {
+            events = events.filter(e => (e.name && e.name.toLowerCase().includes(term)) || (e.category && e.category.toLowerCase().includes(term)));
+        }
+
+        totalCountBadge.textContent = `${events.length} Events`;
+
+        if (events.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted p-4">No events found matching your search.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = events.map(ev => {
+            const limit = typeof eventHouseLimit === 'function' ? eventHouseLimit(fest, ev, 'solo') : (ev.maxPerHouse || 1);
+            
+            // Find registered students for this house and this event
+            const houseRegistrations = state.festRegistrations.filter(r => 
+                r.festId === fest.id && 
+                r.houseId === selectedHouse && 
+                r.events?.includes(ev.id)
+            );
+
+            const count = houseRegistrations.length;
+            const isExceeded = count > limit;
+            const isFull = count >= limit && !isExceeded;
+
+            let badgeClass = 'bg-success-subtle text-success border-success-subtle';
+            if (isExceeded) badgeClass = 'bg-danger text-white border-danger';
+            else if (isFull) badgeClass = 'bg-warning-subtle text-warning-emphasis border-warning';
+
+            const studentPills = houseRegistrations.map(r => {
+                const student = state.students.find(s => s.id === r.studentId);
+                const name = student?.name || r.studentName || 'Student';
+                const adm = student?.admissionNumber ? `(${student.admissionNumber})` : '';
+                return `
+                    <span class="badge bg-light text-dark border me-1 mb-1 p-1 d-inline-flex align-items-center gap-1 shadow-sm" style="font-size: 0.75rem;">
+                        <i class="fas fa-user-check text-primary me-1" style="font-size: 0.68rem;"></i>${name} <small class="text-muted">${adm}</small>
+                    </span>
+                `;
+            }).join('');
+
+            return `
+                <tr class="${isExceeded ? 'table-danger-subtle' : ''}">
+                    <td class="py-2">
+                        <strong class="text-dark d-block">${ev.name}</strong>
+                        <div class="d-flex align-items-center gap-1 mt-1">
+                            <span class="badge bg-secondary-subtle text-secondary py-0 px-1" style="font-size: 0.7rem;">${ev.category || 'General'}</span>
+                            <span class="badge bg-light text-dark border py-0 px-1" style="font-size: 0.7rem;">${ev.type === 'offStage' ? 'Off-Stage' : 'On-Stage'}</span>
+                            ${ev.gender && ev.gender !== 'Common' ? `<span class="badge bg-info-subtle text-info-emphasis py-0 px-1" style="font-size: 0.7rem;">${ev.gender}</span>` : ''}
+                        </div>
+                    </td>
+                    <td>
+                        <span class="badge ${badgeClass} border px-2 py-1 fw-bold" style="font-size: 0.78rem;">
+                            ${count} / ${limit} ${isExceeded ? '(Exceeded)' : isFull ? '(Full)' : ''}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="d-flex flex-wrap align-items-center py-1">
+                            ${studentPills || '<span class="text-muted small fst-italic">No students assigned yet</span>'}
+                        </div>
+                    </td>
+                    <td class="text-end">
+                        <button class="btn btn-sm ${isFull || isExceeded ? 'btn-outline-secondary' : 'btn-primary'} py-1 px-2 text-nowrap" 
+                                onclick="window.openEventStudentPickerModal('${ev.id}', '${selectedHouse}')" 
+                                ${!isRegistrationOpen ? 'disabled' : ''}
+                                title="Add/Assign students to this event">
+                            <i class="fas fa-user-plus me-1"></i>Assign
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function updateView() {
+        const term = searchInput.value.trim().toLowerCase();
+        const selectedClass = classFilter.value;
+        const selectedHouse = houseFilter.value;
+
+        if (currentViewMode === 'events') {
+            renderEventsView(term, selectedHouse);
+        } else {
+            renderStudentsView(term, selectedClass, selectedHouse);
+        }
+    }
+
+    // Event listeners
+    searchInput.addEventListener('input', updateView);
+    classFilter.addEventListener('change', updateView);
+    houseFilter.addEventListener('change', (e) => {
+        // If an admin switches house and is on event view, reload immediately
+        updateView();
+    });
+
+    document.querySelectorAll('input[name="adminViewType"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            currentViewMode = e.target.value;
+            updateView();
+        });
+    });
+
+    updateView();
 }
 
 // --- 5. CHEST NUMBER ALLOCATION SUB-TAB ---
@@ -1659,66 +1818,190 @@ function renderSubTabChestNumbers() {
                         ${houses.map(h => `<option value="${h.id}">${h.name}</option>`).join('')}
                     </select>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="small fw-bold">Prefix</label>
                     <input type="text" id="chest-prefix" class="form-control form-control-sm" placeholder="e.g. A-">
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="small fw-bold">Start Number</label>
                     <input type="number" id="chest-start-no" class="form-control form-control-sm" value="101">
                 </div>
                 <div class="col-md-3">
                     <label class="small fw-bold">Next generation mode</label>
                     <select id="chest-generation-mode" class="form-select form-select-sm">
-                        <option value="missing">Continue: only students without chest numbers</option>
-                        <option value="all">New: generate for all selected students</option>
+                        <option value="missing">Continue: only without chest numbers</option>
+                        <option value="all">New: generate for all matching students</option>
                     </select>
                 </div>
-                <div class="col-md-3 d-flex gap-1">
+                <div class="col-md-2 d-flex gap-1">
                     <button class="btn btn-primary btn-sm w-100" onclick="window.generateChestNumbers()"><i class="fas fa-magic me-1"></i>Generate</button>
-                    <button class="btn btn-outline-danger btn-sm" onclick="window.clearChestNumbers()"><i class="fas fa-eraser"></i></button>
+                    <button class="btn btn-outline-danger btn-sm" title="Clear all in target house" onclick="window.clearChestNumbers()"><i class="fas fa-trash-alt"></i></button>
                 </div>
             </div>
             <div id="chest-number-preview" class="alert alert-info py-2 mt-3 mb-0 small"></div>
         </div>
 
+        <!-- Action Toolbar -->
+        <div class="d-flex justify-content-between align-items-center mb-2 px-1">
+            <div class="d-flex align-items-center gap-2">
+                <button class="btn btn-sm btn-outline-danger" id="btn-clear-selected" onclick="window.clearSelectedChestNumbers()" disabled>
+                    <i class="fas fa-eraser me-1"></i>Clear Selected (<span id="selected-count">0</span>)
+                </button>
+                <span class="small text-muted" id="chest-count-indicator">Showing 0 records</span>
+            </div>
+            <div id="duplicate-warning" class="badge bg-danger d-none">
+                <i class="fas fa-exclamation-triangle me-1"></i> Duplicate Chest Numbers Detected
+            </div>
+        </div>
+
+        <!-- Allocation Table -->
         <div class="table-responsive border rounded" style="max-height: 450px; overflow-y: auto;">
             <table class="table table-sm table-hover align-middle mb-0" id="chest-allocation-table">
                 <thead class="table-light sticky-top">
                     <tr>
+                        <th style="width: 40px;" class="text-center">
+                            <input type="checkbox" class="form-check-input" id="chest-select-all" title="Select All Visible">
+                        </th>
                         <th>Participant Name</th>
                         <th>House</th>
-                        <th style="width: 200px;">Assigned Chest Number</th>
-                        <th class="text-end">Action</th>
+                        <th style="width: 220px;">Assigned Chest Number</th>
+                        <th class="text-end" style="width: 100px;">Action</th>
                     </tr>
                 </thead>
-                <tbody>
-                    ${state.festRegistrations.filter(r => r.festId === fest.id).map(reg => {
-                        const house = houses.find(h => h.id === reg.houseId);
-                        return `
-                            <tr data-reg-id="${reg.id}">
-                                <td><strong>${reg.studentName}</strong></td>
-                                <td>${house?.name || 'N/A'}</td>
-                                <td>
-                                    <input type="text" class="form-control form-control-sm chest-val-input" value="${reg.chestNo || ''}" placeholder="None">
-                                </td>
-                                <td class="text-end">
-                                    <button class="btn btn-sm btn-outline-success py-0" onclick="window.saveSingleChestNumber('${reg.id}', this)">Save</button>
-                                </td>
-                            </tr>
-                        `;
-                    }).join('')}
+                <tbody id="chest-table-body">
+                    <!-- Dynamic rendering -->
                 </tbody>
             </table>
         </div>
     `;
 
-    ['chest-house-picker', 'chest-prefix', 'chest-start-no', 'chest-generation-mode'].forEach(id => {
+    function refreshChestTable() {
+        const selectedHouseId = document.getElementById('chest-house-picker').value;
+        const tbody = document.getElementById('chest-table-body');
+        
+        // Filter by fest and selected house
+        let regs = state.festRegistrations.filter(r => r.festId === fest.id && (!selectedHouseId || r.houseId === selectedHouseId));
+
+        // Order: unassigned/missing first, then alphanumeric sort
+        regs.sort((a, b) => {
+            const hasA = Boolean(a.chestNo && a.chestNo.trim());
+            const hasB = Boolean(b.chestNo && b.chestNo.trim());
+            if (!hasA && hasB) return -1;
+            if (hasA && !hasB) return 1;
+            if (!hasA && !hasB) return (a.studentName || '').localeCompare(b.studentName || '');
+            return String(a.chestNo).localeCompare(String(b.chestNo), undefined, { numeric: true, sensitivity: 'base' });
+        });
+
+        document.getElementById('chest-count-indicator').innerText = 
+            `Showing ${regs.length} student(s) ${selectedHouseId ? 'in selected house' : 'across all houses'}`;
+
+        tbody.innerHTML = regs.map(reg => {
+            const house = houses.find(h => h.id === reg.houseId);
+            const isMissing = !reg.chestNo;
+            return `
+                <tr data-reg-id="${reg.id}" class="${isMissing ? 'table-warning-subtle' : ''}">
+                    <td class="text-center">
+                        <input type="checkbox" class="form-check-input chest-row-select" value="${reg.id}">
+                    </td>
+                    <td>
+                        <strong>${reg.studentName}</strong>
+                        ${isMissing ? '<span class="badge bg-warning text-dark ms-1">No Number</span>' : ''}
+                    </td>
+                    <td><span class="badge bg-light text-dark border">${house?.name || 'N/A'}</span></td>
+                    <td>
+                        <div class="position-relative">
+                            <input type="text" 
+                                class="form-control form-control-sm chest-val-input" 
+                                value="${reg.chestNo || ''}" 
+                                placeholder="None"
+                                data-reg-id="${reg.id}"
+                                oninput="window.validateChestDuplicates()">
+                            <div class="invalid-feedback small py-0">Duplicate chest number!</div>
+                        </div>
+                    </td>
+                    <td class="text-end">
+                        <button class="btn btn-sm btn-outline-success py-0" onclick="window.saveSingleChestNumber('${reg.id}', this)">Save</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        // Reset select-all state
+        const selectAllBox = document.getElementById('chest-select-all');
+        if (selectAllBox) selectAllBox.checked = false;
+        window.syncChestSelectionState();
+        window.validateChestDuplicates();
+    }
+
+    // Event listeners
+    document.getElementById('chest-house-picker').addEventListener('change', () => {
+        refreshChestTable();
+        updateChestNumberPreview();
+    });
+
+    ['chest-prefix', 'chest-start-no', 'chest-generation-mode'].forEach(id => {
         document.getElementById(id)?.addEventListener('input', updateChestNumberPreview);
         document.getElementById(id)?.addEventListener('change', updateChestNumberPreview);
     });
+
+    // Master checkbox listener
+    document.getElementById('chest-select-all')?.addEventListener('change', function() {
+        const rowCheckboxes = document.querySelectorAll('.chest-row-select');
+        rowCheckboxes.forEach(cb => cb.checked = this.checked);
+        window.syncChestSelectionState();
+    });
+
+    // Row selection listener via delegation
+    document.getElementById('chest-table-body')?.addEventListener('change', (e) => {
+        if (e.target.classList.contains('chest-row-select')) {
+            window.syncChestSelectionState();
+        }
+    });
+
+    refreshChestTable();
     updateChestNumberPreview();
 }
+
+window.syncChestSelectionState = function() {
+    const rowCheckboxes = Array.from(document.querySelectorAll('.chest-row-select'));
+    const selected = rowCheckboxes.filter(cb => cb.checked);
+    const clearBtn = document.getElementById('btn-clear-selected');
+    const selectedCount = document.getElementById('selected-count');
+    const selectAllBox = document.getElementById('chest-select-all');
+
+    if (selectedCount) selectedCount.innerText = selected.length;
+    if (clearBtn) clearBtn.disabled = selected.length === 0;
+
+    if (selectAllBox && rowCheckboxes.length > 0) {
+        selectAllBox.checked = selected.length === rowCheckboxes.length;
+        selectAllBox.indeterminate = selected.length > 0 && selected.length < rowCheckboxes.length;
+    }
+};
+
+window.validateChestDuplicates = function() {
+    const inputs = Array.from(document.querySelectorAll('.chest-val-input'));
+    const counts = {};
+    const duplicateBadge = document.getElementById('duplicate-warning');
+    let hasDuplicate = false;
+
+    inputs.forEach(input => {
+        const val = input.value.trim().toUpperCase();
+        if (val) counts[val] = (counts[val] || 0) + 1;
+    });
+
+    inputs.forEach(input => {
+        const val = input.value.trim().toUpperCase();
+        if (val && counts[val] > 1) {
+            input.classList.add('is-invalid');
+            hasDuplicate = true;
+        } else {
+            input.classList.remove('is-invalid');
+        }
+    });
+
+    if (duplicateBadge) duplicateBadge.classList.toggle('d-none', !hasDuplicate);
+    return !hasDuplicate;
+};
 
 function getChestNumberInfo() {
     const fest = state.managingFest;
@@ -1759,7 +2042,7 @@ window.generateChestNumbers = async function() {
     if (targetRegs.length === 0) return window.showAlert('No registered participants match the criteria.', 'warning');
 
     if (mode === 'all' && info.assigned.length > 0) {
-        const confirmed = confirm(`This will replace ${info.assigned.length} existing chest numbers for ${targetHouse || 'all houses'}. Continue with a new sequence?`);
+        const confirmed = confirm(`This will replace ${info.assigned.length} existing chest numbers for ${targetHouse ? 'this house' : 'all houses'}. Continue?`);
         if (!confirmed) return;
     }
 
@@ -1785,14 +2068,46 @@ window.generateChestNumbers = async function() {
     }
 };
 
+window.clearSelectedChestNumbers = async function() {
+    const selectedBoxes = Array.from(document.querySelectorAll('.chest-row-select:checked'));
+    if (selectedBoxes.length === 0) return;
+
+    if (!confirm(`Clear chest numbers for the ${selectedBoxes.length} selected student(s)?`)) return;
+
+    const ids = selectedBoxes.map(cb => cb.value);
+    const batch = writeBatch(db);
+
+    ids.forEach(id => {
+        const reg = state.festRegistrations.find(r => r.id === id);
+        if (reg) {
+            reg.chestNo = null;
+            batch.update(getScopedDoc('festRegistrations', id), {
+                chestNo: null,
+                lastUpdated: serverTimestamp()
+            });
+        }
+    });
+
+    try {
+        await batch.commit();
+        window.showAlert(`Cleared chest numbers for ${ids.length} students.`, 'info');
+        renderSubTabChestNumbers();
+    } catch (err) {
+        console.error(err);
+        window.showAlert('Failed to clear selected chest numbers.', 'danger');
+    }
+};
+
 window.clearChestNumbers = async function() {
     const fest = state.managingFest;
     const targetHouse = document.getElementById('chest-house-picker').value;
-    if (!confirm('Clear chest numbers for selected criteria?')) return;
+    const label = targetHouse ? 'the selected house' : 'all houses';
+    if (!confirm(`Clear chest numbers for ALL students in ${label}?`)) return;
 
     let targetRegs = state.festRegistrations.filter(r => r.festId === fest.id && (!targetHouse || r.houseId === targetHouse));
-    const batch = writeBatch(db);
+    if (targetRegs.length === 0) return window.showAlert('No records to clear.', 'warning');
 
+    const batch = writeBatch(db);
     targetRegs.forEach(reg => {
         reg.chestNo = null;
         batch.update(getScopedDoc('festRegistrations', reg.id), {
@@ -1813,19 +2128,49 @@ window.clearChestNumbers = async function() {
 
 window.saveSingleChestNumber = async function(regId, btn) {
     const row = btn.closest('tr');
-    const inputVal = row.querySelector('.chest-val-input').value.trim().toUpperCase() || null;
+    const input = row.querySelector('.chest-val-input');
+    const inputVal = input.value.trim().toUpperCase() || null;
+
+    // Check duplicate against existing fest registrations
+    if (inputVal) {
+        const isDuplicate = state.festRegistrations.some(
+            r => r.festId === state.managingFest.id && 
+                 r.id !== regId && 
+                 r.chestNo && 
+                 r.chestNo.trim().toUpperCase() === inputVal
+        );
+
+        if (isDuplicate) {
+            input.classList.add('is-invalid');
+            window.showAlert(`Chest number "${inputVal}" is already assigned to another participant.`, 'danger');
+            return;
+        }
+    }
 
     try {
-        await updateScopedDoc('festRegistrations', regId, { chestNo: inputVal });
+        await updateScopedDoc('festRegistrations', regId, { 
+            chestNo: inputVal,
+            lastUpdated: serverTimestamp()
+        });
         const local = state.festRegistrations.find(r => r.id === regId);
         if (local) local.chestNo = inputVal;
+
+        input.classList.remove('is-invalid');
+        btn.classList.replace('btn-outline-success', 'btn-success');
+        btn.innerText = 'Saved';
+        setTimeout(() => {
+            btn.classList.replace('btn-success', 'btn-outline-success');
+            btn.innerText = 'Save';
+        }, 1200);
+
+        window.validateChestDuplicates();
+        updateChestNumberPreview();
         window.showAlert('Chest number updated.', 'success');
     } catch (err) {
         console.error(err);
         window.showAlert('Failed to save chest number.', 'danger');
     }
 };
-
 // --- 6. HOUSE ALLOCATION SUB-TAB ---
 
 function renderSubTabHouseAllocation() {
@@ -2073,6 +2418,18 @@ function renderAccessLinksTab() {
                         <span><i class="fas fa-lock me-1"></i>Protected Admin Portal</span>
                         <button class="btn btn-primary btn-sm" onclick="window.copyAdminPortalLink()"><i class="fas fa-copy me-1"></i>Copy Admin Link</button>
                     </div>
+
+                    <div class="alert alert-success py-2 small d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <span><i class="fas fa-qrcode me-1"></i><strong>Camera QR Scanner:</strong> Instant Result Entry</span>
+    <div class="d-flex gap-1">
+        <button class="btn btn-success btn-sm" onclick="window.openQrScannerModal()">
+            <i class="fas fa-camera me-1"></i>Scan Scorecard
+        </button>
+        <button class="btn btn-outline-success btn-sm" onclick="window.copyJudgeScannerLink()">
+            <i class="fas fa-copy me-1"></i>Copy Link
+        </button>
+    </div>
+</div>
                     <table class="table table-sm align-middle">
                         <thead><tr><th>House</th><th>Portal Password</th><th>Direct Access</th></tr></thead>
                         <tbody>
@@ -2193,6 +2550,13 @@ window.copyAdminPortalLink = function() {
     const root = window.location.href.split('#')[0];
     navigator.clipboard.writeText(`${root}#fest-admin`);
     window.showAlert('Admin portal link copied to clipboard.', 'success');
+};
+
+window.copyJudgeScannerLink = function(festId) {
+    const root = window.location.href.split('#')[0];
+    const targetUrl = `${root}#fest-scan?year=${systemContext.activeYearId}&fest=${festId || state.managingFest?.id || ''}`;
+    navigator.clipboard.writeText(targetUrl);
+    window.showAlert('Result scanner link copied to clipboard!', 'success');
 };
 
 window.saveHousePortalPassword = async function(houseId) {
