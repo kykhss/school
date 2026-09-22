@@ -79,7 +79,14 @@ export async function initializeAppState() {
         await loadAllYearData();
     }
 }
-
+export function eventHouseLimit(fest, event, mode) {
+    const defaults = fest.settings?.houseEventLimits || { onStage: { solo: 2, group: 1 }, offStage: { solo: 2, group: 1 } };
+    if (event?.customHouseLimit !== undefined && event?.customHouseLimit !== null) {
+        return Number(event.customHouseLimit);
+    }
+    const limits = event.houseLimits || defaults;
+    return Number(limits[event.type === 'offStage' ? 'offStage' : 'onStage']?.[mode] ?? 0);
+}
 /**
  * Fetches the root academic years list.
  */
