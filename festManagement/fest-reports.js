@@ -815,13 +815,22 @@ window.printRollCallSheet = function() {
         `;
     }).join('');
 
-    const eventHeaders = events.map(e => `
+    const eventHeadersold = events.map(e => `
         <th style="height: 140px; vertical-align: bottom; padding: 4px;">
             <div style="writing-mode: vertical-rl; transform: rotate(180deg); font-size: 8pt; white-space: nowrap;">
                 ${e.name}
             </div>
         </th>
     `).join('');
+    const eventHeaders = [...new Map(events.map(e => [e.name, e])).values()]
+    .map(e => `
+        <th style="height: 140px; vertical-align: bottom; padding: 4px;">
+            <div style="writing-mode: vertical-rl; transform: rotate(180deg); font-size: 8pt; white-space: nowrap;">
+                ${e.name}
+            </div>
+        </th>
+    `)
+    .join('');
 
     const contentHtml = `
         <div style="text-align: center; margin-bottom: 15px;">
