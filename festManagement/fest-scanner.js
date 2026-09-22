@@ -19,7 +19,17 @@ async function ensureQrScannerLibrary() {
     });
 }
 
-function extractEventId(rawText) {
+function extractEventId(text) {
+    if (!text) return '';
+    const clean = text.trim();
+    if (clean.includes('?')) {
+        const params = new URLSearchParams(clean.split('?')[1]);
+        return params.get('event') || clean;
+    }
+    return clean; // Returns the short event.id directly!
+}
+
+function extractEventIdold(rawText) {
     if (!rawText) return '';
     const text = rawText.trim();
     if (text.includes('?')) {
