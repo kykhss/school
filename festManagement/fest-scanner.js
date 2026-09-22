@@ -3,6 +3,7 @@
 // =========================================================================
 
 import { systemContext, setActiveYear } from "./firebase-config.js";
+import { state } from "./app-state.js";
 
 async function ensureQrScannerLibrary() {
     if (window.Html5Qrcode) return true;
@@ -29,36 +30,39 @@ export async function openQrScannerModal() {
         <div class="text-center p-2">
             <!-- Camera Stream Area -->
             <div id="qr-reader-container" style="width: 100%; max-width: 400px; margin: 0 auto; overflow: hidden; border-radius: 8px; border: 2px dashed #0d6efd; background: #000;">
-                <div id="qr-camera-stream" style="width: 100%; min-height: 250px;"></div>
+                <div id="qr-camera-stream" style="width: 100%; min-height: 240px;"></div>
             </div>
             
             <div class="small text-muted mt-2">
-                <i class="fas fa-camera me-1"></i>Align the <strong>Scorecard QR Code</strong> within the frame
+                <i class="fas fa-camera me-1"></i>Point camera at the Scorecard QR code
             </div>
 
             <div id="qr-scan-status" class="alert alert-info py-1 px-2 mt-2 mb-0 small d-none"></div>
 
-            <!-- Manual Fallback Entry -->
+            <!-- Scanned / Manual Input Field -->
             <div class="mt-3 pt-3 border-top text-start">
                 <label class="form-label small fw-bold mb-1">
-                    <i class="fas fa-keyboard me-1 text-secondary"></i>Camera not working? Enter Event ID manually:
+                    <i class="fas fa-id-badge me-1 text-primary"></i>Detected / Entered Event ID:
                 </label>
-                <div class="input-group input-group-sm">
-                    <input type="text" id="manual-event-id-input" class="form-control font-monospace" placeholder="e.g. EVT_1726000000_SENIOR_M">
-                    <button class="btn btn-primary" id="btn-submit-manual-event">
-                        <i class="fas fa-arrow-right me-1"></i>Open Event
+                <div class="input-group mb-2">
+                    <input type="text" id="manual-event-id-input" class="form-control font-monospace fw-bold" placeholder="Scan QR or type ID..." style="letter-spacing: 0.5px;">
+                    <button class="btn btn-success fw-bold" id="btn-submit-manual-event">
+                        <i class="fas fa-arrow-right me-1"></i>Load Result Entry
                     </button>
                 </div>
-                <small class="text-muted" style="font-size: 0.72rem;">Look for the <code>ID: ...</code> printed directly below the QR code on the scorecard.</small>
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-muted" style="font-size: 0.72rem;">ID format: <code>EVT_...</code></small>
+                    <button class="btn btn-link btn-xs text-danger p-0" id="btn-clear-event-input">Clear</button>
+                </div>
             </div>
         </div>
     `;
 
     const modalFooter = `
-        <button class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal" id="btn-close-scanner">Cancel</button>
+        <button class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal" id="btn-close-scanner">Close</button>
     `;
 
-    const modal = window.showGlobalModal?.(`<i class="fas fa-qrcode me-2"></i>Scorecard Result Entry`, modalBody, modalFooter);
+    const modal = window.showGlobalModal?.(`<i class="fas fa-qrcode me-2"></i>Event QR Scanner`, modalBody, modalFooter);
 
     let html5QrCode = null;
 
@@ -76,72 +80,111 @@ export async function openQrScannerModal() {
     const modalElement = document.querySelector('.modal.show');
     modalElement?.addEventListener('hidden.bs.modal', stopCamera, { once: true });
 
-    // Helper to process both scanned QR URLs and manually typed event IDs
-    const navigateToEvent = async (rawInput) => {
-        const text = rawInput.trim();
-        if (!text) {
-            window.showAlert?.('Please enter an Event ID.', 'warning');
+    const manualInput = document.getElementById('manual-event-id-input');
+    const statusBox = document.getElementById('qr-scan-status');
+
+    // Parse Event ID from raw string, URL parameters, or plain text
+    function extractEventId(rawText) {
+        if (!rawText) return null;
+        let text = rawText.trim();
+        
+        if (text.includes('?')) {
+            const queryString = text.split('?')[1];
+            const params = new URLSearchParams(queryString);
+            return params.get('event') || null;
+        }
+        return text;
+    }
+
+    // Function to load the event into the result-entry tab or open judge portal
+    const proceedToEventResult = async (eventId) => {
+        if (!eventId) {
+            window.showAlert?.('Please provide an Event ID.', 'warning');
             return;
         }
 
         await stopCamera();
         modal?.hide();
 
-        let targetEventId = text;
-        let targetFestId = null;
-        let targetYearId = null;
-        let targetJudgeCode = '';
+        // 1. If currently inside admin workspace with the result entry tab available
+        const adminEventSelect = document.getElementById('admin-result-event');
+        const resultTabBtn = document.querySelector('button[data-bs-target="#tab-result-entry"]');
 
-        if (text.includes('?')) {
-            const queryString = text.split('?')[1];
-            const params = new URLSearchParams(queryString);
-            targetEventId = params.get('event') || text;
-            targetFestId = params.get('fest');
-            targetYearId = params.get('year');
-            targetJudgeCode = params.get('code') || '';
+        if (adminEventSelect && resultTabBtn) {
+            // Switch to result entry tab
+            const tabTrigger = new bootstrap.Tab(resultTabBtn);
+            tabTrigger.show();
+
+            // Set the dropdown and click load
+            adminEventSelect.value = eventId;
+            document.getElementById('admin-result-load')?.click();
+            window.showAlert?.(`Loaded Event: ${eventId}`, 'success');
+            return;
         }
 
-        if (targetYearId && typeof setActiveYear === 'function') {
-            setActiveYear(targetYearId);
-        }
-
-        const activeFest = targetFestId || window.state?.managingFest?.id || '';
-        const activeYear = targetYearId || systemContext.activeYearId || '';
-        const codeParam = targetJudgeCode ? `&code=${encodeURIComponent(targetJudgeCode)}` : '';
-
-        window.location.hash = `#fest-judge?year=${activeYear}&fest=${encodeURIComponent(activeFest)}&event=${encodeURIComponent(targetEventId)}${codeParam}`;
-        window.showAlert?.(`Loaded Event: ${targetEventId}`, 'success');
+        // 2. Fallback: navigate directly to judge scoring mode
+        const activeFest = state.managingFest?.id || '';
+        const activeYear = systemContext.activeYearId || '';
+        window.location.hash = `#fest-judge?year=${activeYear}&fest=${encodeURIComponent(activeFest)}&event=${encodeURIComponent(eventId)}`;
+        window.showAlert?.(`Opening scoring for Event: ${eventId}`, 'success');
     };
 
-    // Attach manual submit click & enter key
-    const manualBtn = document.getElementById('btn-submit-manual-event');
-    const manualInput = document.getElementById('manual-event-id-input');
+    // Camera Scan Success
+    const onScanSuccess = (decodedText) => {
+        const foundId = extractEventId(decodedText);
 
-    manualBtn?.addEventListener('click', () => {
-        navigateToEvent(manualInput?.value || '');
+        if (!foundId) {
+            if (statusBox) {
+                statusBox.classList.remove('d-none', 'alert-info');
+                statusBox.classList.add('alert-warning');
+                statusBox.innerHTML = `<i class="fas fa-exclamation-circle me-1"></i>QR scanned, but no valid Event ID detected.`;
+            }
+            return;
+        }
+
+        // Put the scanned ID into the text input field
+        if (manualInput) {
+            manualInput.value = foundId;
+            manualInput.classList.add('is-valid');
+        }
+
+        if (statusBox) {
+            statusBox.classList.remove('d-none', 'alert-warning');
+            statusBox.classList.add('alert-success');
+            statusBox.innerHTML = `<i class="fas fa-check-circle me-1"></i>Found Event ID: <strong>${foundId}</strong>. Loading...`;
+        }
+
+        // Automatically trigger load after a brief 500ms pause so the user sees the filled ID
+        setTimeout(() => {
+            proceedToEventResult(foundId);
+        }, 500);
+    };
+
+    // Manual Buttons
+    document.getElementById('btn-submit-manual-event')?.addEventListener('click', () => {
+        const id = extractEventId(manualInput.value);
+        proceedToEventResult(id);
     });
 
     manualInput?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
-            navigateToEvent(manualInput?.value || '');
+            const id = extractEventId(manualInput.value);
+            proceedToEventResult(id);
         }
     });
 
-    // Start camera scanning
+    document.getElementById('btn-clear-event-input')?.addEventListener('click', () => {
+        if (manualInput) {
+            manualInput.value = '';
+            manualInput.classList.remove('is-valid');
+        }
+        if (statusBox) statusBox.classList.add('d-none');
+    });
+
+    // Start Camera Feed
     try {
         html5QrCode = new window.Html5Qrcode("qr-camera-stream");
-        const statusBox = document.getElementById('qr-scan-status');
-
-        const onScanSuccess = async (decodedText) => {
-            if (!decodedText) return;
-            if (statusBox) {
-                statusBox.classList.remove('d-none');
-                statusBox.innerHTML = `<i class="fas fa-spinner fa-spin me-1"></i>QR detected! Loading event...`;
-            }
-            navigateToEvent(decodedText);
-        };
-
         const config = { 
             fps: 10, 
             qrbox: { width: 200, height: 200 },
@@ -152,11 +195,10 @@ export async function openQrScannerModal() {
 
     } catch (err) {
         console.error("Camera access error:", err);
-        const statusBox = document.getElementById('qr-scan-status');
         if (statusBox) {
             statusBox.classList.remove('d-none', 'alert-info');
             statusBox.classList.add('alert-warning');
-            statusBox.innerHTML = `<i class="fas fa-exclamation-triangle me-1"></i>Camera unavailable or permission denied. Use the manual ID box below.`;
+            statusBox.innerHTML = `<i class="fas fa-video-slash me-1"></i>Camera unavailable. Type the ID in the box below.`;
         }
     }
 }
