@@ -154,13 +154,20 @@ window.renderFestReportsTab = function() {
                                 ${categories.map(category => `<option value="${category}">${category}</option>`).join('')}
                             </select>
                         </div>
-                        <div class="col-md-4">
-                            <label class="small fw-bold" for="judge-card-event">Event</label>
-                            <select id="judge-card-event" class="form-select form-select-sm">
-                                <option value="ALL">All Events</option>
-                                ${events.map(event => `<option value="${event.id}">${event.name} (${event.category})</option>`).join('')}
-                            </select>
-                        </div>
+                       <div class="col-md-4">
+    <label class="small fw-bold" for="judge-card-event">Event</label>
+    <select id="judge-card-event" class="form-select form-select-sm">
+        <option value="ALL">All Events</option>
+
+        ${[...new Map(events.map(event => [event.id, event])).values()]
+            .map(event => `
+                <option value="${event.id}">
+                    ${event.name} (${event.category})
+                </option>
+            `)
+            .join('')}
+    </select>
+</div>
                         <div class="col-md-2 d-grid">
                             <button class="btn btn-sm btn-outline-dark" type="button" onclick="window.printJudgeCards()">
                             <i class="fas fa-print me-1"></i>Print Judge Cards
