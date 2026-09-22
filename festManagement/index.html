@@ -261,58 +261,33 @@
     </script>
 
     <!-- App Scripts Setup (ES Modules) -->
+    <!-- App Scripts Setup (ES Modules) -->
     <script type="module">
         import { initializeAppState, switchAcademicYear, state } from './app-state.js';
-
-        function waitForRouteHandler(handlerName, timeout = 5000) {
-            return new Promise(resolve => {
-                const startedAt = Date.now();
-                const check = () => {
-                    if (typeof window[handlerName] === 'function') {
-                        resolve(window[handlerName]);
-                        return;
-                    }
-                    if (Date.now() - startedAt >= timeout) {
-                        resolve(null);
-                        return;
-                    }
-                    setTimeout(check, 25);
-                };
-                check();
-            });
-        }
+        import { initRouter, handleHashRoute } from './fest-router.js';
 
         async function init() {
-            // 1. Intercept specialized URL modes before main dashboard loads
-            if (window.location.hash.startsWith('#fest-judge')) {
-                const handler = await waitForRouteHandler('checkForJudgingMode');
-                if (handler) {
-                    const handled = await handler();
-                    if (handled) return;
-                }
-            } else if (window.location.hash.startsWith('#fest-entry')) {
-                const handler = await waitForRouteHandler('checkForDataEntryMode');
-                if (handler) {
-                    const handled = await handler();
-                    if (handled) return;
-                }
-            } else if (window.location.hash.startsWith('#fest-admin')) {
-                const handler = await waitForRouteHandler('checkForAdminMode');
-                if (handler) {
-                    const handled = await handler();
-                    if (handled) return;
-                }
-            } else {
-                const handler = await waitForRouteHandler('checkForAdminMode');
-                if (handler) {
-                    const handled = await handler();
-                    if (handled) return;
-                }
+            // 1. Listen for hash changes
+            initRouter();
+
+            // 2. Intercept hash routes (#fest-judge, #fest-entry, #fest-admin, #fest-scan)
+            const hash = window.location.hash;
+            if (hash.startsWith('#fest-judge') || hash.startsWith('#fest-entry') || hash.startsWith('#fest-scan')) {
+                await handleHashRoute();
+                return;
             }
-            // 2. Initialize application data collections
+
+            // 3. Admin / Dashboard Mode bootstrap
+            const adminHandler = await window.waitForRouteHandler('checkForAdminMode');
+            if (adminHandler) {
+                const handled = await adminHandler();
+                if (handled) return;
+            }
+
+            // 4. Initialize application data collections
             await initializeAppState();
 
-            // 3. Render Academic Year Dropdown
+            // 5. Render Academic Year Dropdown
             const yearSelector = document.getElementById('global-academic-year-select');
             if (state.academicYears && state.academicYears.length > 0) {
                 yearSelector.innerHTML = state.academicYears.map(year => 
@@ -331,7 +306,7 @@
                 }
             });
 
-            // 4. Default execution into the main Fest Management interface
+            // 6. Default execution into the main Fest Management interface
             if (typeof window.renderFestManagement === 'function') {
                 window.renderFestManagement();
             }
@@ -341,6 +316,8 @@
     </script>
 
     <!-- Feature Modules -->
+    <script type="module" src="./fest-scanner.js"></script>
+    <script type="module" src="./fest-router.js"></script>
     <script type="module" src="./fest-admin.js"></script>
     <script type="module" src="./fest-entry.js"></script>
     <script type="module" src="./fest-judge.js"></script>
