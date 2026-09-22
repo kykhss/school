@@ -10,22 +10,14 @@ import { state } from "./app-state.js";
  */
 async function ensureQrScannerLibrary() {
     if (window.Html5Qrcode) {
-        console.log("[QR-SCANNER] Html5Qrcode library already loaded.");
         return true;
     }
-    console.log("[QR-SCANNER] Fetching Html5Qrcode library...");
     return new Promise((resolve, reject) => {
         const script = document.createElement('script');
         script.src = "https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js";
         script.async = true;
-        script.onload = () => {
-            console.log("[QR-SCANNER] Library ready.");
-            resolve(true);
-        };
-        script.onerror = () => {
-            console.error("[QR-SCANNER] Failed to load library.");
-            reject(new Error('Failed to load html5-qrcode library.'));
-        };
+        script.onload = () => resolve(true);
+        script.onerror = () => reject(new Error('Failed to load html5-qrcode library.'));
         document.head.appendChild(script);
     });
 }
@@ -43,7 +35,6 @@ function extractEventId(rawText) {
 
 export async function navigateToEventResult(rawInput, scannerInstance = null) {
     const eventId = extractEventId(rawInput);
-    console.log("[QR-SCANNER] Target Event ID for Judging Mode:", eventId);
 
     if (!eventId) {
         window.showAlert?.('Please enter or scan a valid Event ID.', 'warning');
@@ -51,22 +42,24 @@ export async function navigateToEventResult(rawInput, scannerInstance = null) {
     }
 
     // 1. Stop and clear camera
-    if (scannerInstance && scannerInstance.isScanning) {
+    if (scannerInstance) {
         try {
-            await scannerInstance.stop();
+            if (scannerInstance.isScanning) {
+                await scannerInstance.stop();
+            }
             scannerInstance.clear();
         } catch (e) {
-            console.warn(e);
+            console.warn("[QR-SCANNER] Stop error:", e);
         }
     }
 
-    // 2. Close the scanner modal
+    // 2. Close modal
     const modalEl = document.getElementById('global-modal');
     if (modalEl) {
         bootstrap.Modal.getInstance(modalEl)?.hide();
     }
 
-    // 3. Resolve fest, year, and judge code (if included in QR URL)
+    // 3. Resolve fest, year, and judge code
     let targetJudgeCode = '';
     let targetFestId = '';
     let targetYearId = '';
@@ -86,11 +79,10 @@ export async function navigateToEventResult(rawInput, scannerInstance = null) {
         setActiveYear(activeYear);
     }
 
-    // 4. Construct URL hash for Judge Portal
-    const targetHash = `#fest-judge?year=${activeYear}&fest=${encodeURIComponent(activeFest)}&event=${encodeURIComponent(eventId)}${codeParam}`;
-    window.location.hash = targetHash;
+    // 4. Construct URL hash
+    window.location.hash = `#fest-judge?year=${activeYear}&fest=${encodeURIComponent(activeFest)}&event=${encodeURIComponent(eventId)}${codeParam}`;
 
-    // 5. Explicitly invoke checkForJudgingMode
+    // 5. Invoke handler
     if (typeof window.checkForJudgingMode === 'function') {
         await window.checkForJudgingMode();
     } else if (typeof window.waitForRouteHandler === 'function') {
@@ -98,6 +90,7 @@ export async function navigateToEventResult(rawInput, scannerInstance = null) {
         if (handler) await handler();
     }
 }
+
 export async function openQrScannerModal() {
     try {
         await ensureQrScannerLibrary();
@@ -108,26 +101,23 @@ export async function openQrScannerModal() {
 
     const modalBody = `
         <div class="text-center p-2">
-            <!-- Camera Viewport with visual frame -->
-            <div id="qr-reader" style="width: 100%; max-width: 380px; margin: 0 auto; overflow: hidden; border-radius: 8px; border: 2px dashed #0d6efd; background: #000; min-height: 260px;"></div>
+            <!-- Fixed camera container -->
+            <div id="qr-reader" style="width: 100%; max-width: 320px; min-height: 250px; margin: 0 auto; border-radius: 8px; overflow: hidden; background: #000;"></div>
             
-            <!-- Live Status Alert -->
             <div id="qr-scan-status" class="alert alert-info py-2 px-2 mt-2 mb-0 small">
                 <i class="fas fa-spinner fa-spin me-1"></i> Starting camera...
             </div>
 
-            <!-- Scanned / Manual Input Field -->
             <div class="mt-3 pt-3 border-top text-start">
                 <label class="form-label small fw-bold mb-1">
                     <i class="fas fa-barcode me-1 text-primary"></i>Scanned / Manual Event ID:
                 </label>
                 <div class="input-group input-group-sm mb-2">
-                    <input type="text" id="manual-event-id-input" class="form-control font-monospace fw-bold" placeholder="Scan QR or type ID..." style="letter-spacing: 0.5px;">
+                    <input type="text" id="manual-event-id-input" class="form-control font-monospace fw-bold" placeholder="Scan QR or type ID...">
                     <button class="btn btn-success fw-bold" id="btn-submit-manual-event">
                         <i class="fas fa-arrow-right me-1"></i>Load Result Entry
                     </button>
                 </div>
-                <small class="text-muted" style="font-size: 0.72rem;">Type the <code>ID: ...</code> found under the QR on the scorecard if your camera cannot focus.</small>
             </div>
         </div>
     `;
@@ -140,115 +130,103 @@ export async function openQrScannerModal() {
 
     const manualInput = document.getElementById('manual-event-id-input');
     const statusBox = document.getElementById('qr-scan-status');
-    const scanner = new Html5Qrcode("qr-reader");
 
+    let scanner = null;
     let hasDetectedAnyQr = false;
-    let framesScanned = 0;
-    let noQrTimer = null;
 
-    // Reset status back to "No QR found" if inactive for 3 seconds
-    const kickNoQrTimer = () => {
-        clearTimeout(noQrTimer);
-        noQrTimer = setTimeout(() => {
-            if (!hasDetectedAnyQr && statusBox) {
-                statusBox.className = "alert alert-warning py-2 px-2 mt-2 mb-0 small";
-                statusBox.innerHTML = `<i class="fas fa-search me-1"></i><strong>No QR found in frame.</strong> Point camera directly at the code.`;
+    // Routine to run the camera safely
+    const startScanning = async () => {
+        scanner = new Html5Qrcode("qr-reader");
+
+        // Success Callback
+        const onScanSuccess = async (decodedText) => {
+            if (!decodedText || hasDetectedAnyQr) return;
+            hasDetectedAnyQr = true;
+
+            // Direct terminal/DevTools log
+            console.log("%c[QR-SCANNER] SCANNED VALUE:", "background: #28a745; color: #fff; font-size: 14px; padding: 4px;", decodedText);
+
+            const eventId = extractEventId(decodedText);
+
+            if (statusBox) {
+                statusBox.className = "alert alert-success py-2 px-2 mt-2 mb-0 small";
+                statusBox.innerHTML = `<i class="fas fa-check-circle me-1"></i>Scanned: <code>${eventId}</code>`;
             }
-        }, 3000);
+
+            if (manualInput) {
+                manualInput.value = eventId;
+            }
+
+            // Pause just like your working project to stop rapid re-triggers
+            try {
+                scanner.pause(true);
+            } catch (e) {}
+
+            setTimeout(async () => {
+                await navigateToEventResult(decodedText, scanner);
+            }, 300);
+        };
+
+        try {
+            // Use static qrbox dimensions like your working project
+            await scanner.start(
+                { facingMode: "environment" },
+                {
+                    fps: 10,
+                    qrbox: { width: 240, height: 240 }
+                },
+                onScanSuccess,
+                () => {} // Silent on intermediate scan frames
+            );
+
+            if (statusBox) {
+                statusBox.className = "alert alert-info py-2 px-2 mt-2 mb-0 small";
+                statusBox.innerHTML = `<i class="fas fa-camera me-1"></i>Point camera directly at the QR code.`;
+            }
+        } catch (err) {
+            console.error("[QR-SCANNER] Start failed:", err);
+            if (statusBox) {
+                statusBox.className = "alert alert-danger py-2 px-2 mt-2 mb-0 small";
+                statusBox.innerHTML = `<i class="fas fa-exclamation-triangle me-1"></i>Camera error: ${err.message || "Permission denied."}`;
+            }
+        }
     };
 
-    // Cleanup scanner when modal is closed
-    const modalElement = document.querySelector('.modal.show');
+    // Wait for Bootstrap modal transition to finish so #qr-reader has true DOM dimensions
+    const modalElement = document.getElementById('global-modal') || document.querySelector('.modal');
+    if (modalElement && modalElement.classList.contains('show')) {
+        startScanning();
+    } else if (modalElement) {
+        modalElement.addEventListener('shown.bs.modal', () => {
+            startScanning();
+        }, { once: true });
+    } else {
+        setTimeout(startScanning, 300);
+    }
+
+    // Modal close & cleanup
     modalElement?.addEventListener('hidden.bs.modal', async () => {
-        clearTimeout(noQrTimer);
-        if (scanner.isScanning) {
+        if (scanner) {
             try {
-                await scanner.stop();
+                if (scanner.isScanning) {
+                    await scanner.stop();
+                }
                 scanner.clear();
             } catch (e) {
-                console.warn("[QR-SCANNER] Modal cleanup error:", e);
+                console.warn("[QR-SCANNER] Cleanup error:", e);
             }
         }
     }, { once: true });
 
-    // Manual load buttons
+    // Manual input triggers
     document.getElementById('btn-submit-manual-event')?.addEventListener('click', () => {
-        clearTimeout(noQrTimer);
         navigateToEventResult(manualInput?.value || '', scanner);
     });
 
     manualInput?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
-            clearTimeout(noQrTimer);
             navigateToEventResult(manualInput.value, scanner);
-        }
-    });
-
-    // Success Callback
-    const onScanSuccess = async (decodedText) => {
-        if (!decodedText || hasDetectedAnyQr) return;
-        hasDetectedAnyQr = true;
-        clearTimeout(noQrTimer);
-
-        console.log("[QR-SCANNER] Scanned payload:", decodedText);
-
-        const eventId = extractEventId(decodedText);
-
-        if (statusBox) {
-            statusBox.className = "alert alert-success py-2 px-2 mt-2 mb-0 small";
-            statusBox.innerHTML = `<i class="fas fa-check-circle me-1"></i><strong>QR Recognized!</strong> Event: <code>${eventId}</code>`;
-        }
-
-        if (manualInput) {
-            manualInput.value = eventId;
-            manualInput.classList.add('is-valid');
-        }
-
-        setTimeout(async () => {
-            await navigateToEventResult(eventId, scanner);
-        }, 400);
-    };
-
-    // Frame scan handler (fires on every camera frame processed)
-    const onScanFailure = (error) => {
-        framesScanned++;
-
-        if (!hasDetectedAnyQr && framesScanned % 15 === 0 && statusBox) {
-            // Live scanning indicator
-            statusBox.className = "alert alert-info py-2 px-2 mt-2 mb-0 small";
-            statusBox.innerHTML = `<i class="fas fa-camera me-1"></i>Scanning frame #${framesScanned}... Keep camera steady.`;
-            kickNoQrTimer();
-        }
-    };
-
-    // Start Scanner with responsive frame calculation
-    scanner.start(
-        { facingMode: "environment" },
-        { 
-            fps: 15, 
-            qrbox: (viewfinderWidth, viewfinderHeight) => {
-                const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-                const boxSize = Math.floor(minEdge * 0.75);
-                return { width: boxSize, height: boxSize };
-            },
-            aspectRatio: 1.0
-        },
-        onScanSuccess,
-        onScanFailure
-    ).then(() => {
-        console.log("[QR-SCANNER] Camera active.");
-        if (statusBox) {
-            statusBox.className = "alert alert-info py-2 px-2 mt-2 mb-0 small";
-            statusBox.innerHTML = `<i class="fas fa-video me-1"></i>Camera active. Center the QR code inside the box.`;
-        }
-        kickNoQrTimer();
-    }).catch(err => {
-        console.error("[QR-SCANNER] Camera failed to start:", err);
-        clearTimeout(noQrTimer);
-        if (statusBox) {
-            statusBox.className = "alert alert-danger py-2 px-2 mt-2 mb-0 small";
-            statusBox.innerHTML = `<i class="fas fa-video-slash me-1"></i>Camera permission blocked or unavailable. Type Event ID manually below.`;
         }
     });
 }
