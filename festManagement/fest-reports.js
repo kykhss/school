@@ -2,17 +2,24 @@
 // --- FEST REPORTS & TABULATION MODULE (fest-reports.js) ---
 // =========================================================================
 
-//import { systemContext } from "./firebase-config.js";
 import { 
     state, 
     getStudentClassName, 
     getStudentCategory 
 } from "./app-state.js";
 
-import { db, systemContext,saveScopedDoc,
-    getScopedDoc } from "./firebase-config.js";
+import { 
+    db, 
+    systemContext,
+    saveScopedDoc,
+    getScopedDoc 
+} from "./firebase-config.js";
 
-import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { 
+    doc, 
+    getDoc, 
+    setDoc 
+} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 // --- 1. REPORTS TAB RENDERER ---
 
@@ -74,20 +81,19 @@ window.renderFestReportsTab = function() {
                                 ${categories.map(c => `<option value="${c}">${c}</option>`).join('')}
                             </select>
                         </div>
-                        </div>
                         <div class="col-md-5">
-    <label class="small fw-bold">Select Events</label>
-    <select id="report-ev-id" class="form-select form-select-sm" multiple size="6">
-        ${[...new Map(events.map(e => [e.id, e])).values()]
-            .map(e => `
-                <option value="${e.id}">
-                    ${e.name} (${e.category})
-                </option>
-            `)
-            .join('')}
-    </select>
-    <small class="text-muted">Hold Ctrl and select multiple events</small>
-</div>
+                            <label class="small fw-bold">Select Events</label>
+                            <select id="report-ev-id" class="form-select form-select-sm" multiple size="6">
+                                ${[...new Map(events.map(e => [e.id, e])).values()]
+                                    .map(e => `
+                                        <option value="${e.id}">
+                                            ${e.name} (${e.category})
+                                        </option>
+                                    `)
+                                    .join('')}
+                            </select>
+                            <small class="text-muted">Hold Ctrl and select multiple events</small>
+                        </div>
                         <div class="col-md-3 d-grid">
                             <button class="btn btn-sm btn-success" onclick="window.printEventScorecard()">
                                 <i class="fas fa-print me-1"></i>Generate Scorecard
@@ -134,6 +140,7 @@ window.renderFestReportsTab = function() {
                 </div>
             </div>
 
+            <!-- Card 5: Chest Number Cards -->
             <div class="col-12">
                 <div class="ui-card">
                     <h6 class="fw-bold mb-1"><i class="fas fa-id-badge text-primary me-2"></i>Chest Number Cards</h6>
@@ -155,6 +162,7 @@ window.renderFestReportsTab = function() {
                 </div>
             </div>
 
+            <!-- Card 6: Judge Cards -->
             <div class="col-12">
                 <div class="ui-card">
                     <h6 class="fw-bold mb-1"><i class="fas fa-gavel text-dark me-2"></i>Judge Cards</h6>
@@ -176,7 +184,7 @@ window.renderFestReportsTab = function() {
                         </div>
                         <div class="col-md-2 d-grid">
                             <button class="btn btn-sm btn-outline-dark" type="button" onclick="window.printJudgeCards()">
-                            <i class="fas fa-print me-1"></i>Print Judge Cards
+                                <i class="fas fa-print me-1"></i>Print Judge Cards
                             </button>
                         </div>
                         <div class="col-md-3 d-grid">
@@ -188,6 +196,7 @@ window.renderFestReportsTab = function() {
                 </div>
             </div>
 
+            <!-- Card 7: Blank Registration Form -->
             <div class="col-12">
                 <div class="ui-card">
                     <h6 class="fw-bold mb-1"><i class="fas fa-file-signature text-success me-2"></i>Blank Registration Roll Card</h6>
@@ -222,6 +231,7 @@ window.renderFestReportsTab = function() {
                 </div>
             </div>
 
+            <!-- Card 8: Stage Announcement Sheet -->
             <div class="col-12">
                 <div class="ui-card">
                     <h6 class="fw-bold mb-1"><i class="fas fa-bullhorn text-info me-2"></i>Stage Announcement Sheet</h6>
@@ -241,20 +251,87 @@ window.renderFestReportsTab = function() {
                 </div>
             </div>
 
+            <!-- Card 9: Stage Call Sheets (Tearable Coupons) -->
+            <div class="col-12">
+                <div class="ui-card">
+                    <h6 class="fw-bold mb-1"><i class="fas fa-bullhorn text-danger me-2"></i>Stage Call Sheets (Tearable Slips)</h6>
+                    <p class="small text-muted mb-3">Generate printable slips with tear lines sorted by chest number for stage announcers.</p>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-3">
+                            <label class="small fw-bold">Category</label>
+                            <select id="callsheet-category-filter" class="form-select form-select-sm">
+                                <option value="ALL">All Categories</option>
+                                ${[...new Set(events.map(e => e.category).filter(Boolean))].map(cat => `<option value="${cat}">${cat}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="small fw-bold mb-0">Select Events</label>
+                                <button class="btn btn-link btn-xs p-0 text-decoration-none" id="callsheet-select-all-btn" type="button">Select All</button>
+                            </div>
+                            <select id="callsheet-event-select" class="form-select form-select-sm" multiple size="5">
+                                <!-- Populated dynamically by JS -->
+                            </select>
+                            <small class="text-muted">Hold Ctrl/Cmd to select multiple events</small>
+                        </div>
+                        <div class="col-md-3 d-grid">
+                            <button class="btn btn-sm btn-danger fw-bold" id="btn-generate-callsheet" type="button">
+                                <i class="fas fa-print me-1"></i>Print Stage Call Sheets
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     `;
 
+    // --- Tab Interactivity Listeners ---
+
+    // Filter events for Judge Scorecard
     document.getElementById('report-ev-cat')?.addEventListener('change', (e) => {
         const cat = e.target.value;
         const selector = document.getElementById('report-ev-id');
         const filtered = cat === 'all' ? events : events.filter(ev => ev.category === cat);
         selector.innerHTML = filtered.map(ev => `<option value="${ev.id}">${ev.name} (${ev.category})</option>`).join('');
     });
+
+    // Filter events for Judge Cards
     document.getElementById('judge-card-category')?.addEventListener('change', (e) => {
         const category = e.target.value;
         const selector = document.getElementById('judge-card-event');
         const filtered = category === 'ALL' ? events : events.filter(event => event.category === category);
         selector.innerHTML = `<option value="ALL">All Events</option>${filtered.map(event => `<option value="${event.id}">${event.name} (${event.category})</option>`).join('')}`;
+    });
+
+    // Setup Call Sheet Category & Select All Actions
+    const catFilter = document.getElementById('callsheet-category-filter');
+    const eventSelect = document.getElementById('callsheet-event-select');
+    const selectAllBtn = document.getElementById('callsheet-select-all-btn');
+    const printBtn = document.getElementById('btn-generate-callsheet');
+
+    function updateCallSheetEventList(category = 'ALL') {
+        if (!eventSelect) return;
+        const filtered = events.filter(e => category === 'ALL' || e.category === category);
+        eventSelect.innerHTML = filtered.map(e => 
+            `<option value="${e.id}">${e.name} (${e.category || 'General'} - ${e.isGroupEvent ? 'Group' : 'Solo'})</option>`
+        ).join('');
+    }
+
+    updateCallSheetEventList('ALL');
+
+    catFilter?.addEventListener('change', (e) => {
+        updateCallSheetEventList(e.target.value);
+    });
+
+    selectAllBtn?.addEventListener('click', () => {
+        if (!eventSelect) return;
+        const allSelected = Array.from(eventSelect.options).every(opt => opt.selected);
+        Array.from(eventSelect.options).forEach(opt => opt.selected = !allSelected);
+        selectAllBtn.textContent = allSelected ? 'Select All' : 'Deselect All';
+    });
+
+    printBtn?.addEventListener('click', () => {
+        window.printStageCallSheets();
     });
 };
 
@@ -356,11 +433,11 @@ function calculateStandings(festId) {
 window.printIndividualChampionships = function() {
     const fest = state.managingFest;
     const results = state.festResults.filter(r => r.festId === fest.id);
-    const soloScores = {}; // { studentId: totalPoints }
+    const soloScores = {};
 
     results.forEach(res => {
         const ev = state.festEvents.find(e => e.id === res.eventId);
-        if (!ev || ev.isGroupEvent) return; // Strict solo validation
+        if (!ev || ev.isGroupEvent) return;
 
         res.results?.forEach(item => {
             if (item.studentId && item.points > 0) {
@@ -688,203 +765,7 @@ window.downloadJudgeList = function() {
     URL.revokeObjectURL(url);
 };
 
-// --- 4. JUDGE SCORECARD WITH QR CODE ---
-
-window.printEventScorecardold1 = function() {
-    const fest = state.managingFest;
-    const select = document.getElementById('report-ev-id');
-    if (!select) return;
-
-    // 1. Collect all selected event IDs from the multi-select element
-    const selectedEventIds = Array.from(select.selectedOptions)
-        .map(opt => opt.value)
-        .filter(Boolean);
-
-    if (!selectedEventIds.length) {
-        alert('Please select at least one event.');
-        return;
-    }
-
-    const uniqueEventIds = [...new Set(selectedEventIds)];
-    const selectedEvents = uniqueEventIds
-        .map(id => state.festEvents.find(e => e.id === id))
-        .filter(Boolean);
-
-    if (!selectedEvents.length) {
-        alert('No valid events selected.');
-        return;
-    }
-
-    const rootUrl = window.location.href.split('#')[0];
-    const qrQueue = [];
-
-    // 2. Generate HTML page for each selected event
-    const pagesHtml = selectedEvents.map((event, index) => {
-        const isGroup = Boolean(event.isGroupEvent || event.type === 'group');
-        const participants = state.festRegistrations.filter(r => 
-            r.festId === fest.id && 
-            !r.isDeleted && 
-            Array.isArray(r.events) && 
-            r.events.includes(event.id)
-        );
-
-        let rowsHtml = '';
-
-        if (isGroup) {
-            const groups = state.festGroups.filter(g =>
-                g.festId === fest.id &&
-                !g.isDeleted &&
-                (g.eventId === event.id || g.members?.some(m => participants.some(p => p.studentId === m.studentId)))
-            );
-
-            rowsHtml = groups.map(g => {
-                const house = state.festHouses.find(h => h.id === g.houseId);
-                const captain = g.members?.find(member => member.role === 'Captain' || member.isCaptain);
-                const captainName = state.students.find(s => s.id === captain?.studentId)?.name || 'Not assigned';
-
-                return `
-                    <tr style="height: 40px;">
-                        <td class="text-center" style="font-weight: 700;">${g.chestNo || g.code || '-'}</td>
-                        <td><strong>${g.name}</strong><div class="small text-muted" style="font-size: 7.5pt;">Captain: ${captainName}</div></td>
-                        <td>${house?.name || 'N/A'}</td>
-                        <td style="width: 15%; text-align: center;"></td>
-                        <td style="width: 20%;"></td>
-                    </tr>
-                `;
-            }).join('');
-        } else {
-            const sorted = [...participants].sort((a, b) => {
-                const chestA = String(a.chestNo || '').trim();
-                const chestB = String(b.chestNo || '').trim();
-                if (chestA && chestB) {
-                    return chestA.localeCompare(chestB, undefined, { numeric: true, sensitivity: 'base' });
-                }
-                if (chestA && !chestB) return -1;
-                if (!chestA && chestB) return 1;
-                return (a.studentName || '').localeCompare(b.studentName || '');
-            });
-
-            rowsHtml = sorted.map(p => {
-                const house = state.festHouses.find(h => h.id === p.houseId);
-                const student = state.students.find(s => s.id === p.studentId);
-
-                return `
-                    <tr style="height: 35px;">
-                        <td class="text-center" style="font-weight: 700;">${p.chestNo || 'N/A'}</td>
-                        <td>
-                            <strong>${p.studentName}</strong>
-                            <div class="small text-muted" style="font-size: 7.5pt;">Adm: ${student?.admissionNumber || 'N/A'}</div>
-                        </td>
-                        <td>${house?.name || 'N/A'}</td>
-                        <td style="width: 15%; text-align: center;"></td>
-                        <td style="width: 20%;"></td>
-                    </tr>
-                `;
-            }).join('');
-        }
-
-        const judgeUrl = `${rootUrl}#fest-judge?year=${systemContext.activeYearId}&fest=${encodeURIComponent(fest.id)}&event=${encodeURIComponent(event.id)}`;
-        const qrContainerId = `qr-target-${index}`;
-        qrQueue.push({ containerId: qrContainerId, url: event.id });
-        //qrQueue.push({ containerId: qrContainerId, url: judgeUrl });
-
-        return `
-            <div class="scorecard-page" style="width: 100%; box-sizing: border-box; min-height: 270mm; ${index > 0 ? 'page-break-before: always;' : ''} padding: 10mm 12mm;">
-                <!-- Header with Event Details and QR Code -->
-                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 15px;">
-                    <div>
-                        <h2 style="margin: 0; font-size: 16pt;">${fest.name}</h2>
-                        <h3 style="margin: 3px 0; color: #333; font-size: 12pt;">Score Sheet: ${event.name}</h3>
-                        <small style="font-size: 8pt; color: #555;">
-                            Venue / Stage: <strong>${event.stage || 'Main Stage'}</strong> &bull; 
-                            Type: <strong>${event.type || 'N/A'}</strong> &bull; 
-                            Category: <strong>${event.category || 'N/A'}</strong> &bull; 
-                            Mode: <strong>${isGroup ? 'Group' : 'Solo'}</strong>
-                        </small>
-                    </div>
-                    <div style="text-align: center; min-width: 105px; flex-shrink: 0;">
-    <div id="${qrContainerId}" style="width: 85px; height: 85px; display: inline-block;"></div>
-    <small style="font-size: 7pt; display: block; margin-top: 2px; font-weight: 600; color: #333;">SCAN TO SCORE</small>
-    <!-- Fallback readable code -->
-    <div style="font-family: monospace; font-size: 7.5pt; font-weight: bold; background: #e9ecef; border: 1px solid #ced4da; border-radius: 3px; padding: 1px 4px; margin-top: 3px; word-break: break-all;">
-        ID: ${event.id}
-    </div>
-</div>
-                </div>
-
-                <!-- Score Entry Table -->
-                <table class="table table-bordered table-sm" style="width: 100%; border-collapse: collapse; font-size: 8.5pt;">
-                    <thead class="table-light">
-                        <tr>
-                            ${isGroup 
-                                ? '<th style="width: 15%; text-align: center;">Group Code</th><th style="width: 35%;">Group / Captain</th><th>House</th>' 
-                                : '<th style="width: 15%; text-align: center;">Chest No</th><th style="width: 35%;">Participant Name</th><th>House</th>'
-                            }
-                            <th style="width: 15%; text-align: center;">Position</th>
-                            <th style="width: 20%; text-align: center;">Remarks / Marks</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${rowsHtml || `<tr><td colspan="5" class="text-center py-4 text-muted">No enrolled participants.</td></tr>`}
-                    </tbody>
-                </table>
-
-                <!-- Signature Section -->
-                <div style="margin-top: 60px; display: flex; justify-content: space-around; font-size: 9pt;">
-                    <div>Judge Name: _____________________</div>
-                    <div>Judge Signature: _____________________</div>
-                </div>
-            </div>
-        `;
-    }).join('');
-
-    // 3. Render printable pages and verify every QR code is fully loaded before print()
-    window.printReport({
-        contentHtml: pagesHtml,
-        title: `ScoreSheets_${fest.name.replace(/\s+/g, '_')}`,
-        pageSize: 'A4 portrait',
-        autoPrint: false,
-        onLoadCallback: (pWindow) => {
-            if (!qrQueue.length) {
-                pWindow.print();
-                return;
-            }
-
-            // Generate each QR code in the target print window
-            qrQueue.forEach(item => {
-                const target = pWindow.document.getElementById(item.containerId);
-                if (target && pWindow.QRCode) {
-                    new pWindow.QRCode(target, {
-                        text: item.url,
-                        width: 85,
-                        height: 85,
-                        correctLevel: pWindow.QRCode.CorrectLevel.L
-                    });
-                }
-            });
-
-            // Poll until every single QR code canvas/image has rendered
-            const waitForAllQRs = () => {
-                const allReady = qrQueue.every(item => {
-                    const el = pWindow.document.getElementById(item.containerId);
-                    if (!el) return true;
-                    const img = el.querySelector('img');
-                    const canvas = el.querySelector('canvas');
-                    return (img && img.complete && img.naturalWidth > 0) || (canvas && canvas.width > 0);
-                });
-
-                if (allReady) {
-                    pWindow.focus();
-                    pWindow.print();
-                } else {
-                    setTimeout(waitForAllQRs, 50);
-                }
-            };
-
-            waitForAllQRs();
-        }
-    });
-};
+// --- 4. JUDGE SCORECARD WITH QR CODE & SHORT TOKENS ---
 
 // Deterministic short hash generator
 function generateShortToken(str) {
@@ -893,7 +774,6 @@ function generateShortToken(str) {
         hash = ((hash << 5) - hash) + str.charCodeAt(i);
         hash |= 0;
     }
-    // Produces a clean 3-4 character base-36 token like "A7X" or "K9B"
     return Math.abs(hash).toString(36).substring(0, 4).toUpperCase();
 }
 
@@ -901,22 +781,25 @@ function generateShortToken(str) {
  * Gets or stores a 3-4 character token mapped to the event in Firestore.
  */
 export async function getOrCreateEventToken(festId, eventId, judgeCode = '') {
-    const yearId =  systemContext.activeYearId || localStorage.getItem('activeYearId');
+    const yearId = systemContext.activeYearId || localStorage.getItem('activeYearId');
     const token = generateShortToken(`${festId}_${eventId}`);
     const tokenRef = doc(db, `academicYears/${yearId}/festTokens`, token);
-    console.log(tokenRef)
-    console.log(`Checking token for festId=${festId}, eventId=${eventId}, token=${token}, yearid=${yearId} `);
-    const snap = await getDoc(tokenRef);
-    if (!snap.exists()) {
-        await setDoc(tokenRef, {
-            token: token,
-            yearId: yearId,
-            festId: festId,
-            eventId: eventId,
-            judgeCode: judgeCode || '',
-            createdAt: new Date(),
-            isDeleted:false
-        });
+    
+    try {
+        const snap = await getDoc(tokenRef);
+        if (!snap.exists()) {
+            await setDoc(tokenRef, {
+                token: token,
+                yearId: yearId,
+                festId: festId,
+                eventId: eventId,
+                judgeCode: judgeCode || '',
+                createdAt: new Date(),
+                isDeleted: false
+            });
+        }
+    } catch (e) {
+        console.warn("[TOKEN-CACHE] Token read/write fallback:", e);
     }
 
     return token;
@@ -928,7 +811,6 @@ window.printEventScorecard = async function() {
     const select = document.getElementById('report-ev-id');
     if (!select) return;
 
-    // 1. Collect all selected event IDs from the multi-select element
     const selectedEventIds = Array.from(select.selectedOptions)
         .map(opt => opt.value)
         .filter(Boolean);
@@ -948,26 +830,19 @@ window.printEventScorecard = async function() {
         return;
     }
 
-    const yearId = systemContext.activeYearId || localStorage.getItem('activeYearId'); //
-const rootUrl = window.location.href.split('#')[0];
-
+    const yearId = systemContext.activeYearId || localStorage.getItem('activeYearId');
+    const rootUrl = window.location.href.split('#')[0];
     const qrQueue = [];
 
-    // Pre-resolve short 3-letter tokens for all selected events
-    // Inside window.printEventScorecard in fest-reports.js
+    const tokenDataList = await Promise.all(
+        selectedEvents.map(async (event, index) => {
+            const shortToken = await getOrCreateEventToken(fest.id, event.id);
+            const shortUrl = `${rootUrl}#j/${yearId}/${shortToken}`;
+            const qrContainerId = `qr-target-${index}`;
+            return { event, shortToken, shortUrl, qrContainerId, index };
+        })
+    );
 
-const tokenDataList = await Promise.all(
-    selectedEvents.map(async (event, index) => {
-        const shortToken = await getOrCreateEventToken(fest.id, event.id);
-        
-        // Includes yearId directly in the link: #j/2026-27/A7X
-        const shortUrl = `${rootUrl}#j/${yearId}/${shortToken}`;
-        const qrContainerId = `qr-target-${index}`;
-        return { event, shortToken, shortUrl, qrContainerId, index };
-    })
-);
-
-    // 2. Generate HTML page for each selected event
     const pagesHtml = tokenDataList.map(({ event, shortToken, shortUrl, qrContainerId, index }) => {
         const isGroup = Boolean(event.isGroupEvent || event.type === 'group');
         const participants = state.festRegistrations.filter(r => 
@@ -1032,12 +907,10 @@ const tokenDataList = await Promise.all(
             }).join('');
         }
 
-        // Queue short URL for QR generation
         qrQueue.push({ containerId: qrContainerId, url: shortUrl });
 
         return `
             <div class="scorecard-page" style="width: 100%; box-sizing: border-box; min-height: 270mm; ${index > 0 ? 'page-break-before: always;' : ''} padding: 10mm 12mm;">
-                <!-- Header with Event Details and QR Code -->
                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 15px;">
                     <div>
                         <h2 style="margin: 0; font-size: 16pt;">${fest.name}</h2>
@@ -1050,7 +923,6 @@ const tokenDataList = await Promise.all(
                         </small>
                     </div>
 
-                    <!-- Short QR & 3-Letter ID Box -->
                     <div style="text-align: center; min-width: 95px; flex-shrink: 0;">
                         <div id="${qrContainerId}" style="width: 80px; height: 80px; display: inline-block;"></div>
                         <small style="font-size: 7pt; display: block; margin-top: 2px; font-weight: 600; color: #333;">SCAN TO SCORE</small>
@@ -1060,7 +932,6 @@ const tokenDataList = await Promise.all(
                     </div>
                 </div>
 
-                <!-- Score Entry Table -->
                 <table class="table table-bordered table-sm" style="width: 100%; border-collapse: collapse; font-size: 8.5pt;">
                     <thead class="table-light">
                         <tr>
@@ -1077,7 +948,6 @@ const tokenDataList = await Promise.all(
                     </tbody>
                 </table>
 
-                <!-- Signature Section -->
                 <div style="margin-top: 60px; display: flex; justify-content: space-around; font-size: 9pt;">
                     <div>Judge Name: _____________________</div>
                     <div>Judge Signature: _____________________</div>
@@ -1086,7 +956,6 @@ const tokenDataList = await Promise.all(
         `;
     }).join('');
 
-    // 3. Render printable pages and verify every QR code is fully loaded before print()
     window.printReport({
         contentHtml: pagesHtml,
         title: `ScoreSheets_${fest.name.replace(/\s+/g, '_')}`,
@@ -1098,7 +967,6 @@ const tokenDataList = await Promise.all(
                 return;
             }
 
-            // Generate each QR code with Level L (high scan speed, low density)
             qrQueue.forEach(item => {
                 const target = pWindow.document.getElementById(item.containerId);
                 if (target && pWindow.QRCode) {
@@ -1111,7 +979,6 @@ const tokenDataList = await Promise.all(
                 }
             });
 
-            // Poll until every QR code canvas/image has rendered
             const waitForAllQRs = () => {
                 const allReady = qrQueue.every(item => {
                     const el = pWindow.document.getElementById(item.containerId);
@@ -1133,6 +1000,7 @@ const tokenDataList = await Promise.all(
         }
     });
 };
+
 // --- 5. ROLL CALL GRID / ENTRY MATRIX ---
 
 window.printRollCallSheet = function() {
@@ -1141,12 +1009,10 @@ window.printRollCallSheet = function() {
     const houseFilter = document.getElementById('roll-house')?.value || 'ALL';
     const typeFilter = document.getElementById('roll-type')?.value || 'ALL';
 
-    // 1. Filter raw events for this fest
     let rawEvents = state.festEvents.filter(e => e.festId === fest.id);
     if (catFilter !== 'ALL') rawEvents = rawEvents.filter(e => e.category === catFilter);
     if (typeFilter !== 'ALL') rawEvents = rawEvents.filter(e => (e.type || 'onStage') === typeFilter);
 
-    // 2. Group events by clean name so duplicate names across categories get ONE column
     const uniqueEventsMap = new Map();
     rawEvents.forEach(e => {
         const cleanName = (e.name || '').trim();
@@ -1163,12 +1029,10 @@ window.printRollCallSheet = function() {
         }
     });
 
-    // Sort unique event columns alphabetically
     const events = Array.from(uniqueEventsMap.values()).sort((a, b) => 
         a.displayName.localeCompare(b.displayName, undefined, { numeric: true, sensitivity: 'base' })
     );
 
-    // 3. Filter and enrich participant records
     let registrations = state.festRegistrations.filter(r => r.festId === fest.id && !r.isDeleted);
     if (houseFilter !== 'ALL') {
         registrations = registrations.filter(r => r.houseId === houseFilter);
@@ -1185,7 +1049,6 @@ window.printRollCallSheet = function() {
         enriched = enriched.filter(item => item.category === catFilter);
     }
 
-    // 4. Sort: Category -> Chest Number (natural numeric) -> Student Name
     enriched.sort((a, b) => {
         const catCmp = a.category.localeCompare(b.category);
         if (catCmp !== 0) return catCmp;
@@ -1201,15 +1064,13 @@ window.printRollCallSheet = function() {
         return (a.student?.name || a.reg.studentName || '').localeCompare(b.student?.name || b.reg.studentName || '');
     });
 
-    // 5. Build Table Rows with Category Divider Rows
     let currentCategory = null;
-    const totalColumns = 4 + events.length; // Chest + Name + Class + House + Events
+    const totalColumns = 4 + events.length;
 
     let tableRows = '';
     enriched.forEach(item => {
         const { reg, student, house, category } = item;
 
-        // Insert full-width category divider when grouping shifts
         if (category !== currentCategory) {
             currentCategory = category;
             tableRows += `
@@ -1221,7 +1082,6 @@ window.printRollCallSheet = function() {
             `;
         }
 
-        // Match if student is registered for ANY ID under this unique event name
         const checkCells = events.map(evGroup => {
             const hasEvent = (reg.events || []).some(id => evGroup.eventIds.has(id));
             return `<td style="text-align: center; width: 26px; font-weight: bold; color: ${hasEvent ? '#000' : 'transparent'}; border-left: 1px solid #dee2e6;">${hasEvent ? '&#10003;' : ''}</td>`;
@@ -1242,7 +1102,6 @@ window.printRollCallSheet = function() {
         tableRows = `<tr><td colspan="${totalColumns}" style="text-align: center; padding: 24px; color: #6c757d;">No participants match the selected criteria.</td></tr>`;
     }
 
-    // 6. Vertical Column Headers for Event Names
     const eventHeaders = events.map(e => `
         <th style="height: 140px; vertical-align: bottom; padding: 4px 2px; width: 26px; min-width: 26px; border-left: 1px solid #dee2e6;">
             <div style="writing-mode: vertical-rl; transform: rotate(180deg); font-size: 7.5pt; white-space: nowrap; line-height: 1; max-height: 130px; overflow: hidden; text-overflow: ellipsis;" title="${e.displayName}">
@@ -1253,7 +1112,6 @@ window.printRollCallSheet = function() {
 
     const targetHouse = state.festHouses.find(h => h.id === houseFilter);
 
-    // 7. Render Printable Output
     const contentHtml = `
         <div style="text-align: center; margin-bottom: 12px;">
             <h2 style="margin: 0; font-size: 16pt;">${fest.name}</h2>
@@ -1333,7 +1191,7 @@ window.printAnnouncementSheet = function() {
 };
 
 function generateAnnouncementSheetHTML(festId, selectedStage) {
-    const fest = state.fests.find(item => item.id === festId) || state.managingFest;
+    const fest = state.fests?.find(item => item.id === festId) || state.managingFest;
     const events = state.festEvents.filter(event => event.festId === festId && (event.stage || 'Main Stage') === selectedStage).sort((a, b) => a.name.localeCompare(b.name));
     let contentHtml = '';
     let participantsFound = false;
@@ -1342,22 +1200,160 @@ function generateAnnouncementSheetHTML(festId, selectedStage) {
         const participants = state.festRegistrations.filter(registration => registration.festId === festId && (registration.events || []).includes(event.id));
         if (participants.length === 0) return;
         participantsFound = true;
-            const byHouse = participants.reduce((groups, registration) => {
-                const houseId = registration.houseId || 'UNASSIGNED';
-                (groups[houseId] ||= []).push(registration);
-                return groups;
-            }, {});
-            const houseSections = Object.keys(byHouse).sort((a, b) => (state.festHouses.find(house => house.id === a)?.name || '').localeCompare(state.festHouses.find(house => house.id === b)?.name || '')).map(houseId => {
-                const house = state.festHouses.find(item => item.id === houseId);
-                const chestNumbers = [...new Set(byHouse[houseId].map(registration => registration.chestNo).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
-                return chestNumbers.length ? `<div><h6 class="house-header" style="color:${house?.color || '#000'};">${house?.name || 'Unassigned'}:</h6><p class="chest-number-list">${chestNumbers.join(', ')}</p></div>` : '';
-            }).join('');
-            contentHtml += `<div class="announcement-section"><h3 class="event-title">${selectedStage}: ${event.name} <small class="text-muted">(${event.category})</small></h3>${houseSections}</div>`;
+        const byHouse = participants.reduce((groups, registration) => {
+            const houseId = registration.houseId || 'UNASSIGNED';
+            (groups[houseId] ||= []).push(registration);
+            return groups;
+        }, {});
+        const houseSections = Object.keys(byHouse).sort((a, b) => (state.festHouses.find(house => house.id === a)?.name || '').localeCompare(state.festHouses.find(house => house.id === b)?.name || '')).map(houseId => {
+            const house = state.festHouses.find(item => item.id === houseId);
+            const chestNumbers = [...new Set(byHouse[houseId].map(registration => registration.chestNo).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+            return chestNumbers.length ? `<div><h6 class="house-header" style="color:${house?.color || '#000'};">${house?.name || 'Unassigned'}:</h6><p class="chest-number-list">${chestNumbers.join(', ')}</p></div>` : '';
+        }).join('');
+        contentHtml += `<div class="announcement-section"><h3 class="event-title">${selectedStage}: ${event.name} <small class="text-muted">(${event.category})</small></h3>${houseSections}</div>`;
     });
 
     if (!participantsFound) {
         window.showAlert('No participants with chest numbers were found for this venue / stage.', 'info');
         return { contentHtml: null, reportTitle: '' };
     }
-    return { contentHtml: `<h2 style="text-align:center;">${fest.name}</h2><p style="text-align:center;">Announcement Sheet | Venue / Stage: ${selectedStage} | ${state.activeYear?.label || state.activeYear?.id || ''}</p>${contentHtml}`, reportTitle: `${fest.name}_${selectedStage}` };
+    return { contentHtml: `<h2 style="text-align:center;">${fest.name}</h2><p style="text-align:center;">Announcement Sheet | Venue / Stage: ${selectedStage} | ${systemContext.activeYearId || ''}</p>${contentHtml}`, reportTitle: `${fest.name}_${selectedStage}` };
 }
+
+// --- 6. PRINT STAGE CALL SHEETS (TEARABLE COUPONS) ---
+
+window.printStageCallSheets = function() {
+    const fest = state.managingFest;
+    const select = document.getElementById('callsheet-event-select');
+    if (!select || !fest) return;
+
+    const selectedEventIds = Array.from(select.selectedOptions).map(opt => opt.value).filter(Boolean);
+
+    if (!selectedEventIds.length) {
+        return window.showAlert ? window.showAlert('Please select at least one event for the call sheet.', 'warning') : alert('Please select at least one event.');
+    }
+
+    const targetEvents = selectedEventIds
+        .map(id => state.festEvents.find(e => e.id === id))
+        .filter(Boolean);
+
+    const slipsHtml = targetEvents.map(event => {
+        const isGroup = Boolean(event.isGroupEvent || event.type === 'group');
+        const registrations = state.festRegistrations.filter(r => 
+            r.festId === fest.id && 
+            !r.isDeleted && 
+            Array.isArray(r.events) && 
+            r.events.includes(event.id)
+        );
+
+        let rowsHtml = '';
+
+        if (isGroup) {
+            const groups = state.festGroups.filter(g => 
+                g.festId === fest.id && 
+                !g.isDeleted && 
+                (g.eventId === event.id || g.members?.some(m => registrations.some(p => p.studentId === m.studentId)))
+            );
+
+            rowsHtml = groups.map((g, idx) => {
+                const house = state.festHouses.find(h => h.id === g.houseId);
+                const captain = g.members?.find(m => m.role === 'Captain' || m.isCaptain);
+                const captainName = state.students.find(s => s.id === captain?.studentId)?.name || 'Not assigned';
+
+                return `
+                    <tr style="height: 32px;">
+                        <td style="text-align: center; font-weight: bold; font-size: 11pt;">${g.chestNo || g.code || (idx + 1)}</td>
+                        <td>
+                            <strong>${g.name}</strong>
+                            <div style="font-size: 7.5pt; color: #555;">Lead: ${captainName} (${g.members?.length || 0} members)</div>
+                        </td>
+                        <td>${house?.name || 'N/A'}</td>
+                        <td style="text-align: center; width: 40px;"><input type="checkbox" style="transform: scale(1.2);"></td>
+                        <td style="text-align: center; width: 40px;"><input type="checkbox" style="transform: scale(1.2);"></td>
+                        <td style="text-align: center; width: 40px;"><input type="checkbox" style="transform: scale(1.2);"></td>
+                        <td style="width: 70px;"></td>
+                    </tr>
+                `;
+            }).join('');
+        } else {
+            const sorted = [...registrations].sort((a, b) => {
+                const cA = String(a.chestNo || '').trim();
+                const cB = String(b.chestNo || '').trim();
+                if (cA && cB) return cA.localeCompare(cB, undefined, { numeric: true, sensitivity: 'base' });
+                if (cA && !cB) return -1;
+                if (!cA && cB) return 1;
+                return (a.studentName || '').localeCompare(b.studentName || '');
+            });
+
+            rowsHtml = sorted.map((p, idx) => {
+                const house = state.festHouses.find(h => h.id === p.houseId);
+                const student = state.students.find(s => s.id === p.studentId);
+
+                return `
+                    <tr style="height: 30px;">
+                        <td style="text-align: center; font-weight: bold; font-size: 11pt;">${p.chestNo || (idx + 1)}</td>
+                        <td>
+                            <strong>${p.studentName}</strong>
+                            <span style="font-size: 7.5pt; color: #666; margin-left: 4px;">(Adm: ${student?.admissionNumber || 'N/A'})</span>
+                        </td>
+                        <td>${house?.name || 'N/A'}</td>
+                        <td style="text-align: center; width: 40px;"><input type="checkbox" style="transform: scale(1.2);"></td>
+                        <td style="text-align: center; width: 40px;"><input type="checkbox" style="transform: scale(1.2);"></td>
+                        <td style="text-align: center; width: 40px;"><input type="checkbox" style="transform: scale(1.2);"></td>
+                        <td style="width: 70px;"></td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        return `
+            <div class="call-sheet-coupon" style="page-break-inside: avoid; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 2px dashed #666; font-family: sans-serif;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 6px;">
+                    <div>
+                        <span style="font-size: 8pt; text-transform: uppercase; letter-spacing: 0.5px; color: #555;">${fest.name} &bull; STAGE CALL SHEET</span>
+                        <h3 style="margin: 2px 0 0 0; font-size: 13pt; font-weight: bold; color: #111;">
+                            ${event.name} 
+                            <span style="font-size: 9pt; font-weight: normal; color: #444;">(${event.category || 'General'} - ${isGroup ? 'Group' : 'Solo'})</span>
+                        </h3>
+                    </div>
+                    <div style="text-align: right;">
+                        <span style="display: inline-block; font-size: 8pt; font-weight: bold; background: #e2e8f0; border: 1px solid #cbd5e1; padding: 2px 6px; border-radius: 4px;">
+                            Stage: ${event.stage || 'Main Stage'}
+                        </span>
+                        <div style="font-size: 7.5pt; color: #777; margin-top: 2px;">
+                            <i class="fas fa-scissors"></i> Tear Along Line
+                        </div>
+                    </div>
+                </div>
+
+                <table style="width: 100%; border-collapse: collapse; font-size: 8.5pt;" border="1" cellpadding="3">
+                    <thead style="background-color: #f1f5f9;">
+                        <tr>
+                            <th style="width: 12%; text-align: center;">CHEST NO</th>
+                            <th style="width: 38%; text-align: left;">PARTICIPANT / GROUP</th>
+                            <th style="width: 18%; text-align: left;">HOUSE</th>
+                            <th style="width: 7%; text-align: center;">1st Call</th>
+                            <th style="width: 7%; text-align: center;">2nd Call</th>
+                            <th style="width: 7%; text-align: center;">3rd Call</th>
+                            <th style="width: 11%; text-align: center;">Reported</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rowsHtml || '<tr><td colspan="7" style="text-align:center; color:#888; padding: 10px;">No registered participants for this event.</td></tr>'}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }).join('');
+
+    window.printReport({
+        contentHtml: `
+            <div style="padding: 10px;">
+                ${slipsHtml}
+            </div>
+        `,
+        title: `Stage_CallSheets_${fest.name.replace(/\s+/g, '_')}`,
+        pageSize: 'A4 portrait',
+        autoPrint: true
+    });
+};
