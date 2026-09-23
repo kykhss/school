@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fest Live Broadcast Dashboard</title>
+    <!-- Bootstrap 5 CSS & FontAwesome Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #070b12;
+            --card-bg: #0f172a;
+            --border-color: #1e293b;
+            --gold: #ffc107;
+            --silver: #cbd5e1;
+            --bronze: #cd7f32;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: #f8fafc;
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            user-select: none;
+        }
+
+        .tv-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+            height: 100%;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .tv-card-header {
+            background: rgba(255, 255, 255, 0.03);
+            border-bottom: 1px solid var(--border-color);
+            padding: 8px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Top Bar & Year Selector */
+        .top-navbar {
+            height: 48px;
+            background: #090e17;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+        }
+
+        /* Top-Left: House Leaderboard */
+        .house-bar-bg {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+            height: 14px;
+            overflow: hidden;
+        }
+        .house-bar-fill {
+            height: 100%;
+            transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Top-Right: Event Winner Carousel */
+        .winner-card {
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-color);
+        }
+        .podium-1 { border-left: 4px solid var(--gold); }
+        .podium-2 { border-left: 4px solid var(--silver); }
+        .podium-3 { border-left: 4px solid var(--bronze); }
+
+        .breaking-banner {
+            background: linear-gradient(90deg, #dc3545, #fd7e14);
+            color: white;
+            font-weight: 800;
+            letter-spacing: 1px;
+            animation: pulse-red 1.2s infinite;
+        }
+
+        @keyframes pulse-red {
+            0% { opacity: 0.9; }
+            50% { opacity: 1; filter: brightness(1.2); }
+            100% { opacity: 0.9; }
+        }
+
+        /* Bottom: Matrix Grid with Vertical Event Headers */
+        .matrix-table-container {
+            flex: 1;
+            overflow: auto;
+        }
+
+        .table-dark-custom {
+            --bs-table-bg: transparent;
+            --bs-table-border-color: var(--border-color);
+            color: #e2e8f0;
+            margin-bottom: 0;
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+
+        .table-dark-custom th, 
+        .table-dark-custom td {
+            border-color: var(--border-color);
+        }
+
+        /* Fixed First Column (Houses) */
+        .house-fixed-col {
+            position: sticky;
+            left: 0;
+            background: #0f172a !important;
+            z-index: 3;
+            min-width: 170px;
+            max-width: 170px;
+            border-right: 2px solid var(--border-color) !important;
+        }
+
+        /* Vertical Event Header Styling */
+        .event-header-cell {
+            height: 140px;
+            min-width: 44px;
+            max-width: 48px;
+            vertical-align: bottom;
+            padding: 8px 2px;
+            text-align: center;
+            background: rgba(15, 23, 42, 0.95);
+        }
+
+        .event-vertical-title {
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            white-space: nowrap;
+            font-size: 0.72rem;
+            letter-spacing: 0.4px;
+            max-height: 120px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: inline-block;
+            margin: 0 auto;
+        }
+
+        .pos-badge {
+            font-size: 0.7rem;
+            padding: 2px 4px;
+            border-radius: 4px;
+            display: inline-block;
+            font-weight: 700;
+        }
+
+        .fade-swap {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Global Broadcast Bar -->
+    <header class="top-navbar">
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-danger text-uppercase px-2 py-1"><i class="fas fa-broadcast-tower me-1"></i>LIVE ON AIR</span>
+            <span class="fw-bold fs-6 tracking-wide" id="broadcast-fest-name">FESTIVAL LIVE DASHBOARD</span>
+        </div>
+        
+        <!-- Year Selector in the Top Right Corner -->
+        <div class="d-flex align-items-center gap-2">
+            <label for="global-year-select" class="small text-muted fw-semibold mb-0">
+                <i class="fas fa-calendar-days text-info me-1"></i>Academic Year:
+            </label>
+            <select id="global-year-select" class="form-select form-select-sm bg-dark text-white border-secondary" style="width: 140px;">
+                <option value="">Loading...</option>
+            </select>
+        </div>
+    </header>
+
+    <!-- Main TV Viewport -->
+    <main class="container-fluid p-2 flex-grow-1 d-flex flex-column gap-2" style="height: calc(100vh - 48px);">
+        
+        <!-- Top Half: Leaderboard & Winner Spotlight (~44vh) -->
+        <div class="row g-2" style="height: 42%;">
+            
+            <!-- Top Left: House Championship Standings -->
+            <div class="col-6 h-100">
+                <div class="tv-card">
+                    <div class="tv-card-header">
+                        <span class="fw-bold small"><i class="fas fa-trophy text-warning me-2"></i>HOUSE STANDINGS</span>
+                        <span class="badge bg-primary" id="total-results-count">0 Events Evaluated</span>
+                    </div>
+                    <div class="p-2 overflow-auto flex-grow-1" id="house-rankings-container">
+                        <div class="d-flex h-100 align-items-center justify-content-center text-muted small">
+                            <i class="fas fa-spinner fa-spin me-2"></i>Loading Scores...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top Right: Winner Carousel & Breaking News (5s) -->
+            <div class="col-6 h-100">
+                <div class="tv-card">
+                    <div class="tv-card-header" id="spotlight-header">
+                        <span class="fw-bold small" id="spotlight-title"><i class="fas fa-medal text-info me-2"></i>WINNER SPOTLIGHT (5s)</span>
+                        <span class="badge bg-secondary font-monospace" id="spotlight-counter">0 / 0</span>
+                    </div>
+                    <div class="p-2 flex-grow-1 d-flex flex-column justify-content-center" id="winner-spotlight-container">
+                        <div class="text-center text-muted small">
+                            <i class="fas fa-spinner fa-spin me-2"></i>Waiting for results...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Bottom Half: Vertical Event Header Matrix (~56vh) -->
+        <div class="row g-2 flex-grow-1" style="height: 58%;">
+            <div class="col-12 h-100">
+                <div class="tv-card">
+                    <div class="tv-card-header py-1">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="fw-bold small"><i class="fas fa-layer-group text-success me-2"></i>PLACEMENTS MATRIX</span>
+                            <span class="badge bg-info text-dark" id="current-category-pill">ALL CATEGORIES</span>
+                        </div>
+                        <div class="small text-muted" style="font-size: 0.75rem;">
+                            Category rotation in <span id="category-timer" class="fw-bold text-white">10</span>s
+                        </div>
+                    </div>
+
+                    <div class="matrix-table-container">
+                        <table class="table table-dark-custom align-middle text-center table-bordered" id="matrix-table">
+                            <thead>
+                                <tr id="matrix-header-row">
+                                    <th class="house-fixed-col text-start ps-3 align-bottom">HOUSE \ EVENTS</th>
+                                    <!-- Dynamic Vertical Events Injected Here -->
+                                </tr>
+                            </thead>
+                            <tbody id="matrix-body-rows">
+                                <!-- Dynamic Houses Rows Injected Here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Application Script Setup -->
+    <script type="module">
+        import { db, systemContext } from "./firebase-config.js";
+        import { 
+            collection, 
+            onSnapshot, 
+            doc, 
+            getDocs 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // State & Configuration
+        const urlParams = new URLSearchParams(window.location.search);
+        let activeYearId = urlParams.get('year') || systemContext?.activeYearId || localStorage.getItem('activeYearId') || '2026-27';
+        const targetFestId = urlParams.get('fest') || '';
+
+        let houses = [];
+        let events = [];
+        let registrations = [];
+        let groups = [];
+        let results = [];
+        let houseScoreMap = new Map();
+
+        let spotlightIndex = 0;
+        let categoryIndex = 0;
+        let availableCategories = [];
+        let categoryRotationTimer = 10;
+        let priorityQueue = [];
+        let activeUnsubscribers = [];
+
+        // Category Icon Mapping
+        const CATEGORY_ICONS = {
+            'KIDS': 'fa-child text-warning',
+            'SUB-JUNIOR': 'fa-user-graduate text-info',
+            'JUNIOR': 'fa-running text-primary',
+            'SENIOR': 'fa-award text-danger',
+            'GENERAL': 'fa-shapes text-light',
+            'DEFAULT': 'fa-star text-secondary'
+        };
+
+        function getCategoryIcon(cat) {
+            const clean = (cat || '').toUpperCase();
+            return CATEGORY_ICONS[clean] || CATEGORY_ICONS['DEFAULT'];
+        }
+
+        // Initialize Academic Year Selector
+        async function setupYearSelector() {
+            const selectEl = document.getElementById('global-year-select');
+            if (!selectEl) return;
+
+            try {
+                const yearSnap = await getDocs(collection(db, 'academicYears'));
+                const yearList = yearSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+                if (yearList.length) {
+                    selectEl.innerHTML = yearList.map(y => 
+                        `<option value="${y.id}" ${y.id === activeYearId ? 'selected' : ''}>${y.label || y.id}</option>`
+                    ).join('');
+                } else {
+                    selectEl.innerHTML = `<option value="${activeYearId}">${activeYearId}</option>`;
+                }
+
+                selectEl.addEventListener('change', (e) => {
+                    if (e.target.value) {
+                        activeYearId = e.target.value;
+                        localStorage.setItem('activeYearId', activeYearId);
+                        
+                        // Update browser URL without reload
+                        const newUrl = new URL(window.location.href);
+                        newUrl.searchParams.set('year', activeYearId);
+                        window.history.replaceState({}, '', newUrl);
+
+                        // Rebind listeners with new active year
+                        bindRealtimeListeners();
+                    }
+                });
+            } catch (err) {
+                console.warn("[BROADCAST] Could not fetch academic years list:", err);
+                selectEl.innerHTML = `<option value="${activeYearId}">${activeYearId}</option>`;
+            }
+        }
+
+        // Bind Firestore Live Listeners
+        function bindRealtimeListeners() {
+            // Unsubscribe existing listeners
+            activeUnsubscribers.forEach(unsub => unsub());
+            activeUnsubscribers = [];
+
+            const yearPath = `academicYears/${activeYearId}`;
+
+            // 1. Fest Houses
+            const unsubHouses = onSnapshot(collection(db, `${yearPath}/festHouses`), snap => {
+                houses = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                recomputeAll();
+            });
+            activeUnsubscribers.push(unsubHouses);
+
+            // 2. Fest Events
+            const unsubEvents = onSnapshot(collection(db, `${yearPath}/festEvents`), snap => {
+                events = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+                    .filter(e => !targetFestId || e.festId === targetFestId);
+                
+                availableCategories = [...new Set(events.map(e => e.category).filter(Boolean))];
+                if (!availableCategories.includes('ALL')) availableCategories.unshift('ALL');
+                recomputeAll();
+            });
+            activeUnsubscribers.push(unsubEvents);
+
+            // 3. Registrations
+            const unsubRegs = onSnapshot(collection(db, `${yearPath}/festRegistrations`), snap => {
+                registrations = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+                    .filter(r => !r.isDeleted && (!targetFestId || r.festId === targetFestId));
+                recomputeAll();
+            });
+            activeUnsubscribers.push(unsubRegs);
+
+            // 4. Groups
+            const unsubGroups = onSnapshot(collection(db, `${yearPath}/festGroups`), snap => {
+                groups = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+                    .filter(g => !g.isDeleted && (!targetFestId || g.festId === targetFestId));
+                recomputeAll();
+            });
+            activeUnsubscribers.push(unsubGroups);
+
+            // 5. Results & Real-time Priority Interrupt
+            let isFirstLoad = true;
+            const unsubResults = onSnapshot(collection(db, `${yearPath}/festResults`), snap => {
+                const incoming = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+                    .filter(r => !targetFestId || r.festId === targetFestId);
+
+                if (!isFirstLoad) {
+                    snap.docChanges().forEach(change => {
+                        if (change.type === 'added' || change.type === 'modified') {
+                            const changedResult = { id: change.doc.id, ...change.doc.data() };
+                            // Prepend to priority queue so breaking results play immediately
+                            priorityQueue.unshift(changedResult);
+                            cycleSpotlight();
+                        }
+                    });
+                }
+
+                results = incoming;
+                isFirstLoad = false;
+                recomputeAll();
+            });
+            activeUnsubscribers.push(unsubResults);
+        }
+
+        // Global Refresh Pipeline
+        function recomputeAll() {
+            calculateHouseScores();
+            renderHouseLeaderboard();
+            renderCategoryMatrix();
+            document.getElementById('total-results-count').textContent = `${results.length} Events Evaluated`;
+        }
+
+        // --- TOP-LEFT: CALCULATE HOUSE POINTS & RENDER GRAPH ---
+        function calculateHouseScores() {
+            houseScoreMap.clear();
+            houses.forEach(h => houseScoreMap.set(h.id, 0));
+
+            results.forEach(res => {
+                (res.results || []).forEach(st => {
+                    const pts = Number(st.points) || 0;
+                    let targetHouseId = null;
+
+                    if (st.groupId) {
+                        const grp = groups.find(g => g.id === st.groupId);
+                        targetHouseId = grp?.houseId;
+                    } else if (st.studentId) {
+                        const reg = registrations.find(r => r.studentId === st.studentId && (r.events || []).includes(res.eventId));
+                        targetHouseId = reg?.houseId;
+                    }
+
+                    if (targetHouseId && houseScoreMap.has(targetHouseId)) {
+                        houseScoreMap.set(targetHouseId, houseScoreMap.get(targetHouseId) + pts);
+                    }
+                });
+            });
+        }
+
+        function renderHouseLeaderboard() {
+            const container = document.getElementById('house-rankings-container');
+            if (!container || !houses.length) return;
+
+            const sorted = [...houses].map(h => ({
+                ...h,
+                score: houseScoreMap.get(h.id) || 0
+            })).sort((a, b) => b.score - a.score);
+
+            const maxScore = Math.max(...sorted.map(h => h.score), 1);
+
+            container.innerHTML = sorted.map((h, index) => {
+                const percent = Math.round((h.score / maxScore) * 100);
+                const badgeClass = index === 0 ? 'bg-warning text-dark' : (index === 1 ? 'bg-secondary text-white' : 'bg-dark border border-secondary');
+                const rankText = index === 0 ? '<i class="fas fa-crown me-1 text-warning"></i>1st' : `${index + 1}`;
+
+                return `
+                    <div class="mb-2">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge ${badgeClass}" style="min-width: 40px; font-size: 0.72rem;">${rankText}</span>
+                                <span class="fw-bold small" style="color: ${h.color || '#fff'}">${h.name}</span>
+                            </div>
+                            <span class="fw-bold font-monospace small">${h.score} <small class="text-muted" style="font-size: 0.65rem;">PTS</small></span>
+                        </div>
+                        <div class="house-bar-bg">
+                            <div class="house-bar-fill" style="width: ${percent}%; background-color: ${h.color || '#0d6efd'};"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // --- TOP-RIGHT: 5-SECOND WINNER SPOTLIGHT CAROUSEL ---
+        function cycleSpotlight() {
+            const container = document.getElementById('winner-spotlight-container');
+            const titleEl = document.getElementById('spotlight-title');
+            const counterEl = document.getElementById('spotlight-counter');
+            if (!container) return;
+
+            let activeResult = null;
+            let isBreaking = false;
+
+            if (priorityQueue.length > 0) {
+                activeResult = priorityQueue.shift();
+                isBreaking = true;
+            } else if (results.length > 0) {
+                activeResult = results[spotlightIndex % results.length];
+                spotlightIndex++;
+            }
+
+            if (!activeResult) {
+                container.innerHTML = `<div class="text-center text-muted small">Awaiting published results...</div>`;
+                return;
+            }
+
+            const event = events.find(e => e.id === activeResult.eventId);
+            const total = results.length;
+            const currentNum = (spotlightIndex % total) || total;
+
+            if (isBreaking) {
+                titleEl.innerHTML = `<span class="badge breaking-banner px-2 py-1"><i class="fas fa-bolt me-1"></i>NEW RESULT SUBMITTED</span>`;
+            } else {
+                titleEl.innerHTML = `<i class="fas fa-medal text-info me-2"></i>WINNER SPOTLIGHT`;
+                counterEl.textContent = `${currentNum} / ${total}`;
+            }
+
+            const standings = (activeResult.results || []).sort((a, b) => a.position - b.position);
+
+            container.innerHTML = `
+                <div class="fade-swap">
+                    <div class="d-flex justify-content-between align-items-center border-bottom border-secondary pb-1 mb-2">
+                        <div>
+                            <div class="fw-bold text-white small">${event?.name || activeResult.eventId}</div>
+                            <div class="text-muted" style="font-size: 0.7rem;">
+                                <i class="fas ${getCategoryIcon(event?.category)} me-1"></i>${event?.category || 'General'} 
+                                &bull; ${event?.isGroupEvent ? 'Group' : 'Solo'}
+                            </div>
+                        </div>
+                        <span class="badge bg-success font-monospace" style="font-size: 0.7rem;"><i class="fas fa-check-circle me-1"></i>Final</span>
+                    </div>
+
+                    <div class="row g-1">
+                        ${[1, 2, 3].map(pos => {
+                            const item = standings.find(s => s.position === pos);
+                            let targetName = 'Not placed';
+                            let houseName = '---';
+                            let houseColor = '#475569';
+
+                            if (item) {
+                                if (item.groupId) {
+                                    const grp = groups.find(g => g.id === item.groupId);
+                                    targetName = grp?.name || 'Group';
+                                    const h = houses.find(x => x.id === grp?.houseId);
+                                    houseName = h?.name || 'N/A';
+                                    houseColor = h?.color || houseColor;
+                                } else {
+                                    const reg = registrations.find(r => r.studentId === item.studentId);
+                                    targetName = reg?.studentName || 'Student';
+                                    const h = houses.find(x => x.id === reg?.houseId);
+                                    houseName = h?.name || 'N/A';
+                                    houseColor = h?.color || houseColor;
+                                }
+                            }
+
+                            const podiumClass = pos === 1 ? 'podium-1' : (pos === 2 ? 'podium-2' : 'podium-3');
+                            const rankLabel = pos === 1 ? '1ST' : (pos === 2 ? '2ND' : '3RD');
+                            const badgeColor = pos === 1 ? 'bg-warning text-dark' : (pos === 2 ? 'bg-secondary text-white' : 'bg-dark text-warning border border-warning');
+
+                            return `
+                                <div class="col-4">
+                                    <div class="winner-card ${podiumClass} p-1 h-100">
+                                        <div class="d-flex justify-content-between mb-1">
+                                            <span class="badge ${badgeColor}" style="font-size: 0.6rem;">${rankLabel}</span>
+                                            <span class="small font-monospace text-success fw-bold" style="font-size: 0.65rem;">${item ? `+${item.points}` : ''}</span>
+                                        </div>
+                                        <div class="fw-bold text-truncate text-white" style="font-size: 0.8rem;">${targetName}</div>
+                                        <div class="text-truncate" style="color: ${houseColor}; font-size: 0.7rem; font-weight: 600;">
+                                            <i class="fas fa-shield-halved me-1"></i>${houseName}
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- BOTTOM: HORIZONTAL EVENTS (VERTICAL HEADERS) & VERTICAL HOUSES MATRIX ---
+        function renderCategoryMatrix() {
+            const tableHead = document.getElementById('matrix-header-row');
+            const tableBody = document.getElementById('matrix-body-rows');
+            const pill = document.getElementById('current-category-pill');
+            if (!tableHead || !tableBody || !houses.length) return;
+
+            const activeCat = availableCategories[categoryIndex % availableCategories.length] || 'ALL';
+            pill.textContent = activeCat === 'ALL' ? 'ALL CATEGORIES' : activeCat;
+
+            // Filter events by the active 10s category
+            const filteredEvents = events.filter(e => activeCat === 'ALL' || e.category === activeCat);
+
+            // 1. Build Header: Left House Column + Horizontal Event Columns with Vertical Text
+            tableHead.innerHTML = `
+                <th class="house-fixed-col text-start ps-3 align-bottom">HOUSE \\ EVENT</th>
+                ${filteredEvents.map(event => {
+                    const res = results.find(r => r.eventId === event.id);
+                    const isDone = Boolean(res);
+                    return `
+                        <th class="event-header-cell">
+                            <div class="d-flex flex-column align-items-center justify-content-between h-100">
+                                <span style="font-size: 0.62rem;" title="${event.category}">
+                                    <i class="fas ${getCategoryIcon(event.category)}"></i>
+                                </span>
+                                <span class="event-vertical-title text-white" title="${event.name}">${event.name}</span>
+                                <span class="badge ${isDone ? 'bg-success' : 'bg-secondary'}" style="font-size: 0.5rem; padding: 1px 3px;">
+                                    ${isDone ? 'DONE' : 'WAIT'}
+                                </span>
+                            </div>
+                        </th>
+                    `;
+                }).join('')}
+            `;
+
+            if (!filteredEvents.length) {
+                tableBody.innerHTML = `<tr><td colspan="${filteredEvents.length + 1}" class="text-center py-4 text-muted">No events registered under ${activeCat}.</td></tr>`;
+                return;
+            }
+
+            // 2. Build Body: Houses on Rows (Vertical Axis), Events on Columns (Horizontal Axis)
+            tableBody.className = "fade-swap";
+            tableBody.innerHTML = houses.map(house => {
+                return `
+                    <tr>
+                        <!-- Fixed House Row Header -->
+                        <td class="house-fixed-col text-start ps-3">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="rounded-circle" style="width: 10px; height: 10px; background-color: ${house.color || '#fff'}; display: inline-block;"></span>
+                                <span class="fw-bold small text-white text-truncate">${house.name}</span>
+                            </div>
+                        </td>
+
+                        <!-- Result Cells for each Horizontal Event -->
+                        ${filteredEvents.map(event => {
+                            const res = results.find(r => r.eventId === event.id);
+                            if (!res) {
+                                return `<td class="text-center text-muted" style="opacity: 0.2; font-size: 0.75rem;">-</td>`;
+                            }
+
+                            // Match whether this house placed in this event
+                            const standings = (res.results || []);
+                            let standingFound = null;
+
+                            for (const st of standings) {
+                                let hId = null;
+                                if (st.groupId) {
+                                    hId = groups.find(g => g.id === st.groupId)?.houseId;
+                                } else {
+                                    hId = registrations.find(r => r.studentId === st.studentId && (r.events || []).includes(event.id))?.houseId;
+                                }
+
+                                if (hId === house.id) {
+                                    standingFound = st;
+                                    break;
+                                }
+                            }
+
+                            if (!standingFound) {
+                                return `<td class="text-center text-muted" style="font-size: 0.75rem; opacity: 0.4;">-</td>`;
+                            }
+
+                            const p = standingFound.position;
+                            const badgeColor = p === 1 ? 'bg-warning text-dark' : (p === 2 ? 'bg-secondary text-white' : 'bg-dark text-warning border border-warning');
+                            return `
+                                <td class="text-center p-1">
+                                    <span class="pos-badge ${badgeColor}">
+                                        ${p === 1 ? '1st' : (p === 2 ? '2nd' : '3rd')}
+                                    </span>
+                                </td>
+                            `;
+                        }).join('')}
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // --- AUTOMATION ENGINE ---
+
+        // Top-Right: Every 5 seconds cycle spotlight
+        setInterval(() => {
+            cycleSpotlight();
+        }, 5000);
+
+        // Bottom: 10-second countdown for category rotation
+        setInterval(() => {
+            categoryRotationTimer--;
+            const timerEl = document.getElementById('category-timer');
+            if (timerEl) timerEl.textContent = categoryRotationTimer;
+
+            if (categoryRotationTimer <= 0) {
+                categoryRotationTimer = 10;
+                categoryIndex++;
+                renderCategoryMatrix();
+            }
+        }, 1000);
+
+        // Bootstrap on DOM ready
+        window.addEventListener('DOMContentLoaded', async () => {
+            await setupYearSelector();
+            bindRealtimeListeners();
+        });
+    </script>
+</body>
+</html>
