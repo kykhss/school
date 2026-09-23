@@ -16,7 +16,8 @@ import {
     loadAllYearData,
     getStudentClassName,
     getStudentCategory,
-    hashPassword
+    hashPassword,
+    eventHouseLimit
 } from "./app-state.js";
 
 import { 
@@ -26,14 +27,7 @@ import {
     serverTimestamp 
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-function eventHouseLimit(fest, event, mode) {
-    const defaults = fest.settings?.houseEventLimits || { onStage: { solo: 2, group: 1 }, offStage: { solo: 2, group: 1 } };
-    if (event?.customHouseLimit !== undefined && event?.customHouseLimit !== null) {
-        return Number(event.customHouseLimit);
-    }
-    const limits = event.houseLimits || defaults;
-    return Number(limits[event.type === 'offStage' ? 'offStage' : 'onStage']?.[mode] ?? 0);
-}
+
 
 function houseEventSoloCount(festId, houseId, eventId, excludeStudentId = null) {
     return state.festRegistrations.filter(reg => reg.festId === festId && reg.houseId === houseId && reg.studentId !== excludeStudentId && reg.events?.includes(eventId)).length;
@@ -277,13 +271,13 @@ function renderSoloRegistrationTab(fest, house, isRegistrationOpen) {
             </div>
         </div>
 
-        <div class="table-responsive table-mobile-responsive" style="max-height: 60vh; overflow-y: auto;">
-            <table class="table table-sm table-hover align-middle mb-0" id="house-solo-table">
-                <thead class="table-light sticky-top">
+        <div class="table-responsive border rounded bg-white" style="max-height: 65vh; overflow-y: auto;">
+            <table class="table table-hover align-middle mb-0" id="house-solo-table">
+                <thead class="table-light sticky-top shadow-sm">
                     <tr>
-                        <th style="min-width: 140px;">Student</th>
-                        <th style="min-width: 150px;">Registered Events</th>
-                        <th class="text-end" style="width: 80px;">Action</th>
+                        <th style="min-width: 220px; width: 35%;">Student Details</th>
+                        <th style="min-width: 260px; width: 50%;">Registered Events</th>
+                        <th class="text-end" style="min-width: 100px; width: 15%;">Action</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
@@ -298,14 +292,17 @@ function renderSoloRegistrationTab(fest, house, isRegistrationOpen) {
 
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
-            filtered = filtered.filter(s => s.name.toLowerCase().includes(term) || String(s.admissionNumber || '').includes(term));
+            filtered = filtered.filter(s => 
+                (s.name && s.name.toLowerCase().includes(term)) || 
+                String(s.admissionNumber || '').includes(term)
+            );
         }
         if (classFilter !== 'all') {
             filtered = filtered.filter(s => s.classId === classFilter);
         }
 
         if (filtered.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="3" class="text-center text-muted p-4 small">No matching students found in your house.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="3" class="text-center text-muted py-5 small">No matching students found in your house.</td></tr>`;
             return;
         }
 
@@ -321,7 +318,17 @@ function renderSoloRegistrationTab(fest, house, isRegistrationOpen) {
                 const limit = eventHouseLimit(fest, ev, 'solo');
                 const evCount = houseEventSoloCount(fest.id, house.id, ev.id);
                 const invalid = evCount > limit;
-                return `<span class="badge ${invalid ? 'bg-danger' : 'bg-light text-dark'} border me-1 mb-1" style="font-size: 0.72rem;" title="${invalid ? `House limit exceeded: ${evCount}/${limit}` : `House entries: ${evCount}/${limit}`}">${ev.name} <small class="opacity-75">(${evCount}/${limit})</small></span>`;
+                
+                return `
+                    <span class="badge ${invalid ? 'bg-danger text-white' : 'bg-light text-dark border'} px-2 py-1 me-1 mb-1 d-inline-flex align-items-center gap-1 shadow-sm" 
+                          style="font-size: 0.78rem; font-weight: 500; white-space: normal; text-align: left;" 
+                          title="${invalid ? `House limit exceeded: ${evCount}/${limit}` : `House entries: ${evCount}/${limit}`}">
+                        <span>${ev.name}</span>
+                        <span class="badge ${invalid ? 'bg-white text-danger' : 'bg-secondary-subtle text-secondary'} rounded-pill" style="font-size: 0.7rem;">
+                            ${evCount}/${limit}
+                        </span>
+                    </span>
+                `;
             }).join('');
 
             const invalidCount = events.filter(id => {
@@ -330,22 +337,40 @@ function renderSoloRegistrationTab(fest, house, isRegistrationOpen) {
             }).length;
 
             return `
-                <tr data-studentid="${student.id}" class="${invalidCount ? 'table-danger' : ''}">
-                    <td>
-                        <strong class="text-dark d-block text-truncate" style="max-width: 170px;">${student.name}</strong> 
-                        <div class="d-flex flex-wrap align-items-center gap-1 mt-0">
-                            <span class="badge bg-secondary-subtle text-secondary py-0 px-1" style="font-size: 0.68rem;">${getStudentCategory(student)}</span>
-                            <span class="text-muted small" style="font-size: 0.72rem;">Adm: ${student.admissionNumber || 'N/A'}</span>
+                <tr data-studentid="${student.id}" class="${invalidCount ? 'table-danger-subtle' : ''}">
+                    <!-- Student Identity Column -->
+                    <td class="py-2">
+                        <div class="fw-bold text-dark text-break fs-6 lh-sm mb-1">${student.name}</div>
+                        <div class="d-flex flex-wrap align-items-center gap-1">
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle py-1 px-1" style="font-size: 0.72rem;">
+                                ${getStudentCategory(student)}
+                            </span>
+                            <span class="badge bg-light text-muted border py-1 px-1" style="font-size: 0.72rem;">
+                                Adm: ${student.admissionNumber || 'N/A'}
+                            </span>
+                            <span class="text-secondary small ms-1" style="font-size: 0.75rem;">
+                                ${getStudentClassName(student.classId, student.division)}
+                            </span>
                         </div>
-                        <div class="text-muted small" style="font-size: 0.7rem;">${getStudentClassName(student.classId, student.division)}</div>
                     </td>
-                    <td>
-                        <div class="d-flex flex-wrap">${badges || '<span class="text-muted small fst-italic">None</span>'}</div>
+
+                    <!-- Events Badges Column -->
+                    <td class="py-2">
+                        <div class="d-flex flex-wrap align-items-center py-1">
+                            ${badges || '<span class="text-muted small fst-italic">No events registered</span>'}
+                        </div>
                     </td>
-                    <td class="text-end text-nowrap">
-                        <button class="btn ${invalidCount ? 'btn-danger' : 'btn-outline-primary'} btn-sm py-1 px-2 btn-touch" onclick="window.openEventAllocationModal('${student.id}')" ${!isRegistrationOpen ? 'disabled' : ''}>
-                            <i class="fas fa-edit me-1"></i><span class="d-none d-sm-inline">Manage</span>
-                            <span class="badge bg-primary ms-1">${count}</span>
+
+                    <!-- Action Column -->
+                    <td class="py-2 text-end align-middle">
+                        <button class="btn ${invalidCount ? 'btn-danger' : 'btn-outline-primary'} btn-sm px-2 py-1 shadow-sm d-inline-flex align-items-center" 
+                                onclick="window.openEventAllocationModal('${student.id}')" 
+                                ${!isRegistrationOpen ? 'disabled' : ''}>
+                            <i class="fas fa-edit me-1"></i>
+                            <span class="d-none d-sm-inline">Manage</span>
+                            <span class="badge ${invalidCount ? 'bg-white text-danger' : 'bg-primary text-white'} rounded-pill ms-1 px-1">
+                                ${count}
+                            </span>
                         </button>
                     </td>
                 </tr>
@@ -393,7 +418,7 @@ window.openEventAllocationModal = function(studentId) {
     const offStage = eligibleEvents.filter(e => e.type === 'offStage');
 
     const modalBody = `
-        <div class="mb-3 p-2 bg-light rounded border">
+        <div class="mb-2 p-1 bg-light rounded border">
             <div class="d-flex justify-content-between align-items-center">
                 <span class="badge bg-info text-dark">Category: ${studentCat}</span>
                 <span class="small text-muted">Gender: <strong>${student.gender || 'Common'}</strong></span>
@@ -493,18 +518,87 @@ window.openEventAllocationModal = function(studentId) {
     });
 };
 
-function renderChecklist(eventList, selectedSet, type) {
-    if (eventList.length === 0) return `<small class="text-muted p-1">No eligible events found.</small>`;
-    return eventList.map(e => `
-        <div class="form-check p-2 rounded border bg-white mb-1">
-            <input class="form-check-input ev-select-cb ms-0 me-2" type="checkbox" value="${e.id}" data-type="${type}" id="cb-${e.id}" ${selectedSet.has(e.id) ? 'checked' : ''} style="cursor: pointer;">
-            <label class="form-check-label small fw-semibold text-dark w-100" for="cb-${e.id}" style="cursor: pointer;">
-                ${e.name}
-            </label>
-        </div>
-    `).join('');
-}
+function renderChecklist(eventList, selectedSet, type, houseId = null, festId = null) {
+    if (!eventList || eventList.length === 0) {
+        return `<div class="p-3 text-center text-muted small bg-light rounded border border-dashed">No eligible events found.</div>`;
+    }
 
+    const currentFest = festId ? { id: festId } : state.managingFest;
+    const currentHouseId = houseId || (state.currentHouse ? state.currentHouse.id : null);
+
+    return eventList.map(e => {
+        const isChecked = selectedSet && selectedSet.has(e.id);
+        const eventName = e.name || 'Unnamed Event';
+
+        // Calculate count vs limit
+        let registeredCount = 0;
+        let limit = 0;
+        let hasLimitInfo = false;
+
+        if (typeof houseEventSoloCount === 'function' && typeof eventHouseLimit === 'function' && currentHouseId && currentFest) {
+            registeredCount = type === 'solo' 
+                ? houseEventSoloCount(currentFest.id, currentHouseId, e.id)
+                : (typeof houseEventGroupCount === 'function' ? houseEventGroupCount(currentFest.id, currentHouseId, e.id) : 0);
+
+            limit = eventHouseLimit(currentFest, e, type);
+            hasLimitInfo = true;
+        }
+
+        const isExceeded = hasLimitInfo && registeredCount > limit;
+        const isFull = hasLimitInfo && !isExceeded && registeredCount >= limit;
+
+        // Pill styling based on occupancy
+        let pillClass = 'bg-light text-secondary border';
+        let statusText = `${registeredCount}/${limit}`;
+
+        if (isExceeded) {
+            pillClass = 'bg-danger text-white border-danger';
+            statusText = `${registeredCount}/${limit} Limit Exceeded`;
+        } else if (isFull) {
+            pillClass = 'bg-warning-subtle text-warning-emphasis border-warning';
+            statusText = `${registeredCount}/${limit} Full`;
+        }
+
+        return `
+            <label class="list-group-item list-group-item-action d-flex align-items-center justify-content-between p-2 mb-1 rounded border ${isChecked ? 'border-primary bg-primary-subtle' : 'bg-white'}" 
+                   for="cb-${e.id}" 
+                   style="cursor: pointer; transition: all 0.15s ease;">
+                
+                <div class="d-flex align-items-center flex-grow-1 min-w-0 me-2">
+                    <input class="form-check-input ev-select-cb m-0 me-2 flex-shrink-0" 
+                           type="checkbox" 
+                           value="${e.id}" 
+                           data-type="${type}" 
+                           id="cb-${e.id}" 
+                           ${isChecked ? 'checked' : ''} 
+                           style="cursor: pointer; width: 1.15rem; height: 1.15rem;">
+                    
+                    <!-- Event Name with Inline House Limit -->
+                    <div class="d-flex flex-wrap align-items-center gap-1 lh-sm">
+                        <span class="small fw-bold ${isChecked ? 'text-primary' : 'text-dark'} text-break">
+                            ${eventName}
+                        </span>
+                        
+                        ${hasLimitInfo ? `
+                            <span class="badge ${pillClass} py-0 px-1 ms-1 d-inline-flex align-items-center" style="font-size: 0.72rem;">
+                                <i class="fas fa-users me-1" style="font-size: 0.65rem;"></i>Limit: ${statusText}
+                            </span>
+                        ` : ''}
+                    </div>
+                </div>
+
+                <!-- Right meta info (Category) -->
+                ${e.category ? `
+                    <div class="flex-shrink-0 ms-2">
+                        <span class="badge bg-secondary-subtle text-secondary border" style="font-size: 0.7rem;">
+                            ${e.category}
+                        </span>
+                    </div>
+                ` : ''}
+            </label>
+        `;
+    }).join('');
+}
 // =========================================================================
 // --- 5. EVENT-WISE REGISTRATION TAB & MULTI-SELECT MODAL ---
 // =========================================================================
@@ -689,20 +783,30 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
 
     const houseStudents = state.students.filter(s => s.houseId === houseId);
     const limit = eventHouseLimit(fest, event, 'solo');
-    const existingRegistrations = state.festRegistrations.filter(r => r.festId === fest.id && r.houseId === houseId && r.events?.includes(eventId));
-    const enrolledStudentIds = new Set(existingRegistrations.map(r => r.studentId));
-    const availableSlots = Math.max(0, limit - enrolledStudentIds.size);
 
+    // Get current registrations for this event & house
+    const existingRegistrations = state.festRegistrations.filter(r => 
+        r.festId === fest.id && 
+        r.houseId === houseId && 
+        r.events?.includes(eventId)
+    );
+    
+    // Sets to manage additions and removals
+    const initialEnrolledIds = new Set(existingRegistrations.map(r => r.studentId));
+    const studentsToRemoveIds = new Set();
+    const studentsToAddIds = new Set();
+
+    const studentMaxLimit = fest.studentSoloLimit || fest.maxEventsPerStudent || fest.studentEventLimit || 3;
+
+    // Eligible students who are NOT enrolled initially
     const eligibleStudents = houseStudents.filter(student => {
-        if (enrolledStudentIds.has(student.id)) return false;
+        if (initialEnrolledIds.has(student.id)) return false;
         const catMatch = event.category === 'General' || getStudentCategory(student) === event.category;
         const genderMatch = !event.gender || event.gender === 'Common' || 
             (event.gender === 'Male' && student.gender === 'M') || 
             (event.gender === 'Female' && student.gender === 'F');
         return catMatch && genderMatch;
     });
-
-    const selectedStudentIds = new Set();
 
     const modalBody = `
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-1 mb-2 p-2 bg-light rounded border">
@@ -711,8 +815,8 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
                 <div class="small text-muted" style="font-size: 0.74rem;">${event.category || 'General'} &bull; ${event.type === 'offStage' ? 'Off-Stage' : 'On-Stage'}</div>
             </div>
             <div class="d-flex gap-1">
-                <span class="badge bg-white text-dark border" style="font-size: 0.72rem;">Limit: <strong>${limit}</strong></span>
-                <span class="badge bg-info text-dark" id="picker-slots-badge" style="font-size: 0.72rem;">Open: <strong>${availableSlots}</strong></span>
+                <span class="badge bg-white text-dark border" style="font-size: 0.72rem;">House Limit: <strong>${limit}</strong></span>
+                <span class="badge bg-info text-dark" id="picker-slots-badge" style="font-size: 0.72rem;">Open Slots: <strong id="open-slots-count">0</strong></span>
             </div>
         </div>
 
@@ -724,14 +828,18 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
             <div class="col-12 col-md-7 modal-col-border">
                 <div class="d-flex justify-content-between align-items-center mb-1">
                     <label class="small fw-bold mb-0" style="font-size: 0.78rem;">Eligible Students (${eligibleStudents.length})</label>
-                    <span class="text-muted small" style="font-size: 0.7rem;">Tap to select</span>
+                    <span class="text-muted small" style="font-size: 0.7rem;">Tap to add</span>
                 </div>
-                <div class="list-group border rounded" id="modal-student-available-list" style="max-height: 220px; overflow-y: auto;"></div>
+                <div class="list-group border rounded" id="modal-student-available-list" style="max-height: 300px; overflow-y: auto;"></div>
             </div>
+
             <div class="col-12 col-md-5">
-                <label class="small fw-bold mb-1" style="font-size: 0.78rem;">Selected Queue (<span id="modal-selected-count">0</span>)</label>
-                <div class="border rounded p-2 bg-light" id="modal-selected-queue" style="max-height: 220px; overflow-y: auto;">
-                    <div class="text-muted small text-center py-3" style="font-size: 0.75rem;">Checked students will queue here.</div>
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <label class="small fw-bold mb-0" style="font-size: 0.78rem;">Participants (<span id="modal-total-count">0</span>/${limit})</label>
+                    <span class="text-muted small" style="font-size: 0.7rem;">Manage Roster</span>
+                </div>
+                <div class="border rounded p-2 bg-light" id="modal-selected-queue" style="max-height: 300px; overflow-y: auto;">
+                    <!-- Rendered dynamically -->
                 </div>
             </div>
         </div>
@@ -739,18 +847,114 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
 
     const modalFooter = `
         <button class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Cancel</button>
-        <button class="btn btn-success btn-sm fw-bold px-3 btn-touch" id="modal-commit-students-btn" disabled>
-            <i class="fas fa-save me-1"></i>Save
+        <button class="btn btn-success btn-sm fw-bold px-3 btn-touch" id="modal-commit-students-btn">
+            <i class="fas fa-save me-1"></i>Save Changes
         </button>
     `;
 
-    const modal = window.showGlobalModal(`Assign Students`, modalBody, modalFooter);
+    const modal = window.showGlobalModal(`Manage Event Participants`, modalBody, modalFooter);
 
     const availableContainer = document.getElementById('modal-student-available-list');
     const queueContainer = document.getElementById('modal-selected-queue');
-    const countBadge = document.getElementById('modal-selected-count');
     const commitBtn = document.getElementById('modal-commit-students-btn');
     const searchInput = document.getElementById('modal-student-search-input');
+    const slotsBadge = document.getElementById('open-slots-count');
+    const totalCountSpan = document.getElementById('modal-total-count');
+
+    function getStudentRegisteredCount(studentId) {
+        const reg = state.festRegistrations.find(r => r.id === `${fest.id}_${studentId}`);
+        return (reg?.events || []).length;
+    }
+
+    function getEventCountBadge(current, max) {
+        if (!max) return `<span class="badge bg-light text-muted border">${current} Events</span>`;
+        
+        let colorClass = 'bg-success-subtle text-success border border-success-subtle';
+        let statusTag = '';
+
+        if (current >= max) {
+            colorClass = 'bg-danger text-white border-danger shadow-sm';
+            statusTag = ' (Full)';
+        } else if (current === max - 1) {
+            colorClass = 'bg-warning-subtle text-warning-emphasis border border-warning shadow-sm';
+        }
+
+        return `
+            <span class="badge ${colorClass} px-2 py-1 fw-bold" style="font-size: 0.72rem;">
+                <i class="fas fa-layer-group me-1 opacity-75"></i>${current}/${max}${statusTag}
+            </span>
+        `;
+    }
+
+    function getCurrentEffectiveParticipantCount() {
+        const enrolledCount = initialEnrolledIds.size - studentsToRemoveIds.size;
+        return enrolledCount + studentsToAddIds.size;
+    }
+
+    function renderQueue() {
+        const activeEnrolled = houseStudents.filter(s => initialEnrolledIds.has(s.id) && !studentsToRemoveIds.has(s.id));
+        const newQueued = eligibleStudents.filter(s => studentsToAddIds.has(s.id));
+        const totalCount = activeEnrolled.length + newQueued.length;
+        const availableSlots = Math.max(0, limit - totalCount);
+
+        totalCountSpan.textContent = totalCount;
+        slotsBadge.textContent = availableSlots;
+
+        // Check if there are changes to commit
+        const hasChanges = studentsToAddIds.size > 0 || studentsToRemoveIds.size > 0;
+        commitBtn.disabled = !hasChanges;
+
+        if (totalCount === 0) {
+            queueContainer.innerHTML = `<div class="text-muted small text-center py-4" style="font-size: 0.75rem;">No participants in this event. Check students on the left to add.</div>`;
+            return;
+        }
+
+        let html = '';
+
+        // 1. Existing Enrolled Students
+        if (activeEnrolled.length > 0) {
+            html += `<div class="small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.65rem; letter-spacing: 0.5px;">Currently Registered</div>`;
+            html += activeEnrolled.map(student => {
+                const count = getStudentRegisteredCount(student.id);
+                return `
+                    <div class="d-flex justify-content-between align-items-center bg-white border border-start-3 border-start-success rounded p-1 px-2 mb-1 shadow-sm small">
+                        <div class="text-truncate me-1" style="font-size: 0.78rem;">
+                            <strong class="text-dark">${student.name}</strong>
+                            <div class="text-muted" style="font-size: 0.68rem;">Adm: ${student.admissionNumber || 'N/A'}</div>
+                        </div>
+                        <div class="d-flex align-items-center gap-1 flex-shrink-0">
+                            ${getEventCountBadge(count, studentMaxLimit)}
+                            <button type="button" class="btn btn-xs btn-outline-danger modal-remove-enrolled-btn py-0 px-2" data-id="${student.id}" title="Remove from this event">
+                                <i class="fas fa-user-minus"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // 2. Newly Added Students
+        if (newQueued.length > 0) {
+            html += `<div class="small fw-bold text-primary text-uppercase mt-2 mb-1" style="font-size: 0.65rem; letter-spacing: 0.5px;">Pending Addition (+${newQueued.length})</div>`;
+            html += newQueued.map(student => {
+                const count = getStudentRegisteredCount(student.id) + 1;
+                return `
+                    <div class="d-flex justify-content-between align-items-center bg-primary-subtle border border-primary rounded p-1 px-2 mb-1 shadow-sm small">
+                        <div class="text-truncate me-1" style="font-size: 0.78rem;">
+                            <strong class="text-primary">${student.name}</strong>
+                            <div class="text-muted" style="font-size: 0.68rem;">Adm: ${student.admissionNumber || 'N/A'}</div>
+                        </div>
+                        <div class="d-flex align-items-center gap-1 flex-shrink-0">
+                            ${getEventCountBadge(count, studentMaxLimit)}
+                            <button type="button" class="btn btn-xs btn-outline-danger modal-remove-new-btn py-0 px-2" data-id="${student.id}" title="Cancel addition">&times;</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        queueContainer.innerHTML = html;
+    }
 
     function renderAvailableList() {
         const query = searchInput.value.trim().toLowerCase();
@@ -766,61 +970,71 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
             return;
         }
 
+        const effectiveSlots = Math.max(0, limit - getCurrentEffectiveParticipantCount());
+
         availableContainer.innerHTML = filtered.map(student => {
-            const isChecked = selectedStudentIds.has(student.id);
-            const disableCheck = !isChecked && (selectedStudentIds.size >= availableSlots);
+            const isChecked = studentsToAddIds.has(student.id);
+            const currentCount = getStudentRegisteredCount(student.id);
+            const isFull = currentCount >= studentMaxLimit;
+            const disableCheck = !isChecked && (effectiveSlots <= 0 || isFull);
 
             return `
-                <label class="list-group-item list-group-item-action d-flex align-items-center py-2 px-2 small ${disableCheck ? 'opacity-50' : ''}" style="cursor: pointer;">
-                    <input class="form-check-input me-2 modal-student-cb flex-shrink-0" type="checkbox" value="${student.id}" ${isChecked ? 'checked' : ''} ${disableCheck ? 'disabled' : ''}>
-                    <div class="flex-grow-1 text-truncate">
-                        <strong class="d-block text-truncate" style="font-size: 0.82rem;">${student.name}</strong>
-                        <div class="text-muted" style="font-size: 0.7rem;">Adm: ${student.admissionNumber || 'N/A'} &bull; ${getStudentClassName(student.classId, student.division)}</div>
+                <label class="list-group-item list-group-item-action d-flex align-items-center py-2 px-2 small ${disableCheck ? 'bg-light opacity-75' : ''}" style="cursor: ${disableCheck ? 'not-allowed' : 'pointer'};">
+                    <input class="form-check-input me-2 modal-student-cb flex-shrink-0" 
+                           type="checkbox" 
+                           value="${student.id}" 
+                           ${isChecked ? 'checked' : ''} 
+                           ${disableCheck ? 'disabled' : ''}>
+                    
+                    <div class="flex-grow-1 min-w-0">
+                        <div class="d-flex align-items-center justify-content-between mb-1">
+                            <strong class="text-truncate text-dark" style="font-size: 0.83rem;">${student.name}</strong>
+                            ${getEventCountBadge(currentCount, studentMaxLimit)}
+                        </div>
+                        <div class="text-muted text-truncate" style="font-size: 0.7rem;">
+                            Adm: ${student.admissionNumber || 'N/A'} &bull; ${getStudentClassName(student.classId, student.division)}
+                        </div>
                     </div>
                 </label>
             `;
         }).join('');
     }
 
-    function renderQueue() {
-        const chosen = eligibleStudents.filter(s => selectedStudentIds.has(s.id));
-        countBadge.textContent = chosen.length;
-        commitBtn.disabled = chosen.length === 0;
-
-        if (!chosen.length) {
-            queueContainer.innerHTML = `<div class="text-muted small text-center py-3" style="font-size: 0.75rem;">Checked students will queue here.</div>`;
-            return;
-        }
-
-        queueContainer.innerHTML = chosen.map(student => `
-            <div class="d-flex justify-content-between align-items-center bg-white border rounded p-1 px-2 mb-1 shadow-sm small">
-                <span class="text-truncate me-2" style="font-size: 0.78rem;"><strong>${student.name}</strong></span>
-                <button type="button" class="btn btn-xs btn-outline-danger modal-remove-queued-btn py-0 px-2" data-id="${student.id}">&times;</button>
-            </div>
-        `).join('');
-    }
-
+    // Toggle additions from available pool
     availableContainer.addEventListener('change', e => {
         const cb = e.target.closest('.modal-student-cb');
         if (!cb) return;
 
         if (cb.checked) {
-            if (selectedStudentIds.size < availableSlots) {
-                selectedStudentIds.add(cb.value);
+            const currentSlots = limit - getCurrentEffectiveParticipantCount();
+            if (currentSlots > 0) {
+                studentsToAddIds.add(cb.value);
             }
         } else {
-            selectedStudentIds.delete(cb.value);
+            studentsToAddIds.delete(cb.value);
         }
         renderAvailableList();
         renderQueue();
     });
 
+    // Handle removal of already enrolled students or newly queued additions
     queueContainer.addEventListener('click', e => {
-        const removeBtn = e.target.closest('.modal-remove-queued-btn');
-        if (!removeBtn) return;
-        selectedStudentIds.delete(removeBtn.dataset.id);
-        renderAvailableList();
-        renderQueue();
+        const removeEnrolledBtn = e.target.closest('.modal-remove-enrolled-btn');
+        if (removeEnrolledBtn) {
+            const studentId = removeEnrolledBtn.dataset.id;
+            studentsToRemoveIds.add(studentId);
+            renderAvailableList();
+            renderQueue();
+            return;
+        }
+
+        const removeNewBtn = e.target.closest('.modal-remove-new-btn');
+        if (removeNewBtn) {
+            const studentId = removeNewBtn.dataset.id;
+            studentsToAddIds.delete(studentId);
+            renderAvailableList();
+            renderQueue();
+        }
     });
 
     searchInput.addEventListener('input', renderAvailableList);
@@ -828,14 +1042,28 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
     renderAvailableList();
     renderQueue();
 
+    // Commit both additions and removals to Firestore
     commitBtn.addEventListener('click', async () => {
-        if (!selectedStudentIds.size) return;
         commitBtn.disabled = true;
         commitBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>Saving...`;
 
         const batch = writeBatch(db);
 
-        selectedStudentIds.forEach(studentId => {
+        // 1. Process Removals
+        studentsToRemoveIds.forEach(studentId => {
+            const regId = `${fest.id}_${studentId}`;
+            const existing = state.festRegistrations.find(r => r.id === regId);
+            if (existing) {
+                const updatedEvents = (existing.events || []).filter(id => id !== event.id);
+                batch.update(getScopedDoc('festRegistrations', regId), {
+                    events: updatedEvents,
+                    lastUpdated: serverTimestamp()
+                });
+            }
+        });
+
+        // 2. Process Additions
+        studentsToAddIds.forEach(studentId => {
             const student = houseStudents.find(s => s.id === studentId);
             const regId = `${fest.id}_${studentId}`;
             const existing = state.festRegistrations.find(r => r.id === regId);
@@ -855,19 +1083,22 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
 
         try {
             await batch.commit();
-            window.showAlert(`Assigned ${selectedStudentIds.size} student(s) to ${event.name}.`, 'success');
+            window.showAlert(`Updated participants for ${event.name}.`, 'success');
             modal?.hide();
             await loadAllYearData(true);
-            eventwiseRegistrationTab(fest, state.festHouses.find(h => h.id === houseId), fest.registrationOpen === true);
+            if (typeof eventwiseRegistrationTab === 'function') {
+                eventwiseRegistrationTab(fest, state.festHouses.find(h => h.id === houseId), fest.registrationOpen === true);
+            } else if (typeof renderSubTabRegistrations === 'function') {
+                renderSubTabRegistrations(fest.registrationOpen === true);
+            }
         } catch (error) {
             console.error(error);
-            window.showAlert('Failed to save student assignments.', 'danger');
+            window.showAlert('Failed to update event participants.', 'danger');
             commitBtn.disabled = false;
-            commitBtn.innerHTML = `<i class="fas fa-save me-1"></i>Save Assignments`;
+            commitBtn.innerHTML = `<i class="fas fa-save me-1"></i>Save Changes`;
         }
     });
 };
-
 // --- 5. GROUP TEAM MANAGEMENT TAB ---
 
 function renderGroupTeamTab(fest, house, isRegistrationOpen) {
