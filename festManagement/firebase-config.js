@@ -34,7 +34,7 @@ export const analytics = getAnalytics(app);
 export const db = getFirestore(app);
 
 // --- 2. GLOBAL CONTEXT & STORAGE VERSION CONTROL ---
-export const STORAGE_VERSION = "1.3";
+export const STORAGE_VERSION = "1.4";
 const VERSION_KEY = "APP_STORAGE_VERSION";
 const CACHE_PREFIX = "FEST_CACHE_";
 const META_PREFIX = "FEST_META_LAST_SYNC_";
