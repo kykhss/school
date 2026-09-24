@@ -43,18 +43,28 @@ window.renderFestReportsTab = function() {
 
         <div class="row g-3">
             <!-- Card 1: Final Standings & Score Aggregation -->
-            <div class="col-md-6">
-                <div class="ui-card h-100 d-flex flex-column">
-                    <h6 class="fw-bold mb-1"><i class="fas fa-trophy text-warning me-2"></i>House Championship Standings</h6>
-                    <p class="small text-muted mb-3">Combined point totals split by on-stage, off-stage, and category breakdowns.</p>
-                    <div class="mt-auto text-end">
-                        <button class="btn btn-sm btn-primary" onclick="window.printFinalHouseRankings()">
-                            <i class="fas fa-file-pdf me-1"></i>Print House Standings
-                        </button>
-                    </div>
-                </div>
-            </div>
+            <!-- Card 1: Final Standings & Score Aggregation with Stage Filter -->
+<div class="col-md-6">
+    <div class="ui-card h-100 d-flex flex-column">
+        <h6 class="fw-bold mb-1"><i class="fas fa-trophy text-warning me-2"></i>House Championship Standings</h6>
+        <p class="small text-muted mb-2">Category, gender (Boys/Girls), and stage-wise breakdown of house championship points.</p>
+        
+        <div class="mb-3">
+            <label class="small fw-bold mb-1" for="house-standings-stage-filter">Filter Stage Type:</label>
+            <select id="house-standings-stage-filter" class="form-select form-select-sm">
+                <option value="both">Both (On-Stage & Off-Stage Overall)</option>
+                <option value="onStage">On-Stage Events Only</option>
+                <option value="offStage">Off-Stage Events Only</option>
+            </select>
+        </div>
 
+        <div class="mt-auto text-end">
+            <button class="btn btn-sm btn-primary" onclick="window.printFinalHouseRankings()">
+                <i class="fas fa-file-pdf me-1"></i>Print House Standings
+            </button>
+        </div>
+    </div>
+</div>
             <!-- Card 2: Individual Championships (Kalathilakam / Kalaprathibha) -->
             <div class="col-md-6">
                 <div class="ui-card h-100 d-flex flex-column">
@@ -67,7 +77,18 @@ window.renderFestReportsTab = function() {
                     </div>
                 </div>
             </div>
-
+            <!-- Card: Participant-Wise Detailed Results -->
+<div class="col-md-6">
+    <div class="ui-card h-100 d-flex flex-column">
+        <h6 class="fw-bold mb-1"><i class="fas fa-list-ol text-success me-2"></i>Participant-Wise Results</h6>
+        <p class="small text-muted mb-3">Complete statement of student results listing placed events, individual scores, and grand totals sorted descending.</p>
+        <div class="mt-auto text-end">
+            <button class="btn btn-sm btn-success" onclick="window.printParticipantWiseResults()">
+                <i class="fas fa-file-invoice me-1"></i>Print Participant Results
+            </button>
+        </div>
+    </div>
+</div>
             <!-- Card 3: Judge Result Sheet with QR Code -->
             <div class="col-12">
                 <div class="ui-card">
@@ -339,60 +360,200 @@ window.renderFestReportsTab = function() {
 
 window.printFinalHouseRankings = function() {
     const fest = state.managingFest;
-    const { housePoints, houseBreakdown } = calculateStandings(fest.id);
+    if (!fest) return window.showAlert?.('Please select a fest first.', 'warning');
 
-    const sortedHouses = state.festHouses.map(h => ({
-        id: h.id,
-        name: h.name,
-        color: h.color,
-        total: housePoints[h.id] || 0,
-        onStage: houseBreakdown[h.id]?.onStage || 0,
-        offStage: houseBreakdown[h.id]?.offStage || 0
-    })).sort((a, b) => b.total - a.total);
+    const stageFilter = document.getElementById('house-standings-stage-filter')?.value || 'both';
+    const { houseData, categories } = calculateDetailedStandings(fest.id);
 
-    const tableRows = sortedHouses.map((h, index) => `
-        <tr>
-            <td class="text-center fw-bold">${index + 1}</td>
-            <td><strong>${h.name}</strong></td>
-            <td class="text-center">${h.onStage}</td>
-            <td class="text-center">${h.offStage}</td>
-            <td class="text-center fw-bold">${h.total}</td>
-        </tr>
+    // Determine ranking criteria according to selected stage filter
+    const sortedHouses = state.festHouses.map(h => {
+        const data = houseData[h.id] || { total: 0, onStage: 0, offStage: 0, categories: {} };
+        let activeScore = data.total;
+        if (stageFilter === 'onStage') activeScore = data.onStage;
+        if (stageFilter === 'offStage') activeScore = data.offStage;
+
+        return {
+            id: h.id,
+            name: h.name,
+            color: h.color,
+            data,
+            activeScore
+        };
+    }).sort((a, b) => b.activeScore - a.activeScore);
+
+    // Dynamic Filter Title
+    const filterTitle = stageFilter === 'onStage' 
+        ? 'On-Stage Standings Only' 
+        : (stageFilter === 'offStage' ? 'Off-Stage Standings Only' : 'Overall Championship Standings (On & Off-Stage)');
+
+    // Build Category Table Header (Double Header for Boys, Girls, Total)
+    const categoryTopHeaders = categories.map(cat => `
+        <th colspan="3" class="text-center" style="border: 1px solid #94a3b8; background: #e2e8f0; font-size: 8pt; letter-spacing: 0.5px;">
+            ${cat}
+        </th>
     `).join('');
 
+    const categorySubHeaders = categories.map(() => `
+        <th style="width: 28px; text-align: center; font-size: 7pt; background: #f8fafc;">B</th>
+        <th style="width: 28px; text-align: center; font-size: 7pt; background: #f8fafc;">G</th>
+        <th style="width: 32px; text-align: center; font-size: 7pt; background: #f1f5f9; font-weight: bold;">Tot</th>
+    `).join('');
+
+    // Build Table Body Rows
+    const tableRows = sortedHouses.map((h, index) => {
+        const catCells = categories.map(cat => {
+            const catScore = h.data.categories[cat] || { boys: 0, girls: 0, total: 0 };
+            return `
+                <td style="text-align: center; font-size: 8pt;">${catScore.boys || '-'}</td>
+                <td style="text-align: center; font-size: 8pt;">${catScore.girls || '-'}</td>
+                <td style="text-align: center; font-size: 8.5pt; font-weight: bold; background: #f8fafc;">${catScore.total || '-'}</td>
+            `;
+        }).join('');
+
+        return `
+            <tr style="height: 32px;">
+                <td style="text-align: center; font-weight: bold; font-size: 9pt;">${index + 1}</td>
+                <td style="white-space: nowrap; font-size: 9pt;">
+                    <span style="display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: ${h.color || '#333'}; margin-right: 5px;"></span>
+                    <strong>${h.name}</strong>
+                </td>
+                ${catCells}
+                <td style="text-align: center; font-size: 8.5pt;">${h.data.onStage}</td>
+                <td style="text-align: center; font-size: 8.5pt;">${h.data.offStage}</td>
+                <td style="text-align: center; font-weight: bold; font-size: 10pt; color: #0d6efd; background: #f1f5f9;">
+                    ${stageFilter === 'onStage' ? h.data.onStage : (stageFilter === 'offStage' ? h.data.offStage : h.data.total)}
+                </td>
+            </tr>
+        `;
+    }).join('');
+
     const contentHtml = `
-        <div style="text-align: center; margin-bottom: 20px;">
-            <h2 style="margin-bottom: 5px;">${fest.name}</h2>
-            <h4 style="color: #666; margin-top: 0;">Official House Championship Standings</h4>
-            <small>Academic Year: ${systemContext.activeYearId}</small>
+        <div style="text-align: center; margin-bottom: 16px; font-family: sans-serif;">
+            <h2 style="margin: 0; font-size: 16pt;">${fest.name}</h2>
+            <h4 style="margin: 3px 0; color: #334155; font-size: 11pt;">${filterTitle}</h4>
+            <div style="font-size: 8pt; color: #64748b;">
+                Academic Year: <strong>${systemContext.activeYearId || localStorage.getItem('activeYearId')}</strong> 
+                &bull; Scope: <strong>${stageFilter.toUpperCase()}</strong> 
+                &bull; Breakdown: Category &amp; Gender (B: Boys, G: Girls)
+            </div>
         </div>
-        <table class="table table-bordered table-sm" style="width: 100%; border-collapse: collapse;">
-            <thead class="table-light">
+
+        <table class="table table-bordered table-sm" style="width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 8pt;" border="1" cellpadding="3">
+            <thead>
+                <!-- Level 1 Header -->
+                <tr style="background: #f1f5f9;">
+                    <th rowspan="2" style="width: 35px; text-align: center; vertical-align: middle;">SL</th>
+                    <th rowspan="2" style="min-width: 130px; vertical-align: middle;">HOUSE</th>
+                    ${categoryTopHeaders}
+                    <th rowspan="2" style="width: 50px; text-align: center; vertical-align: middle;">On-Stage</th>
+                    <th rowspan="2" style="width: 50px; text-align: center; vertical-align: middle;">Off-Stage</th>
+                    <th rowspan="2" style="width: 55px; text-align: center; vertical-align: middle; background: #e2e8f0; font-weight: bold;">TOTAL</th>
+                </tr>
+                <!-- Level 2 Header (B / G / Tot) -->
                 <tr>
-                    <th style="width: 10%; text-align: center;">Rank</th>
-                    <th>House</th>
-                    <th style="width: 20%; text-align: center;">On-Stage Pts</th>
-                    <th style="width: 20%; text-align: center;">Off-Stage Pts</th>
-                    <th style="width: 20%; text-align: center;">Total Points</th>
+                    ${categorySubHeaders}
                 </tr>
             </thead>
             <tbody>
                 ${tableRows}
             </tbody>
         </table>
-        <div style="margin-top: 40px; display: flex; justify-content: space-between;">
-            <div>Tabulator Signature: __________________</div>
-            <div>Convener Signature: __________________</div>
+
+        <div style="margin-top: 40px; display: flex; justify-content: space-between; font-size: 8.5pt; font-family: sans-serif; page-break-inside: avoid;">
+            <div>Prepared By: _______________________</div>
+            <div>Tabulator Signature: _______________________</div>
+            <div>Convener Signature: _______________________</div>
         </div>
     `;
 
     window.printReport({
         contentHtml,
-        title: `House_Standings_${fest.name}`,
-        pageSize: 'A4 portrait'
+        title: `House_Standings_${fest.name.replace(/\s+/g, '_')}_${stageFilter}`,
+        pageSize: 'A4 landscape',
+        autoPrint: true
     });
 };
 
+function calculateDetailedStandings(festId) {
+    const fest = state.managingFest;
+    const categories = [...new Set(state.festEvents.filter(e => e.festId === festId).map(e => e.category).filter(Boolean))].sort();
+    
+    // Structure:
+    // {
+    //   [houseId]: {
+    //      total: 0, onStage: 0, offStage: 0,
+    //      categories: {
+    //         [catName]: { boys: 0, girls: 0, total: 0 }
+    //      }
+    //   }
+    // }
+    const houseData = {};
+
+    state.festHouses.forEach(h => {
+        houseData[h.id] = {
+            total: 0,
+            onStage: 0,
+            offStage: 0,
+            categories: {}
+        };
+        categories.forEach(cat => {
+            houseData[h.id].categories[cat] = { boys: 0, girls: 0, total: 0 };
+        });
+    });
+
+    const results = state.festResults.filter(r => r.festId === festId);
+
+    results.forEach(res => {
+        const ev = state.festEvents.find(e => e.id === res.eventId);
+        if (!ev) return;
+
+        const isOffStage = (ev.type === 'offStage');
+        const stageKey = isOffStage ? 'offStage' : 'onStage';
+        const eventCat = ev.category || 'General';
+
+        (res.results || []).forEach(item => {
+            const pts = Number(item.points) || 0;
+            if (pts <= 0) return;
+
+            let targetHouseId = null;
+            let gender = 'M'; // Default if unassigned
+
+            // Solo item: lookup student gender
+            if (item.studentId) {
+                const student = state.students.find(s => s.id === item.studentId);
+                const reg = state.festRegistrations.find(r => r.studentId === item.studentId && r.festId === festId);
+                targetHouseId = student?.houseId || reg?.houseId;
+                gender = (student?.gender || 'M').toUpperCase();
+            } 
+            // Group item: lookup group's house and majority/captain gender
+            else if (item.groupId) {
+                const grp = state.festGroups.find(g => g.id === item.groupId);
+                targetHouseId = grp?.houseId;
+                const captain = grp?.members?.find(m => m.role === 'Captain' || m.isCaptain);
+                const captainStudent = state.students.find(s => s.id === captain?.studentId);
+                gender = (captainStudent?.gender || 'M').toUpperCase();
+            }
+
+            if (targetHouseId && houseData[targetHouseId]) {
+                houseData[targetHouseId].total += pts;
+                houseData[targetHouseId][stageKey] += pts;
+
+                if (!houseData[targetHouseId].categories[eventCat]) {
+                    houseData[targetHouseId].categories[eventCat] = { boys: 0, girls: 0, total: 0 };
+                }
+
+                houseData[targetHouseId].categories[eventCat].total += pts;
+                if (gender === 'F') {
+                    houseData[targetHouseId].categories[eventCat].girls += pts;
+                } else {
+                    houseData[targetHouseId].categories[eventCat].boys += pts;
+                }
+            }
+        });
+    });
+
+    return { houseData, categories };
+}
 function calculateStandings(festId) {
     const housePoints = {};
     const houseBreakdown = {};
@@ -432,77 +593,174 @@ function calculateStandings(festId) {
 
 window.printIndividualChampionships = function() {
     const fest = state.managingFest;
+    if (!fest) return window.showAlert?.('Please select a fest first.', 'warning');
+
     const results = state.festResults.filter(r => r.festId === fest.id);
-    const soloScores = {};
+
+    // Track points per student:
+    // overall: total solo points
+    // race: points from events matching RACE / sprints
+    // jump: points from events matching JUMP
+    // throw: points from events matching THROW / shot put / discus / javelin
+    const studentScoreMap = {};
 
     results.forEach(res => {
         const ev = state.festEvents.find(e => e.id === res.eventId);
-        if (!ev || ev.isGroupEvent) return;
+        if (!ev || ev.isGroupEvent) return; // Strict solo events
+
+        const evName = (ev.name || '').toUpperCase();
+        const isRace = evName.includes('RACE') || evName.includes('RUN') || evName.includes('100M') || evName.includes('200M') || evName.includes('400M') || evName.includes('HURDLE');
+        const isJump = evName.includes('JUMP');
+        const isThrow = evName.includes('THROW') || evName.includes('SHOT PUT') || evName.includes('DISCUS') || evName.includes('JAVELIN');
 
         res.results?.forEach(item => {
-            if (item.studentId && item.points > 0) {
-                soloScores[item.studentId] = (soloScores[item.studentId] || 0) + item.points;
+            const pts = Number(item.points) || 0;
+            if (item.studentId && pts > 0) {
+                if (!studentScoreMap[item.studentId]) {
+                    studentScoreMap[item.studentId] = {
+                        overall: 0,
+                        race: 0,
+                        jump: 0,
+                        throw: 0
+                    };
+                }
+
+                studentScoreMap[item.studentId].overall += pts;
+                if (isRace) studentScoreMap[item.studentId].race += pts;
+                if (isJump) studentScoreMap[item.studentId].jump += pts;
+                if (isThrow) studentScoreMap[item.studentId].throw += pts;
             }
         });
     });
 
-    const parsedStudents = Object.entries(soloScores).map(([studentId, points]) => {
+    // Populate full student metadata
+    const parsedStudents = Object.entries(studentScoreMap).map(([studentId, scores]) => {
         const student = state.students.find(s => s.id === studentId);
-        const house = state.festHouses.find(h => h.id === student?.houseId);
+        const registration = state.festRegistrations.find(r => r.studentId === studentId && r.festId === fest.id);
+        const houseId = student?.houseId || registration?.houseId;
+        const house = state.festHouses.find(h => h.id === houseId);
+        const category = student ? (getStudentCategory(student) || 'General') : 'General';
+        const gender = (student?.gender || 'M').toUpperCase();
+
         return {
             student,
             house,
-            points,
-            gender: student?.gender || 'Common',
-            category: getStudentCategory(student)
+            chestNo: registration?.chestNo || '-',
+            scores,
+            gender: gender === 'F' ? 'Female' : 'Male',
+            category
         };
-    }).sort((a, b) => b.points - a.points);
+    });
 
-    const boys = parsedStudents.filter(s => s.gender === 'M');
-    const girls = parsedStudents.filter(s => s.gender === 'F');
+    // Helper to render ranking tables
+    function renderStandingsTable(title, list, scoreKey = 'overall', badgeColor = 'bg-primary') {
+        const sorted = [...list]
+            .filter(item => item.scores[scoreKey] > 0)
+            .sort((a, b) => b.scores[scoreKey] - a.scores[scoreKey]);
 
-    function renderSection(title, list) {
+        if (sorted.length === 0) return '';
+
         return `
-            <h4 style="margin-top: 25px; border-bottom: 2px solid #333; padding-bottom: 4px;">${title}</h4>
-            <table class="table table-bordered table-sm" style="width: 100%; border-collapse: collapse;">
-                <thead class="table-light">
-                    <tr>
-                        <th style="width: 8%; text-align: center;">Rank</th>
-                        <th>Student Name</th>
-                        <th>Class</th>
-                        <th>House</th>
-                        <th>Category</th>
-                        <th style="width: 15%; text-align: center;">Total Points</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${list.slice(0, 5).map((item, index) => `
+            <div style="page-break-inside: avoid; margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #212529; padding-bottom: 3px; margin-bottom: 6px;">
+                    <h5 style="margin: 0; font-size: 11pt; font-weight: bold; color: #111;">${title}</h5>
+                    <span style="font-size: 7.5pt; color: #555;">Top ${Math.min(sorted.length, 5)} Contenders</span>
+                </div>
+                <table class="table table-bordered table-sm" style="width: 100%; border-collapse: collapse; font-size: 8.5pt;">
+                    <thead class="table-light">
                         <tr>
-                            <td class="text-center fw-bold">${index + 1}</td>
-                            <td><strong>${item.student?.name || 'Unknown'}</strong></td>
-                            <td>${getStudentClassName(item.student?.classId, item.student?.division)}</td>
-                            <td>${item.house?.name || 'N/A'}</td>
-                            <td>${item.category}</td>
-                            <td class="text-center fw-bold">${item.points}</td>
+                            <th style="width: 7%; text-align: center;">Rank</th>
+                            <th style="width: 10%; text-align: center;">Chest</th>
+                            <th style="width: 33%;">Student Name</th>
+                            <th style="width: 15%; text-align: center;">Class</th>
+                            <th style="width: 20%;">House</th>
+                            <th style="width: 15%; text-align: center;">Points</th>
                         </tr>
-                    `).join('') || `<tr><td colspan="6" class="text-center text-muted">No points scored.</td></tr>`}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        ${sorted.slice(0, 5).map((item, index) => `
+                            <tr>
+                                <td class="text-center fw-bold">${index + 1}</td>
+                                <td class="text-center font-monospace fw-bold">${item.chestNo}</td>
+                                <td><strong>${item.student?.name || 'Unknown'}</strong></td>
+                                <td class="text-center">${getStudentClassName(item.student?.classId, item.student?.division) || '-'}</td>
+                                <td>${item.house?.name || 'N/A'}</td>
+                                <td class="text-center fw-bold" style="font-size: 9.5pt;">${item.scores[scoreKey]}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
         `;
     }
 
-    const contentHtml = `
-        <div style="text-align: center; margin-bottom: 20px;">
-            <h2 style="margin-bottom: 5px;">${fest.name}</h2>
-            <h4 style="color: #666; margin-top: 0;">Individual Championship Leaders (Solo Events)</h4>
+    // 1. Overall Kalaprathibha (Male) & Kalathilakam (Female)
+    const overallBoys = parsedStudents.filter(s => s.gender === 'Male');
+    const overallGirls = parsedStudents.filter(s => s.gender === 'Female');
+
+    let contentHtml = `
+        <div style="text-align: center; margin-bottom: 18px;">
+            <h2 style="margin: 0; font-size: 16pt;">${fest.name}</h2>
+            <h4 style="margin: 3px 0; color: #495057; font-size: 11.5pt;">Individual Championship & Special Discipline Standings</h4>
+            <div style="font-size: 8pt; color: #6c757d;">Academic Year: ${systemContext.activeYearId || ''} &bull; Solo Event Standings</div>
         </div>
-        ${renderSection('Kalaprathibha (Male Solo Leaders)', boys)}
-        ${renderSection('Kalathilakam (Female Solo Leaders)', girls)}
+
+        <!-- SECTION 1: OVERALL CHAMPIONS (KALAPRATHIBHA & KALATHILAKAM) -->
+        <div style="background: #f8f9fa; border-left: 4px solid #0d6efd; padding: 4px 10px; margin-bottom: 12px; font-weight: bold; font-size: 9pt; text-transform: uppercase;">
+            Championship Titles (All Solo Events Combined)
+        </div>
+        ${renderStandingsTable('Kalaprathibha (Male Overall Champion)', overallBoys, 'overall')}
+        ${renderStandingsTable('Kalathilakam (Female Overall Champion)', overallGirls, 'overall')}
+
+        <!-- SECTION 2: SPECIAL ATHLETIC TITLES (RACE, JUMP, THROW) -->
+        <div style="background: #f8f9fa; border-left: 4px solid #dc3545; padding: 4px 10px; margin-top: 15px; margin-bottom: 12px; font-weight: bold; font-size: 9pt; text-transform: uppercase;">
+            Special Athletic Discipline Champions
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr; gap: 4px;">
+            ${renderStandingsTable('Sprint & Track Champion (RACE Events)', parsedStudents, 'race')}
+            ${renderStandingsTable('Jump Champion (High, Long & Triple Jumps)', parsedStudents, 'jump')}
+            ${renderStandingsTable('Throw Champion (Shot Put, Discus & Javelin)', parsedStudents, 'throw')}
+        </div>
+
+        <!-- SECTION 3: CATEGORY & GENDER-WISE LEADERS -->
+        <div style="background: #f8f9fa; border-left: 4px solid #198754; padding: 4px 10px; margin-top: 15px; margin-bottom: 12px; font-weight: bold; font-size: 9pt; text-transform: uppercase;">
+            Category & Gender-Wise Individual Champions
+        </div>
+    `;
+
+    // Extract all unique categories present in the fest
+    const categories = [...new Set(parsedStudents.map(s => s.category).filter(Boolean))].sort();
+
+    categories.forEach(cat => {
+        const catBoys = parsedStudents.filter(s => s.category === cat && s.gender === 'Male');
+        const catGirls = parsedStudents.filter(s => s.category === cat && s.gender === 'Female');
+
+        const boysTable = renderStandingsTable(`${cat} Category - Boys Champion`, catBoys, 'overall');
+        const girlsTable = renderStandingsTable(`${cat} Category - Girls Champion`, catGirls, 'overall');
+
+        if (boysTable || girlsTable) {
+            contentHtml += `
+                <div style="margin-top: 10px; page-break-inside: avoid;">
+                    <div style="font-size: 9pt; font-weight: bold; color: #495057; border-bottom: 1px dashed #adb5bd; padding-bottom: 2px; margin-bottom: 8px;">
+                        Category: ${cat}
+                    </div>
+                    ${boysTable}
+                    ${girlsTable}
+                </div>
+            `;
+        }
+    });
+
+    contentHtml += `
+        <div style="margin-top: 40px; display: flex; justify-content: space-between; font-size: 8.5pt; page-break-inside: avoid;">
+            <div>Tabulator Signature: _______________________</div>
+            <div>Convener Signature: _______________________</div>
+        </div>
     `;
 
     window.printReport({
         contentHtml,
-        title: `Individual_Champions_${fest.name}`,
+        title: `Individual_Champions_${fest.name.replace(/\s+/g, '_')}`,
         pageSize: 'A4 portrait'
     });
 };
@@ -1192,32 +1450,116 @@ window.printAnnouncementSheet = function() {
 
 function generateAnnouncementSheetHTML(festId, selectedStage) {
     const fest = state.fests?.find(item => item.id === festId) || state.managingFest;
-    const events = state.festEvents.filter(event => event.festId === festId && (event.stage || 'Main Stage') === selectedStage).sort((a, b) => a.name.localeCompare(b.name));
+    const events = state.festEvents
+        .filter(event => event.festId === festId && (event.stage || 'Main Stage') === selectedStage)
+        .sort((a, b) => a.name.localeCompare(b.name));
+        
     let contentHtml = '';
     let participantsFound = false;
 
     events.forEach(event => {
-        const participants = state.festRegistrations.filter(registration => registration.festId === festId && (registration.events || []).includes(event.id));
-        if (participants.length === 0) return;
-        participantsFound = true;
-        const byHouse = participants.reduce((groups, registration) => {
-            const houseId = registration.houseId || 'UNASSIGNED';
-            (groups[houseId] ||= []).push(registration);
-            return groups;
-        }, {});
-        const houseSections = Object.keys(byHouse).sort((a, b) => (state.festHouses.find(house => house.id === a)?.name || '').localeCompare(state.festHouses.find(house => house.id === b)?.name || '')).map(houseId => {
-            const house = state.festHouses.find(item => item.id === houseId);
-            const chestNumbers = [...new Set(byHouse[houseId].map(registration => registration.chestNo).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
-            return chestNumbers.length ? `<div><h6 class="house-header" style="color:${house?.color || '#000'};">${house?.name || 'Unassigned'}:</h6><p class="chest-number-list">${chestNumbers.join(', ')}</p></div>` : '';
-        }).join('');
-        contentHtml += `<div class="announcement-section"><h3 class="event-title">${selectedStage}: ${event.name} <small class="text-muted">(${event.category})</small></h3>${houseSections}</div>`;
+        const isGroup = Boolean(event.isGroupEvent || event.type === 'group');
+        const registrations = state.festRegistrations.filter(r => 
+            r.festId === festId && 
+            !r.isDeleted && 
+            Array.isArray(r.events) && 
+            r.events.includes(event.id)
+        );
+
+        if (registrations.length === 0) return;
+
+        // Group participants by House
+        const byHouse = {};
+
+        if (isGroup) {
+            const groups = state.festGroups.filter(g => 
+                g.festId === festId && 
+                !g.isDeleted && 
+                (g.eventId === event.id || g.members?.some(m => registrations.some(r => r.studentId === m.studentId)))
+            );
+
+            if (!groups.length) return;
+            participantsFound = true;
+
+            groups.forEach(group => {
+                const houseId = group.houseId || 'UNASSIGNED';
+                (byHouse[houseId] ||= []).push({
+                    chestNo: group.chestNo || group.code || '',
+                    name: group.name
+                });
+            });
+        } else {
+            participantsFound = true;
+            registrations.forEach(r => {
+                const student = state.students.find(s => s.id === r.studentId);
+                const houseId = r.houseId || 'UNASSIGNED';
+                (byHouse[houseId] ||= []).push({
+                    chestNo: r.chestNo || '',
+                    name: student?.name || r.studentName || 'Unknown'
+                });
+            });
+        }
+
+        // Build house entries
+        const houseSections = Object.keys(byHouse)
+            .sort((a, b) => (state.festHouses.find(h => h.id === a)?.name || '').localeCompare(state.festHouses.find(h => h.id === b)?.name || ''))
+            .map(houseId => {
+                const house = state.festHouses.find(h => h.id === houseId);
+                
+                // Sort by chest number (numeric natural order), then by name
+                const entries = byHouse[houseId].sort((a, b) => {
+                    const cA = String(a.chestNo || '').trim();
+                    const cB = String(b.chestNo || '').trim();
+                    if (cA && cB) return cA.localeCompare(cB, undefined, { numeric: true, sensitivity: 'base' });
+                    if (cA && !cB) return -1;
+                    if (!cA && cB) return 1;
+                    return a.name.localeCompare(b.name);
+                });
+
+                // Format as: "101 - John Doe, 102 - Jane Smith"
+                const participantList = entries.map(item => {
+                    return item.chestNo ? `<strong>${item.chestNo}</strong> - ${item.name}` : `${item.name}`;
+                }).join(', ');
+
+                return entries.length 
+                    ? `<div style="margin-bottom: 6px;">
+                         <span class="house-header" style="color: ${house?.color || '#000'}; font-weight: bold;">
+                           ${house?.name || 'Unassigned'}:
+                         </span> 
+                         <span class="chest-number-list" style="color: #222;">${participantList}</span>
+                       </div>` 
+                    : '';
+            }).join('');
+
+        contentHtml += `
+            <div class="announcement-section" style="page-break-inside: avoid; margin-bottom: 18px; border-bottom: 1px dashed #bbb; padding-bottom: 10px;">
+                <h3 class="event-title" style="margin-bottom: 6px; font-size: 1.1rem; border-bottom: 1px solid #ccc; padding-bottom: 4px;">
+                    ${event.name} 
+                    <small class="text-muted" style="font-size: 0.85rem; font-weight: normal;">(${event.category || 'General'} &bull; ${isGroup ? 'Group' : 'Solo'})</small>
+                </h3>
+                ${houseSections}
+            </div>
+        `;
     });
 
     if (!participantsFound) {
         window.showAlert('No participants with chest numbers were found for this venue / stage.', 'info');
         return { contentHtml: null, reportTitle: '' };
     }
-    return { contentHtml: `<h2 style="text-align:center;">${fest.name}</h2><p style="text-align:center;">Announcement Sheet | Venue / Stage: ${selectedStage} | ${systemContext.activeYearId || ''}</p>${contentHtml}`, reportTitle: `${fest.name}_${selectedStage}` };
+
+    return { 
+        contentHtml: `
+            <div style="text-align: center; margin-bottom: 15px;">
+                <h2 style="margin: 0;">${fest.name}</h2>
+                <h4 style="margin: 4px 0; color: #555;">Stage Announcement Sheet</h4>
+                <div style="font-size: 9pt; color: #777;">
+                    Venue / Stage: <strong>${selectedStage}</strong> &bull; Academic Year: <strong>${systemContext.activeYearId || ''}</strong>
+                </div>
+            </div>
+            ${contentHtml}
+        `, 
+        reportTitle: `${fest.name}_${selectedStage}` 
+    };
 }
 
 // --- 6. PRINT STAGE CALL SHEETS (TEARABLE COUPONS) ---
@@ -1354,6 +1696,177 @@ window.printStageCallSheets = function() {
         `,
         title: `Stage_CallSheets_${fest.name.replace(/\s+/g, '_')}`,
         pageSize: 'A4 portrait',
+        autoPrint: true
+    });
+};
+
+/**
+ * Generates participant-wise report showing placed events, individual points,
+ * and grand total sorted in descending order.
+ */
+window.printParticipantWiseResults = function() {
+    const fest = state.managingFest;
+    if (!fest) return window.showAlert?.('Please select a fest first.', 'warning');
+
+    const results = state.festResults.filter(r => r.festId === fest.id);
+    if (!results.length) {
+        return window.showAlert?.('No published results found for this festival.', 'info');
+    }
+
+    // Map to aggregate results by student: { studentId: { total: 0, events: [...] } }
+    const studentScoreMap = {};
+
+    results.forEach(res => {
+        const ev = state.festEvents.find(e => e.id === res.eventId);
+        if (!ev) return;
+
+        (res.results || []).forEach(item => {
+            const pts = Number(item.points) || 0;
+            if (pts <= 0) return;
+
+            // 1. Solo Event Scoring
+            if (item.studentId) {
+                if (!studentScoreMap[item.studentId]) {
+                    studentScoreMap[item.studentId] = { total: 0, eventBreakdown: [] };
+                }
+                studentScoreMap[item.studentId].total += pts;
+                studentScoreMap[item.studentId].eventBreakdown.push({
+                    eventName: ev.name,
+                    category: ev.category || 'General',
+                    isGroup: false,
+                    position: item.position,
+                    points: pts
+                });
+            }
+
+            // 2. Group Event Scoring (Credits group points to each enrolled student member)
+            else if (item.groupId) {
+                const grp = state.festGroups.find(g => g.id === item.groupId);
+                (grp?.members || []).forEach(m => {
+                    const studentId = m.studentId;
+                    if (!studentId) return;
+
+                    if (!studentScoreMap[studentId]) {
+                        studentScoreMap[studentId] = { total: 0, eventBreakdown: [] };
+                    }
+                    studentScoreMap[studentId].total += pts;
+                    studentScoreMap[studentId].eventBreakdown.push({
+                        eventName: `${ev.name} (${grp.name || 'Group'})`,
+                        category: ev.category || 'General',
+                        isGroup: true,
+                        position: item.position,
+                        points: pts
+                    });
+                });
+            }
+        });
+    });
+
+    // Match participant metadata and sort descending by total points
+    const participantsRoster = Object.entries(studentScoreMap).map(([studentId, data]) => {
+        const student = state.students.find(s => s.id === studentId);
+        const registration = state.festRegistrations.find(r => r.studentId === studentId && r.festId === fest.id);
+        const houseId = student?.houseId || registration?.houseId;
+        const house = state.festHouses.find(h => h.id === houseId);
+        const category = student ? (getStudentCategory(student) || 'General') : 'General';
+
+        return {
+            student,
+            house,
+            chestNo: registration?.chestNo || '-',
+            category,
+            totalPoints: data.total,
+            eventBreakdown: data.eventBreakdown.sort((a, b) => a.position - b.position)
+        };
+    }).sort((a, b) => {
+        // Primary: Total Points descending
+        if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+        // Secondary: Natural chest number order
+        return String(a.chestNo).localeCompare(String(b.chestNo), undefined, { numeric: true });
+    });
+
+    if (!participantsRoster.length) {
+        return window.showAlert?.('No participants with scored points found.', 'info');
+    }
+
+    const tableRowsHtml = participantsRoster.map((item, index) => {
+        // Render comma-separated or pill tags for each event placement
+        const eventChips = item.eventBreakdown.map(ev => {
+            const posText = ev.position === 1 ? '1st' : (ev.position === 2 ? '2nd' : '3rd');
+            const posBadgeClass = ev.position === 1 ? 'bg-warning text-dark' : (ev.position === 2 ? 'bg-secondary text-white' : 'bg-dark text-white');
+            return `
+                <div style="display: inline-block; margin: 2px; padding: 2px 6px; border: 1px solid #ced4da; border-radius: 4px; background: #fff; font-size: 7.5pt; line-height: 1.2;">
+                    <strong>${ev.eventName}</strong> 
+                    <span class="badge ${posBadgeClass}" style="font-size: 7pt; padding: 1px 4px;">${posText}</span> 
+                    <span class="text-success font-monospace fw-bold">+${ev.points}</span>
+                </div>
+            `;
+        }).join('');
+
+        return `
+            <tr>
+                <td class="text-center fw-bold" style="font-size: 9pt;">${index + 1}</td>
+                <td class="text-center font-monospace fw-bold" style="font-size: 9.5pt;">${item.chestNo}</td>
+                <td>
+                    <div class="fw-bold" style="font-size: 9pt;">${item.student?.name || 'Unknown Student'}</div>
+                    <small class="text-muted" style="font-size: 7.5pt;">Adm: ${item.student?.admissionNumber || 'N/A'}</small>
+                </td>
+                <td class="text-center" style="font-size: 8pt;">${getStudentClassName(item.student?.classId, item.student?.division) || '-'}</td>
+                <td style="font-size: 8.5pt;">
+                    <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${item.house?.color || '#333'}; margin-right: 4px;"></span>
+                    ${item.house?.name || 'N/A'}
+                </td>
+                <td class="text-center" style="font-size: 8pt;">${item.category}</td>
+                <td style="padding: 4px 6px;">
+                    ${eventChips}
+                </td>
+                <td class="text-center font-monospace fw-bold" style="font-size: 11pt; color: #0d6efd;">
+                    ${item.totalPoints}
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    const contentHtml = `
+        <div style="text-align: center; margin-bottom: 15px;">
+            <h2 style="margin: 0; font-size: 16pt;">${fest.name}</h2>
+            <h4 style="margin: 3px 0; color: #495057; font-size: 11.5pt;">Participant-Wise Detailed Results & Point Aggregate</h4>
+            <div style="font-size: 8pt; color: #6c757d;">
+                Academic Year: <strong>${systemContext.activeYearId || localStorage.getItem('activeYearId')}</strong> 
+                &bull; Total Ranked Students: <strong>${participantsRoster.length}</strong> 
+                &bull; Sorted by Grand Total (Descending)
+            </div>
+        </div>
+
+        <table class="table table-bordered table-sm" style="width: 100%; border-collapse: collapse; font-size: 8.5pt;">
+            <thead class="table-light">
+                <tr>
+                    <th style="width: 5%; text-align: center;">Rank</th>
+                    <th style="width: 8%; text-align: center;">Chest</th>
+                    <th style="width: 20%;">Student Name</th>
+                    <th style="width: 8%; text-align: center;">Class</th>
+                    <th style="width: 12%;">House</th>
+                    <th style="width: 10%; text-align: center;">Category</th>
+                    <th style="width: 29%;">Events & Placements</th>
+                    <th style="width: 8%; text-align: center;">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${tableRowsHtml}
+            </tbody>
+        </table>
+
+        <div style="margin-top: 40px; display: flex; justify-content: space-between; font-size: 8.5pt; page-break-inside: avoid;">
+            <div>Prepared By: _______________________</div>
+            <div>Tabulator Signature: _______________________</div>
+            <div>Convener Signature: _______________________</div>
+        </div>
+    `;
+
+    window.printReport({
+        contentHtml,
+        title: `Participant_Results_${fest.name.replace(/\s+/g, '_')}`,
+        pageSize: 'A4 landscape',
         autoPrint: true
     });
 };
