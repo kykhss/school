@@ -31,7 +31,7 @@
             user-select: none;
         }
 
-        /* 1px Hidden Video to keep TV screens active */
+        /* 1px Hidden Video to prevent TV sleep */
         #screen-keeper-video {
             position: fixed;
             bottom: 0;
@@ -63,7 +63,7 @@
             align-items: center;
         }
 
-        /* Top Bar & Branding */
+        /* Top Bar */
         .top-navbar {
             height: 52px;
             background: #ffffff;
@@ -75,7 +75,6 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.04);
         }
 
-        /* School Crest & Live Stream Badge */
         .school-brand-badge {
             background: #f8fafc;
             border: 1px solid var(--border-color);
@@ -99,7 +98,6 @@
             font-size: 0.9rem;
         }
 
-        /* Animated Live Indicator */
         .pulse-dot {
             width: 8px;
             height: 8px;
@@ -116,7 +114,7 @@
             100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
         }
 
-        /* Top-Left: House Leaderboard (Fit to Width) */
+        /* Top-Left: House Leaderboard Bars */
         .house-row-wrapper {
             width: 100%;
             display: flex;
@@ -184,7 +182,6 @@
             border-color: #e2e8f0;
         }
 
-        /* Fixed First Column (Houses) */
         .house-fixed-col {
             position: sticky;
             left: 0;
@@ -195,7 +192,6 @@
             border-right: 2px solid #cbd5e1 !important;
         }
 
-        /* Vertical Event Header Styling */
         .event-header-cell {
             height: 140px;
             min-width: 46px;
@@ -223,7 +219,7 @@
 
         .pos-badge {
             font-size: 0.7rem;
-            padding: 2px 6px;
+            padding: 2px 5px;
             border-radius: 4px;
             display: inline-block;
             font-weight: 700;
@@ -236,17 +232,61 @@
             from { opacity: 0; transform: translateY(4px); }
             to { opacity: 1; transform: translateY(0); }
         }
+
+        /* Enhanced Grid Lines & Zebra Shading */
+        .table-light-custom {
+            --bs-table-bg: #ffffff;
+            --bs-table-border-color: #cbd5e1;
+            color: var(--text-main);
+            margin-bottom: 0;
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+
+        .table-light-custom th, 
+        .table-light-custom td {
+            border-bottom: 2px solid #cbd5e1 !important;
+            border-right: 1px solid #e2e8f0;
+            padding: 8px 4px;
+        }
+
+        /* Zebra Striping with Subtle Contrast */
+        .table-light-custom tbody tr:nth-child(odd) {
+            background-color: #ffffff;
+        }
+        .table-light-custom tbody tr:nth-child(even) {
+            background-color: #f8fafc;
+        }
+
+        /* Fixed First Column (Houses) with Distinct Shading */
+        .house-fixed-col {
+            position: sticky;
+            left: 0;
+            z-index: 3;
+            min-width: 190px;
+            max-width: 190px;
+            border-right: 3px solid #94a3b8 !important;
+            background-color: inherit !important;
+        }
+
+        /* House Left-Border Strip & Subtle Accent Glow */
+        .house-row-accent {
+            transition: background-color 0.2s ease;
+        }
+        .house-row-accent:hover {
+            background-color: #eff6ff !important; /* Soft sky blue highlight */
+        }
+        
     </style>
 </head>
 <body>
 
-    <!-- Background Stay-Awake Video (Tiny 1-sec transparent base64 video loop) -->
+    <!-- Background Stay-Awake Video (Tiny transparent base64 video loop) -->
     <video id="screen-keeper-video" autoplay muted loop playsinline src="data:video/mp4;base64,AAAAHGZ0eXBtcDQyAAAAAG1wNDJpc29tYXZjMQAAAAhmcmVlAAAAL21kYXQAAAAAAAABGAEA4AAAABhhdWNmYXN0AAAAAAABAAAAAAABAAAAAA=="></video>
 
     <!-- Global Broadcast Bar -->
     <header class="top-navbar">
         <div class="d-flex align-items-center gap-3">
-            <!-- School Brand / Video Streaming Badge -->
             <div class="school-brand-badge" id="wake-status-badge" title="Screen Stay-Awake active">
                 <div class="school-icon-circle">
                     <i class="fas fa-graduation-cap"></i>
@@ -280,14 +320,13 @@
         <!-- Top Half: Leaderboard & Winner Spotlight (~42%) -->
         <div class="row g-2" style="height: 42%;">
             
-            <!-- Top Left: House Championship Standings -->
+            <!-- Top Left: House Standings -->
             <div class="col-6 h-100">
                 <div class="tv-card">
                     <div class="tv-card-header">
                         <span class="fw-bold small text-dark"><i class="fas fa-trophy text-warning me-2"></i>HOUSE STANDINGS</span>
                         <span class="badge bg-primary" id="total-results-count">0 Events Evaluated</span>
                     </div>
-                    <!-- Full-width flex container -->
                     <div class="p-3 overflow-auto flex-grow-1 w-100 d-flex flex-column justify-content-around" id="house-rankings-container">
                         <div class="d-flex h-100 align-items-center justify-content-center text-muted small">
                             <i class="fas fa-spinner fa-spin me-2"></i>Loading Scores...
@@ -296,7 +335,7 @@
                 </div>
             </div>
 
-            <!-- Top Right: Winner Carousel & Breaking News (5s) -->
+            <!-- Top Right: Winner Spotlight & Breaking News (5s) -->
             <div class="col-6 h-100">
                 <div class="tv-card">
                     <div class="tv-card-header" id="spotlight-header">
@@ -332,11 +371,10 @@
                             <thead>
                                 <tr id="matrix-header-row">
                                     <th class="house-fixed-col text-start ps-3 align-bottom">HOUSE \ EVENTS</th>
-                                    <!-- Dynamic Vertical Events Injected Here -->
                                 </tr>
                             </thead>
                             <tbody id="matrix-body-rows">
-                                <!-- Dynamic Houses Rows Injected Here -->
+                                <!-- Populated dynamically -->
                             </tbody>
                         </table>
                     </div>
@@ -346,7 +384,6 @@
 
     </main>
 
-    <!-- Application Script Setup -->
     <script type="module">
         import { db, systemContext } from "./firebase-config.js";
         import { 
@@ -360,13 +397,11 @@
         let wakeLockSentinel = null;
 
         async function activateScreenKeeper() {
-            // 1. Play loop video
             const videoEl = document.getElementById('screen-keeper-video');
             if (videoEl) {
                 videoEl.play().catch(e => console.log('[SCREEN-KEEPER] Autoplay waiting for click:', e));
             }
 
-            // 2. Request native screen WakeLock if supported
             if ('wakeLock' in navigator) {
                 try {
                     wakeLockSentinel = await navigator.wakeLock.request('screen');
@@ -379,14 +414,12 @@
             }
         }
 
-        // Re-request lock if window regains visibility
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
                 activateScreenKeeper();
             }
         });
 
-        // Activate on user interaction (TV Remote click / touch)
         window.addEventListener('click', () => {
             activateScreenKeeper();
         }, { once: true });
@@ -396,6 +429,7 @@
         let activeYearId = urlParams.get('year') || systemContext?.activeYearId || localStorage.getItem('activeYearId') || '2026-27';
         const targetFestId = urlParams.get('fest') || '';
 
+        let students = [];
         let houses = [];
         let events = [];
         let registrations = [];
@@ -464,14 +498,21 @@
 
             const yearPath = `academicYears/${activeYearId}`;
 
-            // 1. Fest Houses
+            // 1. Sync Students (CRUCIAL for House Resolution)
+            const unsubStudents = onSnapshot(collection(db, `${yearPath}/students`), snap => {
+                students = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                recomputeAll();
+            });
+            activeUnsubscribers.push(unsubStudents);
+
+            // 2. Fest Houses
             const unsubHouses = onSnapshot(collection(db, `${yearPath}/festHouses`), snap => {
                 houses = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 recomputeAll();
             });
             activeUnsubscribers.push(unsubHouses);
 
-            // 2. Fest Events
+            // 3. Fest Events
             const unsubEvents = onSnapshot(collection(db, `${yearPath}/festEvents`), snap => {
                 events = snap.docs.map(d => ({ id: d.id, ...d.data() }))
                     .filter(e => !targetFestId || e.festId === targetFestId);
@@ -482,7 +523,7 @@
             });
             activeUnsubscribers.push(unsubEvents);
 
-            // 3. Registrations
+            // 4. Registrations
             const unsubRegs = onSnapshot(collection(db, `${yearPath}/festRegistrations`), snap => {
                 registrations = snap.docs.map(d => ({ id: d.id, ...d.data() }))
                     .filter(r => !r.isDeleted && (!targetFestId || r.festId === targetFestId));
@@ -490,15 +531,15 @@
             });
             activeUnsubscribers.push(unsubRegs);
 
-            // 4. Groups
+            // 5. Groups
             const unsubGroups = onSnapshot(collection(db, `${yearPath}/festGroups`), snap => {
                 groups = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-                    .filter(g => !g.isDeleted && (!targetFestId || g.festId === targetFestId));
+                    .filter(g => !g.isDeleted);
                 recomputeAll();
             });
             activeUnsubscribers.push(unsubGroups);
 
-            // 5. Results & Real-time Priority Interrupt
+            // 6. Results & Real-time Priority Interrupt
             let isFirstLoad = true;
             const unsubResults = onSnapshot(collection(db, `${yearPath}/festResults`), snap => {
                 const incoming = snap.docs.map(d => ({ id: d.id, ...d.data() }))
@@ -521,6 +562,39 @@
             activeUnsubscribers.push(unsubResults);
         }
 
+        // Robust House Resolver across result item types
+        function resolveStandingHouseId(st, eventId) {
+            if (st.houseId) return st.houseId;
+
+            // Group event resolution
+            if (st.groupId) {
+                const grp = groups.find(g => g.id === st.groupId);
+                if (grp?.houseId) return grp.houseId;
+
+                if (grp?.members?.length) {
+                    const firstStudentId = grp.members[0].studentId;
+                    const stu = students.find(s => s.id === firstStudentId);
+                    if (stu?.houseId) return stu.houseId;
+                    const reg = registrations.find(r => r.studentId === firstStudentId);
+                    if (reg?.houseId) return reg.houseId;
+                }
+            }
+
+            // Solo event resolution
+            if (st.studentId) {
+                const regEvent = registrations.find(r => r.studentId === st.studentId && (r.events || []).includes(eventId));
+                if (regEvent?.houseId) return regEvent.houseId;
+
+                const regAny = registrations.find(r => r.studentId === st.studentId);
+                if (regAny?.houseId) return regAny.houseId;
+
+                const stu = students.find(s => s.id === st.studentId);
+                if (stu?.houseId) return stu.houseId;
+            }
+
+            return null;
+        }
+
         function recomputeAll() {
             calculateHouseScores();
             renderHouseLeaderboard();
@@ -535,15 +609,7 @@
             results.forEach(res => {
                 (res.results || []).forEach(st => {
                     const pts = Number(st.points) || 0;
-                    let targetHouseId = null;
-
-                    if (st.groupId) {
-                        const grp = groups.find(g => g.id === st.groupId);
-                        targetHouseId = grp?.houseId;
-                    } else if (st.studentId) {
-                        const reg = registrations.find(r => r.studentId === st.studentId && (r.events || []).includes(res.eventId));
-                        targetHouseId = reg?.houseId;
-                    }
+                    const targetHouseId = resolveStandingHouseId(st, res.eventId);
 
                     if (targetHouseId && houseScoreMap.has(targetHouseId)) {
                         houseScoreMap.set(targetHouseId, houseScoreMap.get(targetHouseId) + pts);
@@ -644,13 +710,16 @@
                                 if (item.groupId) {
                                     const grp = groups.find(g => g.id === item.groupId);
                                     targetName = grp?.name || 'Group';
-                                    const h = houses.find(x => x.id === grp?.houseId);
+                                    const resolvedHId = resolveStandingHouseId(item, activeResult.eventId);
+                                    const h = houses.find(x => x.id === resolvedHId);
                                     houseName = h?.name || 'N/A';
                                     houseColor = h?.color || houseColor;
                                 } else {
+                                    const stu = students.find(s => s.id === item.studentId);
                                     const reg = registrations.find(r => r.studentId === item.studentId);
-                                    targetName = reg?.studentName || 'Student';
-                                    const h = houses.find(x => x.id === reg?.houseId);
+                                    targetName = stu?.name || reg?.studentName || 'Student';
+                                    const resolvedHId = resolveStandingHouseId(item, activeResult.eventId);
+                                    const h = houses.find(x => x.id === resolvedHId);
                                     houseName = h?.name || 'N/A';
                                     houseColor = h?.color || houseColor;
                                 }
@@ -695,7 +764,7 @@
                 <th class="house-fixed-col text-start ps-3 align-bottom text-dark">HOUSE \\ EVENT</th>
                 ${filteredEvents.map(event => {
                     const res = results.find(r => r.eventId === event.id);
-                    const isDone = Boolean(res);
+                    const isDone = Boolean(res && (res.results || []).length > 0);
                     return `
                         <th class="event-header-cell">
                             <div class="d-flex flex-column align-items-center justify-content-between h-100">
@@ -717,59 +786,60 @@
                 return;
             }
 
+            // Build Body with Row Accent Shading and House Border
             tableBody.className = "fade-swap";
-            tableBody.innerHTML = houses.map(house => {
+            tableBody.innerHTML = houses.map((house, hIdx) => {
+                const houseColor = house.color || '#2563eb';
+                const rowBg = hIdx % 2 === 0 ? '#ffffff' : '#f8fafc';
+
                 return `
-                    <tr>
-                        <td class="house-fixed-col text-start ps-3">
+                    <tr class="house-row-accent" style="background-color: ${rowBg};">
+                        <!-- Fixed House Header with Solid Left Color Accent -->
+                        <td class="house-fixed-col text-start ps-3" style="border-left: 6px solid ${houseColor} !important;">
                             <div class="d-flex align-items-center gap-2">
-                                <span class="rounded-circle shadow-sm" style="width: 12px; height: 12px; background-color: ${house.color || '#2563eb'}; display: inline-block;"></span>
-                                <span class="fw-bold small text-dark text-truncate">${house.name}</span>
+                                <span class="rounded-circle shadow-sm" style="width: 12px; height: 12px; background-color: ${houseColor}; display: inline-block;"></span>
+                                <span class="fw-bold text-dark text-truncate" style="font-size: 0.85rem;">${house.name}</span>
                             </div>
                         </td>
 
+                        <!-- Placed Badges / Dash -->
                         ${filteredEvents.map(event => {
                             const res = results.find(r => r.eventId === event.id);
-                            if (!res) {
+                            if (!res || !res.results?.length) {
                                 return `<td class="text-center text-muted" style="opacity: 0.25; font-size: 0.75rem;">-</td>`;
                             }
 
-                            const standings = (res.results || []);
-                            let standingFound = null;
+                            // Match all placements by this house in the current event
+                            const houseStandings = (res.results || []).filter(st => {
+                                const hId = resolveStandingHouseId(st, event.id);
+                                return hId === house.id;
+                            });
 
-                            for (const st of standings) {
-                                let hId = null;
-                                if (st.groupId) {
-                                    hId = groups.find(g => g.id === st.groupId)?.houseId;
-                                } else {
-                                    hId = registrations.find(r => r.studentId === st.studentId && (r.events || []).includes(event.id))?.houseId;
-                                }
-
-                                if (hId === house.id) {
-                                    standingFound = st;
-                                    break;
-                                }
-                            }
-
-                            if (!standingFound) {
+                            if (!houseStandings.length) {
                                 return `<td class="text-center text-muted" style="font-size: 0.75rem; opacity: 0.3;">-</td>`;
                             }
 
-                            const p = standingFound.position;
-                            const badgeColor = p === 1 ? 'bg-warning text-dark' : (p === 2 ? 'bg-secondary text-white' : 'bg-light text-dark border');
-                            return `
-                                <td class="text-center p-1">
-                                    <span class="pos-badge ${badgeColor}">
-                                        ${p === 1 ? '1st' : (p === 2 ? '2nd' : '3rd')}
-                                    </span>
-                                </td>
-                            `;
+                            // Render badges for all positions
+                            const badgesHtml = houseStandings
+                                .sort((a, b) => a.position - b.position)
+                                .map(st => {
+                                    const p = st.position;
+                                    const badgeColor = p === 1 ? 'bg-warning text-dark' : (p === 2 ? 'bg-secondary text-white' : 'bg-light text-dark border border-secondary');
+                                    return `
+                                        <span class="pos-badge ${badgeColor} m-1 shadow-sm">
+                                            ${p === 1 ? '1st' : (p === 2 ? '2nd' : '3rd')}
+                                        </span>
+                                    `;
+                                }).join('');
+
+                            return `<td class="text-center p-1">${badgesHtml}</td>`;
                         }).join('')}
                     </tr>
                 `;
             }).join('');
         }
 
+        // Automation Timers
         setInterval(() => {
             cycleSpotlight();
         }, 5000);
