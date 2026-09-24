@@ -3,7 +3,7 @@ import { state, getStudentClassName } from './app-state.js';
 
 function pointsFor(position, isGroup) {
     if (position === 1) return isGroup ? 10 : 5;
-    if (position === 2) return isGroup ? 5 : 3;
+    if (position === 2) return isGroup ? 7 : 3;
     if (position === 3) return isGroup ? 3 : 1;
     return 0;
 }
