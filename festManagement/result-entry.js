@@ -1,10 +1,33 @@
 import { saveScopedDoc } from './firebase-config.js';
 import { state, getStudentClassName } from './app-state.js';
 
-function pointsFor(position, isGroup) {
-    if (position === 1) return isGroup ? 10 : 5;
-    if (position === 2) return isGroup ? 7 : 3;
-    if (position === 3) return isGroup ? 3 : 1;
+function pointsFor(position, isGroup = false, name = '') {
+    const isMarchPast = String(name || '').trim().toUpperCase() === "MARCH PAST";
+
+    // 1. Special Tier: March Past (20 / 15 / 10 / 5)
+    if (isMarchPast) {
+        if (position === 1) return 20;
+        if (position === 2) return 15;
+        if (position === 3) return 10;
+        if (position === 4) return 5;
+        return 0;
+    }
+
+    // 2. Group Tier (15 / 10 / 5 / 0)
+    if (isGroup) {
+        if (position === 1) return 15;
+        if (position === 2) return 10;
+        if (position === 3) return 5;
+        if (position === 4) return 0;
+        return 0;
+    }
+
+    // 3. Solo / Standard Tier (5 / 3 / 1 / 0)
+    if (position === 1) return 5;
+    if (position === 2) return 3;
+    if (position === 3) return 1;
+    if (position === 4) return 0;
+
     return 0;
 }
 
@@ -43,7 +66,7 @@ function loadResultEvent(eventId) {
     const rows = resultRows(fest, event);
     const existing = state.festResults.find(result => result.festId === fest.id && result.eventId === event.id);
     const saved = new Map((existing?.results || []).map(item => [item.groupId || item.studentId, item]));
-    table.innerHTML = `<div class="d-flex justify-content-between align-items-center mb-2"><div><strong>${event.name}</strong><span class="text-muted small ms-2">${event.category} | ${event.stage || 'Main Stage'} | ${event.isGroupEvent ? 'Group' : 'Solo'}</span></div><button class="btn btn-sm btn-success" id="admin-result-save"><i class="fas fa-save me-1"></i>Save Results</button></div><div class="table-responsive"><table class="table table-sm table-hover align-middle" id="admin-result-grid"><thead class="table-light"><tr><th>Participant / Group</th><th>House</th><th style="width:150px">Position</th><th style="width:100px">Points</th></tr></thead><tbody>${rows.map(row => { const value = saved.get(row.id)?.position || 0; const house = state.festHouses.find(item => item.id === row.houseId); return `<tr data-id="${row.id}" data-group="${row.isGroup}" data-search="${(row.name + ' ' + row.details).toLowerCase()}"><td><strong>${row.name}</strong><div class="small text-muted">${row.details}</div></td><td>${house?.name || 'N/A'}</td><td><select class="form-select form-select-sm result-position"><option value="0">Not placed</option><option value="1" ${value === 1 ? 'selected' : ''}>1st</option><option value="2" ${value === 2 ? 'selected' : ''}>2nd</option><option value="3" ${value === 3 ? 'selected' : ''}>3rd</option></select></td><td class="result-points">${pointsFor(value, row.isGroup)}</td></tr>`; }).join('') || '<tr><td colspan="4" class="text-muted">No participants found.</td></tr>'}</tbody></table></div><div class="small text-muted mt-2">Ties are allowed. Same-position winners receive the same points: solo 5/3/1, group 10/5/3.</div>`;
+    table.innerHTML = `<div class="d-flex justify-content-between align-items-center mb-2"><div><strong>${event.name}</strong><span class="text-muted small ms-2">${event.category} | ${event.stage || 'Main Stage'} | ${event.isGroupEvent ? 'Group' : 'Solo'}</span></div><button class="btn btn-sm btn-success" id="admin-result-save"><i class="fas fa-save me-1"></i>Save Results</button></div><div class="table-responsive"><table class="table table-sm table-hover align-middle" id="admin-result-grid"><thead class="table-light"><tr><th>Participant / Group</th><th>House</th><th style="width:150px">Position</th><th style="width:100px">Points</th></tr></thead><tbody>${rows.map(row => { const value = saved.get(row.id)?.position || 0; const house = state.festHouses.find(item => item.id === row.houseId); return `<tr data-id="${row.id}" data-group="${row.isGroup}" data-search="${(row.name + ' ' + row.details).toLowerCase()}"><td><strong>${row.name}</strong><div class="small text-muted">${row.details}</div></td><td>${house?.name || 'N/A'}</td><td><select class="form-select form-select-sm result-position"><option value="0">Not placed</option><option value="1" ${value === 1 ? 'selected' : ''}>1st</option><option value="2" ${value === 2 ? 'selected' : ''}>2nd</option><option value="3" ${value === 3 ? 'selected' : ''}>3rd</option></select></td><td class="result-points">${pointsFor(value, row.isGroup,row.name)}</td></tr>`; }).join('') || '<tr><td colspan="4" class="text-muted">No participants found.</td></tr>'}</tbody></table></div><div class="small text-muted mt-2">Ties are allowed. Same-position winners receive the same points: solo 5/3/1, group 10/5/3.</div>`;
     document.getElementById('result-entry-status').textContent = existing ? 'Existing result loaded' : 'New result';
     document.querySelectorAll('#admin-result-grid tbody tr').forEach(row => row.querySelector('.result-position')?.addEventListener('change', event => { row.querySelector('.result-points').textContent = pointsFor(Number(event.target.value), row.dataset.group === 'true'); }));
     document.getElementById('admin-result-search').addEventListener('input', filterResultRows);
