@@ -8,7 +8,7 @@ import { doc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-
 
 
 /**
- * Polls until a named global or imported function exists on window.
+ * Polls until a named global or imported function exists on window. 
  */
 export function waitForRouteHandler(handlerName, timeout = 5000) {
     return new Promise(resolve => {
