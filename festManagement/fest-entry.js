@@ -27,14 +27,30 @@ import {
     serverTimestamp 
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-
-
 function houseEventSoloCount(festId, houseId, eventId, excludeStudentId = null) {
     return state.festRegistrations.filter(reg => reg.festId === festId && reg.houseId === houseId && reg.studentId !== excludeStudentId && reg.events?.includes(eventId)).length;
 }
 
 function houseEventGroupCount(festId, houseId, eventId, excludeGroupId = null) {
     return state.festGroups.filter(group => group.festId === festId && group.houseId === houseId && group.id !== excludeGroupId && group.eventId === eventId).length;
+}
+
+// Stage Type Indicator Helper (Icons & Color Coding)
+function getStageBadgeMarkup(isOffStage) {
+    if (isOffStage) {
+        return `
+            <span class="badge border d-inline-flex align-items-center gap-1 shadow-xs" 
+                  style="background-color: #ecfdf5; color: #047857; border-color: #a7f3d0 !important; font-size: 0.68rem; font-weight: 600;">
+                <i class="fas fa-palette" style="color: #059669;"></i> Off-Stage
+            </span>
+        `;
+    }
+    return `
+        <span class="badge border d-inline-flex align-items-center gap-1 shadow-xs" 
+              style="background-color: #eef2ff; color: #4338ca; border-color: #c7d2fe !important; font-size: 0.68rem; font-weight: 600;">
+            <i class="fas fa-microphone-lines" style="color: #4f46e5;"></i> On-Stage
+        </span>
+    `;
 }
 
 // Inject lightweight mobile helper styles once
@@ -64,6 +80,11 @@ function ensurePortalMobileStyles() {
             font-size: 0.85rem;
             padding: 0.45rem 0.75rem;
             border-radius: 50rem;
+        }
+        .stage-btn-group .btn {
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 0.25rem 0.65rem;
         }
         @media (max-width: 767.98px) {
             .table-mobile-responsive {
@@ -100,9 +121,6 @@ function ensurePortalMobileStyles() {
 
 // --- 1. ENTRY ROUTE INTERCEPTOR ---
 
-/**
- * Detects URL hash '#fest-entry' and bootstraps the House Captain experience.
- */
 window.checkForDataEntryMode = async function() {
     if (!window.location.hash.startsWith('#fest-entry')) return false;
     ensurePortalMobileStyles();
@@ -117,7 +135,6 @@ window.checkForDataEntryMode = async function() {
         return true;
     }
 
-    // Anchor active academic year
     systemContext.activeYearId = yearId;
     localStorage.setItem('activeYearId', yearId);
 
@@ -140,6 +157,29 @@ window.checkForDataEntryMode = async function() {
         const festData = { id: festSnap.id, ...festSnap.data() };
         const houseData = { id: houseSnap.id, ...houseSnap.data() };
 
+        // 24-HOUR AUTO-LOGIN CHECK
+        const authKey = `fest_portal_auth_${yearId}_${festId}_${houseId}`;
+        const storedAuth = getStoredPortalAuth(authKey);
+        const targetKey = festData.housePasswords?.[houseId];
+
+        if (storedAuth && isAuthValidWithinOneDay(storedAuth.timestamp) && targetKey) {
+            const storedInput = storedAuth.password;
+            const inputHash = typeof hashPassword === 'function' ? await hashPassword(storedInput) : null;
+
+            if (storedInput === targetKey || inputHash === targetKey) {
+                state.managingFest = festData;
+                state.loggedInHouseId = houseData.id;
+                
+                await loadAllYearData();
+                bootstrapHouseCaptainWorkspace(festData, houseData);
+                return true;
+            }
+        }
+
+        if (storedAuth) {
+            localStorage.removeItem(authKey);
+        }
+
         renderHousePortalLogin(festData, houseData);
         return true;
     } catch (err) {
@@ -147,6 +187,29 @@ window.checkForDataEntryMode = async function() {
         document.body.innerHTML = `<div class="container py-4"><div class="alert alert-danger shadow-sm">Connection failed. Check network stability.</div></div>`;
         return true;
     }
+};
+
+function isAuthValidWithinOneDay(timestamp) {
+    if (!timestamp) return false;
+    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+    return (Date.now() - timestamp) < ONE_DAY_MS;
+}
+
+function getStoredPortalAuth(key) {
+    try {
+        const item = localStorage.getItem(key);
+        return item ? JSON.parse(item) : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+window.savePortalSession = function(yearId, festId, houseId, password) {
+    const key = `fest_portal_auth_${yearId}_${festId}_${houseId}`;
+    localStorage.setItem(key, JSON.stringify({
+        password: String(password || '').trim(),
+        timestamp: Date.now()
+    }));
 };
 
 // --- 2. AUTHENTICATION & PORTAL SHELL ---
@@ -165,7 +228,7 @@ function renderHousePortalLogin(fest, house) {
                         <div class="mb-3">
                             <input type="password" id="house-secret-key" class="form-control form-control-lg text-center fs-6 py-2" placeholder="Enter House Password" required autocomplete="current-password">
                         </div>
-                        <button type="submit" class="btn btn-primary w-100 fw-bold py-2 btn-touch">Enter Dashboard</button>
+                        <button type="submit" id="house-login-btn" class="btn btn-primary w-100 fw-bold py-2 btn-touch">Enter Dashboard</button>
                     </form>
                 </div>
             </div>
@@ -174,18 +237,35 @@ function renderHousePortalLogin(fest, house) {
 
     document.getElementById('house-portal-login-form').addEventListener('submit', async (e) => {
         e.preventDefault();
+        const submitBtn = document.getElementById('house-login-btn');
         const inputKey = document.getElementById('house-secret-key').value.trim();
         const targetKey = fest.housePasswords?.[house.id];
-        const inputHash = await hashPassword(inputKey);
 
+        if (!targetKey) {
+            return window.showAlert ? window.showAlert('No password configured for this house.', 'warning') : alert('No password configured for this house.');
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>Verifying...`;
+
+        const inputHash = typeof hashPassword === 'function' ? await hashPassword(inputKey) : null;
+        
         if (inputHash === targetKey || inputKey === targetKey) {
             state.managingFest = fest;
             state.loggedInHouseId = house.id;
 
+            window.savePortalSession(systemContext.activeYearId, fest.id, house.id, inputKey);
+
             await loadAllYearData();
             bootstrapHouseCaptainWorkspace(fest, house);
         } else {
-            window.showAlert('Incorrect House Password.', 'danger');
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Enter Dashboard';
+            if (window.showAlert) {
+                window.showAlert('Incorrect House Password.', 'danger');
+            } else {
+                alert('Incorrect House Password.');
+            }
         }
     });
 }
@@ -209,15 +289,14 @@ function bootstrapHouseCaptainWorkspace(fest, house) {
         </nav>
 
         <div class="container-fluid portal-container py-3">
-            <!-- Scrollable mobile friendly pills navigation -->
             <ul class="nav nav-pills fest-scroll-tabs mb-3" id="captain-tabs" role="tablist">
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-eventwise-reg" type="button" role="tab">
+                    <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tab-eventwise-reg" type="button" role="tab">
                         <i class="fas fa-calendar-check me-1"></i>Event-wise
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tab-solo-reg" type="button" role="tab">
+                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-solo-reg" type="button" role="tab">
                         <i class="fas fa-user-edit me-1"></i>Solo Entries
                     </button>
                 </li>
@@ -234,16 +313,16 @@ function bootstrapHouseCaptainWorkspace(fest, house) {
             </ul>
 
             <div class="tab-content card p-2 p-md-3 shadow-sm border-0">
-                <div class="tab-pane fade show active" id="tab-solo-reg" role="tabpanel"></div>
-                <div class="tab-pane fade" id="tab-eventwise-reg" role="tabpanel"></div>
+                <div class="tab-pane fade show active" id="tab-eventwise-reg" role="tabpanel"></div>
+                <div class="tab-pane fade" id="tab-solo-reg" role="tabpanel"></div>
                 <div class="tab-pane fade" id="tab-group-reg" role="tabpanel"></div>
                 <div class="tab-pane fade" id="tab-view-summary" role="tabpanel"></div>
             </div>
         </div>
     `;
 
-    renderSoloRegistrationTab(fest, house, isRegistrationOpen);
     eventwiseRegistrationTab(fest, house, isRegistrationOpen);
+    renderSoloRegistrationTab(fest, house, isRegistrationOpen);
     renderGroupTeamTab(fest, house, isRegistrationOpen);
     renderRosterSummaryTab(fest, house);
 }
@@ -318,13 +397,15 @@ function renderSoloRegistrationTab(fest, house, isRegistrationOpen) {
                 const limit = eventHouseLimit(fest, ev, 'solo');
                 const evCount = houseEventSoloCount(fest.id, house.id, ev.id);
                 const invalid = evCount > limit;
+                const isOffStage = ev.type === 'offStage';
                 
                 return `
                     <span class="badge ${invalid ? 'bg-danger text-white' : 'bg-light text-dark border'} px-2 py-1 me-1 mb-1 d-inline-flex align-items-center gap-1 shadow-sm" 
                           style="font-size: 0.78rem; font-weight: 500; white-space: normal; text-align: left;" 
                           title="${invalid ? `House limit exceeded: ${evCount}/${limit}` : `House entries: ${evCount}/${limit}`}">
+                        <i class="fas ${isOffStage ? 'fa-palette text-success' : 'fa-microphone-lines text-primary'}" style="font-size: 0.7rem;"></i>
                         <span>${ev.name}</span>
-                        <span class="badge ${invalid ? 'bg-white text-danger' : 'bg-secondary-subtle text-secondary'} rounded-pill" style="font-size: 0.7rem;">
+                        <span class="badge ${invalid ? 'bg-white text-danger' : 'bg-secondary-subtle text-secondary'} rounded-pill ms-1" style="font-size: 0.68rem;">
                             ${evCount}/${limit}
                         </span>
                     </span>
@@ -338,7 +419,6 @@ function renderSoloRegistrationTab(fest, house, isRegistrationOpen) {
 
             return `
                 <tr data-studentid="${student.id}" class="${invalidCount ? 'table-danger-subtle' : ''}">
-                    <!-- Student Identity Column -->
                     <td class="py-2">
                         <div class="fw-bold text-dark text-break fs-6 lh-sm mb-1">${student.name}</div>
                         <div class="d-flex flex-wrap align-items-center gap-1">
@@ -354,14 +434,12 @@ function renderSoloRegistrationTab(fest, house, isRegistrationOpen) {
                         </div>
                     </td>
 
-                    <!-- Events Badges Column -->
                     <td class="py-2">
                         <div class="d-flex flex-wrap align-items-center py-1">
                             ${badges || '<span class="text-muted small fst-italic">No events registered</span>'}
                         </div>
                     </td>
 
-                    <!-- Action Column -->
                     <td class="py-2 text-end align-middle">
                         <button class="btn ${invalidCount ? 'btn-danger' : 'btn-outline-primary'} btn-sm px-2 py-1 shadow-sm d-inline-flex align-items-center" 
                                 onclick="window.openEventAllocationModal('${student.id}')" 
@@ -429,15 +507,19 @@ window.openEventAllocationModal = function(studentId) {
         </div>
         <div class="row g-2">
             <div class="col-12 col-md-6 modal-col-border">
-                <h6 class="fw-bold text-primary small mb-2"><i class="fas fa-microphone me-1"></i>ON-STAGE EVENTS</h6>
+                <h6 class="fw-bold small mb-2 d-flex align-items-center gap-1" style="color: #4338ca;">
+                    <i class="fas fa-microphone-lines text-primary"></i> ON-STAGE EVENTS
+                </h6>
                 <div class="d-flex flex-column gap-1" id="box-onstage" style="max-height: 220px; overflow-y: auto;">
-                    ${renderChecklist(onStage, selected, 'onStage')}
+                    ${renderChecklist(onStage, selected, 'onStage', houseId, fest.id)}
                 </div>
             </div>
             <div class="col-12 col-md-6">
-                <h6 class="fw-bold text-primary small mb-2"><i class="fas fa-palette me-1"></i>OFF-STAGE EVENTS</h6>
+                <h6 class="fw-bold small mb-2 d-flex align-items-center gap-1" style="color: #047857;">
+                    <i class="fas fa-palette text-success"></i> OFF-STAGE EVENTS
+                </h6>
                 <div class="d-flex flex-column gap-1" id="box-offstage" style="max-height: 220px; overflow-y: auto;">
-                    ${renderChecklist(offStage, selected, 'offStage')}
+                    ${renderChecklist(offStage, selected, 'offStage', houseId, fest.id)}
                 </div>
             </div>
         </div>
@@ -466,12 +548,8 @@ window.openEventAllocationModal = function(studentId) {
             const event = state.festEvents.find(item => item.id === cb.value);
             const existingCount = event ? houseEventSoloCount(fest.id, houseId, event.id, student.id) : 0;
             const limit = event ? eventHouseLimit(fest, event, 'solo') : 0;
-            const item = cb.closest('.form-check');
-            item?.classList.toggle('text-danger', existingCount + (cb.checked ? 1 : 0) > limit);
-            item?.querySelector('.event-limit-warning')?.remove();
-            if (event) {
-                item?.querySelector('label')?.insertAdjacentHTML('beforeend', ` <span class="badge ${existingCount + (cb.checked ? 1 : 0) > limit ? 'bg-danger' : 'bg-light text-dark'} border event-limit-warning ms-1" style="font-size: 0.68rem;">House: ${existingCount + (cb.checked ? 1 : 0)}/${limit}</span>`);
-            }
+            const item = cb.closest('label');
+            item?.classList.toggle('border-danger', existingCount + (cb.checked ? 1 : 0) > limit);
         });
     }
 
@@ -529,25 +607,21 @@ function renderChecklist(eventList, selectedSet, type, houseId = null, festId = 
     return eventList.map(e => {
         const isChecked = selectedSet && selectedSet.has(e.id);
         const eventName = e.name || 'Unnamed Event';
+        const isOffStage = e.type === 'offStage';
 
-        // Calculate count vs limit
         let registeredCount = 0;
         let limit = 0;
         let hasLimitInfo = false;
 
         if (typeof houseEventSoloCount === 'function' && typeof eventHouseLimit === 'function' && currentHouseId && currentFest) {
-            registeredCount = type === 'solo' 
-                ? houseEventSoloCount(currentFest.id, currentHouseId, e.id)
-                : (typeof houseEventGroupCount === 'function' ? houseEventGroupCount(currentFest.id, currentHouseId, e.id) : 0);
-
-            limit = eventHouseLimit(currentFest, e, type);
+            registeredCount = houseEventSoloCount(currentFest.id, currentHouseId, e.id);
+            limit = eventHouseLimit(currentFest, e, 'solo');
             hasLimitInfo = true;
         }
 
         const isExceeded = hasLimitInfo && registeredCount > limit;
         const isFull = hasLimitInfo && !isExceeded && registeredCount >= limit;
 
-        // Pill styling based on occupancy
         let pillClass = 'bg-light text-secondary border';
         let statusText = `${registeredCount}/${limit}`;
 
@@ -560,7 +634,7 @@ function renderChecklist(eventList, selectedSet, type, houseId = null, festId = 
         }
 
         return `
-            <label class="list-group-item list-group-item-action d-flex align-items-center justify-content-between p-2 mb-1 rounded border ${isChecked ? 'border-primary bg-primary-subtle' : 'bg-white'}" 
+            <label class="list-group-item list-group-item-action d-flex align-items-center justify-content-between p-2 mb-1 rounded border ${isChecked ? (isOffStage ? 'border-success bg-success-subtle' : 'border-primary bg-primary-subtle') : 'bg-white'}" 
                    for="cb-${e.id}" 
                    style="cursor: pointer; transition: all 0.15s ease;">
                 
@@ -573,21 +647,20 @@ function renderChecklist(eventList, selectedSet, type, houseId = null, festId = 
                            ${isChecked ? 'checked' : ''} 
                            style="cursor: pointer; width: 1.15rem; height: 1.15rem;">
                     
-                    <!-- Event Name with Inline House Limit -->
                     <div class="d-flex flex-wrap align-items-center gap-1 lh-sm">
-                        <span class="small fw-bold ${isChecked ? 'text-primary' : 'text-dark'} text-break">
+                        <i class="fas ${isOffStage ? 'fa-palette text-success' : 'fa-microphone-lines text-primary'} me-1" style="font-size: 0.72rem;"></i>
+                        <span class="small fw-bold ${isChecked ? (isOffStage ? 'text-success' : 'text-primary') : 'text-dark'} text-break">
                             ${eventName}
                         </span>
                         
                         ${hasLimitInfo ? `
                             <span class="badge ${pillClass} py-0 px-1 ms-1 d-inline-flex align-items-center" style="font-size: 0.72rem;">
-                                <i class="fas fa-users me-1" style="font-size: 0.65rem;"></i>Limit: ${statusText}
+                                <i class="fas fa-users me-1" style="font-size: 0.65rem;"></i>${statusText}
                             </span>
                         ` : ''}
                     </div>
                 </div>
 
-                <!-- Right meta info (Category) -->
                 ${e.category ? `
                     <div class="flex-shrink-0 ms-2">
                         <span class="badge bg-secondary-subtle text-secondary border" style="font-size: 0.7rem;">
@@ -599,8 +672,9 @@ function renderChecklist(eventList, selectedSet, type, houseId = null, festId = 
         `;
     }).join('');
 }
+
 // =========================================================================
-// --- 5. EVENT-WISE REGISTRATION TAB & MULTI-SELECT MODAL ---
+// --- 5. EVENT-WISE REGISTRATION TAB (WITH ON-STAGE/OFF-STAGE FILTER) ---
 // =========================================================================
 
 function eventwiseRegistrationTab(fest, house, isRegistrationOpen) {
@@ -618,24 +692,40 @@ function eventwiseRegistrationTab(fest, house, isRegistrationOpen) {
             <span class="badge bg-secondary py-1 px-2" style="font-size: 0.75rem;">${houseStudents.length} House Members</span>
         </div>
 
-        <div class="row g-2 mb-3">
-            <div class="col-6 col-md-4">
+        <!-- Filter Controls Bar -->
+        <div class="row g-2 mb-3 align-items-end">
+            <!-- Stage Type Filter Buttons -->
+            <div class="col-12 col-md-5">
+                <label class="small fw-semibold mb-1 d-block" style="font-size: 0.75rem;">Stage Scope</label>
+                <div class="btn-group stage-btn-group w-100 shadow-xs" role="group" id="eventwise-stage-filter-group">
+                    <input type="radio" class="btn-check" name="eventwise-stage-filter" id="stage-filter-all" value="all" checked autocomplete="off">
+                    <label class="btn btn-outline-dark" for="stage-filter-all">
+                        <i class="fas fa-layer-group me-1"></i>All
+                    </label>
+
+                    <input type="radio" class="btn-check" name="eventwise-stage-filter" id="stage-filter-on" value="onStage" autocomplete="off">
+                    <label class="btn btn-outline-primary" for="stage-filter-on">
+                        <i class="fas fa-microphone-lines me-1"></i>On-Stage
+                    </label>
+
+                    <input type="radio" class="btn-check" name="eventwise-stage-filter" id="stage-filter-off" value="offStage" autocomplete="off">
+                    <label class="btn btn-outline-success" for="stage-filter-off">
+                        <i class="fas fa-palette me-1"></i>Off-Stage
+                    </label>
+                </div>
+            </div>
+
+            <div class="col-6 col-md-3">
                 <label class="small fw-semibold mb-1" style="font-size: 0.75rem;" for="eventwise-category-filter">Category</label>
                 <select id="eventwise-category-filter" class="form-select form-select-sm">
                     <option value="all">All Categories</option>
                     ${categories.map(category => `<option value="${category}">${category}</option>`).join('')}
                 </select>
             </div>
+
             <div class="col-6 col-md-4">
-                <label class="small fw-semibold mb-1" style="font-size: 0.75rem;" for="eventwise-event-search">Search</label>
-                <input id="eventwise-event-search" type="search" class="form-control form-control-sm" placeholder="Event name...">
-            </div>
-            <div class="col-12 col-md-4 d-flex align-items-end">
-                <div class="d-flex flex-wrap gap-1 align-items-center small" style="font-size: 0.7rem;">
-                    <span class="badge bg-warning-subtle text-warning-emphasis border border-warning">Pending</span>
-                    <span class="badge bg-success-subtle text-success-emphasis border border-success">Filled</span>
-                    <span class="badge bg-danger text-white">Over Limit</span>
-                </div>
+                <label class="small fw-semibold mb-1" style="font-size: 0.75rem;" for="eventwise-event-search">Search Event</label>
+                <input id="eventwise-event-search" type="search" class="form-control form-control-sm" placeholder="Search event or stage...">
             </div>
         </div>
 
@@ -643,8 +733,8 @@ function eventwiseRegistrationTab(fest, house, isRegistrationOpen) {
             <table class="table table-sm table-hover align-middle mb-0" id="eventwise-registration-table">
                 <thead class="table-light sticky-top">
                     <tr>
-                        <th style="min-width: 140px;">Event</th>
-                        <th style="width: 60px;">Type</th>
+                        <th style="min-width: 150px;">Event &amp; Stage</th>
+                        <th style="width: 80px;">Scope</th>
                         <th class="text-center" style="width: 75px;">Capacity</th>
                         <th style="min-width: 180px;">Registered</th>
                         <th class="text-end" style="width: 100px;">Action</th>
@@ -670,19 +760,27 @@ function eventwiseRegistrationTab(fest, house, isRegistrationOpen) {
     }
 
     function renderRows() {
+        const selectedStage = container.querySelector('input[name="eventwise-stage-filter"]:checked')?.value || 'all';
         const selectedCategory = categoryFilter.value;
         const searchTerm = eventSearch.value.trim().toLowerCase();
 
         const visibleEvents = events.filter(event => {
+            const isOffStage = event.type === 'offStage';
+            const matchesStage = selectedStage === 'all' 
+                ? true 
+                : (selectedStage === 'offStage' ? isOffStage : !isOffStage);
+            
             const matchesCat = selectedCategory === 'all' || (event.category || 'General') === selectedCategory;
             const matchesSearch = !searchTerm || event.name.toLowerCase().includes(searchTerm) || (event.stage || '').toLowerCase().includes(searchTerm);
-            return matchesCat && matchesSearch;
+            
+            return matchesStage && matchesCat && matchesSearch;
         });
 
         tbody.innerHTML = visibleEvents.map(event => {
             const registered = registeredStudents(event);
             const limit = eventHouseLimit(fest, event, event.isGroupEvent ? 'group' : 'solo');
             const count = registered.length;
+            const isOffStage = event.type === 'offStage';
 
             const isOverLimit = count > limit;
             const isFull = count >= limit && limit > 0;
@@ -707,11 +805,22 @@ function eventwiseRegistrationTab(fest, house, isRegistrationOpen) {
             return `
                 <tr class="${rowClass}">
                     <td>
-                        <strong class="text-dark d-block text-truncate" style="max-width: 160px;">${event.name}</strong>
-                        <div class="text-muted small" style="font-size: 0.7rem;">${event.category || 'General'} &bull; ${event.stage || 'Main Stage'}</div>
+                        <div class="d-flex align-items-center gap-1">
+                            <i class="fas ${isOffStage ? 'fa-palette text-success' : 'fa-microphone-lines text-primary'} me-1" style="font-size: 0.85rem;"></i>
+                            <strong class="text-dark d-block text-truncate" style="max-width: 170px;">${event.name}</strong>
+                        </div>
+                        <div class="text-muted small mt-1" style="font-size: 0.7rem;">
+                            <span class="badge bg-light text-secondary border py-0 px-1 me-1">${event.category || 'General'}</span>
+                            <span class="badge bg-light text-muted border py-0 px-1">${event.stage || 'Main Stage'}</span>
+                        </div>
                     </td>
                     <td>
-                        <span class="badge ${event.isGroupEvent ? 'bg-info' : 'bg-secondary'}" style="font-size: 0.68rem;">${event.isGroupEvent ? 'Group' : 'Solo'}</span>
+                        <div class="d-flex flex-column gap-1">
+                            ${getStageBadgeMarkup(isOffStage)}
+                            <span class="badge ${event.isGroupEvent ? 'bg-info-subtle text-info-emphasis border border-info' : 'bg-secondary-subtle text-secondary border'}" style="font-size: 0.65rem;">
+                                <i class="fas ${event.isGroupEvent ? 'fa-users' : 'fa-user'} me-1"></i>${event.isGroupEvent ? 'Group' : 'Solo'}
+                            </span>
+                        </div>
                     </td>
                     <td class="text-center">${statusBadge}</td>
                     <td>${registeredHtml}</td>
@@ -767,6 +876,9 @@ function eventwiseRegistrationTab(fest, house, isRegistrationOpen) {
         }
     });
 
+    container.querySelectorAll('input[name="eventwise-stage-filter"]').forEach(radio => {
+        radio.addEventListener('change', renderRows);
+    });
     categoryFilter.addEventListener('change', renderRows);
     eventSearch.addEventListener('input', renderRows);
     renderRows();
@@ -783,22 +895,20 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
 
     const houseStudents = state.students.filter(s => s.houseId === houseId);
     const limit = eventHouseLimit(fest, event, 'solo');
+    const isOffStage = event.type === 'offStage';
 
-    // Get current registrations for this event & house
     const existingRegistrations = state.festRegistrations.filter(r => 
         r.festId === fest.id && 
         r.houseId === houseId && 
         r.events?.includes(eventId)
     );
     
-    // Sets to manage additions and removals
     const initialEnrolledIds = new Set(existingRegistrations.map(r => r.studentId));
     const studentsToRemoveIds = new Set();
     const studentsToAddIds = new Set();
 
     const studentMaxLimit = fest.studentSoloLimit || fest.maxEventsPerStudent || fest.studentEventLimit || 3;
 
-    // Eligible students who are NOT enrolled initially
     const eligibleStudents = houseStudents.filter(student => {
         if (initialEnrolledIds.has(student.id)) return false;
         const catMatch = event.category === 'General' || getStudentCategory(student) === event.category;
@@ -811,8 +921,14 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
     const modalBody = `
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-1 mb-2 p-2 bg-light rounded border">
             <div>
-                <h6 class="fw-bold mb-0 text-primary fs-6">${event.name}</h6>
-                <div class="small text-muted" style="font-size: 0.74rem;">${event.category || 'General'} &bull; ${event.type === 'offStage' ? 'Off-Stage' : 'On-Stage'}</div>
+                <div class="d-flex align-items-center gap-1">
+                    <i class="fas ${isOffStage ? 'fa-palette text-success' : 'fa-microphone-lines text-primary'}"></i>
+                    <h6 class="fw-bold mb-0 text-dark fs-6">${event.name}</h6>
+                </div>
+                <div class="small text-muted mt-1" style="font-size: 0.74rem;">
+                    ${getStageBadgeMarkup(isOffStage)}
+                    <span class="ms-1">${event.category || 'General'} &bull; ${event.stage || 'Main Stage'}</span>
+                </div>
             </div>
             <div class="d-flex gap-1">
                 <span class="badge bg-white text-dark border" style="font-size: 0.72rem;">House Limit: <strong>${limit}</strong></span>
@@ -838,9 +954,7 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
                     <label class="small fw-bold mb-0" style="font-size: 0.78rem;">Participants (<span id="modal-total-count">0</span>/${limit})</label>
                     <span class="text-muted small" style="font-size: 0.7rem;">Manage Roster</span>
                 </div>
-                <div class="border rounded p-2 bg-light" id="modal-selected-queue" style="max-height: 300px; overflow-y: auto;">
-                    <!-- Rendered dynamically -->
-                </div>
+                <div class="border rounded p-2 bg-light" id="modal-selected-queue" style="max-height: 300px; overflow-y: auto;"></div>
             </div>
         </div>
     `;
@@ -900,7 +1014,6 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
         totalCountSpan.textContent = totalCount;
         slotsBadge.textContent = availableSlots;
 
-        // Check if there are changes to commit
         const hasChanges = studentsToAddIds.size > 0 || studentsToRemoveIds.size > 0;
         commitBtn.disabled = !hasChanges;
 
@@ -911,7 +1024,6 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
 
         let html = '';
 
-        // 1. Existing Enrolled Students
         if (activeEnrolled.length > 0) {
             html += `<div class="small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.65rem; letter-spacing: 0.5px;">Currently Registered</div>`;
             html += activeEnrolled.map(student => {
@@ -933,7 +1045,6 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
             }).join('');
         }
 
-        // 2. Newly Added Students
         if (newQueued.length > 0) {
             html += `<div class="small fw-bold text-primary text-uppercase mt-2 mb-1" style="font-size: 0.65rem; letter-spacing: 0.5px;">Pending Addition (+${newQueued.length})</div>`;
             html += newQueued.map(student => {
@@ -1000,7 +1111,6 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
         }).join('');
     }
 
-    // Toggle additions from available pool
     availableContainer.addEventListener('change', e => {
         const cb = e.target.closest('.modal-student-cb');
         if (!cb) return;
@@ -1017,7 +1127,6 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
         renderQueue();
     });
 
-    // Handle removal of already enrolled students or newly queued additions
     queueContainer.addEventListener('click', e => {
         const removeEnrolledBtn = e.target.closest('.modal-remove-enrolled-btn');
         if (removeEnrolledBtn) {
@@ -1042,14 +1151,12 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
     renderAvailableList();
     renderQueue();
 
-    // Commit both additions and removals to Firestore
     commitBtn.addEventListener('click', async () => {
         commitBtn.disabled = true;
         commitBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>Saving...`;
 
         const batch = writeBatch(db);
 
-        // 1. Process Removals
         studentsToRemoveIds.forEach(studentId => {
             const regId = `${fest.id}_${studentId}`;
             const existing = state.festRegistrations.find(r => r.id === regId);
@@ -1062,7 +1169,6 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
             }
         });
 
-        // 2. Process Additions
         studentsToAddIds.forEach(studentId => {
             const student = houseStudents.find(s => s.id === studentId);
             const regId = `${fest.id}_${studentId}`;
@@ -1088,8 +1194,6 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
             await loadAllYearData(true);
             if (typeof eventwiseRegistrationTab === 'function') {
                 eventwiseRegistrationTab(fest, state.festHouses.find(h => h.id === houseId), fest.registrationOpen === true);
-            } else if (typeof renderSubTabRegistrations === 'function') {
-                renderSubTabRegistrations(fest.registrationOpen === true);
             }
         } catch (error) {
             console.error(error);
@@ -1099,7 +1203,8 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
         }
     });
 };
-// --- 5. GROUP TEAM MANAGEMENT TAB ---
+
+// --- 6. GROUP TEAM MANAGEMENT TAB ---
 
 function renderGroupTeamTab(fest, house, isRegistrationOpen) {
     const container = document.getElementById('tab-group-reg');
@@ -1118,15 +1223,21 @@ function renderGroupTeamTab(fest, house, isRegistrationOpen) {
             ${groups.map(g => {
                 const captain = g.members?.find(m => m.role === 'Captain');
                 const captainObj = state.students.find(s => s.id === captain?.studentId);
+                const ev = state.festEvents.find(e => e.id === g.eventId);
+                const isOffStage = ev?.type === 'offStage';
+
                 return `
                     <div class="col-12 col-md-6">
                         <div class="card border p-3 h-100 shadow-sm">
                             <div class="d-flex justify-content-between align-items-start gap-1">
-                                <h6 class="fw-bold mb-1 text-truncate fs-6">${g.name}</h6>
+                                <div>
+                                    <h6 class="fw-bold mb-0 text-truncate fs-6">${g.name}</h6>
+                                    <div class="mt-1">${getStageBadgeMarkup(isOffStage)}</div>
+                                </div>
                                 <span class="badge bg-secondary flex-shrink-0" style="font-size: 0.7rem;">${g.members?.length || 0} Members</span>
                             </div>
-                            <p class="small text-muted mb-2" style="font-size: 0.75rem;">
-                                ${g.category || 'General'} &bull; ${state.festEvents.find(e => e.id === g.eventId)?.name || 'Event not recorded'}<br>
+                            <p class="small text-muted mb-2 mt-2" style="font-size: 0.75rem;">
+                                ${g.category || 'General'} &bull; ${ev?.name || 'Event not recorded'}<br>
                                 Captain: <strong>${captainObj?.name || 'Unassigned'}</strong>
                             </p>
                             <div class="d-flex flex-wrap justify-content-end gap-1 mt-auto pt-2 border-top">
@@ -1177,7 +1288,7 @@ window.openGroupModal = function(groupId) {
             <label class="form-label small fw-bold mb-1">Select Group Event</label>
             <select id="grp-event" class="form-select form-select-sm">
                 <option value="">Choose event</option>
-                ${groupEvents.map(e => `<option value="${e.id}" ${group?.eventId === e.id ? 'selected' : ''}>${e.name} (${e.category}) - Limit: ${eventHouseLimit(fest, e, 'group')}${e.maxParticipants ? `, max ${e.maxParticipants} members` : ''}</option>`).join('')}
+                ${groupEvents.map(e => `<option value="${e.id}" ${group?.eventId === e.id ? 'selected' : ''}>${e.name} (${e.category}) [${e.type === 'offStage' ? 'Off-Stage' : 'On-Stage'}] - Limit: ${eventHouseLimit(fest, e, 'group')}${e.maxParticipants ? `, max ${e.maxParticipants} members` : ''}</option>`).join('')}
             </select>
         </div>
         <div id="grp-validation" class="small mb-2"></div>
@@ -1447,7 +1558,7 @@ window.deleteGroup = async function(groupId) {
     }
 };
 
-// --- 6. ROSTER SUMMARY TAB ---
+// --- 7. ROSTER SUMMARY TAB (WITH STAGE TOGGLE) ---
 
 function renderRosterSummaryTab(fest, house) {
     const container = document.getElementById('tab-view-summary');
@@ -1544,20 +1655,33 @@ function renderRosterSummaryTab(fest, house) {
         <div class="tab-content border rounded p-2 p-md-3 bg-white">
             <!-- 1. EVENT-WISE ROSTER TAB -->
             <div class="tab-pane fade show active" id="subtab-roster-events">
-                <div class="row g-2 mb-3">
+                <!-- Multi-filter bar: Stage buttons, Category, Search -->
+                <div class="row g-2 mb-3 align-items-end">
                     <div class="col-12 col-md-5">
-                        <input id="roster-event-search" type="search" class="form-control form-control-sm" placeholder="Search event, category, stage...">
+                        <label class="small fw-semibold mb-1 d-block" style="font-size: 0.75rem;">Stage Scope</label>
+                        <div class="btn-group stage-btn-group w-100 shadow-xs" role="group" id="roster-stage-filter-group">
+                            <input type="radio" class="btn-check" name="roster-stage-filter" id="roster-stage-all" value="all" checked autocomplete="off">
+                            <label class="btn btn-outline-dark" for="roster-stage-all"><i class="fas fa-layer-group me-1"></i>All</label>
+
+                            <input type="radio" class="btn-check" name="roster-stage-filter" id="roster-stage-on" value="onStage" autocomplete="off">
+                            <label class="btn btn-outline-primary" for="roster-stage-on"><i class="fas fa-microphone-lines me-1"></i>On-Stage</label>
+
+                            <input type="radio" class="btn-check" name="roster-stage-filter" id="roster-stage-off" value="offStage" autocomplete="off">
+                            <label class="btn btn-outline-success" for="roster-stage-off"><i class="fas fa-palette me-1"></i>Off-Stage</label>
+                        </div>
                     </div>
-                    <div class="col-7 col-md-4">
+
+                    <div class="col-6 col-md-3">
+                        <label class="small fw-semibold mb-1" style="font-size: 0.75rem;">Category</label>
                         <select id="roster-event-cat" class="form-select form-select-sm">
                             <option value="all">All Categories</option>
                             ${[...new Set(events.map(e => e.category || 'General'))].map(c => `<option value="${c}">${c}</option>`).join('')}
                         </select>
                     </div>
-                    <div class="col-5 col-md-3 text-end">
-                        <span class="badge bg-light text-dark border p-2 w-100" id="roster-event-counter" style="font-size: 0.75rem;">
-                            ${events.length} Events
-                        </span>
+
+                    <div class="col-6 col-md-4">
+                        <label class="small fw-semibold mb-1" style="font-size: 0.75rem;">Search Event</label>
+                        <input id="roster-event-search" type="search" class="form-control form-control-sm" placeholder="Search event, stage...">
                     </div>
                 </div>
 
@@ -1565,8 +1689,8 @@ function renderRosterSummaryTab(fest, house) {
                     <table class="table table-sm table-hover align-middle mb-0" id="roster-events-table">
                         <thead class="table-light sticky-top">
                             <tr>
-                                <th style="min-width: 140px;">Event</th>
-                                <th style="width: 60px;">Type</th>
+                                <th style="min-width: 150px;">Event</th>
+                                <th style="width: 80px;">Scope</th>
                                 <th class="text-center" style="width: 75px;">Capacity</th>
                                 <th style="min-width: 180px;">Enrolled Roster</th>
                             </tr>
@@ -1574,6 +1698,8 @@ function renderRosterSummaryTab(fest, house) {
                         <tbody id="roster-events-body">
                             ${eventSummaries.map(item => {
                                 const ev = item.event;
+                                const isOffStage = ev.type === 'offStage';
+
                                 const badges = item.participants.map(p => {
                                     if (p.isTeam) {
                                         return `
@@ -1598,19 +1724,29 @@ function renderRosterSummaryTab(fest, house) {
                                 return `
                                     <tr class="${item.isOver ? 'table-danger' : (item.isFilled ? 'table-success-subtle' : '')}"
                                         data-event-name="${`${ev.name.toLowerCase()} ${ev.category || ''} ${ev.stage || ''}`}"
-                                        data-event-category="${ev.category || 'General'}">
+                                        data-event-category="${ev.category || 'General'}"
+                                        data-event-stage="${isOffStage ? 'offStage' : 'onStage'}">
                                         <td>
-                                            <strong class="text-dark d-block text-truncate" style="max-width: 160px;">${ev.name}</strong>
-                                            <div class="small text-muted" style="font-size: 0.7rem;">${ev.category || 'General'} &bull; ${ev.stage || 'Main Stage'}</div>
+                                            <div class="d-flex align-items-center gap-1">
+                                                <i class="fas ${isOffStage ? 'fa-palette text-success' : 'fa-microphone-lines text-primary'} me-1" style="font-size: 0.85rem;"></i>
+                                                <strong class="text-dark d-block text-truncate" style="max-width: 170px;">${ev.name}</strong>
+                                            </div>
+                                            <div class="small text-muted mt-1" style="font-size: 0.7rem;">
+                                                <span class="badge bg-light text-secondary border py-0 px-1 me-1">${ev.category || 'General'}</span>
+                                                <span class="badge bg-light text-muted border py-0 px-1">${ev.stage || 'Main Stage'}</span>
+                                            </div>
                                         </td>
                                         <td>
-                                            <span class="badge ${ev.isGroupEvent ? 'bg-info' : 'bg-secondary'}" style="font-size: 0.68rem;">
-                                                ${ev.isGroupEvent ? 'Group' : 'Solo'}
-                                            </span>
+                                            <div class="d-flex flex-column gap-1">
+                                                ${getStageBadgeMarkup(isOffStage)}
+                                                <span class="badge ${ev.isGroupEvent ? 'bg-info-subtle text-info-emphasis border border-info' : 'bg-secondary-subtle text-secondary border'}" style="font-size: 0.65rem;">
+                                                    <i class="fas ${ev.isGroupEvent ? 'fa-users' : 'fa-user'} me-1"></i>${ev.isGroupEvent ? 'Group' : 'Solo'}
+                                                </span>
+                                            </div>
                                         </td>
                                         <td class="text-center">
                                             <span class="badge ${item.isOver ? 'bg-danger' : (item.isFilled ? 'bg-success' : 'bg-light text-dark border')}" style="font-size: 0.72rem;">
-                                                ${item.count} / ${item.limit}
+                                                ${item.count} /${item.limit}
                                             </span>
                                         </td>
                                         <td>${badges}</td>
@@ -1637,7 +1773,8 @@ function renderRosterSummaryTab(fest, house) {
                         <tbody>
                             ${registrations.map(r => {
                                 const student = state.students.find(s => s.id === r.studentId);
-                                const enrolledEventNames = (r.events || []).map(id => events.find(e => e.id === id)?.name).filter(Boolean);
+                                const enrolledEvents = (r.events || []).map(id => events.find(e => e.id === id)).filter(Boolean);
+                                
                                 return `
                                     <tr>
                                         <td>
@@ -1648,7 +1785,13 @@ function renderRosterSummaryTab(fest, house) {
                                         <td class="text-center"><strong>${r.events?.length || 0}</strong></td>
                                         <td>
                                             <div class="d-flex flex-wrap gap-1">
-                                                ${enrolledEventNames.map(name => `<span class="badge bg-light text-dark border" style="font-size: 0.7rem;">${name}</span>`).join('') || '<span class="text-muted small fst-italic">None</span>'}
+                                                ${enrolledEvents.map(ev => `
+                                                    <span class="badge border py-1 px-2 d-inline-flex align-items-center gap-1 shadow-xs" 
+                                                          style="background: #fff; font-size: 0.7rem;">
+                                                        <i class="fas ${ev.type === 'offStage' ? 'fa-palette text-success' : 'fa-microphone-lines text-primary'}"></i>
+                                                        <span class="text-dark">${ev.name}</span>
+                                                    </span>
+                                                `).join('') || '<span class="text-muted small fst-italic">None</span>'}
                                             </div>
                                         </td>
                                     </tr>
@@ -1662,27 +1805,36 @@ function renderRosterSummaryTab(fest, house) {
             <!-- 3. LIVE STATUS CARDS TAB -->
             <div class="tab-pane fade" id="subtab-roster-status">
                 <div class="row g-2">
-                    ${eventSummaries.map(item => `
-                        <div class="col-12 col-md-6 col-xl-4">
-                            <div class="border rounded p-2 p-md-3 h-100 shadow-sm ${item.completed ? 'border-success bg-success-subtle' : 'border-warning bg-warning-subtle'}">
-                                <div class="d-flex justify-content-between align-items-start gap-1">
-                                    <div class="text-truncate me-1">
-                                        <strong class="text-dark d-block text-truncate" style="font-size: 0.85rem;">${item.event.name}</strong>
-                                        <div class="text-muted" style="font-size: 0.72rem;">${item.event.category || 'General'} &bull; ${item.event.stage || stages[0]}</div>
+                    ${eventSummaries.map(item => {
+                        const isOffStage = item.event.type === 'offStage';
+                        return `
+                            <div class="col-12 col-md-6 col-xl-4">
+                                <div class="border rounded p-2 p-md-3 h-100 shadow-sm ${item.completed ? 'border-success bg-success-subtle' : 'border-warning bg-warning-subtle'}">
+                                    <div class="d-flex justify-content-between align-items-start gap-1">
+                                        <div class="text-truncate me-1">
+                                            <div class="d-flex align-items-center gap-1">
+                                                <i class="fas ${isOffStage ? 'fa-palette text-success' : 'fa-microphone-lines text-primary'}"></i>
+                                                <strong class="text-dark d-block text-truncate" style="font-size: 0.85rem;">${item.event.name}</strong>
+                                            </div>
+                                            <div class="text-muted mt-1" style="font-size: 0.72rem;">
+                                                ${getStageBadgeMarkup(isOffStage)}
+                                                <span class="ms-1">${item.event.category || 'General'} &bull; ${item.event.stage || stages[0]}</span>
+                                            </div>
+                                        </div>
+                                        <span class="badge ${item.completed ? 'bg-success' : 'bg-warning text-dark'} flex-shrink-0" style="font-size: 0.68rem;">
+                                            ${item.completed ? 'Entered' : 'Pending'}
+                                        </span>
                                     </div>
-                                    <span class="badge ${item.completed ? 'bg-success' : 'bg-warning text-dark'} flex-shrink-0" style="font-size: 0.68rem;">
-                                        ${item.completed ? 'Entered' : 'Pending'}
-                                    </span>
-                                </div>
-                                <div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top" style="font-size: 0.75rem;">
-                                    <span class="fw-semibold">${item.participantTotal} Member(s)</span>
-                                    <span class="badge ${item.isOver ? 'bg-danger' : (item.isFilled ? 'bg-success' : 'bg-secondary')}">
-                                        ${item.count} / ${item.limit} ${item.event.isGroupEvent ? 'Teams' : 'Entries'}
-                                    </span>
+                                    <div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top" style="font-size: 0.75rem;">
+                                        <span class="fw-semibold">${item.participantTotal} Member(s)</span>
+                                        <span class="badge ${item.isOver ? 'bg-danger' : (item.isFilled ? 'bg-success' : 'bg-secondary')}">
+                                            ${item.count} / ${item.limit}${item.event.isGroupEvent ? 'Teams' : 'Entries'}
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    `).join('') || '<div class="col-12 text-muted text-center p-3 small">No events to preview.</div>'}
+                        `;
+                    }).join('') || '<div class="col-12 text-muted text-center p-3 small">No events to preview.</div>'}
                 </div>
             </div>
         </div>
@@ -1690,24 +1842,24 @@ function renderRosterSummaryTab(fest, house) {
 
     const searchInput = container.querySelector('#roster-event-search');
     const catSelect = container.querySelector('#roster-event-cat');
-    const counter = container.querySelector('#roster-event-counter');
 
     function filterEventsTable() {
         const query = searchInput.value.trim().toLowerCase();
         const cat = catSelect.value;
-        let visibleCount = 0;
+        const stage = container.querySelector('input[name="roster-stage-filter"]:checked')?.value || 'all';
 
         container.querySelectorAll('#roster-events-body tr').forEach(row => {
             const matchesSearch = !query || row.dataset.eventName.includes(query);
             const matchesCat = cat === 'all' || row.dataset.eventCategory === cat;
-            const isVisible = matchesSearch && matchesCat;
+            const matchesStage = stage === 'all' || row.dataset.eventStage === stage;
+            const isVisible = matchesSearch && matchesCat && matchesStage;
             row.classList.toggle('d-none', !isVisible);
-            if (isVisible) visibleCount++;
         });
-
-        if (counter) counter.textContent = `${visibleCount} Events`;
     }
 
+    container.querySelectorAll('input[name="roster-stage-filter"]').forEach(radio => {
+        radio.addEventListener('change', filterEventsTable);
+    });
     searchInput.addEventListener('input', filterEventsTable);
     catSelect.addEventListener('change', filterEventsTable);
 
@@ -1724,7 +1876,7 @@ function renderRosterSummaryTab(fest, house) {
             return `
                 <tr>
                     <td style="text-align: center;">${idx + 1}</td>
-                    <td><strong>${ev.name}</strong><br><small>${ev.category || 'General'} | ${ev.stage || 'Main Stage'}</small></td>
+                    <td><strong>${ev.name}</strong><br><small>${ev.category || 'General'} | ${ev.stage || 'Main Stage'} [${ev.type === 'offStage' ? 'Off-Stage' : 'On-Stage'}]</small></td>
                     <td>${ev.isGroupEvent ? 'Group' : 'Solo'}</td>
                     <td style="text-align: center;">${item.count} / ${item.limit}</td>
                     <td>${participantsText}</td>
