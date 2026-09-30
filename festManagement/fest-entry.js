@@ -897,6 +897,12 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
     const limit = eventHouseLimit(fest, event, 'solo');
     const isOffStage = event.type === 'offStage';
 
+    // 1. Resolve exact limit for the active event's stage type
+    const maxOnStage = fest.settings?.maxOnStageSoloEvents ?? 2;
+    const maxOffStage = fest.settings?.maxOffStageSoloEvents ?? 1;
+    const activeStageLimit = isOffStage ? maxOffStage : maxOnStage;
+    const stageName = isOffStage ? 'Off-Stage' : 'On-Stage';
+
     const existingRegistrations = state.festRegistrations.filter(r => 
         r.festId === fest.id && 
         r.houseId === houseId && 
@@ -906,8 +912,6 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
     const initialEnrolledIds = new Set(existingRegistrations.map(r => r.studentId));
     const studentsToRemoveIds = new Set();
     const studentsToAddIds = new Set();
-
-    const studentMaxLimit = fest.studentSoloLimit || fest.maxEventsPerStudent || fest.studentEventLimit || 3;
 
     const eligibleStudents = houseStudents.filter(student => {
         if (initialEnrolledIds.has(student.id)) return false;
@@ -928,6 +932,7 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
                 <div class="small text-muted mt-1" style="font-size: 0.74rem;">
                     ${getStageBadgeMarkup(isOffStage)}
                     <span class="ms-1">${event.category || 'General'} &bull; ${event.stage || 'Main Stage'}</span>
+                    <span class="badge bg-secondary-subtle text-dark border ms-1">Student Max: <strong>${activeStageLimit} ${stageName}</strong></span>
                 </div>
             </div>
             <div class="d-flex gap-1">
@@ -975,9 +980,16 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
     const slotsBadge = document.getElementById('open-slots-count');
     const totalCountSpan = document.getElementById('modal-total-count');
 
-    function getStudentRegisteredCount(studentId) {
+    // 2. Count registered events MATCHING the active event's stage type (On-Stage vs Off-Stage)
+    function getStudentStageRegisteredCount(studentId) {
         const reg = state.festRegistrations.find(r => r.id === `${fest.id}_${studentId}`);
-        return (reg?.events || []).length;
+        const regEventIds = reg?.events || [];
+        
+        return regEventIds.filter(id => {
+            const ev = state.festEvents.find(e => e.id === id);
+            if (!ev || ev.isGroupEvent) return false;
+            return isOffStage ? (ev.type === 'offStage') : (ev.type !== 'offStage');
+        }).length;
     }
 
     function getEventCountBadge(current, max) {
@@ -994,8 +1006,8 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
         }
 
         return `
-            <span class="badge ${colorClass} px-2 py-1 fw-bold" style="font-size: 0.72rem;">
-                <i class="fas fa-layer-group me-1 opacity-75"></i>${current}/${max}${statusTag}
+            <span class="badge ${colorClass} px-2 py-1 fw-bold" style="font-size: 0.72rem;" title="${current}/${max} ${stageName} Solo Events">
+                <i class="fas ${isOffStage ? 'fa-palette' : 'fa-microphone-lines'} me-1 opacity-75"></i>${current}/${max}${statusTag}
             </span>
         `;
     }
@@ -1027,7 +1039,7 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
         if (activeEnrolled.length > 0) {
             html += `<div class="small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.65rem; letter-spacing: 0.5px;">Currently Registered</div>`;
             html += activeEnrolled.map(student => {
-                const count = getStudentRegisteredCount(student.id);
+                const count = getStudentStageRegisteredCount(student.id);
                 return `
                     <div class="d-flex justify-content-between align-items-center bg-white border border-start-3 border-start-success rounded p-1 px-2 mb-1 shadow-sm small">
                         <div class="text-truncate me-1" style="font-size: 0.78rem;">
@@ -1035,7 +1047,7 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
                             <div class="text-muted" style="font-size: 0.68rem;">Adm: ${student.admissionNumber || 'N/A'}</div>
                         </div>
                         <div class="d-flex align-items-center gap-1 flex-shrink-0">
-                            ${getEventCountBadge(count, studentMaxLimit)}
+                            ${getEventCountBadge(count, activeStageLimit)}
                             <button type="button" class="btn btn-xs btn-outline-danger modal-remove-enrolled-btn py-0 px-2" data-id="${student.id}" title="Remove from this event">
                                 <i class="fas fa-user-minus"></i>
                             </button>
@@ -1048,7 +1060,7 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
         if (newQueued.length > 0) {
             html += `<div class="small fw-bold text-primary text-uppercase mt-2 mb-1" style="font-size: 0.65rem; letter-spacing: 0.5px;">Pending Addition (+${newQueued.length})</div>`;
             html += newQueued.map(student => {
-                const count = getStudentRegisteredCount(student.id) + 1;
+                const count = getStudentStageRegisteredCount(student.id) + 1;
                 return `
                     <div class="d-flex justify-content-between align-items-center bg-primary-subtle border border-primary rounded p-1 px-2 mb-1 shadow-sm small">
                         <div class="text-truncate me-1" style="font-size: 0.78rem;">
@@ -1056,7 +1068,7 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
                             <div class="text-muted" style="font-size: 0.68rem;">Adm: ${student.admissionNumber || 'N/A'}</div>
                         </div>
                         <div class="d-flex align-items-center gap-1 flex-shrink-0">
-                            ${getEventCountBadge(count, studentMaxLimit)}
+                            ${getEventCountBadge(count, activeStageLimit)}
                             <button type="button" class="btn btn-xs btn-outline-danger modal-remove-new-btn py-0 px-2" data-id="${student.id}" title="Cancel addition">&times;</button>
                         </div>
                     </div>
@@ -1085,8 +1097,9 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
 
         availableContainer.innerHTML = filtered.map(student => {
             const isChecked = studentsToAddIds.has(student.id);
-            const currentCount = getStudentRegisteredCount(student.id);
-            const isFull = currentCount >= studentMaxLimit;
+            // Evaluates count strictly against On-Stage or Off-Stage quota
+            const currentStageCount = getStudentStageRegisteredCount(student.id);
+            const isFull = currentStageCount >= activeStageLimit;
             const disableCheck = !isChecked && (effectiveSlots <= 0 || isFull);
 
             return `
@@ -1100,7 +1113,7 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
                     <div class="flex-grow-1 min-w-0">
                         <div class="d-flex align-items-center justify-content-between mb-1">
                             <strong class="text-truncate text-dark" style="font-size: 0.83rem;">${student.name}</strong>
-                            ${getEventCountBadge(currentCount, studentMaxLimit)}
+                            ${getEventCountBadge(currentStageCount, activeStageLimit)}
                         </div>
                         <div class="text-muted text-truncate" style="font-size: 0.7rem;">
                             Adm: ${student.admissionNumber || 'N/A'} &bull; ${getStudentClassName(student.classId, student.division)}
