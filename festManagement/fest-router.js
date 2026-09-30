@@ -2,8 +2,10 @@
 // --- FEST ROUTING & PORTAL LINK UTILITIES (fest-router.js) ---
 // =========================================================================
 
-import { systemContext } from "./firebase-config.js";
 import { openQrScannerModal } from "./fest-scanner.js";
+import { db, systemContext, setActiveYear } from "./firebase-config.js";
+import { doc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
 
 /**
  * Polls until a named global or imported function exists on window.
@@ -57,95 +59,119 @@ window.copyJudgeScannerLink = copyJudgeScannerLink;
 
 // --- CENTRAL HASH ROUTE DISPATCHER ---
 
+
 export async function handleHashRoute() {
     const hash = window.location.hash || '';
-    // Handle short token route: #j/TOKEN
-    if (hash.startsWith('#j/')) {
-        // Strip prefix and split by slash
-        const rawPath = hash.replace('#j/', '').trim();
-        const parts = rawPath.split('/').filter(Boolean);
 
-        let targetYearId = '';
-        let targetToken = '';
+    // =========================================================================
+    // 1. ROUTE: #j/ (Short QR Token for Judges)
+    // Supports #j/YEAR_ID/TOKEN (e.g., #j/2026-27/A7X) and #j/TOKEN (e.g., #j/A7X)
+    // =========================================================================
+    // =========================================================================
+// ROUTE: #j/ (Short Token Handler)
+// =========================================================================
+if (hash.startsWith('#j/')) {
+    const rawPath = hash.replace('#j/', '').trim();
+    const parts = rawPath.split('/').filter(Boolean);
 
-        if (parts.length >= 2) {
-            // Format: #j/2026-27/A7X
-            targetYearId = decodeURIComponent(parts[0]);
-            targetToken = decodeURIComponent(parts[1]).toUpperCase();
-        } else if (parts.length === 1) {
-            // Legacy / Short Format: #j/A7X
-            targetToken = decodeURIComponent(parts[0]).toUpperCase();
-            targetYearId = systemContext?.activeYearId || localStorage.getItem('activeYearId') || '';
-        }
+    let targetYearId = '';
+    let targetToken = '';
 
-        if (!targetYearId) {
-            window.showAlert?.('Academic year not identified in link.', 'danger');
+    if (parts.length >= 2) {
+        targetYearId = decodeURIComponent(parts[0]);
+        targetToken = decodeURIComponent(parts[1]).toUpperCase();
+    } else if (parts.length === 1) {
+        targetToken = decodeURIComponent(parts[0]).toUpperCase();
+        targetYearId = systemContext?.activeYearId || localStorage.getItem('activeYearId') || '';
+    }
+
+    if (!targetYearId) {
+        window.showAlert?.('Academic year not identified in link.', 'danger');
+        return;
+    }
+
+    if (typeof setActiveYear === 'function') {
+        setActiveYear(targetYearId);
+    } else {
+        if (systemContext) systemContext.activeYearId = targetYearId;
+        localStorage.setItem('activeYearId', targetYearId);
+    }
+
+    try {
+        const tokenRef = doc(db, `academicYears/${targetYearId}/festTokens`, targetToken);
+        const tokenSnap = await getDoc(tokenRef);
+
+        if (!tokenSnap.exists()) {
+            window.showAlert?.(`Invalid or expired token: ${targetToken}`, 'danger');
             return;
         }
 
-        // Anchor active academic year context immediately
-        if (typeof setActiveYear === 'function') {
-            setActiveYear(targetYearId);
-        } else {
-            if (systemContext) systemContext.activeYearId = targetYearId;
-            localStorage.setItem('activeYearId', targetYearId);
-        }
+        const tokenData = tokenSnap.data();
+        const resolvedYearId = tokenData.yearId || targetYearId;
+        const festId = tokenData.festId || '';
+        const eventId = tokenData.eventId || '';
+        const judgeCode = tokenData.judgeCode || '';
+        const judgeName = tokenData.judgeName || '';
 
-        try {
-            const tokenRef = doc(db, `academicYears/${targetYearId}/festTokens`, targetToken);
-            const tokenSnap = await getDoc(tokenRef);
+        // Build URL params including both code and judgeName
+        const codeParam = judgeCode ? `&code=${encodeURIComponent(judgeCode)}` : '';
+        const nameParam = judgeName ? `&judgeName=${encodeURIComponent(judgeName)}` : '';
 
-            if (tokenSnap.exists()) {
-                const tokenData = tokenSnap.data();
-                const resolvedYearId = tokenData.yearId || targetYearId;
-                const festId = tokenData.festId || '';
-                const eventId = tokenData.eventId || '';
-                const judgeCode = tokenData.judgeCode || '';
-                const codeParam = judgeCode ? `&code=${encodeURIComponent(judgeCode)}` : '';
+        // Seamless routing into fest-judge with Judge Name attached
+        const targetHash = `#fest-judge?year=${encodeURIComponent(resolvedYearId)}&fest=${encodeURIComponent(festId)}&event=${encodeURIComponent(eventId)}${codeParam}${nameParam}`;
 
-                // Seamlessly routes into full judging mode
-                window.location.hash = `#fest-judge?year=${encodeURIComponent(resolvedYearId)}&fest=${encodeURIComponent(festId)}&event=${encodeURIComponent(eventId)}${codeParam}`;
+        window.location.replace(targetHash);
 
-                if (typeof window.checkForJudgingMode === 'function') {
-                    await window.checkForJudgingMode();
-                } else if (typeof window.waitForRouteHandler === 'function') {
-                    const handler = await window.waitForRouteHandler('checkForJudgingMode');
-                    if (handler) await handler();
-                }
-                return;
-            } else {
-                window.showAlert?.(`Invalid or expired token: ${targetToken}`, 'danger');
-            }
-        } catch (err) {
-            console.error("Token resolution error:", err);
-            window.showAlert?.('Failed to resolve event token from database.', 'danger');
+        if (typeof window.checkForJudgingMode === 'function') {
+            await window.checkForJudgingMode();
         }
         return;
+    } catch (err) {
+        console.error("Token resolution error:", err);
+        window.showAlert?.('Failed to resolve event token from database.', 'danger');
+        return;
     }
-    // Route: #fest-scan
+}
+
+    // =========================================================================
+    // 2. ROUTE: #fest-scan (Admin Camera Result Scanner)
+    // =========================================================================
     if (hash.startsWith('#fest-scan')) {
-        openQrScannerModal();
+        if (typeof window.openQrScannerModal === 'function') {
+            window.openQrScannerModal();
+        } else if (typeof openResultScannerModal === 'function') {
+            openResultScannerModal();
+        }
         return;
     }
 
-    // Route: #fest-judge
+    // =========================================================================
+    // 3. ROUTE: #fest-judge (Judges Score Entry Screen)
+    // =========================================================================
     if (hash.startsWith('#fest-judge')) {
-        const handler = await waitForRouteHandler('checkForJudgingMode');
-        if (handler) await handler();
+        if (typeof window.checkForJudgingMode === 'function') {
+            await window.checkForJudgingMode();
+        }
         return;
     }
 
-    // Route: #fest-entry
+    // =========================================================================
+    // 4. ROUTE: #fest-entry (House Captain Portal)
+    // =========================================================================
     if (hash.startsWith('#fest-entry')) {
-        const handler = await waitForRouteHandler('checkForDataEntryMode');
-        if (handler) await handler();
+        if (typeof window.checkForDataEntryMode === 'function') {
+            await window.checkForDataEntryMode();
+        }
         return;
     }
 
-    // Route: #fest-admin or fallback
+    // =========================================================================
+    // 5. ROUTE: #fest-admin or Default Fallback
+    // =========================================================================
     if (hash.startsWith('#fest-admin') || !hash || hash === '#') {
-        const handler = await waitForRouteHandler('checkForAdminMode');
-        if (handler) await handler();
+        if (typeof window.checkForAdminMode === 'function') {
+            await window.checkForAdminMode();
+        }
         return;
     }
 }

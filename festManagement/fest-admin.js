@@ -1398,11 +1398,19 @@ function renderParticipantsTab() {
     renderSubTabHouseAllocation();
 }
 
+// =========================================================================
+// --- SUB-TAB: GROUP PARTICIPATION (ADMIN) ---
+// =========================================================================
+
+let isAdminSavingGroup = false;
+
 function renderSubTabGroups(isRegistrationOpen) {
     const container = document.getElementById('subtab-groups');
+    if (!container) return;
+
     const fest = state.managingFest;
     const houses = state.festHouses;
-    const events = state.festEvents.filter(e => e.festId === fest.id && e.isGroupEvent);
+    const events = state.festEvents.filter(e => e.festId === fest.id && e.isGroupEvent && e.cancelled !== true);
     const categories = ['General', ...(fest.settings?.categories?.map(c => c.name) || [])];
     const groups = state.festGroups.filter(g => g.festId === fest.id);
 
@@ -1410,79 +1418,357 @@ function renderSubTabGroups(isRegistrationOpen) {
         <div class="ui-card mb-3">
             <h6 class="fw-bold"><i class="fas fa-people-group me-2 text-primary"></i>Create Group Participation</h6>
             <div class="row g-2 align-items-end">
-                <div class="col-md-3"><label class="small fw-bold">House</label><select id="admin-group-house" class="form-select form-select-sm"><option value="">Choose House</option>${houses.map(h => `<option value="${h.id}">${h.name}</option>`).join('')}</select></div>
-                <div class="col-md-3"><label class="small fw-bold">Group Name</label><input id="admin-group-name" class="form-control form-control-sm" placeholder="Team name"></div>
-                <div class="col-md-2"><label class="small fw-bold">Category</label><select id="admin-group-category" class="form-select form-select-sm">${categories.map(c => `<option value="${c}">${c}</option>`).join('')}</select></div>
-                <div class="col-md-4"><label class="small fw-bold">Group Event</label><select id="admin-group-event" class="form-select form-select-sm"><option value="">Choose Event</option>${events.map(e => `<option value="${e.id}" data-category="${e.category}">${e.name} (${e.category})</option>`).join('')}</select></div>
+                <div class="col-md-3">
+                    <label class="small fw-bold" for="admin-group-house">House</label>
+                    <select id="admin-group-house" class="form-select form-select-sm">
+                        <option value="">Choose House</option>
+                        ${houses.map(h => `<option value="${h.id}">${h.name}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="small fw-bold" for="admin-group-event">Group Event</label>
+                    <select id="admin-group-event" class="form-select form-select-sm">
+                        <option value="">Choose Event</option>
+                        ${events.map(e => `
+                            <option value="${e.id}" data-category="${e.category || 'General'}" data-gender="${e.gender || 'Common'}" data-max="${e.maxParticipants || ''}">
+                                ${e.name} (${e.category || 'General'}) [${e.type === 'offStage' ? 'Off-Stage' : 'On-Stage'}]
+                            </option>
+                        `).join('')}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="small fw-bold" for="admin-group-name">Group Name <span class="text-muted fw-normal">(Optional)</span></label>
+                    <input id="admin-group-name" class="form-control form-control-sm" placeholder="Auto-generated if blank">
+                </div>
+                <div class="col-md-3">
+                    <label class="small fw-bold" for="admin-group-category">Category</label>
+                    <select id="admin-group-category" class="form-select form-select-sm">
+                        ${categories.map(c => `<option value="${c}">${c}</option>`).join('')}
+                    </select>
+                </div>
             </div>
-            <div class="row g-2 mt-1">
-                <div class="col-md-8"><label class="small fw-bold">Participants</label><select id="admin-group-members" class="form-select form-select-sm" multiple size="5"><option value="">Choose a house first</option></select><small class="text-muted">Use Ctrl/Cmd to select multiple students.</small></div>
-                <div class="col-md-4"><label class="small fw-bold">Captain</label><select id="admin-group-captain" class="form-select form-select-sm"><option value="">Choose participants first</option></select><button class="btn btn-success btn-sm w-100 mt-2" onclick="window.saveAdminGroup()" ${!isRegistrationOpen ? 'disabled' : ''}><i class="fas fa-save me-1"></i>Save Group</button></div>
+
+            <div class="row g-2 mt-2">
+                <div class="col-md-8">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label class="small fw-bold mb-0" for="admin-group-members">Participants</label>
+                        <span class="small text-muted" id="admin-group-limit-info" style="font-size: 0.72rem;"></span>
+                    </div>
+                    <select id="admin-group-members" class="form-select form-select-sm" multiple size="6">
+                        <option value="">Choose a house and event first</option>
+                    </select>
+                    <small class="text-muted" style="font-size: 0.72rem;">Hold Ctrl (Windows) / Cmd (Mac) to select multiple students.</small>
+                </div>
+                <div class="col-md-4 d-flex flex-column justify-content-between">
+                    <div>
+                        <label class="small fw-bold mb-1" for="admin-group-captain">Captain</label>
+                        <select id="admin-group-captain" class="form-select form-select-sm">
+                            <option value="">Choose participants first</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-success btn-sm w-100 mt-2 py-2 fw-bold" id="admin-save-group-btn" onclick="window.saveAdminGroup()" ${!isRegistrationOpen ? 'disabled' : ''}>
+                        <i class="fas fa-save me-1"></i>Save Group Team
+                    </button>
+                </div>
             </div>
         </div>
-        <div class="table-responsive border rounded"><table class="table table-sm table-hover align-middle mb-0"><thead class="table-light"><tr><th>Group</th><th>House</th><th>Category</th><th>Event</th><th>Participants</th></tr></thead><tbody>${groups.length ? groups.map(group => { const house = houses.find(h => h.id === group.houseId); const event = state.festEvents.find(e => e.id === group.eventId); return `<tr><td><strong>${group.name}</strong></td><td>${house?.name || 'N/A'}</td><td>${group.category || event?.category || 'General'}</td><td>${event?.name || 'N/A'}</td><td>${group.members?.map(m => `${state.students.find(s => s.id === m.studentId)?.name || m.studentId}${m.role === 'Captain' ? ' (Captain)' : ''}`).join(', ') || 'None'}</td></tr>`; }).join('') : '<tr><td colspan="5" class="text-center text-muted p-4">No group participants added.</td></tr>'}</tbody></table></div>
+
+        <!-- Groups Table with Delete Option -->
+        <div class="table-responsive border rounded bg-white" style="max-height: 480px; overflow-y: auto;">
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light sticky-top">
+                    <tr>
+                        <th style="min-width: 140px;">Group Name</th>
+                        <th style="min-width: 110px;">House</th>
+                        <th>Category</th>
+                        <th style="min-width: 130px;">Event</th>
+                        <th style="min-width: 250px;">Participants</th>
+                        <th class="text-end" style="width: 80px;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${groups.length ? groups.map(group => {
+                        const house = houses.find(h => h.id === group.houseId);
+                        const event = state.festEvents.find(e => e.id === group.eventId);
+                        const memberPills = (group.members || []).map(m => {
+                            const st = state.students.find(s => s.id === m.studentId);
+                            const name = st?.name || m.studentId;
+                            const isCap = m.role === 'Captain';
+                            return `
+                                <span class="badge ${isCap ? 'bg-warning text-dark border border-warning' : 'bg-light text-dark border'} me-1 mb-1 p-1">
+                                    ${isCap ? '<i class="fas fa-crown me-1 text-dark"></i>' : ''}${name}
+                                </span>
+                            `;
+                        }).join('');
+
+                        return `
+                            <tr>
+                                <td><strong class="text-primary">${group.name}</strong></td>
+                                <td>
+                                    ${house ? `<span class="badge bg-light text-dark border"><span class="color-dot-display me-1" style="background-color:${house.color || '#333'}"></span>${house.name}</span>` : '<span class="text-muted">N/A</span>'}
+                                </td>
+                                <td><span class="badge bg-secondary-subtle text-secondary">${group.category || event?.category || 'General'}</span></td>
+                                <td>
+                                    <strong>${event?.name || 'N/A'}</strong>
+                                    <div class="text-muted" style="font-size: 0.7rem;">${event?.type === 'offStage' ? 'Off-Stage' : 'On-Stage'}</div>
+                                </td>
+                                <td><div class="d-flex flex-wrap">${memberPills || '<span class="text-muted fst-italic">None</span>'}</div></td>
+                                <td class="text-end">
+                                    <button class="btn btn-xs btn-outline-danger" onclick="window.deleteAdminGroup('${group.id}')" title="Delete this group" ${!isRegistrationOpen ? 'disabled' : ''}>
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                    }).join('') : '<tr><td colspan="6" class="text-center text-muted p-4">No group teams formed yet.</td></tr>'}
+                </tbody>
+            </table>
+        </div>
     `;
 
     const housePicker = document.getElementById('admin-group-house');
+    const eventPicker = document.getElementById('admin-group-event');
+    const categoryPicker = document.getElementById('admin-group-category');
     const memberPicker = document.getElementById('admin-group-members');
     const captainPicker = document.getElementById('admin-group-captain');
+    const limitInfo = document.getElementById('admin-group-limit-info');
+
     const refreshMembers = () => {
-        const students = state.students.filter(s => s.houseId === housePicker.value);
-        memberPicker.innerHTML = students.map(s => `<option value="${s.id}">${s.name} (${s.admissionNumber})</option>`).join('') || '<option value="">No students in this house</option>';
-        captainPicker.innerHTML = '<option value="">Choose captain</option>';
+        const selectedHouseId = housePicker.value;
+        const selectedEventId = eventPicker.value;
+        const event = state.festEvents.find(e => e.id === selectedEventId);
+
+        if (event && event.category) {
+            categoryPicker.value = event.category;
+        }
+
+        if (!selectedHouseId) {
+            memberPicker.innerHTML = '<option value="">Choose a house first</option>';
+            captainPicker.innerHTML = '<option value="">Choose participants first</option>';
+            if (limitInfo) limitInfo.textContent = '';
+            return;
+        }
+
+        let students = state.students.filter(s => s.houseId === selectedHouseId);
+
+        // Filter eligible students based on event gender and category
+        if (event) {
+            students = students.filter(s => {
+                const catMatch = !event.category || event.category === 'General' || getStudentCategory(s) === event.category;
+                const genderMatch = !event.gender || event.gender === 'Common' ||
+                    (event.gender === 'Male' && s.gender === 'M') ||
+                    (event.gender === 'Female' && s.gender === 'F');
+                return catMatch && genderMatch;
+            });
+
+            if (limitInfo) {
+                const maxParts = event.maxParticipants ? `Max ${event.maxParticipants} members` : 'No size limit';
+                const houseLimit = eventHouseLimit(fest, event, 'group');
+                limitInfo.textContent = `${maxParts} | House limit: ${houseLimit} team(s)`;
+            }
+        } else if (limitInfo) {
+            limitInfo.textContent = '';
+        }
+
+        memberPicker.innerHTML = students.map(s => 
+            `<option value="${s.id}">${s.name} (${s.admissionNumber || 'N/A'}) - ${getStudentClassName(s.classId, s.division)}</option>`
+        ).join('') || '<option value="">No eligible students found in this house</option>';
+
+        captainPicker.innerHTML = '<option value="">Choose participants first</option>';
     };
+
     housePicker.addEventListener('change', refreshMembers);
+    eventPicker.addEventListener('change', refreshMembers);
+
     memberPicker.addEventListener('change', () => {
         const selected = Array.from(memberPicker.selectedOptions);
-        captainPicker.innerHTML = '<option value="">Choose captain</option>' + selected.map(o => `<option value="${o.value}">${o.textContent}</option>`).join('');
+        const previousCaptain = captainPicker.value;
+
+        if (selected.length === 0) {
+            captainPicker.innerHTML = '<option value="">Choose participants first</option>';
+            return;
+        }
+
+        captainPicker.innerHTML = selected.map((o, idx) => 
+            `<option value="${o.value}" ${o.value === previousCaptain || idx === 0 ? 'selected' : ''}>${o.textContent}</option>`
+        ).join('');
     });
 }
 
 window.saveAdminGroup = async function() {
+    if (isAdminSavingGroup) return; // Prevent double-click submission
+
     const fest = state.managingFest;
     const houseId = document.getElementById('admin-group-house').value;
-    const name = document.getElementById('admin-group-name').value.trim();
-    const category = document.getElementById('admin-group-category').value;
     const eventId = document.getElementById('admin-group-event').value;
+    const category = document.getElementById('admin-group-category').value;
+    let name = document.getElementById('admin-group-name').value.trim();
     const memberIds = Array.from(document.getElementById('admin-group-members').selectedOptions).map(o => o.value).filter(Boolean);
     const captainId = document.getElementById('admin-group-captain').value;
+    const saveBtn = document.getElementById('admin-save-group-btn');
+
     const event = state.festEvents.find(e => e.id === eventId);
-    if (!houseId || !name || !eventId || memberIds.length === 0 || !captainId) return window.showAlert('Choose house, group name, event, participants, and one captain.', 'warning');
-    if (!event?.isGroupEvent) return window.showAlert('Selected event is not a group event.', 'warning');
-    if (new Set(memberIds).size !== memberIds.length) return window.showAlert('A participant cannot be added twice to the same group.', 'warning');
-    const existingGroups = state.festGroups.filter(group => group.festId === fest.id);
-    const duplicateMember = memberIds.find(studentId => existingGroups.some(group => group.eventId === eventId && group.members?.some(member => member.studentId === studentId)));
-    if (duplicateMember) return window.showAlert('One or more participants are already registered in this event group.', 'warning');
-    if (existingGroups.some(group => group.members?.some(member => member.studentId === captainId && member.role === 'Captain'))) return window.showAlert('This student is already captain of another group.', 'warning');
-    const groupLimit = event.type === 'offStage' ? (fest.settings?.maxOffStageGroupEvents ?? 1) : (fest.settings?.maxOnStageGroupEvents ?? 2);
-    const overLimit = memberIds.find(studentId => {
-        const count = existingGroups.filter(group => group.members?.some(member => member.studentId === studentId)).filter(group => {
-            const groupEvent = state.festEvents.find(item => item.id === group.eventId);
-            return groupEvent?.type === event.type;
+    const house = state.festHouses.find(h => h.id === houseId);
+
+    if (!houseId || !eventId || memberIds.length === 0 || !captainId) {
+        return window.showAlert('Please choose a house, an event, participants, and designate one captain.', 'warning');
+    }
+    if (!event?.isGroupEvent) {
+        return window.showAlert('Selected event is not configured as a group event.', 'warning');
+    }
+
+    // Default group name if left empty
+    if (!name) {
+        const existingCount = state.festGroups.filter(g => g.festId === fest.id && g.eventId === eventId && g.houseId === houseId).length;
+        name = `${event.name} - ${house?.name || 'House'} Group ${existingCount + 1}`;
+    }
+
+    // Check duplicate members within selection
+    if (new Set(memberIds).size !== memberIds.length) {
+        return window.showAlert('A participant cannot be added twice to the same group.', 'warning');
+    }
+
+    // Max participants per team check
+    if (event.maxParticipants && memberIds.length > event.maxParticipants) {
+        return window.showAlert(`This event allows a maximum of ${event.maxParticipants} participants per team. You selected ${memberIds.length}.`, 'warning');
+    }
+
+    // House-level group count quota
+    const existingHouseTeams = state.festGroups.filter(g => g.festId === fest.id && g.eventId === eventId && g.houseId === houseId);
+    const houseTeamLimit = eventHouseLimit(fest, event, 'group');
+    if (existingHouseTeams.length >= houseTeamLimit) {
+        return window.showAlert(`This house has reached its limit of ${houseTeamLimit} group team(s) for ${event.name}.`, 'warning');
+    }
+
+    // Check if participant is already registered in another group for this event
+    const existingGroups = state.festGroups.filter(g => g.festId === fest.id);
+    const duplicateMember = memberIds.find(studentId => 
+        existingGroups.some(g => g.eventId === eventId && g.members?.some(m => m.studentId === studentId))
+    );
+    if (duplicateMember) {
+        const st = state.students.find(s => s.id === duplicateMember);
+        return window.showAlert(`${st?.name || 'A participant'} is already enrolled in another group for this event.`, 'warning');
+    }
+
+    // Check if captain is already captain of another team
+    if (existingGroups.some(g => g.members?.some(m => m.studentId === captainId && m.role === 'Captain'))) {
+        const st = state.students.find(s => s.id === captainId);
+        return window.showAlert(`${st?.name || 'Selected student'} is already serving as captain in another group team.`, 'warning');
+    }
+
+    // Stage-specific group quota check
+    const isOffStage = event.type === 'offStage';
+    const groupLimit = isOffStage ? (fest.settings?.maxOffStageGroupEvents ?? 1) : (fest.settings?.maxOnStageGroupEvents ?? 2);
+
+    const overLimitStudent = memberIds.find(studentId => {
+        const count = existingGroups.filter(g => g.members?.some(m => m.studentId === studentId)).filter(g => {
+            const ev = state.festEvents.find(item => item.id === g.eventId);
+            return isOffStage ? ev?.type === 'offStage' : ev?.type !== 'offStage';
         }).length;
         return count >= groupLimit;
     });
-    if (overLimit) return window.showAlert(`A participant already has the maximum ${event.type === 'offStage' ? 'off-stage' : 'on-stage'} group events (${groupLimit}).`, 'warning');
 
-    const groupId = `GRP_${Date.now()}`;
-    const members = memberIds.map(studentId => ({ studentId, role: studentId === captainId ? 'Captain' : 'Member' }));
+    if (overLimitStudent) {
+        const st = state.students.find(s => s.id === overLimitStudent);
+        return window.showAlert(`${st?.name || 'A student'} has reached the maximum ${isOffStage ? 'off-stage' : 'on-stage'} group limit (${groupLimit}).`, 'warning');
+    }
+
+    // Lock save button and set spinner
+    isAdminSavingGroup = true;
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>Saving...`;
+    }
+
+    const groupId = `GRP_${fest.id}_${houseId}_${eventId}_${Date.now()}`;
+    const members = memberIds.map(studentId => ({
+        studentId,
+        role: studentId === captainId ? 'Captain' : 'Member'
+    }));
+
     const batch = writeBatch(db);
-    batch.set(getScopedDoc('festGroups', groupId), { id: groupId, festId: fest.id, houseId, name, category, eventId, members, lastUpdated: serverTimestamp() });
+    batch.set(getScopedDoc('festGroups', groupId), {
+        id: groupId,
+        festId: fest.id,
+        houseId,
+        name,
+        category,
+        eventId,
+        members,
+        lastUpdated: serverTimestamp()
+    });
+
+    // Sync group event onto individual registrations
     memberIds.forEach(studentId => {
         const student = state.students.find(s => s.id === studentId);
         const regId = `${fest.id}_${studentId}`;
         const existing = state.festRegistrations.find(r => r.id === regId);
-        batch.set(getScopedDoc('festRegistrations', regId), { id: regId, festId: fest.id, studentId, studentName: student?.name || 'Student', houseId, events: [...new Set([...(existing?.events || []), eventId])], chestNo: existing?.chestNo || null, lastUpdated: serverTimestamp() }, { merge: true });
+        const mergedEvents = [...new Set([...(existing?.events || []), eventId])];
+
+        batch.set(getScopedDoc('festRegistrations', regId), {
+            id: regId,
+            festId: fest.id,
+            studentId,
+            studentName: student?.name || 'Student',
+            houseId,
+            events: mergedEvents,
+            chestNo: existing?.chestNo || null,
+            lastUpdated: serverTimestamp()
+        }, { merge: true });
     });
+
     try {
         await batch.commit();
-        await loadAllYearData();
-        window.showAlert('Group participation saved.', 'success');
+        await loadAllYearData(true);
+        window.showAlert(`Group team "${name}" saved.`, 'success');
         renderSubTabGroups(fest.registrationOpen === true);
-        renderSubTabParticipation();
+        if (typeof renderSubTabParticipation === 'function') renderSubTabParticipation();
     } catch (err) {
         console.error(err);
         window.showAlert('Failed to save group participation.', 'danger');
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = `<i class="fas fa-save me-1"></i>Save Group Team`;
+        }
+    } finally {
+        isAdminSavingGroup = false;
+    }
+};
+
+window.deleteAdminGroup = async function(groupId) {
+    const group = state.festGroups.find(g => g.id === groupId);
+    if (!group) return window.showAlert('Group record not found.', 'danger');
+
+    if (!confirm(`Delete group "${group.name}"? This will remove the event from its members.`)) return;
+
+    const fest = state.managingFest;
+    const batch = writeBatch(db);
+
+    // 1. Delete group document
+    batch.delete(getScopedDoc('festGroups', groupId));
+
+    // 2. Remove this group event from members' fest registrations
+    (group.members || []).forEach(m => {
+        const regId = `${fest.id}_${m.studentId}`;
+        const reg = state.festRegistrations.find(r => r.id === regId);
+        if (reg) {
+            const filteredEvents = (reg.events || []).filter(evId => evId !== group.eventId);
+            batch.update(getScopedDoc('festRegistrations', regId), {
+                events: filteredEvents,
+                lastUpdated: serverTimestamp()
+            });
+        }
+    });
+
+    try {
+        await batch.commit();
+        await loadAllYearData(true);
+        window.showAlert(`Group "${group.name}" deleted.`, 'success');
+        renderSubTabGroups(fest.registrationOpen === true);
+        if (typeof renderSubTabParticipation === 'function') renderSubTabParticipation();
+    } catch (err) {
+        console.error(err);
+        window.showAlert('Failed to delete group team.', 'danger');
     }
 };
 
