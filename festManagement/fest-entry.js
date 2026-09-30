@@ -734,9 +734,9 @@ function eventwiseRegistrationTab(fest, house, isRegistrationOpen) {
                 <thead class="table-light sticky-top">
                     <tr>
                         <th style="min-width: 150px;">Event &amp; Stage</th>
-                        <th style="width: 80px;">Scope</th>
-                        <th class="text-center" style="width: 75px;">Capacity</th>
-                        <th style="min-width: 180px;">Registered</th>
+                        <th style="width: 85px;">Scope</th>
+                        <th class="text-center" style="min-width: 110px;">Capacity</th>
+                        <th style="min-width: 200px;">Registered</th>
                         <th class="text-end" style="width: 100px;">Action</th>
                     </tr>
                 </thead>
@@ -748,16 +748,6 @@ function eventwiseRegistrationTab(fest, house, isRegistrationOpen) {
     const categoryFilter = container.querySelector('#eventwise-category-filter');
     const eventSearch = container.querySelector('#eventwise-event-search');
     const tbody = container.querySelector('#eventwise-registration-table tbody');
-
-    function registeredStudents(event) {
-        return state.festRegistrations
-            .filter(registration => registration.festId === fest.id && registration.houseId === house.id && registration.events?.includes(event.id))
-            .map(registration => ({ 
-                registration, 
-                student: houseStudents.find(item => item.id === registration.studentId) 
-            }))
-            .filter(item => item.student || item.registration.studentName);
-    }
 
     function renderRows() {
         const selectedStage = container.querySelector('input[name="eventwise-stage-filter"]:checked')?.value || 'all';
@@ -777,30 +767,112 @@ function eventwiseRegistrationTab(fest, house, isRegistrationOpen) {
         });
 
         tbody.innerHTML = visibleEvents.map(event => {
-            const registered = registeredStudents(event);
-            const limit = eventHouseLimit(fest, event, event.isGroupEvent ? 'group' : 'solo');
-            const count = registered.length;
             const isOffStage = event.type === 'offStage';
+            const isGroup = Boolean(event.isGroupEvent || event.type === 'group');
 
-            const isOverLimit = count > limit;
-            const isFull = count >= limit && limit > 0;
+            let capacityBadgeHtml = '';
+            let registeredHtml = '';
+            let rowClass = '';
+            let actionBtnHtml = '';
 
-            const rowClass = isOverLimit ? 'table-danger' : (isFull ? 'table-success-subtle' : (count > 0 ? 'table-warning-subtle' : ''));
+            if (isGroup) {
+                // --- GROUP EVENT LOGIC ---
+                const houseTeams = state.festGroups.filter(g => g.festId === fest.id && g.houseId === house.id && g.eventId === event.id);
+                const teamLimit = eventHouseLimit(fest, event, 'group');
+                const teamCount = houseTeams.length;
+                const memberLimit = event.maxParticipants || null;
 
-            const statusBadge = isOverLimit 
-                ? `<span class="badge bg-danger text-white">${count}/${limit}</span>`
-                : (isFull 
-                    ? `<span class="badge bg-success">${count}/${limit}</span>`
-                    : `<span class="badge bg-warning text-dark border">${count}/${limit}</span>`);
+                const isTeamOver = teamCount > teamLimit;
+                const isTeamFull = teamCount >= teamLimit && teamLimit > 0;
 
-            const registeredHtml = registered.map(({ registration, student }) => `
-                <div class="d-inline-flex align-items-center bg-white border rounded-pill px-2 py-0 me-1 mb-1 shadow-sm" style="font-size: 0.75rem;">
-                    <span class="eventwise-student-chip text-primary fw-semibold me-1 py-1" role="button" data-student-id="${registration.studentId}" title="Tap to manage student events">
-                        <i class="fas fa-user-pen me-1 text-muted"></i>${student?.name || registration.studentName}
+                rowClass = isTeamOver ? 'table-danger' : (isTeamFull ? 'table-success-subtle' : (teamCount > 0 ? 'table-warning-subtle' : ''));
+
+                // Dual capacity badges: Teams + Members
+                capacityBadgeHtml = `
+                    <div class="d-flex flex-column align-items-center gap-1">
+                        <span class="badge ${isTeamOver ? 'bg-danger text-white' : (isTeamFull ? 'bg-success' : 'bg-warning text-dark border')}" style="font-size: 0.7rem;">
+                            <i class="fas fa-users-gear me-1"></i>${teamCount}/${teamLimit} Teams
+                        </span>
+                        ${memberLimit ? `
+                            <span class="badge bg-light text-secondary border" style="font-size: 0.65rem;">
+                                Max ${memberLimit} / Team
+                            </span>
+                        ` : ''}
+                    </div>
+                `;
+
+                if (houseTeams.length > 0) {
+                    registeredHtml = houseTeams.map(grp => {
+                        const mCount = grp.members?.length || 0;
+                        const isMemberOver = memberLimit && mCount > memberLimit;
+                        const captain = grp.members?.find(m => m.role === 'Captain');
+                        const captainStudent = state.students.find(s => s.id === captain?.studentId);
+
+                        return `
+                            <div class="border rounded p-1 px-2 mb-1 bg-white shadow-xs">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <strong class="text-primary text-truncate" style="font-size: 0.78rem;">${grp.name}</strong>
+                                    <span class="badge ${isMemberOver ? 'bg-danger text-white' : 'bg-secondary-subtle text-secondary border'}" style="font-size: 0.65rem;">
+                                        ${mCount}${memberLimit ? `/${memberLimit}` : ''} Members
+                                    </span>
+                                </div>
+                                <div class="small text-muted" style="font-size: 0.68rem;">
+                                    Capt: <strong>${captainStudent?.name || 'Unassigned'}</strong>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    registeredHtml = `<span class="small text-muted fst-italic" style="font-size: 0.72rem;">No group team formed</span>`;
+                }
+
+                actionBtnHtml = `
+                    <button type="button" class="btn btn-sm btn-outline-primary py-1 px-2 btn-touch" 
+                            onclick="document.querySelector('button[data-bs-target=\\'#tab-group-reg\\']')?.click()" 
+                            style="font-size: 0.75rem;">
+                        <i class="fas fa-users me-1"></i>Manage
+                    </button>
+                `;
+
+            } else {
+                // --- SOLO EVENT LOGIC ---
+                const registered = state.festRegistrations
+                    .filter(r => r.festId === fest.id && r.houseId === house.id && r.events?.includes(event.id))
+                    .map(r => ({
+                        registration: r,
+                        student: houseStudents.find(s => s.id === r.studentId)
+                    }))
+                    .filter(item => item.student || item.registration.studentName);
+
+                const limit = eventHouseLimit(fest, event, 'solo');
+                const count = registered.length;
+
+                const isOverLimit = count > limit;
+                const isFull = count >= limit && limit > 0;
+
+                rowClass = isOverLimit ? 'table-danger' : (isFull ? 'table-success-subtle' : (count > 0 ? 'table-warning-subtle' : ''));
+
+                capacityBadgeHtml = `
+                    <span class="badge ${isOverLimit ? 'bg-danger text-white' : (isFull ? 'bg-success' : 'bg-warning text-dark border')}" style="font-size: 0.72rem;">
+                        ${count}/${limit}
                     </span>
-                    <button type="button" class="btn-close btn-close-xs eventwise-clear-btn p-1 ms-1" data-registration-id="${registration.id}" data-event-id="${event.id}" title="Remove from event" style="font-size: 0.55rem;"></button>
-                </div>
-            `).join('') || '<span class="small text-muted fst-italic" style="font-size: 0.72rem;">No participants</span>';
+                `;
+
+                registeredHtml = registered.map(({ registration, student }) => `
+                    <div class="d-inline-flex align-items-center bg-white border rounded-pill px-2 py-0 me-1 mb-1 shadow-sm" style="font-size: 0.75rem;">
+                        <span class="eventwise-student-chip text-primary fw-semibold me-1 py-1" role="button" data-student-id="${registration.studentId}" title="Tap to manage student events">
+                            <i class="fas fa-user-pen me-1 text-muted"></i>${student?.name || registration.studentName}
+                        </span>
+                        <button type="button" class="btn-close btn-close-xs eventwise-clear-btn p-1 ms-1" data-registration-id="${registration.id}" data-event-id="${event.id}" title="Remove from event" style="font-size: 0.55rem;"></button>
+                    </div>
+                `).join('') || '<span class="small text-muted fst-italic" style="font-size: 0.72rem;">No participants</span>';
+
+                actionBtnHtml = `
+                    <button type="button" class="btn btn-sm ${isFull ? 'btn-outline-secondary' : 'btn-primary'} py-1 px-2 open-student-picker-btn btn-touch" data-event-id="${event.id}" ${!isRegistrationOpen || isFull ? 'disabled' : ''} style="font-size: 0.78rem;">
+                        <i class="fas fa-user-plus me-1"></i>${isFull ? 'Full' : 'Assign'}
+                    </button>
+                `;
+            }
 
             return `
                 <tr class="${rowClass}">
@@ -817,20 +889,15 @@ function eventwiseRegistrationTab(fest, house, isRegistrationOpen) {
                     <td>
                         <div class="d-flex flex-column gap-1">
                             ${getStageBadgeMarkup(isOffStage)}
-                            <span class="badge ${event.isGroupEvent ? 'bg-info-subtle text-info-emphasis border border-info' : 'bg-secondary-subtle text-secondary border'}" style="font-size: 0.65rem;">
-                                <i class="fas ${event.isGroupEvent ? 'fa-users' : 'fa-user'} me-1"></i>${event.isGroupEvent ? 'Group' : 'Solo'}
+                            <span class="badge ${isGroup ? 'bg-info-subtle text-info-emphasis border border-info' : 'bg-secondary-subtle text-secondary border'}" style="font-size: 0.65rem;">
+                                <i class="fas ${isGroup ? 'fa-users' : 'fa-user'} me-1"></i>${isGroup ? 'Group' : 'Solo'}
                             </span>
                         </div>
                     </td>
-                    <td class="text-center">${statusBadge}</td>
+                    <td class="text-center align-middle">${capacityBadgeHtml}</td>
                     <td>${registeredHtml}</td>
-                    <td class="text-end text-nowrap">
-                        ${event.isGroupEvent
-                            ? '<span class="text-muted small fst-italic" style="font-size: 0.7rem;">Group Tab</span>'
-                            : `<button type="button" class="btn btn-sm ${isFull ? 'btn-outline-secondary' : 'btn-primary'} py-1 px-2 open-student-picker-btn btn-touch" data-event-id="${event.id}" ${!isRegistrationOpen || isFull ? 'disabled' : ''} style="font-size: 0.78rem;">
-                                 <i class="fas fa-user-plus me-1"></i>${isFull ? 'Full' : 'Assign'}
-                               </button>`
-                        }
+                    <td class="text-end text-nowrap align-middle">
+                        ${actionBtnHtml}
                     </td>
                 </tr>
             `;
@@ -1397,38 +1464,255 @@ function renderGroupTeamTab(fest, house, isRegistrationOpen) {
 // =========================================================================
 // --- 6. ASSEMBLE/EDIT GROUP MODAL (WITH CAPTAIN & OPTIONAL NAME) ---
 // =========================================================================
+// =========================================================================
+// --- MODAL UTILITIES & BACKDROP CLEANUP (Fixes Frozen Screen Overlay) ---
+// =========================================================================
+
+function safeCloseModal(modalEl) {
+    if (!modalEl) return;
+    try {
+        const inst = bootstrap.Modal.getInstance(modalEl);
+        if (inst) inst.hide();
+    } catch (e) {
+        console.warn('Error hiding modal instance:', e);
+    }
+
+    // Force purge stuck backdrops and reset body scroll
+    setTimeout(() => {
+        document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
+    }, 200);
+}
+
+// Global modal cleanup listener to prevent stuck backdrop
+document.addEventListener('hidden.bs.modal', () => {
+    // If no other modal is currently active, purge all backdrops
+    if (!document.querySelector('.modal.show')) {
+        document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
+    }
+});
+
+// =========================================================================
+// --- 1. STUDENT EVENT PROFILE MODAL (Independent from #global-modal) ---
+// =========================================================================
+
+window.showStudentEventProfileModal = function(studentId) {
+    const fest = state.managingFest;
+    const student = state.students.find(s => s.id === studentId);
+    if (!student) return window.showAlert?.('Student record not found.', 'warning');
+
+    const house = state.festHouses.find(h => h.id === student.houseId);
+    const reg = state.festRegistrations.find(r => r.studentId === student.id && r.festId === fest.id);
+    const registeredEventIds = reg?.events || [];
+
+    // 1. Solo Events
+    const soloEvents = registeredEventIds
+        .map(id => state.festEvents.find(e => e.id === id))
+        .filter(e => e && !e.isGroupEvent && e.type !== 'group');
+
+    // 2. Group Events & Teams
+    const studentTeams = state.festGroups.filter(g => 
+        g.festId === fest.id && 
+        g.members?.some(m => m.studentId === student.id)
+    );
+
+    const maxOnSolo = fest.settings?.maxOnStageSoloEvents ?? 2;
+    const maxOffSolo = fest.settings?.maxOffStageSoloEvents ?? 1;
+    const maxOnGrp = fest.settings?.maxOnStageGroupEvents ?? 2;
+    const maxOffGrp = fest.settings?.maxOffStageGroupEvents ?? 1;
+
+    const onSoloCount = soloEvents.filter(e => e.type !== 'offStage').length;
+    const offSoloCount = soloEvents.filter(e => e.type === 'offStage').length;
+    
+    const onGrpCount = studentTeams.filter(g => {
+        const ev = state.festEvents.find(e => e.id === g.eventId);
+        return ev && ev.type !== 'offStage';
+    }).length;
+
+    const offGrpCount = studentTeams.filter(g => {
+        const ev = state.festEvents.find(e => e.id === g.eventId);
+        return ev && ev.type === 'offStage';
+    }).length;
+
+    // Use an independent modal container to prevent destroying active background modals
+    let profileModalEl = document.getElementById('student-profile-custom-modal');
+    if (!profileModalEl) {
+        profileModalEl = document.createElement('div');
+        profileModalEl.id = 'student-profile-custom-modal';
+        profileModalEl.className = 'modal fade';
+        profileModalEl.tabIndex = -1;
+        profileModalEl.setAttribute('aria-hidden', 'true');
+        profileModalEl.innerHTML = `
+            <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+                <div class="modal-content shadow-lg border-0">
+                    <div class="modal-header py-2 bg-light border-bottom">
+                        <h6 class="modal-title fw-bold text-dark mb-0">Student Event Breakdown</h6>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body p-3" id="student-profile-modal-body"></div>
+                    <div class="modal-footer py-1 border-top bg-light">
+                        <button type="button" class="btn btn-sm btn-secondary px-3" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(profileModalEl);
+    }
+
+    const modalBodyHtml = `
+        <div class="card p-3 mb-3 border bg-light shadow-xs">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <h5 class="fw-bold mb-1 text-dark fs-6">${student.name}</h5>
+                    <div class="small text-muted" style="font-size: 0.76rem;">
+                        <span>Adm: <strong>${student.admissionNumber || 'N/A'}</strong></span> &bull; 
+                        <span>Class: <strong>${getStudentClassName(student.classId, student.division)}</strong></span> &bull; 
+                        <span>Gender: <strong>${student.gender || 'Common'}</strong></span>
+                    </div>
+                </div>
+                <div class="text-end">
+                    <span class="badge border py-1 px-2" style="background: ${house?.color || '#2563eb'}; color: #fff;">
+                        ${house?.name || 'No House'}
+                    </span>
+                    <div class="mt-1 small font-monospace text-primary fw-bold" style="font-size: 0.75rem;">
+                        Chest: ${reg?.chestNo ? `#${reg.chestNo}` : 'Unassigned'}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quota Badges Bar -->
+            <div class="d-flex flex-wrap gap-1 mt-2 pt-2 border-top">
+                <span class="badge ${onSoloCount >= maxOnSolo ? 'bg-danger' : 'bg-primary-subtle text-primary border'}" style="font-size: 0.68rem;">
+                    <i class="fas fa-microphone-lines me-1"></i>Solo On: ${onSoloCount}/${maxOnSolo}
+                </span>
+                <span class="badge ${offSoloCount >= maxOffSolo ? 'bg-danger' : 'bg-success-subtle text-success border'}" style="font-size: 0.68rem;">
+                    <i class="fas fa-palette me-1"></i>Solo Off: ${offSoloCount}/${maxOffSolo}
+                </span>
+                <span class="badge ${onGrpCount >= maxOnGrp ? 'bg-danger' : 'bg-info-subtle text-info border'}" style="font-size: 0.68rem;">
+                    <i class="fas fa-users me-1"></i>Grp On: ${onGrpCount}/${maxOnGrp}
+                </span>
+                <span class="badge ${offGrpCount >= maxOffGrp ? 'bg-danger' : 'bg-warning-subtle text-warning-emphasis border'}" style="font-size: 0.68rem;">
+                    <i class="fas fa-palette me-1"></i>Grp Off: ${offGrpCount}/${maxOffGrp}
+                </span>
+            </div>
+        </div>
+
+        <!-- Solo Registrations -->
+        <div class="mb-3">
+            <div class="fw-bold text-primary small text-uppercase mb-1" style="letter-spacing: 0.5px;">
+                <i class="fas fa-user me-1"></i>Solo Registrations (${soloEvents.length})
+            </div>
+            ${soloEvents.length === 0 ? `
+                <div class="p-2 border rounded bg-white text-muted small text-center">No solo events registered.</div>
+            ` : `
+                <div class="list-group shadow-xs">
+                    ${soloEvents.map(e => `
+                        <div class="list-group-item d-flex justify-content-between align-items-center py-2 px-3">
+                            <div>
+                                <strong class="text-dark d-block text-truncate" style="font-size: 0.82rem;">${e.name}</strong>
+                                <small class="text-muted" style="font-size: 0.7rem;">${e.category || 'General'} &bull; ${e.stage || 'Main Stage'}</small>
+                            </div>
+                            <span class="badge ${e.type === 'offStage' ? 'bg-success-subtle text-success border' : 'bg-primary-subtle text-primary border'}" style="font-size: 0.7rem;">
+                                ${e.type === 'offStage' ? '<i class="fas fa-palette me-1"></i>Off-Stage' : '<i class="fas fa-microphone-lines me-1"></i>On-Stage'}
+                            </span>
+                        </div>
+                    `).join('')}
+                </div>
+            `}
+        </div>
+
+        <!-- Group Teams -->
+        <div>
+            <div class="fw-bold text-success small text-uppercase mb-1" style="letter-spacing: 0.5px;">
+                <i class="fas fa-users me-1"></i>Group Teams (${studentTeams.length})
+            </div>
+            ${studentTeams.length === 0 ? `
+                <div class="p-2 border rounded bg-white text-muted small text-center">No group teams assigned.</div>
+            ` : `
+                <div class="list-group shadow-xs">
+                    ${studentTeams.map(grp => {
+                        const ev = state.festEvents.find(e => e.id === grp.eventId);
+                        const isCaptain = grp.members?.find(m => m.studentId === student.id)?.role === 'Captain';
+                        return `
+                            <div class="list-group-item d-flex justify-content-between align-items-center py-2 px-3">
+                                <div>
+                                    <div class="d-flex align-items-center gap-1">
+                                        <strong class="text-dark" style="font-size: 0.82rem;">${grp.name}</strong>
+                                        ${isCaptain ? '<span class="badge bg-warning text-dark ms-1" style="font-size: 0.65rem;"><i class="fas fa-crown me-1"></i>Captain</span>' : ''}
+                                    </div>
+                                    <small class="text-muted" style="font-size: 0.7rem;">
+                                        Event: <strong>${ev?.name || 'Group Event'}</strong> (${ev?.category || 'General'})
+                                    </small>
+                                </div>
+                                <span class="badge ${ev?.type === 'offStage' ? 'bg-success-subtle text-success border' : 'bg-primary-subtle text-primary border'}" style="font-size: 0.7rem;">
+                                    ${ev?.type === 'offStage' ? '<i class="fas fa-palette me-1"></i>Off-Stage' : '<i class="fas fa-microphone-lines me-1"></i>On-Stage'}
+                                </span>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `}
+        </div>
+    `;
+
+    document.getElementById('student-profile-modal-body').innerHTML = modalBodyHtml;
+    const modalInst = bootstrap.Modal.getOrCreateInstance(profileModalEl);
+    modalInst.show();
+};
+
+
+// =========================================================================
+// --- 2. ASSEMBLE/EDIT GROUP MODAL (WITH ANTI-DOUBLE-SAVE & VALIDATION) ---
+// =========================================================================
+
+// Global lock to prevent rapid double-clicks from saving duplicated groups
+let isSubmittingGroup = false;
 
 window.openGroupModal = function(eventId, groupId = null, slotIndex = 1) {
+    if (isSubmittingGroup) return; // Prevent launch during save
+
     const fest = state.managingFest;
     const houseId = state.loggedInHouseId;
     const event = state.festEvents.find(e => e.id === eventId);
-    if (!event) return window.showAlert('Event not found.', 'danger');
+    if (!event) return window.showAlert?.('Event not found.', 'danger');
 
     const isEdit = Boolean(groupId);
     const group = isEdit ? state.festGroups.find(g => g.id === groupId) : null;
     const houseStudents = state.students.filter(s => s.houseId === houseId);
     const isOffStage = event.type === 'offStage';
 
-    // 1. Resolve exact student group limits based on event stage type
     const maxOnStageGroup = fest.settings?.maxOnStageGroupEvents ?? 2;
     const maxOffStageGroup = fest.settings?.maxOffStageGroupEvents ?? 1;
-    const studentGroupStageLimit = isOffStage ? maxOffStageGroup : maxOnStageGroup;
+    const activeStageLimit = isOffStage ? maxOffStageGroup : maxOnStageGroup;
     const stageName = isOffStage ? 'Off-Stage' : 'On-Stage';
 
-    // Active roster array: [{ studentId, role: 'Captain' | 'Member' }]
+    // Clone active roster to prevent mutation bugs
     let activeMembers = isEdit ? JSON.parse(JSON.stringify(group.members || [])) : [];
 
-    // Helper: Compute how many groups of this stage type the student is already in (excluding current group)
-    function getStudentGroupStageCount(studentId) {
-        return state.festGroups.filter(g => 
+    // Helper: Compute BOTH group counts for a student (excluding this current group)
+    function getStudentDualGroupCounts(studentId) {
+        const studentGroups = state.festGroups.filter(g => 
             g.festId === fest.id && 
             g.id !== groupId && 
             g.members?.some(m => m.studentId === studentId)
-        ).filter(g => {
+        );
+
+        let onStage = 0;
+        let offStage = 0;
+
+        studentGroups.forEach(g => {
             const ev = state.festEvents.find(e => e.id === g.eventId);
-            if (!ev) return false;
-            return isOffStage ? (ev.type === 'offStage') : (ev.type !== 'offStage');
-        }).length;
+            if (!ev) return;
+            if (ev.type === 'offStage') offStage++;
+            else onStage++;
+        });
+
+        return { onStage, offStage };
     }
 
     // Helper: Check if student is already in another team for THIS specific event
@@ -1438,6 +1722,15 @@ window.openGroupModal = function(eventId, groupId = null, slotIndex = 1) {
             g.eventId === event.id && 
             g.id !== groupId && 
             g.members?.some(m => m.studentId === studentId)
+        );
+    }
+
+    // Helper: Check if a student is already a captain in another group
+    function isCaptainInAnotherTeam(studentId) {
+        return state.festGroups.some(g =>
+            g.festId === fest.id &&
+            g.id !== groupId &&
+            g.members?.some(m => m.studentId === studentId && m.role === 'Captain')
         );
     }
 
@@ -1451,14 +1744,17 @@ window.openGroupModal = function(eventId, groupId = null, slotIndex = 1) {
     });
 
     const modalBody = `
-        <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded border">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-1 mb-2 p-2 bg-light rounded border">
             <div>
                 <strong class="text-dark fs-6">${event.name} (Group Slot ${slotIndex})</strong>
-                <div class="small text-muted mt-1">
+                <div class="small text-muted mt-1 d-flex flex-wrap align-items-center gap-1">
                     ${getStageBadgeMarkup(isOffStage)}
-                    <span class="ms-1">${event.category || 'General'}${event.maxParticipants ? ` &bull; Max Team Size: <strong>${event.maxParticipants}</strong>` : ''}</span>
-                    <span class="badge bg-secondary-subtle text-dark border ms-1">
-                        Student Limit: <strong>${studentGroupStageLimit} ${stageName} Group(s)</strong>
+                    <span>${event.category || 'General'}${event.maxParticipants ? ` &bull; Max Size: <strong>${event.maxParticipants}</strong>` : ''}</span>
+                    <span class="badge border ms-1" style="background:#eef2ff; color:#4338ca; border-color:#c7d2fe !important;">
+                        On-Stage Max: <strong>${maxOnStageGroup}</strong>
+                    </span>
+                    <span class="badge border" style="background:#ecfdf5; color:#047857; border-color:#a7f3d0 !important;">
+                        Off-Stage Max: <strong>${maxOffStageGroup}</strong>
                     </span>
                 </div>
             </div>
@@ -1475,23 +1771,23 @@ window.openGroupModal = function(eventId, groupId = null, slotIndex = 1) {
         </div>
 
         <div class="row g-2">
-            <!-- Left: Student Candidate Pool with Stage Limit Validation -->
+            <!-- Left: Candidate Pool -->
             <div class="col-12 col-md-6 modal-col-border">
                 <div class="d-flex justify-content-between align-items-center mb-1">
                     <label class="form-label small fw-bold mb-0">Eligible Students (${eligibleStudents.length})</label>
-                    <span class="text-muted small" style="font-size: 0.7rem;">Tap to add</span>
+                    <span class="text-muted small" style="font-size: 0.7rem;">Click name for details</span>
                 </div>
-                <input type="search" id="grp-candidate-search" class="form-control form-control-sm mb-1" placeholder="Search name or admission...">
-                <div class="list-group border rounded" id="grp-candidate-pool" style="max-height: 250px; overflow-y: auto;"></div>
+                <input type="search" id="grp-candidate-search" class="form-control form-control-sm mb-1 border-primary" placeholder="Search name or admission...">
+                <div class="list-group border rounded" id="grp-candidate-pool" style="max-height: 270px; overflow-y: auto;"></div>
             </div>
 
-            <!-- Right: Team Roster with Captain Selector -->
+            <!-- Right: Assigned Team Roster -->
             <div class="col-12 col-md-6">
                 <div class="d-flex justify-content-between align-items-center mb-1">
                     <label class="form-label small fw-bold mb-0">Assigned Team Roster</label>
                     <span class="small text-muted" style="font-size: 0.7rem;">Click star to make Captain</span>
                 </div>
-                <div class="border rounded p-2 bg-light" id="grp-roster-list" style="max-height: 250px; overflow-y: auto;"></div>
+                <div class="border rounded p-2 bg-light" id="grp-roster-list" style="max-height: 270px; overflow-y: auto;"></div>
             </div>
         </div>
     `;
@@ -1515,7 +1811,7 @@ window.openGroupModal = function(eventId, groupId = null, slotIndex = 1) {
         const assignedIds = new Set(activeMembers.map(m => m.studentId));
         badgeEl.textContent = `${activeMembers.length} Selected`;
 
-        // 1. Render Left Pool with Live Limit Validation
+        // 1. Render Left Pool with Live Validations
         const query = searchInput.value.trim().toLowerCase();
         const filtered = eligibleStudents.filter(s => 
             !query || s.name.toLowerCase().includes(query) || String(s.admissionNumber || '').includes(query)
@@ -1523,43 +1819,56 @@ window.openGroupModal = function(eventId, groupId = null, slotIndex = 1) {
 
         poolEl.innerHTML = filtered.map(s => {
             const isAssigned = assignedIds.has(s.id);
-            const currentStageGroups = getStudentGroupStageCount(s.id);
-            const isStageQuotaFull = currentStageGroups >= studentGroupStageLimit;
+            const counts = getStudentDualGroupCounts(s.id);
+
+            const currentRelevantCount = isOffStage ? counts.offStage : counts.onStage;
+            const isQuotaFullForThisEvent = currentRelevantCount >= activeStageLimit;
             const alreadyInOtherTeam = isStudentInOtherTeamForThisEvent(s.id);
             const isTeamCapacityFull = event.maxParticipants && activeMembers.length >= event.maxParticipants && !isAssigned;
 
-            // Block candidate if already full or enrolled in another team for this event
-            const isDisabled = isAssigned || isStageQuotaFull || alreadyInOtherTeam || isTeamCapacityFull;
+            const isDisabled = isAssigned || isQuotaFullForThisEvent || alreadyInOtherTeam || isTeamCapacityFull;
 
-            let badgeHtml = '';
+            const onBadgeClass = counts.onStage >= maxOnStageGroup 
+                ? 'bg-danger text-white' 
+                : 'bg-indigo-subtle text-primary border border-primary-subtle';
+            
+            const offBadgeClass = counts.offStage >= maxOffStageGroup 
+                ? 'bg-danger text-white' 
+                : 'bg-success-subtle text-success border border-success-subtle';
+
+            let actionStatusHtml = '';
             if (isAssigned) {
-                badgeHtml = `<span class="badge bg-success"><i class="fas fa-check"></i> Added</span>`;
+                actionStatusHtml = `<span class="badge bg-success py-1"><i class="fas fa-check"></i> Added</span>`;
             } else if (alreadyInOtherTeam) {
-                badgeHtml = `<span class="badge bg-danger text-white">In Another Team</span>`;
-            } else if (isStageQuotaFull) {
-                badgeHtml = `<span class="badge bg-danger text-white">${currentStageGroups}/${studentGroupStageLimit} (Full)</span>`;
+                actionStatusHtml = `<span class="badge bg-danger text-white py-1">In Other Team</span>`;
+            } else if (isQuotaFullForThisEvent) {
+                actionStatusHtml = `<span class="badge bg-danger text-white py-1">Full (${stageName})</span>`;
             } else {
-                badgeHtml = `
-                    <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size: 0.68rem;">
-                        ${currentStageGroups}/${studentGroupStageLimit}
-                    </span>
-                    <span class="badge bg-light text-primary border ms-1"><i class="fas fa-plus"></i> Add</span>
+                actionStatusHtml = `
+                    <button type="button" class="btn btn-xs btn-outline-primary py-0 px-2 pool-add-action-btn" data-id="${s.id}">
+                        <i class="fas fa-plus"></i> Add
+                    </button>
                 `;
             }
 
             return `
-                <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-2 px-2 small pool-student-btn ${isDisabled && !isAssigned ? 'bg-light opacity-75' : ''}" 
-                        data-id="${s.id}" 
-                        ${isDisabled ? 'disabled' : ''}
-                        style="cursor: ${isDisabled ? 'not-allowed' : 'pointer'};">
-                    <div class="text-truncate">
-                        <strong class="${isAssigned ? 'text-muted' : (isStageQuotaFull || alreadyInOtherTeam ? 'text-danger' : 'text-dark')}">${s.name}</strong>
+                <div class="list-group-item d-flex justify-content-between align-items-center py-2 px-2 small ${isDisabled && !isAssigned ? 'bg-light opacity-75' : ''}">
+                    <div class="text-truncate me-1 student-info-trigger" role="button" data-id="${s.id}" title="Click to view all registered Solo & Group events">
+                        <strong class="text-primary text-decoration-underline" style="cursor: pointer;">${s.name}</strong>
+                        <i class="fas fa-circle-info text-muted ms-1" style="font-size: 0.72rem;"></i>
                         <div class="text-muted" style="font-size: 0.7rem;">Adm: ${s.admissionNumber || 'N/A'} &bull; ${getStudentClassName(s.classId, s.division)}</div>
                     </div>
-                    <div class="d-flex align-items-center flex-shrink-0">
-                        ${badgeHtml}
+                    
+                    <div class="d-flex align-items-center gap-1 flex-shrink-0">
+                        <span class="badge ${onBadgeClass} p-1" style="font-size: 0.65rem;" title="On-Stage: ${counts.onStage}/${maxOnStageGroup}">
+                            <i class="fas fa-microphone-lines me-1"></i>${counts.onStage}/${maxOnStageGroup}
+                        </span>
+                        <span class="badge ${offBadgeClass} p-1" style="font-size: 0.65rem;" title="Off-Stage: ${counts.offStage}/${maxOffStageGroup}">
+                            <i class="fas fa-palette me-1"></i>${counts.offStage}/${maxOffStageGroup}
+                        </span>
+                        ${actionStatusHtml}
                     </div>
-                </button>
+                </div>
             `;
         }).join('') || `<div class="p-3 text-center text-muted small">No students found.</div>`;
 
@@ -1572,14 +1881,18 @@ window.openGroupModal = function(eventId, groupId = null, slotIndex = 1) {
         rosterEl.innerHTML = activeMembers.map((m, idx) => {
             const student = state.students.find(s => s.id === m.studentId);
             const isCaptain = m.role === 'Captain';
-            const currentStageGroups = getStudentGroupStageCount(m.studentId) + 1;
+            const counts = getStudentDualGroupCounts(m.studentId);
+            const currentOn = counts.onStage + (!isOffStage ? 1 : 0);
+            const currentOff = counts.offStage + (isOffStage ? 1 : 0);
 
             return `
                 <div class="d-flex justify-content-between align-items-center p-2 mb-1 rounded border shadow-xs ${isCaptain ? 'border-warning bg-warning-subtle' : 'border-secondary-subtle bg-white'}">
-                    <div class="text-truncate me-2">
+                    <div class="text-truncate me-2 student-info-trigger" role="button" data-id="${m.studentId}" title="Click to view events">
                         <div class="d-flex align-items-center gap-1">
-                            <strong class="text-dark" style="font-size: 0.8rem;">${student?.name || 'Unknown'}</strong>
-                            <span class="badge bg-light text-muted border" style="font-size: 0.65rem;">${currentStageGroups}/${studentGroupStageLimit}</span>
+                            <strong class="text-dark text-decoration-underline" style="cursor: pointer; font-size: 0.8rem;">${student?.name || 'Unknown'}</strong>
+                            <i class="fas fa-circle-info text-muted" style="font-size: 0.68rem;"></i>
+                            <span class="badge bg-light text-primary border ms-1" style="font-size: 0.62rem;">On: ${currentOn}/${maxOnStageGroup}</span>
+                            <span class="badge bg-light text-success border" style="font-size: 0.62rem;">Off: ${currentOff}/${maxOffStageGroup}</span>
                         </div>
                         <div class="text-muted" style="font-size: 0.68rem;">Adm: ${student?.admissionNumber || 'N/A'}</div>
                     </div>
@@ -1594,33 +1907,55 @@ window.openGroupModal = function(eventId, groupId = null, slotIndex = 1) {
         }).join('');
     }
 
-    // Add Student to Team
+    // Left Pool Handlers: Profile Trigger vs Add Button
     poolEl.addEventListener('click', e => {
-        const btn = e.target.closest('.pool-student-btn');
-        if (!btn || btn.disabled) return;
-        const sid = btn.dataset.id;
+        const infoTrigger = e.target.closest('.student-info-trigger');
+        if (infoTrigger) {
+            e.stopPropagation();
+            window.showStudentEventProfileModal(infoTrigger.dataset.id);
+            return;
+        }
+
+        const addBtn = e.target.closest('.pool-add-action-btn');
+        if (!addBtn) return;
+        const sid = addBtn.dataset.id;
         
-        // Re-verify stage limit before pushing
-        if (getStudentGroupStageCount(sid) >= studentGroupStageLimit) {
-            return window.showAlert(`This student has reached the ${studentGroupStageLimit} ${stageName} group event limit.`, 'warning');
+        const counts = getStudentDualGroupCounts(sid);
+        const currentRelevant = isOffStage ? counts.offStage : counts.onStage;
+
+        if (currentRelevant >= activeStageLimit) {
+            return window.showAlert?.(`This student has reached the limit of ${activeStageLimit} ${stageName} group event(s).`, 'warning');
         }
 
         if (!activeMembers.some(m => m.studentId === sid)) {
-            const role = activeMembers.length === 0 ? 'Captain' : 'Member';
+            // First member defaults to Captain, unless already a captain in another group
+            let role = 'Member';
+            if (activeMembers.length === 0 && !isCaptainInAnotherTeam(sid)) {
+                role = 'Captain';
+            }
             activeMembers.push({ studentId: sid, role });
             refreshUI();
         }
     });
 
-    // Remove Student & Manage Captain
+    // Right Roster Handlers: Profile Trigger, Remove & Captain Toggle
     rosterEl.addEventListener('click', e => {
+        const infoTrigger = e.target.closest('.student-info-trigger');
+        if (infoTrigger && !e.target.closest('button')) {
+            e.stopPropagation();
+            window.showStudentEventProfileModal(infoTrigger.dataset.id);
+            return;
+        }
+
         const removeBtn = e.target.closest('.remove-member-btn');
         if (removeBtn) {
             const idx = parseInt(removeBtn.dataset.index, 10);
             const removedWasCaptain = activeMembers[idx].role === 'Captain';
             activeMembers.splice(idx, 1);
             if (removedWasCaptain && activeMembers.length > 0) {
-                activeMembers[0].role = 'Captain';
+                // Find next eligible member who is not already a captain elsewhere
+                const nextCaptain = activeMembers.find(m => !isCaptainInAnotherTeam(m.studentId));
+                if (nextCaptain) nextCaptain.role = 'Captain';
             }
             refreshUI();
             return;
@@ -1629,6 +1964,14 @@ window.openGroupModal = function(eventId, groupId = null, slotIndex = 1) {
         const captainBtn = e.target.closest('.toggle-captain-btn');
         if (captainBtn) {
             const idx = parseInt(captainBtn.dataset.index, 10);
+            const targetStudentId = activeMembers[idx].studentId;
+            
+            // Validate that this student is not already captain in another group
+            if (isCaptainInAnotherTeam(targetStudentId)) {
+                const s = state.students.find(st => st.id === targetStudentId);
+                return window.showAlert?.(`${s?.name || 'This student'} is already the captain of another group.`, 'danger');
+            }
+
             activeMembers.forEach((m, i) => {
                 m.role = (i === idx) ? 'Captain' : 'Member';
             });
@@ -1639,46 +1982,61 @@ window.openGroupModal = function(eventId, groupId = null, slotIndex = 1) {
     searchInput.addEventListener('input', refreshUI);
     refreshUI();
 
-    // Commit Group with Pre-Flight Checks
+    // Commit Group with Pre-Flight Checks & Anti-Duplicate Lock
     commitBtn.addEventListener('click', async () => {
+        if (isSubmittingGroup) return; // Prevent double-tap submission
+
         if (!activeMembers.length) {
-            return window.showAlert('Please add at least one student to this team.', 'warning');
+            return window.showAlert?.('Please add at least one student to this team.', 'warning');
         }
 
-        // Validate max participants if configured on the event
         if (event.maxParticipants && activeMembers.length > event.maxParticipants) {
-            return window.showAlert(`This event allows maximum ${event.maxParticipants} members. Your team has ${activeMembers.length}.`, 'danger');
+            return window.showAlert?.(`This event allows maximum ${event.maxParticipants} members. Your team has ${activeMembers.length}.`, 'danger');
         }
 
-        // Validate all members against group quotas
+        // Validate all members against the specific stage group quota
         const exceededStudentNames = [];
         activeMembers.forEach(m => {
-            if (getStudentGroupStageCount(m.studentId) >= studentGroupStageLimit) {
+            const counts = getStudentDualGroupCounts(m.studentId);
+            const currentRelevant = isOffStage ? counts.offStage : counts.onStage;
+            if (currentRelevant >= activeStageLimit) {
                 const s = state.students.find(st => st.id === m.studentId);
                 exceededStudentNames.push(s?.name || m.studentId);
             }
         });
 
         if (exceededStudentNames.length > 0) {
-            return window.showAlert(`Group stage limit (${studentGroupStageLimit} ${stageName}) exceeded for: ${exceededStudentNames.join(', ')}`, 'danger');
+            return window.showAlert?.(`Group stage limit (${activeStageLimit} ${stageName}) exceeded for: ${exceededStudentNames.join(', ')}`, 'danger');
         }
 
-        // Ensure exactly one captain exists
-        const hasCaptain = activeMembers.some(m => m.role === 'Captain');
-        if (!hasCaptain) {
-            activeMembers[0].role = 'Captain';
+        // Validate Captain Assignment
+        const captainMember = activeMembers.find(m => m.role === 'Captain');
+        if (!captainMember) {
+            // Pick first eligible member who is not captain of another team
+            const eligibleForCaptain = activeMembers.find(m => !isCaptainInAnotherTeam(m.studentId));
+            if (eligibleForCaptain) {
+                eligibleForCaptain.role = 'Captain';
+            } else {
+                return window.showAlert?.('All selected members are already captains in other groups. Please assign a non-captain member.', 'danger');
+            }
+        } else if (isCaptainInAnotherTeam(captainMember.studentId)) {
+            const capStudent = state.students.find(s => s.id === captainMember.studentId);
+            return window.showAlert?.(`${capStudent?.name || 'Selected captain'} is already captain of another group team.`, 'danger');
         }
 
-        // Auto-generate name if left blank
         let teamName = document.getElementById('grp-modal-name').value.trim();
         if (!teamName) {
             teamName = `${event.name} - Group ${slotIndex}`;
         }
 
+        // Lock UI to prevent duplicate submissions
+        isSubmittingGroup = true;
         commitBtn.disabled = true;
         commitBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>Saving...`;
 
-        const targetGroupId = isEdit ? groupId : `GRP_${Date.now()}`;
+        // Deterministic ID prevents creating duplicate records even if triggered multiple times
+        const targetGroupId = isEdit ? groupId : `GRP_${fest.id}_${houseId}_${event.id}_slot${slotIndex}`;
+
         const payload = {
             id: targetGroupId,
             festId: fest.id,
@@ -1694,7 +2052,7 @@ window.openGroupModal = function(eventId, groupId = null, slotIndex = 1) {
         const batch = writeBatch(db);
         batch.set(getScopedDoc('festGroups', targetGroupId), payload);
 
-        // Sync event onto individual registrations
+        // Sync event onto individual student registrations
         activeMembers.forEach(m => {
             const regId = `${fest.id}_${m.studentId}`;
             const studentObj = state.students.find(s => s.id === m.studentId);
@@ -1714,17 +2072,23 @@ window.openGroupModal = function(eventId, groupId = null, slotIndex = 1) {
 
         try {
             await batch.commit();
-            window.showAlert(`Saved ${teamName}.`, 'success');
-            modal?.hide();
+            window.showAlert?.(`Saved ${teamName}.`, 'success');
+            
+            // Clean close modal and purge any backdrop
+            safeCloseModal(document.getElementById('global-modal'));
+            
             await loadAllYearData(true);
             renderGroupTeamTab(fest, state.festHouses.find(h => h.id === houseId), fest.registrationOpen === true);
         } catch (err) {
             console.error(err);
-            window.showAlert('Failed to save group.', 'danger');
+            window.showAlert?.('Failed to save group.', 'danger');
             commitBtn.disabled = false;
             commitBtn.innerHTML = `<i class="fas fa-save me-1"></i>Save Group Team`;
+        } finally {
+            isSubmittingGroup = false;
         }
     });
+    
 };
 
 window.openGroupModalOLD = function(groupId) {
