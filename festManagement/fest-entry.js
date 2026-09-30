@@ -1219,60 +1219,515 @@ window.openEventStudentPickerModal = function(eventId, houseId) {
 
 // --- 6. GROUP TEAM MANAGEMENT TAB ---
 
+// =========================================================================
+// --- 5. GROUP TEAMS TAB WITH SLOTS & STAGE/CATEGORY FILTERS ---
+// =========================================================================
+
 function renderGroupTeamTab(fest, house, isRegistrationOpen) {
     const container = document.getElementById('tab-group-reg');
-    const groups = state.festGroups.filter(g => g.festId === fest.id && g.houseId === house.id);
+    const groupEvents = state.festEvents.filter(e => e.festId === fest.id && e.isGroupEvent && e.cancelled !== true);
+    const categories = [...new Set(groupEvents.map(e => e.category || 'General'))];
 
     container.innerHTML = `
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-            <h6 class="fw-bold mb-0 fs-6">House Group Teams</h6>
-            <button class="btn btn-primary btn-sm py-1 px-3 btn-touch" onclick="window.openGroupModal(null)" ${!isRegistrationOpen ? 'disabled' : ''}>
-                <i class="fas fa-plus me-1"></i>Create Group Team
-            </button>
+            <div>
+                <h6 class="fw-bold mb-0 fs-6"><i class="fas fa-users text-primary me-2"></i>Group Event Teams</h6>
+                <div class="text-muted small" style="font-size: 0.75rem;">Manage designated group slots per event based on your house limits.</div>
+            </div>
+            <span class="badge bg-secondary py-1 px-2" style="font-size: 0.75rem;">${groupEvents.length} Group Events</span>
         </div>
 
-        <div class="row g-2 g-md-3" id="groups-list">
-            ${groups.length === 0 ? `<div class="col-12 text-center text-muted p-4 small">No groups formed yet.</div>` : ''}
-            ${groups.map(g => {
-                const captain = g.members?.find(m => m.role === 'Captain');
-                const captainObj = state.students.find(s => s.id === captain?.studentId);
-                const ev = state.festEvents.find(e => e.id === g.eventId);
-                const isOffStage = ev?.type === 'offStage';
+        <!-- Filter Controls -->
+        <div class="row g-2 mb-3 align-items-end">
+            <div class="col-12 col-md-5">
+                <label class="small fw-semibold mb-1 d-block" style="font-size: 0.75rem;">Stage Scope</label>
+                <div class="btn-group stage-btn-group w-100 shadow-xs" role="group" id="group-stage-filter-group">
+                    <input type="radio" class="btn-check" name="group-stage-filter" id="grp-stage-all" value="all" checked autocomplete="off">
+                    <label class="btn btn-outline-dark" for="grp-stage-all"><i class="fas fa-layer-group me-1"></i>All</label>
 
-                return `
-                    <div class="col-12 col-md-6">
-                        <div class="card border p-3 h-100 shadow-sm">
-                            <div class="d-flex justify-content-between align-items-start gap-1">
-                                <div>
-                                    <h6 class="fw-bold mb-0 text-truncate fs-6">${g.name}</h6>
-                                    <div class="mt-1">${getStageBadgeMarkup(isOffStage)}</div>
+                    <input type="radio" class="btn-check" name="group-stage-filter" id="grp-stage-on" value="onStage" autocomplete="off">
+                    <label class="btn btn-outline-primary" for="grp-stage-on"><i class="fas fa-microphone-lines me-1"></i>On-Stage</label>
+
+                    <input type="radio" class="btn-check" name="group-stage-filter" id="grp-stage-off" value="offStage" autocomplete="off">
+                    <label class="btn btn-outline-success" for="grp-stage-off"><i class="fas fa-palette me-1"></i>Off-Stage</label>
+                </div>
+            </div>
+
+            <div class="col-6 col-md-3">
+                <label class="small fw-semibold mb-1" style="font-size: 0.75rem;" for="group-category-filter">Category</label>
+                <select id="group-category-filter" class="form-select form-select-sm">
+                    <option value="all">All Categories</option>
+                    ${categories.map(c => `<option value="${c}">${c}</option>`).join('')}
+                </select>
+            </div>
+
+            <div class="col-6 col-md-4">
+                <label class="small fw-semibold mb-1" style="font-size: 0.75rem;" for="group-event-search">Search Event</label>
+                <input id="group-event-search" type="search" class="form-control form-control-sm" placeholder="Event name, stage...">
+            </div>
+        </div>
+
+        <!-- Group Events Slot Grid -->
+        <div class="row g-3" id="group-events-slot-list"></div>
+    `;
+
+    const stageRadios = container.querySelectorAll('input[name="group-stage-filter"]');
+    const categoryFilter = container.querySelector('#group-category-filter');
+    const searchInput = container.querySelector('#group-event-search');
+    const slotListContainer = container.querySelector('#group-events-slot-list');
+
+    function renderSlots() {
+        const selectedStage = container.querySelector('input[name="group-stage-filter"]:checked')?.value || 'all';
+        const selectedCategory = categoryFilter.value;
+        const searchTerm = searchInput.value.trim().toLowerCase();
+
+        const filteredEvents = groupEvents.filter(event => {
+            const isOffStage = event.type === 'offStage';
+            const matchesStage = selectedStage === 'all' 
+                ? true 
+                : (selectedStage === 'offStage' ? isOffStage : !isOffStage);
+            const matchesCat = selectedCategory === 'all' || (event.category || 'General') === selectedCategory;
+            const matchesSearch = !searchTerm || event.name.toLowerCase().includes(searchTerm) || (event.stage || '').toLowerCase().includes(searchTerm);
+            return matchesStage && matchesCat && matchesSearch;
+        });
+
+        if (!filteredEvents.length) {
+            slotListContainer.innerHTML = `<div class="col-12 text-center text-muted p-5 small">No group events match your filters.</div>`;
+            return;
+        }
+
+        slotListContainer.innerHTML = filteredEvents.map(event => {
+            const isOffStage = event.type === 'offStage';
+            const limit = Math.max(1, eventHouseLimit(fest, event, 'group'));
+            
+            // Get already created teams for this house and event
+            const existingGroups = state.festGroups.filter(g => g.festId === fest.id && g.houseId === house.id && g.eventId === event.id);
+
+            // Build discrete slots: Slot 1, Slot 2, ... up to house limit
+            const slotsHtml = Array.from({ length: limit }, (_, idx) => {
+                const slotIndex = idx + 1;
+                const group = existingGroups[idx]; // Assigned team for this slot
+
+                if (group) {
+                    const captain = group.members?.find(m => m.role === 'Captain');
+                    const captainStudent = state.students.find(s => s.id === captain?.studentId);
+                    const memberNames = (group.members || []).map(m => state.students.find(s => s.id === m.studentId)?.name || 'Unknown').join(', ');
+
+                    return `
+                        <div class="col-12 col-md-6 mb-2">
+                            <div class="border rounded p-2 bg-white shadow-xs h-100 d-flex flex-column">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle" style="font-size: 0.72rem;">
+                                        Group Slot ${slotIndex}
+                                    </span>
+                                    <span class="badge bg-secondary flex-shrink-0" style="font-size: 0.68rem;">
+                                        ${group.members?.length || 0}${event.maxParticipants ? `/${event.maxParticipants}` : ''} Members
+                                    </span>
                                 </div>
-                                <span class="badge bg-secondary flex-shrink-0" style="font-size: 0.7rem;">${g.members?.length || 0} Members</span>
+                                <strong class="text-dark text-truncate" style="font-size: 0.85rem;">${group.name}</strong>
+                                <div class="small text-muted mb-1" style="font-size: 0.72rem;">
+                                    Captain: <strong class="text-dark">${captainStudent?.name || 'Unassigned'}</strong>
+                                </div>
+                                <div class="text-muted text-truncate small mb-2" style="font-size: 0.68rem;" title="${memberNames}">
+                                    ${memberNames}
+                                </div>
+                                <div class="d-flex gap-1 mt-auto pt-2 border-top justify-content-end">
+                                    <button class="btn btn-xs btn-outline-secondary py-0 px-2" onclick="window.printGroupRollCard('${group.id}')" title="Print Roll Card">
+                                        <i class="fas fa-print"></i>
+                                    </button>
+                                    <button class="btn btn-xs btn-outline-primary py-0 px-2" onclick="window.openGroupModal('${event.id}', '${group.id}', ${slotIndex})" ${!isRegistrationOpen ? 'disabled' : ''}>
+                                        <i class="fas fa-edit me-1"></i>Edit
+                                    </button>
+                                    <button class="btn btn-xs btn-outline-danger py-0 px-2" onclick="window.deleteGroup('${group.id}')" ${!isRegistrationOpen ? 'disabled' : ''}>
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
                             </div>
-                            <p class="small text-muted mb-2 mt-2" style="font-size: 0.75rem;">
-                                ${g.category || 'General'} &bull; ${ev?.name || 'Event not recorded'}<br>
-                                Captain: <strong>${captainObj?.name || 'Unassigned'}</strong>
-                            </p>
-                            <div class="d-flex flex-wrap justify-content-end gap-1 mt-auto pt-2 border-top">
-                                <button class="btn btn-xs btn-outline-secondary py-1 px-2 btn-touch" onclick="window.printGroupRollCard('${g.id}')">
-                                    <i class="fas fa-print me-1"></i>Roll Card
-                                </button>
-                                <button class="btn btn-xs btn-outline-primary py-1 px-2 btn-touch" onclick="window.openGroupModal('${g.id}')" ${!isRegistrationOpen ? 'disabled' : ''}>
-                                    <i class="fas fa-users-gear me-1"></i>Edit
-                                </button>
-                                <button class="btn btn-xs btn-outline-danger py-1 px-2 btn-touch" onclick="window.deleteGroup('${g.id}')" ${!isRegistrationOpen ? 'disabled' : ''}>
-                                    <i class="fas fa-trash me-1"></i>Delete
-                                </button>
-                            </div>
+                        </div>
+                    `;
+                }
+
+                // Empty Slot Card
+                return `
+                    <div class="col-12 col-md-6 mb-2">
+                        <div class="border border-dashed rounded p-3 h-100 d-flex flex-column align-items-center justify-content-center bg-light text-center">
+                            <span class="badge bg-secondary-subtle text-secondary border mb-2" style="font-size: 0.72rem;">Group Slot ${slotIndex} (Available)</span>
+                            <button type="button" class="btn btn-sm btn-outline-primary py-1 px-3 btn-touch" 
+                                    onclick="window.openGroupModal('${event.id}', null, ${slotIndex})"
+                                    ${!isRegistrationOpen ? 'disabled' : ''} style="font-size: 0.78rem;">
+                                <i class="fas fa-plus me-1"></i>Form Group ${slotIndex}
+                            </button>
                         </div>
                     </div>
                 `;
-            }).join('')}
-        </div>
-    `;
+            }).join('');
+
+            return `
+                <div class="col-12">
+                    <div class="card border shadow-sm">
+                        <div class="card-header bg-light py-2 d-flex justify-content-between align-items-center">
+                            <div class="d-flex align-items-center gap-2">
+                                <i class="fas ${isOffStage ? 'fa-palette text-success' : 'fa-microphone-lines text-primary'}"></i>
+                                <strong class="text-dark fs-6">${event.name}</strong>
+                                ${getStageBadgeMarkup(isOffStage)}
+                                <span class="badge bg-light text-secondary border">${event.category || 'General'}</span>
+                            </div>
+                            <span class="badge bg-dark" style="font-size: 0.72rem;">
+                                Filled: ${existingGroups.length} / ${limit} Teams
+                            </span>
+                        </div>
+                        <div class="card-body p-2">
+                            <div class="row g-2">
+                                ${slotsHtml}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    stageRadios.forEach(radio => radio.addEventListener('change', renderSlots));
+    categoryFilter.addEventListener('change', renderSlots);
+    searchInput.addEventListener('input', renderSlots);
+
+    renderSlots();
 }
 
-window.openGroupModal = function(groupId) {
+// =========================================================================
+// --- 6. ASSEMBLE/EDIT GROUP MODAL (WITH CAPTAIN & OPTIONAL NAME) ---
+// =========================================================================
+
+window.openGroupModal = function(eventId, groupId = null, slotIndex = 1) {
+    const fest = state.managingFest;
+    const houseId = state.loggedInHouseId;
+    const event = state.festEvents.find(e => e.id === eventId);
+    if (!event) return window.showAlert('Event not found.', 'danger');
+
+    const isEdit = Boolean(groupId);
+    const group = isEdit ? state.festGroups.find(g => g.id === groupId) : null;
+    const houseStudents = state.students.filter(s => s.houseId === houseId);
+    const isOffStage = event.type === 'offStage';
+
+    // 1. Resolve exact student group limits based on event stage type
+    const maxOnStageGroup = fest.settings?.maxOnStageGroupEvents ?? 2;
+    const maxOffStageGroup = fest.settings?.maxOffStageGroupEvents ?? 1;
+    const studentGroupStageLimit = isOffStage ? maxOffStageGroup : maxOnStageGroup;
+    const stageName = isOffStage ? 'Off-Stage' : 'On-Stage';
+
+    // Active roster array: [{ studentId, role: 'Captain' | 'Member' }]
+    let activeMembers = isEdit ? JSON.parse(JSON.stringify(group.members || [])) : [];
+
+    // Helper: Compute how many groups of this stage type the student is already in (excluding current group)
+    function getStudentGroupStageCount(studentId) {
+        return state.festGroups.filter(g => 
+            g.festId === fest.id && 
+            g.id !== groupId && 
+            g.members?.some(m => m.studentId === studentId)
+        ).filter(g => {
+            const ev = state.festEvents.find(e => e.id === g.eventId);
+            if (!ev) return false;
+            return isOffStage ? (ev.type === 'offStage') : (ev.type !== 'offStage');
+        }).length;
+    }
+
+    // Helper: Check if student is already in another team for THIS specific event
+    function isStudentInOtherTeamForThisEvent(studentId) {
+        return state.festGroups.some(g => 
+            g.festId === fest.id && 
+            g.eventId === event.id && 
+            g.id !== groupId && 
+            g.members?.some(m => m.studentId === studentId)
+        );
+    }
+
+    // Filter eligible house students based on category and gender
+    const eligibleStudents = houseStudents.filter(student => {
+        const catMatch = event.category === 'General' || getStudentCategory(student) === event.category;
+        const genderMatch = !event.gender || event.gender === 'Common' ||
+            (event.gender === 'Male' && student.gender === 'M') ||
+            (event.gender === 'Female' && student.gender === 'F');
+        return catMatch && genderMatch;
+    });
+
+    const modalBody = `
+        <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded border">
+            <div>
+                <strong class="text-dark fs-6">${event.name} (Group Slot ${slotIndex})</strong>
+                <div class="small text-muted mt-1">
+                    ${getStageBadgeMarkup(isOffStage)}
+                    <span class="ms-1">${event.category || 'General'}${event.maxParticipants ? ` &bull; Max Team Size: <strong>${event.maxParticipants}</strong>` : ''}</span>
+                    <span class="badge bg-secondary-subtle text-dark border ms-1">
+                        Student Limit: <strong>${studentGroupStageLimit} ${stageName} Group(s)</strong>
+                    </span>
+                </div>
+            </div>
+            <span class="badge bg-primary" id="grp-selected-badge">0 Selected</span>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label small fw-bold mb-1">
+                Group Name <span class="text-muted fw-normal">(Optional - defaults to "${event.name} - Group ${slotIndex}")</span>
+            </label>
+            <input type="text" id="grp-modal-name" class="form-control form-control-sm" 
+                   placeholder="e.g. Patriotic Song Squad" 
+                   value="${group?.name || ''}">
+        </div>
+
+        <div class="row g-2">
+            <!-- Left: Student Candidate Pool with Stage Limit Validation -->
+            <div class="col-12 col-md-6 modal-col-border">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <label class="form-label small fw-bold mb-0">Eligible Students (${eligibleStudents.length})</label>
+                    <span class="text-muted small" style="font-size: 0.7rem;">Tap to add</span>
+                </div>
+                <input type="search" id="grp-candidate-search" class="form-control form-control-sm mb-1" placeholder="Search name or admission...">
+                <div class="list-group border rounded" id="grp-candidate-pool" style="max-height: 250px; overflow-y: auto;"></div>
+            </div>
+
+            <!-- Right: Team Roster with Captain Selector -->
+            <div class="col-12 col-md-6">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <label class="form-label small fw-bold mb-0">Assigned Team Roster</label>
+                    <span class="small text-muted" style="font-size: 0.7rem;">Click star to make Captain</span>
+                </div>
+                <div class="border rounded p-2 bg-light" id="grp-roster-list" style="max-height: 250px; overflow-y: auto;"></div>
+            </div>
+        </div>
+    `;
+
+    const modalFooter = `
+        <button class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-success btn-sm fw-bold px-3 btn-touch" id="grp-commit-btn">
+            <i class="fas fa-save me-1"></i>Save Group Team
+        </button>
+    `;
+
+    const modal = window.showGlobalModal(isEdit ? `Edit Team - ${event.name}` : `Assemble Team - Slot ${slotIndex}`, modalBody, modalFooter);
+
+    const poolEl = document.getElementById('grp-candidate-pool');
+    const rosterEl = document.getElementById('grp-roster-list');
+    const searchInput = document.getElementById('grp-candidate-search');
+    const badgeEl = document.getElementById('grp-selected-badge');
+    const commitBtn = document.getElementById('grp-commit-btn');
+
+    function refreshUI() {
+        const assignedIds = new Set(activeMembers.map(m => m.studentId));
+        badgeEl.textContent = `${activeMembers.length} Selected`;
+
+        // 1. Render Left Pool with Live Limit Validation
+        const query = searchInput.value.trim().toLowerCase();
+        const filtered = eligibleStudents.filter(s => 
+            !query || s.name.toLowerCase().includes(query) || String(s.admissionNumber || '').includes(query)
+        );
+
+        poolEl.innerHTML = filtered.map(s => {
+            const isAssigned = assignedIds.has(s.id);
+            const currentStageGroups = getStudentGroupStageCount(s.id);
+            const isStageQuotaFull = currentStageGroups >= studentGroupStageLimit;
+            const alreadyInOtherTeam = isStudentInOtherTeamForThisEvent(s.id);
+            const isTeamCapacityFull = event.maxParticipants && activeMembers.length >= event.maxParticipants && !isAssigned;
+
+            // Block candidate if already full or enrolled in another team for this event
+            const isDisabled = isAssigned || isStageQuotaFull || alreadyInOtherTeam || isTeamCapacityFull;
+
+            let badgeHtml = '';
+            if (isAssigned) {
+                badgeHtml = `<span class="badge bg-success"><i class="fas fa-check"></i> Added</span>`;
+            } else if (alreadyInOtherTeam) {
+                badgeHtml = `<span class="badge bg-danger text-white">In Another Team</span>`;
+            } else if (isStageQuotaFull) {
+                badgeHtml = `<span class="badge bg-danger text-white">${currentStageGroups}/${studentGroupStageLimit} (Full)</span>`;
+            } else {
+                badgeHtml = `
+                    <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size: 0.68rem;">
+                        ${currentStageGroups}/${studentGroupStageLimit}
+                    </span>
+                    <span class="badge bg-light text-primary border ms-1"><i class="fas fa-plus"></i> Add</span>
+                `;
+            }
+
+            return `
+                <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-2 px-2 small pool-student-btn ${isDisabled && !isAssigned ? 'bg-light opacity-75' : ''}" 
+                        data-id="${s.id}" 
+                        ${isDisabled ? 'disabled' : ''}
+                        style="cursor: ${isDisabled ? 'not-allowed' : 'pointer'};">
+                    <div class="text-truncate">
+                        <strong class="${isAssigned ? 'text-muted' : (isStageQuotaFull || alreadyInOtherTeam ? 'text-danger' : 'text-dark')}">${s.name}</strong>
+                        <div class="text-muted" style="font-size: 0.7rem;">Adm: ${s.admissionNumber || 'N/A'} &bull; ${getStudentClassName(s.classId, s.division)}</div>
+                    </div>
+                    <div class="d-flex align-items-center flex-shrink-0">
+                        ${badgeHtml}
+                    </div>
+                </button>
+            `;
+        }).join('') || `<div class="p-3 text-center text-muted small">No students found.</div>`;
+
+        // 2. Render Right Roster with Role Controls
+        if (!activeMembers.length) {
+            rosterEl.innerHTML = `<div class="text-center text-muted small py-4">No students assigned yet. Click on students from the left to add.</div>`;
+            return;
+        }
+
+        rosterEl.innerHTML = activeMembers.map((m, idx) => {
+            const student = state.students.find(s => s.id === m.studentId);
+            const isCaptain = m.role === 'Captain';
+            const currentStageGroups = getStudentGroupStageCount(m.studentId) + 1;
+
+            return `
+                <div class="d-flex justify-content-between align-items-center p-2 mb-1 rounded border shadow-xs ${isCaptain ? 'border-warning bg-warning-subtle' : 'border-secondary-subtle bg-white'}">
+                    <div class="text-truncate me-2">
+                        <div class="d-flex align-items-center gap-1">
+                            <strong class="text-dark" style="font-size: 0.8rem;">${student?.name || 'Unknown'}</strong>
+                            <span class="badge bg-light text-muted border" style="font-size: 0.65rem;">${currentStageGroups}/${studentGroupStageLimit}</span>
+                        </div>
+                        <div class="text-muted" style="font-size: 0.68rem;">Adm: ${student?.admissionNumber || 'N/A'}</div>
+                    </div>
+                    <div class="d-flex align-items-center gap-1 flex-shrink-0">
+                        <button type="button" class="btn btn-xs ${isCaptain ? 'btn-warning text-dark' : 'btn-outline-secondary'} py-0 px-2 toggle-captain-btn" data-index="${idx}" title="Set as Captain">
+                            <i class="fas fa-crown me-1"></i>${isCaptain ? 'Captain' : 'Make Captain'}
+                        </button>
+                        <button type="button" class="btn btn-xs btn-outline-danger remove-member-btn py-0 px-2" data-index="${idx}" title="Remove from team">&times;</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // Add Student to Team
+    poolEl.addEventListener('click', e => {
+        const btn = e.target.closest('.pool-student-btn');
+        if (!btn || btn.disabled) return;
+        const sid = btn.dataset.id;
+        
+        // Re-verify stage limit before pushing
+        if (getStudentGroupStageCount(sid) >= studentGroupStageLimit) {
+            return window.showAlert(`This student has reached the ${studentGroupStageLimit} ${stageName} group event limit.`, 'warning');
+        }
+
+        if (!activeMembers.some(m => m.studentId === sid)) {
+            const role = activeMembers.length === 0 ? 'Captain' : 'Member';
+            activeMembers.push({ studentId: sid, role });
+            refreshUI();
+        }
+    });
+
+    // Remove Student & Manage Captain
+    rosterEl.addEventListener('click', e => {
+        const removeBtn = e.target.closest('.remove-member-btn');
+        if (removeBtn) {
+            const idx = parseInt(removeBtn.dataset.index, 10);
+            const removedWasCaptain = activeMembers[idx].role === 'Captain';
+            activeMembers.splice(idx, 1);
+            if (removedWasCaptain && activeMembers.length > 0) {
+                activeMembers[0].role = 'Captain';
+            }
+            refreshUI();
+            return;
+        }
+
+        const captainBtn = e.target.closest('.toggle-captain-btn');
+        if (captainBtn) {
+            const idx = parseInt(captainBtn.dataset.index, 10);
+            activeMembers.forEach((m, i) => {
+                m.role = (i === idx) ? 'Captain' : 'Member';
+            });
+            refreshUI();
+        }
+    });
+
+    searchInput.addEventListener('input', refreshUI);
+    refreshUI();
+
+    // Commit Group with Pre-Flight Checks
+    commitBtn.addEventListener('click', async () => {
+        if (!activeMembers.length) {
+            return window.showAlert('Please add at least one student to this team.', 'warning');
+        }
+
+        // Validate max participants if configured on the event
+        if (event.maxParticipants && activeMembers.length > event.maxParticipants) {
+            return window.showAlert(`This event allows maximum ${event.maxParticipants} members. Your team has ${activeMembers.length}.`, 'danger');
+        }
+
+        // Validate all members against group quotas
+        const exceededStudentNames = [];
+        activeMembers.forEach(m => {
+            if (getStudentGroupStageCount(m.studentId) >= studentGroupStageLimit) {
+                const s = state.students.find(st => st.id === m.studentId);
+                exceededStudentNames.push(s?.name || m.studentId);
+            }
+        });
+
+        if (exceededStudentNames.length > 0) {
+            return window.showAlert(`Group stage limit (${studentGroupStageLimit} ${stageName}) exceeded for: ${exceededStudentNames.join(', ')}`, 'danger');
+        }
+
+        // Ensure exactly one captain exists
+        const hasCaptain = activeMembers.some(m => m.role === 'Captain');
+        if (!hasCaptain) {
+            activeMembers[0].role = 'Captain';
+        }
+
+        // Auto-generate name if left blank
+        let teamName = document.getElementById('grp-modal-name').value.trim();
+        if (!teamName) {
+            teamName = `${event.name} - Group ${slotIndex}`;
+        }
+
+        commitBtn.disabled = true;
+        commitBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>Saving...`;
+
+        const targetGroupId = isEdit ? groupId : `GRP_${Date.now()}`;
+        const payload = {
+            id: targetGroupId,
+            festId: fest.id,
+            houseId: houseId,
+            name: teamName,
+            category: event.category || 'General',
+            eventId: event.id,
+            slotIndex: slotIndex,
+            members: activeMembers,
+            lastUpdated: serverTimestamp()
+        };
+
+        const batch = writeBatch(db);
+        batch.set(getScopedDoc('festGroups', targetGroupId), payload);
+
+        // Sync event onto individual registrations
+        activeMembers.forEach(m => {
+            const regId = `${fest.id}_${m.studentId}`;
+            const studentObj = state.students.find(s => s.id === m.studentId);
+            const currentEvents = state.festRegistrations.find(r => r.id === regId)?.events || [];
+            const merged = [...new Set([...currentEvents, event.id])];
+
+            batch.set(getScopedDoc('festRegistrations', regId), {
+                id: regId,
+                festId: fest.id,
+                studentId: m.studentId,
+                studentName: studentObj?.name || 'Student',
+                houseId: houseId,
+                events: merged,
+                lastUpdated: serverTimestamp()
+            }, { merge: true });
+        });
+
+        try {
+            await batch.commit();
+            window.showAlert(`Saved ${teamName}.`, 'success');
+            modal?.hide();
+            await loadAllYearData(true);
+            renderGroupTeamTab(fest, state.festHouses.find(h => h.id === houseId), fest.registrationOpen === true);
+        } catch (err) {
+            console.error(err);
+            window.showAlert('Failed to save group.', 'danger');
+            commitBtn.disabled = false;
+            commitBtn.innerHTML = `<i class="fas fa-save me-1"></i>Save Group Team`;
+        }
+    });
+};
+
+window.openGroupModalOLD = function(groupId) {
     const fest = state.managingFest;
     const houseId = state.loggedInHouseId;
     const isEdit = groupId !== null;
