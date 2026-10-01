@@ -214,13 +214,17 @@ export function detachRealtimeListeners() {
 export function selectFest(festId) {
     state.managingFest = state.fests.find(f => f.id === festId) || null;
     systemContext.activeFestId = festId;
+    
+    // Start listening to live updates for this fest
+    if (state.managingFest) {
+        initLiveSync(festId);
+    }
+    
     return state.managingFest;
 }
 
-/**
- * Clears selected fest.
- */
 export function unselectFest() {
+    detachRealtimeListeners();
     state.managingFest = null;
     systemContext.activeFestId = null;
 }
@@ -314,7 +318,45 @@ export async function loginWithUsername(username, plainPassword, remember = true
         return { success: false, message: "Unable to connect to database." };
     }
 }
+/**
+ * Attaches real-time listeners to dynamic event collections for the active academic year.
+ * Emits 'festDataUpdated' whenever any client commits writes.
+ */
+export function initLiveSync(festId) {
+    if (!systemContext.activeYearId || !festId) return;
 
+    // Detach any previous subscriptions first
+    detachRealtimeListeners();
+
+    const yearId = systemContext.activeYearId;
+
+    const collectionsToWatch = [
+        { name: 'festRegistrations', stateKey: 'festRegistrations' },
+        { name: 'festGroups', stateKey: 'festGroups' },
+        { name: 'festResults', stateKey: 'festResults' },
+        { name: 'festEvents', stateKey: 'festEvents' }
+    ];
+
+    collectionsToWatch.forEach(({ name, stateKey }) => {
+        const colRef = collection(db, `academicYears/${yearId}/${name}`);
+        const q = query(colRef, where('festId', '==', festId));
+
+        const unsub = onSnapshot(q, (snapshot) => {
+            // Update in-memory state
+            state[stateKey] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            window[stateKey] = state[stateKey];
+
+            // Broadcast UI refresh notification
+            window.dispatchEvent(new CustomEvent('festDataUpdated', {
+                detail: { collection: name, festId }
+            }));
+        }, (err) => {
+            console.warn(`[LIVESYNC] Stream error on ${name}:`, err);
+        });
+
+        state.unsubscribers.push(unsub);
+    });
+}
 export function logoutUser() {
     state.currentUser = null;
     state.currentUserRole = null;

@@ -327,6 +327,8 @@ async function handleSaveFestForm(e) {
 function renderDashboardTab() {
     const container = document.getElementById('tab-dash');
     const fest = state.managingFest;
+    if (!container || !fest) return;
+
     const participants = state.festRegistrations.filter(r => r.festId === fest.id);
     const events = state.festEvents.filter(e => e.festId === fest.id);
     const houses = state.festHouses;
@@ -337,7 +339,6 @@ function renderDashboardTab() {
     const resultWinners = new Map();
 
     finalizedResults.forEach(result => {
-        const event = events.find(item => item.id === result.eventId);
         const winners = [];
         (result.results || []).forEach(standing => {
             const group = standing.groupId ? state.festGroups.find(item => item.id === standing.groupId) : null;
@@ -363,6 +364,7 @@ function renderDashboardTab() {
     });
 
     const houseRanking = [...housePoints.values()].sort((a, b) => b.points - a.points || b.wins - a.wins || a.house.name.localeCompare(b.house.name));
+    
     const eventSummaries = events.map(event => {
         const registrations = participants.filter(registration => registration.events?.includes(event.id));
         const groups = state.festGroups.filter(group => group.festId === fest.id && group.eventId === event.id);
@@ -379,21 +381,24 @@ function renderDashboardTab() {
             winners: resultWinners.get(event.id) || []
         };
     });
+
     const completedCount = eventSummaries.filter(item => item.completed).length;
     const pendingSummaries = eventSummaries.filter(item => !item.completed && !item.cancelled);
+    const categories = [...new Set(events.map(e => e.category || 'General'))].sort();
 
     container.innerHTML = `
+        <!-- Top Stats Row -->
         <div class="row g-3">
-            <div class="col-md-3">
+            <div class="col-6 col-md-3">
                 <div class="ui-card-stat">
                     <div class="stat-icon bg-primary"><i class="fas fa-users"></i></div>
                     <div>
                         <div class="stat-number">${participants.length}</div>
-                        <div class="stat-label">Registered Participants</div>
+                        <div class="stat-label">Registered Students</div>
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col-6 col-md-3">
                 <div class="ui-card-stat">
                     <div class="stat-icon bg-info"><i class="fas fa-calendar-alt"></i></div>
                     <div>
@@ -402,7 +407,7 @@ function renderDashboardTab() {
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col-6 col-md-3">
                 <div class="ui-card-stat">
                     <div class="stat-icon bg-success"><i class="fas fa-shield-alt"></i></div>
                     <div>
@@ -411,7 +416,7 @@ function renderDashboardTab() {
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col-6 col-md-3">
                 <div class="ui-card-stat">
                     <div class="stat-icon bg-warning"><i class="fas fa-gavel"></i></div>
                     <div>
@@ -422,74 +427,293 @@ function renderDashboardTab() {
             </div>
         </div>
 
+        <!-- Live Event Preview Section -->
         <div class="ui-card mt-4 mb-0">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
                 <div>
-                    <h5 class="section-header mb-1"><i class="fas fa-timeline me-2"></i>Live Event Preview</h5>
-                    <div class="small text-muted">${completedCount} of ${events.length} events have entries. Pending events are ready for catch-up.</div>
+                    <h5 class="section-header mb-1"><i class="fas fa-timeline me-2 text-primary"></i>Live Programme Preview</h5>
+                    <div class="small text-muted">${completedCount} of ${events.length} events completed. Pending items are ready for scoring.</div>
                 </div>
-                <div class="d-flex gap-2">
-                    <button class="btn btn-sm btn-outline-warning" type="button" onclick="window.filterDashboardEvents('pending')">
-                        <i class="fas fa-hourglass-half me-1"></i>Pending (${pendingSummaries.length})
+                <div class="d-flex flex-wrap gap-1">
+                    <button class="btn btn-sm btn-outline-danger" type="button" onclick="window.printProgrammeChecklist()">
+                        <i class="fas fa-print me-1"></i>Print Programme Checklist
                     </button>
-                    <button class="btn btn-sm btn-outline-secondary" type="button" onclick="window.filterDashboardEvents('all')">
-                        <i class="fas fa-list me-1"></i>All Events
-                    </button>
-                    <button class="btn btn-sm btn-outline-primary" type="button" onclick="window.refreshDashboardPreview()" title="Refresh event counts and result status">
+                    <button class="btn btn-sm btn-outline-primary" type="button" onclick="window.refreshDashboardPreview()" title="Refresh live status">
                         <i class="fas fa-arrows-rotate"></i>
                     </button>
                 </div>
             </div>
-            <div class="row g-3" id="dashboard-event-grid">
-                ${eventSummaries.map(item => `
-                    <div class="col-md-6 col-xl-4 dashboard-event-card" data-entry-status="${item.cancelled ? 'cancelled' : item.completed ? 'completed' : 'pending'}">
-                        <div class="card h-100 border-${item.cancelled ? 'secondary' : item.completed ? 'success' : 'warning'} ${item.cancelled ? 'bg-light' : item.completed ? 'bg-success-subtle' : 'bg-warning-subtle'} shadow-sm">
-                            <div class="card-body d-flex flex-column">
-                                <div class="d-flex justify-content-between align-items-start gap-2">
-                                    <div>
-                                        <h6 class="fw-bold mb-1">${item.event.name}</h6>
-                                        <div class="small text-muted">${item.event.category || 'General'} &bull; ${item.event.isGroupEvent ? 'Group' : 'Solo'} &bull; ${item.event.type || 'Event'}</div>
-                                    </div>
-                                    <span class="badge ${item.cancelled ? 'bg-secondary' : item.completed ? 'bg-success' : 'bg-warning text-dark'}">
-                                        <i class="fas ${item.cancelled ? 'fa-ban' : item.completed ? 'fa-check' : 'fa-clock'} me-1"></i>${item.cancelled ? 'Cancelled' : item.completed ? 'Entered' : 'Pending'}
-                                    </span>
-                                </div>
-                                <div class="row g-2 my-3">
-                                    <div class="col-6"><div class="border rounded p-2 bg-white"><div class="h5 mb-0 fw-bold">${item.participantCount}</div><div class="small text-muted">Participants</div></div></div>
-                                    <div class="col-6"><div class="border rounded p-2 bg-white"><div class="h5 mb-0 fw-bold">${item.registrationCount}</div><div class="small text-muted">${item.event.isGroupEvent ? 'Teams' : 'Entries'}</div></div></div>
-                                </div>
-                                <div class="mt-auto">
-                                    <div class="small"><strong>Stage / Venue:</strong> ${item.event.stage || stages[0]}</div>
-                                    ${item.winners.length && !item.cancelled ? `<div class="small mt-2"><strong>Winners</strong>${item.winners.map(winner => `<div><span class="me-1">${winner.position}.</span><span class="color-dot-display" style="background-color: ${winner.house?.color || '#6c757d'}"></span>${winner.name} <span class="text-muted">(${winner.house?.name || 'House'})</span></div>`).join('')}</div>` : ''}
-                                    ${item.cancelled ? '<div class="small text-secondary mt-2"><i class="fas fa-ban me-1"></i>Programme cancelled</div>' : item.completed ? '<div class="small text-success mt-2"><i class="fas fa-circle-check me-1"></i>Judging entry received</div>' : '<div class="small text-warning-emphasis mt-2"><i class="fas fa-triangle-exclamation me-1"></i>Pending judging entry</div>'}
-                                </div>
+
+            <!-- Multi-Filter Toolbar -->
+            <div class="row g-2 mb-3 align-items-end p-2 bg-light rounded border">
+                <div class="col-12 col-md-3">
+                    <label class="small fw-bold mb-1" style="font-size: 0.72rem;">Search Event</label>
+                    <input type="search" id="dash-event-search" class="form-control form-control-sm" placeholder="Event name or stage...">
+                </div>
+
+                <div class="col-6 col-md-2">
+                    <label class="small fw-bold mb-1" style="font-size: 0.72rem;">Category</label>
+                    <select id="dash-filter-category" class="form-select form-select-sm">
+                        <option value="all">All Categories</option>
+                        ${categories.map(c => `<option value="${c}">${c}</option>`).join('')}
+                    </select>
+                </div>
+
+                <div class="col-6 col-md-2">
+                    <label class="small fw-bold mb-1" style="font-size: 0.72rem;">Stage Scope</label>
+                    <select id="dash-filter-stage" class="form-select form-select-sm">
+                        <option value="all">All Stages</option>
+                        <option value="onStage">On-Stage Only</option>
+                        <option value="offStage">Off-Stage Only</option>
+                    </select>
+                </div>
+
+                <div class="col-6 col-md-2">
+                    <label class="small fw-bold mb-1" style="font-size: 0.72rem;">Mode</label>
+                    <select id="dash-filter-mode" class="form-select form-select-sm">
+                        <option value="all">All Modes</option>
+                        <option value="solo">Solo Only</option>
+                        <option value="group">Group Only</option>
+                    </select>
+                </div>
+
+                <div class="col-6 col-md-3">
+                    <label class="small fw-bold mb-1 d-block" style="font-size: 0.72rem;">Status Quick Toggle</label>
+                    <div class="btn-group btn-group-sm w-100" role="group">
+                        <button type="button" class="btn btn-outline-secondary active dash-status-btn" data-status="all">All</button>
+                        <button type="button" class="btn btn-outline-warning dash-status-btn" data-status="pending">Pending (${pendingSummaries.length})</button>
+                        <button type="button" class="btn btn-outline-success dash-status-btn" data-status="completed">Done (${completedCount})</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Grouped Category Cards Container -->
+            <div id="dashboard-category-sections">
+                ${categories.map(cat => {
+                    const catEvents = eventSummaries.filter(item => (item.event.category || 'General') === cat);
+                    if (!catEvents.length) return '';
+
+                    return `
+                        <div class="category-block mb-3" data-category="${cat}">
+                            <div class="d-flex align-items-center justify-content-between p-2 mb-2 rounded bg-light border-start border-primary border-4 shadow-xs">
+                                <span class="fw-bold text-dark fs-6">
+                                    <i class="fas fa-layer-group text-primary me-1"></i>Category: ${cat}
+                                </span>
+                                <span class="badge bg-secondary-subtle text-secondary border category-count-badge">
+                                    ${catEvents.length} Programmes
+                                </span>
+                            </div>
+
+                            <div class="row g-3">
+                                ${catEvents.map(item => {
+                                    const ev = item.event;
+                                    const isOffStage = ev.type === 'offStage';
+                                    const isGroup = ev.isGroupEvent;
+
+                                    return `
+                                        <div class="col-12 col-md-6 col-xl-4 dashboard-event-card" 
+                                             data-event-id="${ev.id}"
+                                             data-event-name="${ev.name.toLowerCase()} ${(ev.stage || '').toLowerCase()}"
+                                             data-category="${cat}"
+                                             data-stage="${isOffStage ? 'offStage' : 'onStage'}"
+                                             data-mode="${isGroup ? 'group' : 'solo'}"
+                                             data-status="${item.cancelled ? 'cancelled' : item.completed ? 'completed' : 'pending'}">
+                                            
+                                            <div class="card h-100 border-${item.cancelled ? 'secondary' : item.completed ? 'success' : 'warning'} ${item.cancelled ? 'bg-light opacity-75' : item.completed ? 'bg-success-subtle' : 'bg-warning-subtle'} shadow-sm">
+                                                <div class="card-body p-3 d-flex flex-column">
+                                                    
+                                                    <!-- Top Card Title & Quick Status Actions -->
+                                                    <div class="d-flex justify-content-between align-items-start gap-1 mb-2">
+                                                        <div class="text-truncate me-1">
+                                                            <div class="d-flex align-items-center gap-1">
+                                                                <i class="fas ${isOffStage ? 'fa-palette text-success' : 'fa-microphone-lines text-primary'}" style="font-size: 0.8rem;"></i>
+                                                                <strong class="text-dark d-block text-truncate" style="font-size: 0.88rem;">${ev.name}</strong>
+                                                            </div>
+                                                            <div class="small text-muted" style="font-size: 0.7rem;">
+                                                                ${isOffStage ? 'Off-Stage' : 'On-Stage'} &bull; ${isGroup ? 'Group Team' : 'Solo'}
+                                                            </div>
+                                                        </div>
+
+                                                        <div class="d-flex align-items-center gap-1 flex-shrink-0">
+                                                            <span class="badge ${item.cancelled ? 'bg-secondary' : item.completed ? 'bg-success' : 'bg-warning text-dark'}" style="font-size: 0.65rem;">
+                                                                ${item.cancelled ? 'Cancelled' : item.completed ? 'Entered' : 'Pending'}
+                                                            </span>
+                                                            <div class="dropdown">
+                                                                <button class="btn btn-xs btn-outline-secondary py-0 px-1 border-0" type="button" data-bs-toggle="dropdown" title="Quick Settings">
+                                                                    <i class="fas fa-ellipsis-v"></i>
+                                                                </button>
+                                                                <ul class="dropdown-menu dropdown-menu-end shadow-sm small py-1" style="font-size: 0.76rem;">
+                                                                    <li>
+                                                                        <button class="dropdown-item py-1" type="button" onclick="window.toggleEventCancellation('${ev.id}')">
+                                                                            <i class="fas ${item.cancelled ? 'fa-rotate-left text-success' : 'fa-ban text-danger'} me-1"></i>
+                                                                            ${item.cancelled ? 'Restore Programme' : 'Cancel Programme'}
+                                                                        </button>
+                                                                    </li>
+                                                                    <li>
+                                                                        <button class="dropdown-item py-1" type="button" onclick="window.openQuickScoreEdit('${ev.id}')">
+                                                                            <i class="fas fa-square-poll-vertical text-primary me-1"></i>Enter / View Results
+                                                                        </button>
+                                                                    </li>
+                                                                </ul>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Counters -->
+                                                    <div class="row g-1 text-center my-1">
+                                                        <div class="col-6">
+                                                            <div class="border rounded p-1 bg-white">
+                                                                <strong class="h6 mb-0 d-block">${item.participantCount}</strong>
+                                                                <small class="text-muted" style="font-size: 0.65rem;">Members</small>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-6">
+                                                            <div class="border rounded p-1 bg-white">
+                                                                <strong class="h6 mb-0 d-block">${item.registrationCount}</strong>
+                                                                <small class="text-muted" style="font-size: 0.65rem;">${isGroup ? 'Teams' : 'Entries'}</small>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Card Bottom: Stage & Placements -->
+                                                    <div class="mt-auto pt-2 border-top">
+                                                        <div class="d-flex justify-content-between align-items-center small" style="font-size: 0.7rem;">
+                                                            <span class="text-muted"><i class="fas fa-location-dot me-1"></i>${ev.stage || stages[0]}</span>
+                                                            <span class="badge bg-light text-dark border">${ev.gender || 'Common'}</span>
+                                                        </div>
+
+                                                        ${item.winners.length && !item.cancelled ? `
+                                                            <div class="mt-1 pt-1 border-top" style="font-size: 0.72rem;">
+                                                                ${item.winners.map(w => `
+                                                                    <div class="d-flex justify-content-between align-items-center mb-0">
+                                                                        <span class="text-truncate">
+                                                                            <span class="fw-bold me-1">${w.position === 1 ? '🥇' : w.position === 2 ? '🥈' : '🥉'}</span>
+                                                                            <span>${w.name}</span>
+                                                                        </span>
+                                                                        <span class="badge border py-0 px-1 ms-1 flex-shrink-0" style="background:#fff; color:${w.house?.color || '#333'}; border-color:${w.house?.color || '#ccc'} !important;">
+                                                                            ${w.house?.name || 'N/A'}
+                                                                        </span>
+                                                                    </div>
+                                                                `).join('')}
+                                                            </div>
+                                                        ` : ''}
+                                                    </div>
+
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `;
+                                }).join('')}
                             </div>
                         </div>
-                    </div>
-                `).join('') || '<div class="col-12"><div class="alert alert-light border mb-0">No events have been created for this fest.</div></div>'}
+                    `;
+                }).join('') || '<div class="alert alert-light border text-center p-4">No events found.</div>'}
             </div>
         </div>
 
+        <!-- House Championship Table -->
         <div class="ui-card mt-4 mb-0">
-            <h5 class="section-header mb-3"><i class="fas fa-ranking-star me-2"></i>House-wise Ranking</h5>
-            <div class="table-responsive">
+            <h5 class="section-header mb-3"><i class="fas fa-ranking-star me-2 text-warning"></i>House-wise Overall Ranking</h5>
+            <div class="table-responsive border rounded bg-white">
                 <table class="table table-sm align-middle mb-0">
-                    <thead class="table-light"><tr><th>Rank</th><th>House</th><th>1st Place Wins</th><th class="text-end">Total Points</th></tr></thead>
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 70px;">Rank</th>
+                            <th>House Name</th>
+                            <th class="text-center" style="width: 140px;">1st Place Wins</th>
+                            <th class="text-end" style="width: 120px;">Total Points</th>
+                        </tr>
+                    </thead>
                     <tbody>
                         ${houseRanking.map((item, index) => `
                             <tr>
-                                <td><strong>${item.points > 0 ? index + 1 : '-'}</strong></td>
-                                <td><span class="color-dot-display" style="background-color: ${item.house.color || '#6c757d'}"></span><strong>${item.house.name}</strong></td>
-                                <td>${item.wins}</td>
-                                <td class="text-end"><span class="badge ${index === 0 && item.points > 0 ? 'bg-success' : 'bg-primary'}">${item.points}</span></td>
+                                <td><strong class="fs-6">${item.points > 0 ? `#${index + 1}` : '-'}</strong></td>
+                                <td>
+                                    <span class="color-dot-display me-1" style="background-color: ${item.house.color || '#6c757d'}"></span>
+                                    <strong>${item.house.name}</strong>
+                                </td>
+                                <td class="text-center">${item.wins}</td>
+                                <td class="text-end">
+                                    <span class="badge ${index === 0 && item.points > 0 ? 'bg-success' : 'bg-primary'} px-2 py-1 fs-6">
+                                        ${item.points}
+                                    </span>
+                                </td>
                             </tr>
-                        `).join('') || '<tr><td colspan="4" class="text-muted">No houses configured.</td></tr>'}
+                        `).join('') || '<tr><td colspan="4" class="text-muted p-3">No houses configured.</td></tr>'}
                     </tbody>
                 </table>
             </div>
         </div>
     `;
+
+    // Multi-Filter Engine
+    const searchInput = document.getElementById('dash-event-search');
+    const catSelect = document.getElementById('dash-filter-category');
+    const stageSelect = document.getElementById('dash-filter-stage');
+    const modeSelect = document.getElementById('dash-filter-mode');
+    let activeStatus = 'all';
+
+    function applyDashboardFilters() {
+        const query = (searchInput?.value || '').trim().toLowerCase();
+        const selectedCat = catSelect?.value || 'all';
+        const selectedStage = stageSelect?.value || 'all';
+        const selectedMode = modeSelect?.value || 'all';
+
+        document.querySelectorAll('.category-block').forEach(catBlock => {
+            const blockCat = catBlock.dataset.category;
+            const matchesCategoryBlock = selectedCat === 'all' || blockCat === selectedCat;
+
+            let visibleInBlock = 0;
+
+            catBlock.querySelectorAll('.dashboard-event-card').forEach(card => {
+                const name = card.dataset.eventName;
+                const stage = card.dataset.stage;
+                const mode = card.dataset.mode;
+                const status = card.dataset.status;
+
+                const matchesSearch = !query || name.includes(query);
+                const matchesStage = selectedStage === 'all' || stage === selectedStage;
+                const matchesMode = selectedMode === 'all' || mode === selectedMode;
+                const matchesStatus = activeStatus === 'all' || status === activeStatus;
+
+                const isVisible = matchesCategoryBlock && matchesSearch && matchesStage && matchesMode && matchesStatus;
+                card.classList.toggle('d-none', !isVisible);
+
+                if (isVisible) visibleInBlock++;
+            });
+
+            // Toggle category header block based on child visibility
+            catBlock.classList.toggle('d-none', visibleInBlock === 0);
+            const countBadge = catBlock.querySelector('.category-count-badge');
+            if (countBadge) countBadge.textContent = `${visibleInBlock} Programmes`;
+        });
+    }
+
+    searchInput?.addEventListener('input', applyDashboardFilters);
+    catSelect?.addEventListener('change', applyDashboardFilters);
+    stageSelect?.addEventListener('change', applyDashboardFilters);
+    modeSelect?.addEventListener('change', applyDashboardFilters);
+
+    document.querySelectorAll('.dash-status-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.dash-status-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            activeStatus = btn.dataset.status;
+            applyDashboardFilters();
+        });
+    });
 }
+
+// Quick jump to result entry from dashboard gear
+window.openQuickScoreEdit = function(eventId) {
+    const tabBtn = document.querySelector('button[data-bs-target="#tab-result-entry"]');
+    if (tabBtn) tabBtn.click();
+    setTimeout(() => {
+        if (typeof window.loadResultEvent === 'function') {
+            window.loadResultEvent(eventId);
+        }
+    }, 100);
+};
 
 window.filterDashboardEvents = function(status) {
     document.querySelectorAll('.dashboard-event-card').forEach(card => {
@@ -3223,4 +3447,193 @@ window.logoutAdmin = function() {
     logoutUser();
     window.location.hash = '#fest-admin';
     window.checkForAdminMode();
+};
+
+// =========================================================================
+// --- REACTIVE LIVE UI DISPATCHER ---
+// =========================================================================
+
+// Debounce timer to prevent rapid redraws when batch writes arrive
+let liveRefreshDebounceTimer = null;
+
+window.addEventListener('festDataUpdated', (e) => {
+    if (!state.managingFest) return;
+
+    clearTimeout(liveRefreshDebounceTimer);
+    liveRefreshDebounceTimer = setTimeout(() => {
+        refreshActiveAdminView(e.detail.collection);
+    }, 120);
+});
+
+/**
+ * Checks which tab and sub-tab are visible and triggers only its render function.
+ */
+function refreshActiveAdminView(changedCollection) {
+    // 1. Check main admin active tab
+    const activeMainTab = document.querySelector('#festAdminTabs .nav-link.active');
+    const mainTarget = activeMainTab?.getAttribute('data-bs-target');
+
+    if (!mainTarget) return;
+
+    // Refresh Dashboard counters and rankings
+    if (mainTarget === '#tab-dash') {
+        renderDashboardTab();
+        return;
+    }
+
+    // Refresh Events management table
+    if (mainTarget === '#tab-events' && changedCollection === 'festEvents') {
+        renderEventsTab();
+        return;
+    }
+
+    // Refresh Participants workspace
+    if (mainTarget === '#tab-participants') {
+        const activeSubTab = document.querySelector('#participant-sub-tabs .nav-link.active');
+        const subTarget = activeSubTab?.getAttribute('data-bs-target');
+
+        const isRegOpen = state.managingFest.registrationOpen === true;
+
+        if (subTarget === '#subtab-registrations') {
+            // Re-render allocations table using current search and filter values
+            renderSubTabRegistrations(isRegOpen);
+        } else if (subTarget === '#subtab-groups') {
+            // Re-render group table rows preserving sort order without wiping form inputs
+            if (typeof renderAdminGroupsTableBody === 'function') {
+                renderAdminGroupsTableBody(isRegOpen);
+            } else {
+                renderSubTabGroups(isRegOpen);
+            }
+        } else if (subTarget === '#subtab-participation') {
+            renderSubTabParticipation();
+        } else if (subTarget === '#subtab-chest' && changedCollection === 'festRegistrations') {
+            // Only refresh chest table if the bulk generator is not currently open/editing
+            const activeInput = document.activeElement;
+            if (!activeInput || !activeInput.classList.contains('chest-val-input')) {
+                renderSubTabChestNumbers();
+            }
+        }
+        return;
+    }
+
+    // Refresh Live Result Entry tab if an event is currently loaded
+    if (mainTarget === '#tab-result-entry' && changedCollection === 'festResults') {
+        const evSelect = document.getElementById('admin-result-event');
+        if (evSelect && evSelect.value) {
+            // Do not redraw if an admin is currently typing in an input
+            const activeEl = document.activeElement;
+            const isTyping = activeEl && (activeEl.classList.contains('result-score-input') || activeEl.tagName === 'SELECT');
+            if (!isTyping && typeof loadResultEvent === 'function') {
+                loadResultEvent(evSelect.value);
+            }
+        }
+    }
+}
+
+window.printProgrammeChecklist = function() {
+    const fest = state.managingFest;
+    if (!fest) return window.showAlert?.('Please select a festival first.', 'warning');
+
+    const events = state.festEvents.filter(e => e.festId === fest.id && e.cancelled !== true);
+    const houses = state.festHouses;
+
+    if (!events.length) {
+        return window.showAlert?.('No active events to print.', 'info');
+    }
+
+    // Group events by category
+    const categories = [...new Set(events.map(e => e.category || 'General'))].sort();
+
+    // Compact list of house reference tags (e.g. RED [R], BLUE [B])
+    const houseLegend = houses.map(h => `<strong>${h.name}</strong>: <code>${h.id.slice(0, 2).toUpperCase()}</code>`).join(' &bull; ');
+
+    const categoryTablesHtml = categories.map((cat, catIdx) => {
+        const catEvents = events.filter(e => (e.category || 'General') === cat);
+
+        // Sort: Solo First, then Group; then by Stage and Name
+        catEvents.sort((a, b) => {
+            if (a.isGroupEvent !== b.isGroupEvent) return a.isGroupEvent ? 1 : -1;
+            if (a.type !== b.type) return a.type === 'onStage' ? -1 : 1;
+            return a.name.localeCompare(b.name);
+        });
+
+        const rows = catEvents.map((ev, idx) => {
+            const isGroup = ev.isGroupEvent;
+            const isOff = ev.type === 'offStage';
+
+            return `
+                <tr style="height: 32px;">
+                    <td style="text-align: center; font-weight: bold; width: 4%;">${idx + 1}</td>
+                    <td style="width: 38%;">
+                        <strong>${ev.name}</strong>
+                        <div style="font-size: 7.5pt; color: #555;">
+                            ${isOff ? 'Off-Stage' : 'On-Stage'} &bull; ${isGroup ? 'Group Team' : 'Solo'} &bull; Stage: ${ev.stage || 'Main'} &bull; ${ev.gender || 'Common'}
+                        </div>
+                    </td>
+                    <td style="width: 10%; text-align: center; font-size: 8pt;">${isOff ? 'Off-Stage' : 'On-Stage'}</td>
+                    <td style="width: 8%; text-align: center; font-size: 8pt;">${isGroup ? 'Group' : 'Solo'}</td>
+                    
+                    <!-- 2-Letter House Code Input Boxes -->
+                    <td style="width: 13%; text-align: center; vertical-align: middle;">
+                        <div style="display: inline-block; width: 34px; height: 22px; border: 1.5px solid #000; border-radius: 3px; font-weight: bold; line-height: 20px;"></div>
+                    </td>
+                    <td style="width: 13%; text-align: center; vertical-align: middle;">
+                        <div style="display: inline-block; width: 34px; height: 22px; border: 1.5px solid #000; border-radius: 3px; font-weight: bold; line-height: 20px;"></div>
+                    </td>
+                    <td style="width: 14%; text-align: center; vertical-align: middle;">
+                        <div style="display: inline-block; width: 34px; height: 22px; border: 1.5px solid #000; border-radius: 3px; font-weight: bold; line-height: 20px;"></div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        return `
+            <div style="margin-bottom: 22px; page-break-inside: avoid; ${catIdx > 0 ? 'margin-top: 15px;' : ''}">
+                <div style="background: #e9ecef; border-left: 5px solid #0d6efd; padding: 4px 8px; font-weight: bold; font-size: 9.5pt; margin-bottom: 6px;">
+                    CATEGORY: ${cat.toUpperCase()} (${catEvents.length} Programmes)
+                </div>
+
+                <table class="table table-bordered table-sm" style="width: 100%; border-collapse: collapse; font-size: 8.5pt;">
+                    <thead style="background: #f8f9fa;">
+                        <tr>
+                            <th style="text-align: center;">#</th>
+                            <th>Programme / Event Name</th>
+                            <th style="text-align: center;">Stage</th>
+                            <th style="text-align: center;">Mode</th>
+                            <th style="text-align: center; background: #fff3cd;">🥇 1st House</th>
+                            <th style="text-align: center; background: #e2e3e5;">🥈 2nd House</th>
+                            <th style="text-align: center; background: #f8d7da;">🥉 3rd House</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }).join('');
+
+    const contentHtml = `
+        <div style="text-align: center; margin-bottom: 15px; border-bottom: 2px solid #212529; padding-bottom: 10px;">
+            <h2 style="margin: 0; font-size: 16pt;">${fest.name}</h2>
+            <h4 style="margin: 3px 0; color: #495057; font-size: 11.5pt;">Official Programme Checklist &amp; Tabulator Result Sheet</h4>
+            <div style="font-size: 8.5pt; color: #555; margin-top: 4px;">
+                <strong>House Codes (Write 2 letters in box):</strong> ${houseLegend}
+            </div>
+        </div>
+
+        ${categoryTablesHtml}
+
+        <div style="margin-top: 40px; display: flex; justify-content: space-between; font-size: 8.5pt; page-break-inside: avoid;">
+            <div>Stage Manager: ______________________</div>
+            <div>Scrutinizer: ______________________</div>
+            <div>Convener Signature: ______________________</div>
+        </div>
+    `;
+
+    window.printReport({
+        contentHtml,
+        title: `Programme_Checklist_${fest.name.replace(/\s+/g, '_')}`,
+        pageSize: 'A4 portrait'
+    });
 };

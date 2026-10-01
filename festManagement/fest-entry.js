@@ -2868,3 +2868,24 @@ window.filterHouseEventPreview = function(status) {
         card.classList.toggle('d-none', card.dataset.entryStatus !== status);
     });
 };
+
+window.addEventListener('festDataUpdated', () => {
+    const fest = state.managingFest;
+    const houseId = state.loggedInHouseId;
+    if (!fest || !houseId) return;
+
+    const house = state.festHouses.find(h => h.id === houseId);
+    if (!house) return;
+
+    const activeTabBtn = document.querySelector('#captain-tabs .nav-link.active');
+    const target = activeTabBtn?.getAttribute('data-bs-target');
+    const isRegOpen = fest.registrationOpen === true;
+
+    if (target === '#tab-eventwise-reg') {
+        eventwiseRegistrationTab(fest, house, isRegOpen);
+    } else if (target === '#tab-group-reg') {
+        renderGroupTeamTab(fest, house, isRegOpen);
+    } else if (target === '#tab-view-summary') {
+        renderRosterSummaryTab(fest, house);
+    }
+});
