@@ -114,55 +114,27 @@
             100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
         }
 
-        /* Top-Left: High Contrast Dual-Toned House Progress Bar */
+        /* Top-Left: House Leaderboard Bars */
         .house-row-wrapper {
             width: 100%;
             display: flex;
             flex-direction: column;
-            margin-bottom: 6px;
+            margin-bottom: 8px;
         }
 
         .house-bar-bg {
             background: #e2e8f0;
             border-radius: 8px;
-            height: 22px;
+            height: 18px;
             width: 100%;
             overflow: hidden;
-            display: flex;
-            box-shadow: inset 0 2px 4px rgba(0,0,0,0.12);
-            border: 1px solid #cbd5e1;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
         }
 
-        .house-bar-solo {
+        .house-bar-fill {
             height: 100%;
             transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #ffffff;
-            font-size: 0.7rem;
-            font-weight: bold;
-            text-shadow: 0 1px 2px rgba(0,0,0,0.6);
-        }
-
-        .house-bar-group {
-            height: 100%;
-            transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-            background-image: repeating-linear-gradient(
-                45deg,
-                rgba(0, 0, 0, 0.22),
-                rgba(0, 0, 0, 0.22) 8px,
-                rgba(255, 255, 255, 0.15) 8px,
-                rgba(255, 255, 255, 0.15) 16px
-            );
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #ffffff;
-            font-size: 0.7rem;
-            font-weight: bold;
-            text-shadow: 0 1px 2px rgba(0,0,0,0.7);
-            border-left: 2px solid #ffffff;
+            border-radius: 8px;
         }
 
         /* Top-Right: Event Winner Carousel */
@@ -198,7 +170,7 @@
 
         .table-light-custom {
             --bs-table-bg: #ffffff;
-            --bs-table-border-color: #cbd5e1;
+            --bs-table-border-color: #e2e8f0;
             color: var(--text-main);
             margin-bottom: 0;
             border-collapse: separate;
@@ -207,33 +179,17 @@
 
         .table-light-custom th, 
         .table-light-custom td {
-            border-bottom: 2px solid #cbd5e1 !important;
-            border-right: 1px solid #e2e8f0;
-            padding: 8px 4px;
-        }
-
-        .table-light-custom tbody tr:nth-child(odd) {
-            background-color: #ffffff;
-        }
-        .table-light-custom tbody tr:nth-child(even) {
-            background-color: #f8fafc;
+            border-color: #e2e8f0;
         }
 
         .house-fixed-col {
             position: sticky;
             left: 0;
+            background: #f8fafc !important;
             z-index: 3;
-            min-width: 190px;
-            max-width: 190px;
-            border-right: 3px solid #94a3b8 !important;
-            background-color: inherit !important;
-        }
-
-        .house-row-accent {
-            transition: background-color 0.2s ease;
-        }
-        .house-row-accent:hover {
-            background-color: #eff6ff !important;
+            min-width: 180px;
+            max-width: 180px;
+            border-right: 2px solid #cbd5e1 !important;
         }
 
         .event-header-cell {
@@ -276,6 +232,51 @@
             from { opacity: 0; transform: translateY(4px); }
             to { opacity: 1; transform: translateY(0); }
         }
+
+        /* Enhanced Grid Lines & Zebra Shading */
+        .table-light-custom {
+            --bs-table-bg: #ffffff;
+            --bs-table-border-color: #cbd5e1;
+            color: var(--text-main);
+            margin-bottom: 0;
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+
+        .table-light-custom th, 
+        .table-light-custom td {
+            border-bottom: 2px solid #cbd5e1 !important;
+            border-right: 1px solid #e2e8f0;
+            padding: 8px 4px;
+        }
+
+        /* Zebra Striping with Subtle Contrast */
+        .table-light-custom tbody tr:nth-child(odd) {
+            background-color: #ffffff;
+        }
+        .table-light-custom tbody tr:nth-child(even) {
+            background-color: #f8fafc;
+        }
+
+        /* Fixed First Column (Houses) with Distinct Shading */
+        .house-fixed-col {
+            position: sticky;
+            left: 0;
+            z-index: 3;
+            min-width: 190px;
+            max-width: 190px;
+            border-right: 3px solid #94a3b8 !important;
+            background-color: inherit !important;
+        }
+
+        /* House Left-Border Strip & Subtle Accent Glow */
+        .house-row-accent {
+            transition: background-color 0.2s ease;
+        }
+        .house-row-accent:hover {
+            background-color: #eff6ff !important; /* Soft sky blue highlight */
+        }
+        
     </style>
 </head>
 <body>
@@ -323,10 +324,7 @@
             <div class="col-6 h-100">
                 <div class="tv-card">
                     <div class="tv-card-header">
-                        <div class="d-flex align-items-center gap-2">
-                            <span class="fw-bold small text-dark"><i class="fas fa-trophy text-warning me-2"></i>HOUSE STANDINGS</span>
-                            <small class="text-muted" style="font-size: 0.7rem;">(Solid: Solo | Striped: Group)</small>
-                        </div>
+                        <span class="fw-bold small text-dark"><i class="fas fa-trophy text-warning me-2"></i>HOUSE STANDINGS</span>
                         <span class="badge bg-primary" id="total-results-count">0 Events Evaluated</span>
                     </div>
                     <div class="p-3 overflow-auto flex-grow-1 w-100 d-flex flex-column justify-content-around" id="house-rankings-container">
@@ -446,20 +444,6 @@
         let priorityQueue = [];
         let activeUnsubscribers = [];
 
-        // Exact tiered scoring table
-        function pointsFor(position, isGroup = false, name = '') {
-            const isMarchPast = String(name || '').trim().toUpperCase() === "MARCH PAST";
-
-            const table = {
-                marchPast: { 1: 20, 2: 15, 3: 10, 4: 5 },
-                group:     { 1: 15, 2: 10, 3: 5,  4: 0 },
-                solo:      { 1: 5,  2: 3,  3: 1,  4: 0 }
-            };
-
-            const tier = isMarchPast ? 'marchPast' : (isGroup ? 'group' : 'solo');
-            return table[tier][position] ?? 0;
-        }
-
         const CATEGORY_ICONS = {
             'KIDS': 'fa-child text-warning',
             'SUB-JUNIOR': 'fa-user-graduate text-info',
@@ -514,7 +498,7 @@
 
             const yearPath = `academicYears/${activeYearId}`;
 
-            // 1. Sync Students
+            // 1. Sync Students (CRUCIAL for House Resolution)
             const unsubStudents = onSnapshot(collection(db, `${yearPath}/students`), snap => {
                 students = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 recomputeAll();
@@ -578,7 +562,7 @@
             activeUnsubscribers.push(unsubResults);
         }
 
-        // House Resolver across result item types
+        // Robust House Resolver across result item types
         function resolveStandingHouseId(st, eventId) {
             if (st.houseId) return st.houseId;
 
@@ -618,60 +602,37 @@
             document.getElementById('total-results-count').textContent = `${results.length} Events Evaluated`;
         }
 
-        // Calculate Solo & Group Points separately
         function calculateHouseScores() {
             houseScoreMap.clear();
-            houses.forEach(h => houseScoreMap.set(h.id, { solo: 0, group: 0, total: 0 }));
+            houses.forEach(h => houseScoreMap.set(h.id, 0));
 
             results.forEach(res => {
-                const ev = events.find(e => e.id === res.eventId);
-                const isGroup = Boolean(ev?.isGroupEvent || ev?.type === 'group');
-                const evName = ev?.name || '';
-
                 (res.results || []).forEach(st => {
-                    const pos = Number(st.position);
-                    let pts = 0;
-
-                    if (pos >= 1 && pos <= 4) {
-                        pts = pointsFor(pos, isGroup, evName);
-                    } else {
-                        pts = Number(st.points) || 0;
-                    }
-
+                    const pts = Number(st.points) || 0;
                     const targetHouseId = resolveStandingHouseId(st, res.eventId);
 
                     if (targetHouseId && houseScoreMap.has(targetHouseId)) {
-                        const entry = houseScoreMap.get(targetHouseId);
-                        if (isGroup || String(evName).trim().toUpperCase() === "MARCH PAST") {
-                            entry.group += pts;
-                        } else {
-                            entry.solo += pts;
-                        }
-                        entry.total += pts;
+                        houseScoreMap.set(targetHouseId, houseScoreMap.get(targetHouseId) + pts);
                     }
                 });
             });
         }
 
-        // High-contrast dual-tone progress bars
         function renderHouseLeaderboard() {
             const container = document.getElementById('house-rankings-container');
             if (!container || !houses.length) return;
 
             const sorted = [...houses].map(h => ({
                 ...h,
-                scores: houseScoreMap.get(h.id) || { solo: 0, group: 0, total: 0 }
-            })).sort((a, b) => b.scores.total - a.scores.total);
+                score: houseScoreMap.get(h.id) || 0
+            })).sort((a, b) => b.score - a.score);
 
-            const maxScore = Math.max(...sorted.map(h => h.scores.total), 1);
+            const maxScore = Math.max(...sorted.map(h => h.score), 1);
 
             container.innerHTML = sorted.map((h, index) => {
-                const soloPct = Math.round((h.scores.solo / maxScore) * 100);
-                const groupPct = Math.round((h.scores.group / maxScore) * 100);
-
+                const percent = Math.max(Math.round((h.score / maxScore) * 100), 4);
                 const badgeClass = index === 0 ? 'bg-warning text-dark' : (index === 1 ? 'bg-secondary text-white' : 'bg-light text-dark border');
                 const rankText = index === 0 ? '<i class="fas fa-crown text-warning me-1"></i>1st' : `${index + 1}`;
-                const houseColor = h.color || '#2563eb';
 
                 return `
                     <div class="house-row-wrapper">
@@ -680,26 +641,10 @@
                                 <span class="badge ${badgeClass}" style="min-width: 44px; font-size: 0.75rem;">${rankText}</span>
                                 <span class="fw-bold small text-dark">${h.name}</span>
                             </div>
-                            <div class="d-flex align-items-center gap-2">
-                                <small class="text-muted" style="font-size: 0.68rem;">
-                                    (Solo: <strong>${h.scores.solo}</strong> | Grp: <strong>${h.scores.group}</strong>)
-                                </small>
-                                <span class="fw-bold font-monospace text-dark" style="font-size: 0.9rem;">
-                                    ${h.scores.total} <small class="text-secondary" style="font-size: 0.65rem;">PTS</small>
-                                </span>
-                            </div>
+                            <span class="fw-bold font-monospace text-dark small">${h.score} <small class="text-secondary" style="font-size: 0.65rem;">PTS</small></span>
                         </div>
-
-                        <!-- Stacked Dual-Toned High-Contrast Bar -->
                         <div class="house-bar-bg">
-                            <!-- Solo Segment (Solid House Tone) -->
-                            <div class="house-bar-solo" style="width: ${soloPct}%; background-color: ${houseColor};" title="Solo Points: ${h.scores.solo}">
-                                ${soloPct > 8 ? h.scores.solo : ''}
-                            </div>
-                            <!-- Group Segment (High-Contrast Pattern Over House Tone) -->
-                            <div class="house-bar-group" style="width: ${groupPct}%; background-color: ${houseColor};" title="Group Points: ${h.scores.group}">
-                                ${groupPct > 8 ? h.scores.group : ''}
-                            </div>
+                            <div class="house-bar-fill" style="width: ${percent}%; background-color: ${h.color || '#2563eb'};"></div>
                         </div>
                     </div>
                 `;
@@ -841,6 +786,7 @@
                 return;
             }
 
+            // Build Body with Row Accent Shading and House Border
             tableBody.className = "fade-swap";
             tableBody.innerHTML = houses.map((house, hIdx) => {
                 const houseColor = house.color || '#2563eb';
@@ -848,6 +794,7 @@
 
                 return `
                     <tr class="house-row-accent" style="background-color: ${rowBg};">
+                        <!-- Fixed House Header with Solid Left Color Accent -->
                         <td class="house-fixed-col text-start ps-3" style="border-left: 6px solid ${houseColor} !important;">
                             <div class="d-flex align-items-center gap-2">
                                 <span class="rounded-circle shadow-sm" style="width: 12px; height: 12px; background-color: ${houseColor}; display: inline-block;"></span>
@@ -855,12 +802,14 @@
                             </div>
                         </td>
 
+                        <!-- Placed Badges / Dash -->
                         ${filteredEvents.map(event => {
                             const res = results.find(r => r.eventId === event.id);
                             if (!res || !res.results?.length) {
                                 return `<td class="text-center text-muted" style="opacity: 0.25; font-size: 0.75rem;">-</td>`;
                             }
 
+                            // Match all placements by this house in the current event
                             const houseStandings = (res.results || []).filter(st => {
                                 const hId = resolveStandingHouseId(st, event.id);
                                 return hId === house.id;
@@ -870,15 +819,15 @@
                                 return `<td class="text-center text-muted" style="font-size: 0.75rem; opacity: 0.3;">-</td>`;
                             }
 
+                            // Render badges for all positions
                             const badgesHtml = houseStandings
                                 .sort((a, b) => a.position - b.position)
                                 .map(st => {
                                     const p = st.position;
-                                    const badgeColor = p === 1 ? 'bg-warning text-dark' : (p === 2 ? 'bg-secondary text-white' : (p === 3 ? 'bg-light text-dark border border-secondary' : 'bg-light text-muted border'));
-                                    const label = p === 1 ? '1st' : (p === 2 ? '2nd' : (p === 3 ? '3rd' : '4th'));
+                                    const badgeColor = p === 1 ? 'bg-warning text-dark' : (p === 2 ? 'bg-secondary text-white' : 'bg-light text-dark border border-secondary');
                                     return `
                                         <span class="pos-badge ${badgeColor} m-1 shadow-sm">
-                                            ${label}
+                                            ${p === 1 ? '1st' : (p === 2 ? '2nd' : '3rd')}
                                         </span>
                                     `;
                                 }).join('');
