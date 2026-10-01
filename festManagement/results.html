@@ -29,9 +29,10 @@
             display: flex;
             flex-direction: column;
             user-select: none;
+            margin: 0;
+            padding: 0;
         }
 
-        /* 1px Hidden Video to prevent TV sleep */
         #screen-keeper-video {
             position: fixed;
             bottom: 0;
@@ -57,13 +58,13 @@
         .tv-card-header {
             background: #f8fafc;
             border-bottom: 1px solid var(--border-color);
-            padding: 8px 16px;
+            padding: clamp(4px, 0.9vh, 8px) 16px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-shrink: 0;
         }
 
-        /* Top Bar */
         .top-navbar {
             height: 52px;
             background: #ffffff;
@@ -73,6 +74,7 @@
             justify-content: space-between;
             padding: 0 16px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            flex-shrink: 0;
         }
 
         .school-brand-badge {
@@ -114,27 +116,69 @@
             100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
         }
 
-        /* Top-Left: House Leaderboard Bars */
+        /* Top-Left: Zero-scroll House Standings */
+        #house-rankings-container {
+            padding: clamp(4px, 1vh, 10px) 14px;
+            overflow: hidden !important;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-evenly;
+            height: 100%;
+        }
+
         .house-row-wrapper {
             width: 100%;
             display: flex;
             flex-direction: column;
-            margin-bottom: 8px;
+            margin-bottom: 0;
+        }
+
+        .house-row-meta {
+            font-size: clamp(0.68rem, 1.2vh, 0.84rem);
+            margin-bottom: 2px;
         }
 
         .house-bar-bg {
             background: #e2e8f0;
-            border-radius: 8px;
-            height: 18px;
+            border-radius: 6px;
+            height: clamp(14px, 2.2vh, 22px);
             width: 100%;
             overflow: hidden;
-            box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.12);
+            border: 1px solid #cbd5e1;
         }
 
-        .house-bar-fill {
+        .house-bar-solo {
             height: 100%;
             transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+            font-size: clamp(0.55rem, 1vh, 0.72rem);
+            font-weight: bold;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+        }
+
+        .house-bar-group {
+            height: 100%;
+            transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+            background-image: repeating-linear-gradient(
+                45deg,
+                rgba(0, 0, 0, 0.22),
+                rgba(0, 0, 0, 0.22) 8px,
+                rgba(255, 255, 255, 0.15) 8px,
+                rgba(255, 255, 255, 0.15) 16px
+            );
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+            font-size: clamp(0.55rem, 1vh, 0.72rem);
+            font-weight: bold;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+            border-left: 2px solid #ffffff;
         }
 
         /* Top-Right: Event Winner Carousel */
@@ -161,68 +205,136 @@
             100% { opacity: 0.9; }
         }
 
-        /* Bottom: Matrix Grid with Vertical Event Headers */
+        /* Bottom Half: Continuous Horizontal Marquee Scroller */
         .matrix-table-container {
             flex: 1;
-            overflow: auto;
+            overflow-x: hidden;
+            overflow-y: hidden;
             background: #ffffff;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        .matrix-table-container::-webkit-scrollbar {
+            display: none;
         }
 
         .table-light-custom {
             --bs-table-bg: #ffffff;
-            --bs-table-border-color: #e2e8f0;
+            --bs-table-border-color: #cbd5e1;
             color: var(--text-main);
             margin-bottom: 0;
             border-collapse: separate;
             border-spacing: 0;
+            width: auto;
+            min-width: 100%;
+            height: 100%;
         }
 
         .table-light-custom th, 
         .table-light-custom td {
-            border-color: #e2e8f0;
+            border-bottom: 1px solid #cbd5e1 !important;
+            border-right: 1px solid #e2e8f0;
+            padding: 3px 2px;
+        }
+
+        .table-light-custom tbody tr:nth-child(odd) {
+            background-color: #ffffff;
+        }
+        .table-light-custom tbody tr:nth-child(even) {
+            background-color: #f8fafc;
         }
 
         .house-fixed-col {
             position: sticky;
             left: 0;
-            background: #f8fafc !important;
-            z-index: 3;
-            min-width: 180px;
-            max-width: 180px;
-            border-right: 2px solid #cbd5e1 !important;
+            z-index: 5;
+            width: 175px;
+            min-width: 175px;
+            max-width: 175px;
+            border-right: 3px solid #94a3b8 !important;
+            box-shadow: 3px 0 6px rgba(0, 0, 0, 0.06);
+            background-color: #ffffff !important;
+        }
+        .table-light-custom tbody tr:nth-child(even) .house-fixed-col {
+            background-color: #f8fafc !important;
+        }
+
+        .house-row-accent {
+            transition: background-color 0.2s ease;
+        }
+        .house-row-accent:hover {
+            background-color: #eff6ff !important;
         }
 
         .event-header-cell {
-            height: 140px;
-            min-width: 46px;
-            max-width: 50px;
             vertical-align: bottom;
-            padding: 8px 2px;
             text-align: center;
             background: #f8fafc;
+            padding: 6px 2px 4px 2px;
+            height: 135px;
+            width: 58px;
+            min-width: 58px;
+            max-width: 64px;
+        }
+
+        .event-data-cell {
+            width: 58px;
+            min-width: 58px;
+            max-width: 64px;
+            text-align: center;
+            vertical-align: middle;
+            padding: 2px !important;
+            white-space: nowrap;
+        }
+
+        .event-badge-flex-row {
+            display: inline-flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            width: 100%;
+            overflow: visible;
+        }
+
+        .event-vertical-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            height: 100%;
+            width: 100%;
         }
 
         .event-vertical-title {
             writing-mode: vertical-rl;
             transform: rotate(180deg);
-            white-space: nowrap;
-            font-size: 0.75rem;
-            font-weight: 600;
-            letter-spacing: 0.3px;
-            max-height: 120px;
+            white-space: normal;
+            word-break: break-word;
+            line-height: 1.05;
+            max-height: 94px;
             overflow: hidden;
-            text-overflow: ellipsis;
-            display: inline-block;
-            margin: 0 auto;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            font-size: clamp(0.66rem, 1.1vh, 0.74rem);
+            font-weight: 700;
+            letter-spacing: 0.2px;
             color: #1e293b;
+            margin: auto 0;
         }
 
         .pos-badge {
-            font-size: 0.7rem;
-            padding: 2px 5px;
+            font-size: clamp(0.58rem, 0.95vh, 0.68rem);
+            padding: 2px 3px;
             border-radius: 4px;
             display: inline-block;
             font-weight: 700;
+            line-height: 1;
+            white-space: nowrap;
         }
 
         .fade-swap {
@@ -232,56 +344,10 @@
             from { opacity: 0; transform: translateY(4px); }
             to { opacity: 1; transform: translateY(0); }
         }
-
-        /* Enhanced Grid Lines & Zebra Shading */
-        .table-light-custom {
-            --bs-table-bg: #ffffff;
-            --bs-table-border-color: #cbd5e1;
-            color: var(--text-main);
-            margin-bottom: 0;
-            border-collapse: separate;
-            border-spacing: 0;
-        }
-
-        .table-light-custom th, 
-        .table-light-custom td {
-            border-bottom: 2px solid #cbd5e1 !important;
-            border-right: 1px solid #e2e8f0;
-            padding: 8px 4px;
-        }
-
-        /* Zebra Striping with Subtle Contrast */
-        .table-light-custom tbody tr:nth-child(odd) {
-            background-color: #ffffff;
-        }
-        .table-light-custom tbody tr:nth-child(even) {
-            background-color: #f8fafc;
-        }
-
-        /* Fixed First Column (Houses) with Distinct Shading */
-        .house-fixed-col {
-            position: sticky;
-            left: 0;
-            z-index: 3;
-            min-width: 190px;
-            max-width: 190px;
-            border-right: 3px solid #94a3b8 !important;
-            background-color: inherit !important;
-        }
-
-        /* House Left-Border Strip & Subtle Accent Glow */
-        .house-row-accent {
-            transition: background-color 0.2s ease;
-        }
-        .house-row-accent:hover {
-            background-color: #eff6ff !important; /* Soft sky blue highlight */
-        }
-        
     </style>
 </head>
 <body>
 
-    <!-- Background Stay-Awake Video (Tiny transparent base64 video loop) -->
     <video id="screen-keeper-video" autoplay muted loop playsinline src="data:video/mp4;base64,AAAAHGZ0eXBtcDQyAAAAAG1wNDJpc29tYXZjMQAAAAhmcmVlAAAAL21kYXQAAAAAAAABGAEA4AAAABhhdWNmYXN0AAAAAAABAAAAAAABAAAAAA=="></video>
 
     <!-- Global Broadcast Bar -->
@@ -303,7 +369,6 @@
             <span class="fw-bold fs-6 tracking-wide text-dark" id="broadcast-fest-name">ANNUAL FEST LIVE</span>
         </div>
         
-        <!-- Year Selector in the Top Right Corner -->
         <div class="d-flex align-items-center gap-2">
             <label for="global-year-select" class="small text-secondary fw-semibold mb-0">
                 <i class="fas fa-calendar-days text-primary me-1"></i>Academic Year:
@@ -317,17 +382,20 @@
     <!-- Main TV Viewport -->
     <main class="container-fluid p-2 flex-grow-1 d-flex flex-column gap-2" style="height: calc(100vh - 52px);">
         
-        <!-- Top Half: Leaderboard & Winner Spotlight (~42%) -->
-        <div class="row g-2" style="height: 42%;">
+        <!-- Top Half: Leaderboard & Winner Spotlight (~38%) -->
+        <div class="row g-2" style="height: 38%;">
             
-            <!-- Top Left: House Standings -->
+            <!-- Top Left: Standings -->
             <div class="col-6 h-100">
                 <div class="tv-card">
                     <div class="tv-card-header">
-                        <span class="fw-bold small text-dark"><i class="fas fa-trophy text-warning me-2"></i>HOUSE STANDINGS</span>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="fw-bold small text-dark"><i class="fas fa-trophy text-warning me-2"></i>HOUSE STANDINGS</span>
+                            <small class="text-muted" style="font-size: 0.7rem;">(Solid: Solo | Striped: Group)</small>
+                        </div>
                         <span class="badge bg-primary" id="total-results-count">0 Events Evaluated</span>
                     </div>
-                    <div class="p-3 overflow-auto flex-grow-1 w-100 d-flex flex-column justify-content-around" id="house-rankings-container">
+                    <div id="house-rankings-container">
                         <div class="d-flex h-100 align-items-center justify-content-center text-muted small">
                             <i class="fas fa-spinner fa-spin me-2"></i>Loading Scores...
                         </div>
@@ -352,25 +420,26 @@
 
         </div>
 
-        <!-- Bottom Half: Vertical Event Header Matrix (~58%) -->
-        <div class="row g-2 flex-grow-1" style="height: 58%;">
+        <!-- Bottom Half: Continuous Autoscrolling Matrix (~62%) -->
+        <div class="row g-2 flex-grow-1" style="height: 62%;">
             <div class="col-12 h-100">
                 <div class="tv-card">
                     <div class="tv-card-header py-1">
                         <div class="d-flex align-items-center gap-2">
                             <span class="fw-bold small text-dark"><i class="fas fa-layer-group text-success me-2"></i>PLACEMENTS MATRIX</span>
                             <span class="badge bg-primary" id="current-category-pill">ALL CATEGORIES</span>
+                            <span class="badge bg-secondary font-monospace" id="scroll-status-badge">Auto-Scroll Active</span>
                         </div>
                         <div class="small text-secondary" style="font-size: 0.75rem;">
-                            Category rotation in <span id="category-timer" class="fw-bold text-dark">10</span>s
+                            Category change in <span id="category-timer" class="fw-bold text-dark">20</span>s
                         </div>
                     </div>
 
-                    <div class="matrix-table-container">
+                    <div class="matrix-table-container" id="matrix-container">
                         <table class="table table-light-custom align-middle text-center table-bordered" id="matrix-table">
                             <thead>
                                 <tr id="matrix-header-row">
-                                    <th class="house-fixed-col text-start ps-3 align-bottom">HOUSE \ EVENTS</th>
+                                    <th class="house-fixed-col text-start ps-3 align-middle">HOUSE \ EVENTS</th>
                                 </tr>
                             </thead>
                             <tbody id="matrix-body-rows">
@@ -393,7 +462,6 @@
             getDocs 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Screen Wake Lock & Video Keep-Awake Engine
         let wakeLockSentinel = null;
 
         async function activateScreenKeeper() {
@@ -405,9 +473,6 @@
             if ('wakeLock' in navigator) {
                 try {
                     wakeLockSentinel = await navigator.wakeLock.request('screen');
-                    wakeLockSentinel.addEventListener('release', () => {
-                        console.log('[SCREEN-KEEPER] Wake lock released');
-                    });
                 } catch (err) {
                     console.warn('[SCREEN-KEEPER] Native WakeLock error:', err);
                 }
@@ -415,14 +480,9 @@
         }
 
         document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') {
-                activateScreenKeeper();
-            }
+            if (document.visibilityState === 'visible') activateScreenKeeper();
         });
-
-        window.addEventListener('click', () => {
-            activateScreenKeeper();
-        }, { once: true });
+        window.addEventListener('click', () => activateScreenKeeper(), { once: true });
 
         // State & Configuration
         const urlParams = new URLSearchParams(window.location.search);
@@ -440,9 +500,50 @@
         let spotlightIndex = 0;
         let categoryIndex = 0;
         let availableCategories = [];
-        let categoryRotationTimer = 10;
+        let categoryTimerSeconds = 20;
         let priorityQueue = [];
         let activeUnsubscribers = [];
+
+        let scrollRafId = null;
+        let scrollSpeed = 0.65;
+        let isScrollPaused = false;
+
+        function pointsFor(position, isGroup = false, name = '') {
+            const isMarchPast = String(name || '').trim().toUpperCase() === "MARCH PAST";
+            const table = {
+                marchPast: { 1: 20, 2: 15, 3: 10, 4: 5 },
+                group:     { 1: 15, 2: 10, 3: 5,  4: 0 },
+                solo:      { 1: 5,  2: 3,  3: 1,  4: 0 }
+            };
+            const tier = isMarchPast ? 'marchPast' : (isGroup ? 'group' : 'solo');
+            return table[tier][position] ?? 0;
+        }
+
+        // Calculate points ONLY for events that have result entries published
+        function calculateEvaluatedPossiblePoints() {
+            const completedEventIds = new Set(
+                results.filter(r => (r.results || []).length > 0).map(r => r.eventId)
+            );
+
+            if (completedEventIds.size === 0) return 1;
+
+            let totalPossible = 0;
+            completedEventIds.forEach(evId => {
+                const ev = events.find(e => e.id === evId);
+                const isMarchPast = String(ev?.name || '').trim().toUpperCase() === "MARCH PAST";
+                const isGroup = Boolean(ev?.isGroupEvent || ev?.type === 'group');
+
+                if (isMarchPast) {
+                    totalPossible += (20 + 15 + 10 + 5); // 50 pts
+                } else if (isGroup) {
+                    totalPossible += (15 + 10 + 5);      // 30 pts
+                } else {
+                    totalPossible += (5 + 3 + 1);        // 9 pts
+                }
+            });
+
+            return Math.max(totalPossible, 1);
+        }
 
         const CATEGORY_ICONS = {
             'KIDS': 'fa-child text-warning',
@@ -478,11 +579,9 @@
                     if (e.target.value) {
                         activeYearId = e.target.value;
                         localStorage.setItem('activeYearId', activeYearId);
-                        
                         const newUrl = new URL(window.location.href);
                         newUrl.searchParams.set('year', activeYearId);
                         window.history.replaceState({}, '', newUrl);
-
                         bindRealtimeListeners();
                     }
                 });
@@ -498,58 +597,46 @@
 
             const yearPath = `academicYears/${activeYearId}`;
 
-            // 1. Sync Students (CRUCIAL for House Resolution)
-            const unsubStudents = onSnapshot(collection(db, `${yearPath}/students`), snap => {
+            activeUnsubscribers.push(onSnapshot(collection(db, `${yearPath}/students`), snap => {
                 students = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 recomputeAll();
-            });
-            activeUnsubscribers.push(unsubStudents);
+            }));
 
-            // 2. Fest Houses
-            const unsubHouses = onSnapshot(collection(db, `${yearPath}/festHouses`), snap => {
+            activeUnsubscribers.push(onSnapshot(collection(db, `${yearPath}/festHouses`), snap => {
                 houses = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 recomputeAll();
-            });
-            activeUnsubscribers.push(unsubHouses);
+            }));
 
-            // 3. Fest Events
-            const unsubEvents = onSnapshot(collection(db, `${yearPath}/festEvents`), snap => {
+            activeUnsubscribers.push(onSnapshot(collection(db, `${yearPath}/festEvents`), snap => {
                 events = snap.docs.map(d => ({ id: d.id, ...d.data() }))
                     .filter(e => !targetFestId || e.festId === targetFestId);
                 
                 availableCategories = [...new Set(events.map(e => e.category).filter(Boolean))];
                 if (!availableCategories.includes('ALL')) availableCategories.unshift('ALL');
                 recomputeAll();
-            });
-            activeUnsubscribers.push(unsubEvents);
+            }));
 
-            // 4. Registrations
-            const unsubRegs = onSnapshot(collection(db, `${yearPath}/festRegistrations`), snap => {
+            activeUnsubscribers.push(onSnapshot(collection(db, `${yearPath}/festRegistrations`), snap => {
                 registrations = snap.docs.map(d => ({ id: d.id, ...d.data() }))
                     .filter(r => !r.isDeleted && (!targetFestId || r.festId === targetFestId));
                 recomputeAll();
-            });
-            activeUnsubscribers.push(unsubRegs);
+            }));
 
-            // 5. Groups
-            const unsubGroups = onSnapshot(collection(db, `${yearPath}/festGroups`), snap => {
+            activeUnsubscribers.push(onSnapshot(collection(db, `${yearPath}/festGroups`), snap => {
                 groups = snap.docs.map(d => ({ id: d.id, ...d.data() }))
                     .filter(g => !g.isDeleted);
                 recomputeAll();
-            });
-            activeUnsubscribers.push(unsubGroups);
+            }));
 
-            // 6. Results & Real-time Priority Interrupt
             let isFirstLoad = true;
-            const unsubResults = onSnapshot(collection(db, `${yearPath}/festResults`), snap => {
+            activeUnsubscribers.push(onSnapshot(collection(db, `${yearPath}/festResults`), snap => {
                 const incoming = snap.docs.map(d => ({ id: d.id, ...d.data() }))
                     .filter(r => !targetFestId || r.festId === targetFestId);
 
                 if (!isFirstLoad) {
                     snap.docChanges().forEach(change => {
                         if (change.type === 'added' || change.type === 'modified') {
-                            const changedResult = { id: change.doc.id, ...change.doc.data() };
-                            priorityQueue.unshift(changedResult);
+                            priorityQueue.unshift({ id: change.doc.id, ...change.doc.data() });
                             cycleSpotlight();
                         }
                     });
@@ -558,19 +645,15 @@
                 results = incoming;
                 isFirstLoad = false;
                 recomputeAll();
-            });
-            activeUnsubscribers.push(unsubResults);
+            }));
         }
 
-        // Robust House Resolver across result item types
         function resolveStandingHouseId(st, eventId) {
             if (st.houseId) return st.houseId;
 
-            // Group event resolution
             if (st.groupId) {
                 const grp = groups.find(g => g.id === st.groupId);
                 if (grp?.houseId) return grp.houseId;
-
                 if (grp?.members?.length) {
                     const firstStudentId = grp.members[0].studentId;
                     const stu = students.find(s => s.id === firstStudentId);
@@ -580,14 +663,11 @@
                 }
             }
 
-            // Solo event resolution
             if (st.studentId) {
                 const regEvent = registrations.find(r => r.studentId === st.studentId && (r.events || []).includes(eventId));
                 if (regEvent?.houseId) return regEvent.houseId;
-
                 const regAny = registrations.find(r => r.studentId === st.studentId);
                 if (regAny?.houseId) return regAny.houseId;
-
                 const stu = students.find(s => s.id === st.studentId);
                 if (stu?.houseId) return stu.houseId;
             }
@@ -599,52 +679,83 @@
             calculateHouseScores();
             renderHouseLeaderboard();
             renderCategoryMatrix();
-            document.getElementById('total-results-count').textContent = `${results.length} Events Evaluated`;
+            const evaluatedCount = results.filter(r => (r.results || []).length > 0).length;
+            const el = document.getElementById('total-results-count');
+            if (el) el.textContent = `${evaluatedCount} Events Evaluated`;
         }
 
         function calculateHouseScores() {
             houseScoreMap.clear();
-            houses.forEach(h => houseScoreMap.set(h.id, 0));
+            houses.forEach(h => houseScoreMap.set(h.id, { solo: 0, group: 0, total: 0 }));
 
             results.forEach(res => {
+                const ev = events.find(e => e.id === res.eventId);
+                const isGroup = Boolean(ev?.isGroupEvent || ev?.type === 'group');
+                const evName = ev?.name || '';
+
                 (res.results || []).forEach(st => {
-                    const pts = Number(st.points) || 0;
+                    const pos = Number(st.position);
+                    let pts = (pos >= 1 && pos <= 4) ? pointsFor(pos, isGroup, evName) : (Number(st.points) || 0);
                     const targetHouseId = resolveStandingHouseId(st, res.eventId);
 
                     if (targetHouseId && houseScoreMap.has(targetHouseId)) {
-                        houseScoreMap.set(targetHouseId, houseScoreMap.get(targetHouseId) + pts);
+                        const entry = houseScoreMap.get(targetHouseId);
+                        if (isGroup || String(evName).trim().toUpperCase() === "MARCH PAST") {
+                            entry.group += pts;
+                        } else {
+                            entry.solo += pts;
+                        }
+                        entry.total += pts;
                     }
                 });
             });
         }
 
+        // House leaderboard bars proportional ONLY to evaluated events
         function renderHouseLeaderboard() {
             const container = document.getElementById('house-rankings-container');
             if (!container || !houses.length) return;
 
             const sorted = [...houses].map(h => ({
                 ...h,
-                score: houseScoreMap.get(h.id) || 0
-            })).sort((a, b) => b.score - a.score);
+                scores: houseScoreMap.get(h.id) || { solo: 0, group: 0, total: 0 }
+            })).sort((a, b) => b.scores.total - a.scores.total);
 
-            const maxScore = Math.max(...sorted.map(h => h.score), 1);
+            const evaluatedPossiblePoints = calculateEvaluatedPossiblePoints();
 
             container.innerHTML = sorted.map((h, index) => {
-                const percent = Math.max(Math.round((h.score / maxScore) * 100), 4);
+                const soloPct = Math.min(((h.scores.solo / evaluatedPossiblePoints) * 100), 100).toFixed(1);
+                const groupPct = Math.min(((h.scores.group / evaluatedPossiblePoints) * 100), 100).toFixed(1);
+
                 const badgeClass = index === 0 ? 'bg-warning text-dark' : (index === 1 ? 'bg-secondary text-white' : 'bg-light text-dark border');
                 const rankText = index === 0 ? '<i class="fas fa-crown text-warning me-1"></i>1st' : `${index + 1}`;
+                const houseColor = h.color || '#2563eb';
 
                 return `
                     <div class="house-row-wrapper">
-                        <div class="d-flex justify-content-between align-items-center mb-1">
-                            <div class="d-flex align-items-center gap-2">
-                                <span class="badge ${badgeClass}" style="min-width: 44px; font-size: 0.75rem;">${rankText}</span>
-                                <span class="fw-bold small text-dark">${h.name}</span>
+                        <div class="d-flex justify-content-between align-items-center house-row-meta">
+                            <div class="d-flex align-items-center gap-1 gap-md-2">
+                                <span class="badge ${badgeClass}" style="min-width: 36px; padding: 2px 4px;">${rankText}</span>
+                                <span class="fw-bold text-dark text-truncate">${h.name}</span>
                             </div>
-                            <span class="fw-bold font-monospace text-dark small">${h.score} <small class="text-secondary" style="font-size: 0.65rem;">PTS</small></span>
+                            <div class="d-flex align-items-center gap-2">
+                                <small class="text-muted d-none d-md-inline" style="font-size: 0.65rem;">
+                                    (Solo: <strong>${h.scores.solo}</strong> | Grp: <strong>${h.scores.group}</strong>)
+                                </small>
+                                <span class="fw-bold font-monospace text-dark">
+                                    ${h.scores.total} 
+                                    <small class="text-secondary" style="font-size: 0.65rem;">/ ${evaluatedPossiblePoints} PTS</small>
+                                </span>
+                            </div>
                         </div>
-                        <div class="house-bar-bg">
-                            <div class="house-bar-fill" style="width: ${percent}%; background-color: ${h.color || '#2563eb'};"></div>
+
+                        <div class="house-bar-bg" title="Evaluated points: ${evaluatedPossiblePoints}">
+                            <div class="house-bar-solo" style="width: ${soloPct}%; background-color: ${houseColor};" title="Solo Points: ${h.scores.solo} (${soloPct}%)">
+                                ${Number(soloPct) > 6 ? h.scores.solo : ''}
+                            </div>
+                            <div class="house-bar-group" style="width: ${groupPct}%; background-color: ${houseColor};" title="Group Points: ${h.scores.group} (${groupPct}%)">
+                                ${Number(groupPct) > 6 ? h.scores.group : ''}
+                            </div>
                         </div>
                     </div>
                 `;
@@ -690,7 +801,7 @@
                 <div class="fade-swap">
                     <div class="d-flex justify-content-between align-items-center border-bottom pb-1 mb-2">
                         <div>
-                            <div class="fw-bold text-dark small">${event?.name || activeResult.eventId}</div>
+                            <div class="fw-bold text-dark small text-truncate" style="max-width: 250px;">${event?.name || activeResult.eventId}</div>
                             <div class="text-secondary" style="font-size: 0.72rem;">
                                 <i class="fas ${getCategoryIcon(event?.category)} me-1"></i>${event?.category || 'General'} 
                                 &bull; ${event?.isGroupEvent ? 'Group' : 'Solo'}
@@ -736,7 +847,7 @@
                                             <span class="badge ${badgeColor}" style="font-size: 0.65rem;">${rankLabel}</span>
                                             <span class="small font-monospace text-success fw-bold" style="font-size: 0.7rem;">${item ? `+${item.points}` : ''}</span>
                                         </div>
-                                        <div class="fw-bold text-truncate text-dark" style="font-size: 0.85rem;">${targetName}</div>
+                                        <div class="fw-bold text-truncate text-dark" style="font-size: 0.82rem;">${targetName}</div>
                                         <div class="text-truncate" style="color: ${houseColor}; font-size: 0.72rem; font-weight: 700;">
                                             <i class="fas fa-shield-halved me-1"></i>${houseName}
                                         </div>
@@ -749,7 +860,39 @@
             `;
         }
 
+        function startContinuousScroll() {
+            if (scrollRafId) cancelAnimationFrame(scrollRafId);
+            const container = document.getElementById('matrix-container');
+            const badge = document.getElementById('scroll-status-badge');
+            if (!container) return;
+
+            let pauseUntil = 0;
+
+            function step(timestamp) {
+                if (!isScrollPaused && container.scrollWidth > container.clientWidth) {
+                    if (badge) badge.style.display = 'inline-block';
+
+                    if (timestamp >= pauseUntil) {
+                        container.scrollLeft += scrollSpeed;
+
+                        if (container.scrollLeft >= (container.scrollWidth - container.clientWidth - 1)) {
+                            pauseUntil = timestamp + 1800;
+                            setTimeout(() => {
+                                if (container) container.scrollLeft = 0;
+                            }, 1800);
+                        }
+                    }
+                } else if (badge) {
+                    badge.style.display = 'none';
+                }
+                scrollRafId = requestAnimationFrame(step);
+            }
+
+            scrollRafId = requestAnimationFrame(step);
+        }
+
         function renderCategoryMatrix() {
+            const container = document.getElementById('matrix-container');
             const tableHead = document.getElementById('matrix-header-row');
             const tableBody = document.getElementById('matrix-body-rows');
             const pill = document.getElementById('current-category-pill');
@@ -760,19 +903,27 @@
 
             const filteredEvents = events.filter(e => activeCat === 'ALL' || e.category === activeCat);
 
+            if (!filteredEvents.length) {
+                tableHead.innerHTML = `<th class="house-fixed-col text-start ps-3 align-middle text-dark">HOUSE \\ EVENT</th>`;
+                tableBody.innerHTML = `<tr><td colspan="2" class="text-center py-4 text-muted">No events registered under ${activeCat}.</td></tr>`;
+                return;
+            }
+
+            if (container) container.scrollLeft = 0;
+
             tableHead.innerHTML = `
-                <th class="house-fixed-col text-start ps-3 align-bottom text-dark">HOUSE \\ EVENT</th>
+                <th class="house-fixed-col text-start ps-3 align-middle text-dark">HOUSE \\ EVENT</th>
                 ${filteredEvents.map(event => {
                     const res = results.find(r => r.eventId === event.id);
                     const isDone = Boolean(res && (res.results || []).length > 0);
                     return `
                         <th class="event-header-cell">
-                            <div class="d-flex flex-column align-items-center justify-content-between h-100">
+                            <div class="event-vertical-container">
                                 <span style="font-size: 0.65rem;" title="${event.category}">
                                     <i class="fas ${getCategoryIcon(event.category)}"></i>
                                 </span>
                                 <span class="event-vertical-title" title="${event.name}">${event.name}</span>
-                                <span class="badge ${isDone ? 'bg-success' : 'bg-light text-secondary border'}" style="font-size: 0.5rem; padding: 1px 3px;">
+                                <span class="badge ${isDone ? 'bg-success' : 'bg-light text-secondary border'}" style="font-size: 0.5rem; padding: 1px 2px;">
                                     ${isDone ? 'DONE' : 'WAIT'}
                                 </span>
                             </div>
@@ -781,80 +932,88 @@
                 }).join('')}
             `;
 
-            if (!filteredEvents.length) {
-                tableBody.innerHTML = `<tr><td colspan="${filteredEvents.length + 1}" class="text-center py-4 text-muted">No events registered under ${activeCat}.</td></tr>`;
-                return;
-            }
-
-            // Build Body with Row Accent Shading and House Border
-            tableBody.className = "fade-swap";
             tableBody.innerHTML = houses.map((house, hIdx) => {
                 const houseColor = house.color || '#2563eb';
                 const rowBg = hIdx % 2 === 0 ? '#ffffff' : '#f8fafc';
 
                 return `
                     <tr class="house-row-accent" style="background-color: ${rowBg};">
-                        <!-- Fixed House Header with Solid Left Color Accent -->
                         <td class="house-fixed-col text-start ps-3" style="border-left: 6px solid ${houseColor} !important;">
                             <div class="d-flex align-items-center gap-2">
-                                <span class="rounded-circle shadow-sm" style="width: 12px; height: 12px; background-color: ${houseColor}; display: inline-block;"></span>
-                                <span class="fw-bold text-dark text-truncate" style="font-size: 0.85rem;">${house.name}</span>
+                                <span class="rounded-circle shadow-sm" style="width: 10px; height: 10px; background-color: ${houseColor}; display: inline-block;"></span>
+                                <span class="fw-bold text-dark text-truncate" style="font-size: 0.82rem;">${house.name}</span>
                             </div>
                         </td>
 
-                        <!-- Placed Badges / Dash -->
                         ${filteredEvents.map(event => {
                             const res = results.find(r => r.eventId === event.id);
                             if (!res || !res.results?.length) {
-                                return `<td class="text-center text-muted" style="opacity: 0.25; font-size: 0.75rem;">-</td>`;
+                                return `<td class="event-data-cell text-muted" style="opacity: 0.25; font-size: 0.75rem;">-</td>`;
                             }
 
-                            // Match all placements by this house in the current event
                             const houseStandings = (res.results || []).filter(st => {
                                 const hId = resolveStandingHouseId(st, event.id);
                                 return hId === house.id;
                             });
 
                             if (!houseStandings.length) {
-                                return `<td class="text-center text-muted" style="font-size: 0.75rem; opacity: 0.3;">-</td>`;
+                                return `<td class="event-data-cell text-muted" style="font-size: 0.75rem; opacity: 0.3;">-</td>`;
                             }
 
-                            // Render badges for all positions
                             const badgesHtml = houseStandings
                                 .sort((a, b) => a.position - b.position)
                                 .map(st => {
                                     const p = st.position;
-                                    const badgeColor = p === 1 ? 'bg-warning text-dark' : (p === 2 ? 'bg-secondary text-white' : 'bg-light text-dark border border-secondary');
+                                    const badgeColor = p === 1 ? 'bg-warning text-dark' : (p === 2 ? 'bg-secondary text-white' : (p === 3 ? 'bg-light text-dark border border-secondary' : 'bg-light text-muted border'));
+                                    const label = p === 1 ? '1st' : (p === 2 ? '2nd' : (p === 3 ? '3rd' : '4th'));
                                     return `
-                                        <span class="pos-badge ${badgeColor} m-1 shadow-sm">
-                                            ${p === 1 ? '1st' : (p === 2 ? '2nd' : '3rd')}
+                                        <span class="pos-badge ${badgeColor} shadow-sm">
+                                            ${label}
                                         </span>
                                     `;
                                 }).join('');
 
-                            return `<td class="text-center p-1">${badgesHtml}</td>`;
+                            return `
+                                <td class="event-data-cell">
+                                    <div class="event-badge-flex-row">
+                                        ${badgesHtml}
+                                    </div>
+                                </td>
+                            `;
                         }).join('')}
                     </tr>
                 `;
             }).join('');
+
+            startContinuousScroll();
         }
 
-        // Automation Timers
         setInterval(() => {
             cycleSpotlight();
         }, 5000);
 
         setInterval(() => {
-            categoryRotationTimer--;
+            categoryTimerSeconds--;
             const timerEl = document.getElementById('category-timer');
-            if (timerEl) timerEl.textContent = categoryRotationTimer;
+            if (timerEl) timerEl.textContent = categoryTimerSeconds;
 
-            if (categoryRotationTimer <= 0) {
-                categoryRotationTimer = 10;
+            if (categoryTimerSeconds <= 0) {
+                categoryTimerSeconds = 20;
                 categoryIndex++;
                 renderCategoryMatrix();
             }
         }, 1000);
+
+        const matrixContainer = document.getElementById('matrix-container');
+        if (matrixContainer) {
+            matrixContainer.addEventListener('mouseenter', () => { isScrollPaused = true; });
+            matrixContainer.addEventListener('mouseleave', () => { isScrollPaused = false; });
+        }
+
+        window.addEventListener('resize', () => {
+            renderHouseLeaderboard();
+            renderCategoryMatrix();
+        });
 
         window.addEventListener('DOMContentLoaded', async () => {
             await activateScreenKeeper();
