@@ -1404,6 +1404,10 @@ function renderParticipantsTab() {
 
 let isAdminSavingGroup = false;
 
+// State tracker for Admin Group list sorting
+let adminGroupSortColumn = 'name'; // 'name' | 'house' | 'category' | 'event' | 'members'
+let adminGroupSortDirection = 'asc'; // 'asc' | 'desc'
+
 function renderSubTabGroups(isRegistrationOpen) {
     const container = document.getElementById('subtab-groups');
     if (!container) return;
@@ -1412,7 +1416,6 @@ function renderSubTabGroups(isRegistrationOpen) {
     const houses = state.festHouses;
     const events = state.festEvents.filter(e => e.festId === fest.id && e.isGroupEvent && e.cancelled !== true);
     const categories = ['General', ...(fest.settings?.categories?.map(c => c.name) || [])];
-    const groups = state.festGroups.filter(g => g.festId === fest.id);
 
     container.innerHTML = `
         <div class="ui-card mb-3">
@@ -1473,54 +1476,31 @@ function renderSubTabGroups(isRegistrationOpen) {
             </div>
         </div>
 
-        <!-- Groups Table with Delete Option -->
+        <!-- Groups Table with Interactive Sort Headers -->
         <div class="table-responsive border rounded bg-white" style="max-height: 480px; overflow-y: auto;">
-            <table class="table table-sm table-hover align-middle mb-0">
-                <thead class="table-light sticky-top">
+            <table class="table table-sm table-hover align-middle mb-0" id="admin-groups-table">
+                <thead class="table-light sticky-top shadow-xs" style="user-select: none;">
                     <tr>
-                        <th style="min-width: 140px;">Group Name</th>
-                        <th style="min-width: 110px;">House</th>
-                        <th>Category</th>
-                        <th style="min-width: 130px;">Event</th>
-                        <th style="min-width: 250px;">Participants</th>
+                        <th style="min-width: 150px; cursor: pointer;" onclick="window.handleAdminGroupSort('name')">
+                            Group Name <span id="sort-arrow-name">${getSortIconMarkup('name')}</span>
+                        </th>
+                        <th style="min-width: 120px; cursor: pointer;" onclick="window.handleAdminGroupSort('house')">
+                            House <span id="sort-arrow-house">${getSortIconMarkup('house')}</span>
+                        </th>
+                        <th style="min-width: 100px; cursor: pointer;" onclick="window.handleAdminGroupSort('category')">
+                            Category <span id="sort-arrow-category">${getSortIconMarkup('category')}</span>
+                        </th>
+                        <th style="min-width: 140px; cursor: pointer;" onclick="window.handleAdminGroupSort('event')">
+                            Event <span id="sort-arrow-event">${getSortIconMarkup('event')}</span>
+                        </th>
+                        <th style="min-width: 200px; cursor: pointer;" onclick="window.handleAdminGroupSort('members')">
+                            Participants &amp; Count <span id="sort-arrow-members">${getSortIconMarkup('members')}</span>
+                        </th>
                         <th class="text-end" style="width: 80px;">Action</th>
                     </tr>
                 </thead>
-                <tbody>
-                    ${groups.length ? groups.map(group => {
-                        const house = houses.find(h => h.id === group.houseId);
-                        const event = state.festEvents.find(e => e.id === group.eventId);
-                        const memberPills = (group.members || []).map(m => {
-                            const st = state.students.find(s => s.id === m.studentId);
-                            const name = st?.name || m.studentId;
-                            const isCap = m.role === 'Captain';
-                            return `
-                                <span class="badge ${isCap ? 'bg-warning text-dark border border-warning' : 'bg-light text-dark border'} me-1 mb-1 p-1">
-                                    ${isCap ? '<i class="fas fa-crown me-1 text-dark"></i>' : ''}${name}
-                                </span>
-                            `;
-                        }).join('');
-
-                        return `
-                            <tr>
-                                <td><strong class="text-primary">${group.name}</strong></td>
-                                <td>
-                                    ${house ? `<span class="badge bg-light text-dark border"><span class="color-dot-display me-1" style="background-color:${house.color || '#333'}"></span>${house.name}</span>` : '<span class="text-muted">N/A</span>'}
-                                </td>
-                                <td><span class="badge bg-secondary-subtle text-secondary">${group.category || event?.category || 'General'}</span></td>
-                                <td>
-                                    <strong>${event?.name || 'N/A'}</strong>
-                                    <div class="text-muted" style="font-size: 0.7rem;">${event?.type === 'offStage' ? 'Off-Stage' : 'On-Stage'}</div>
-                                </td>
-                                <td><div class="d-flex flex-wrap">${memberPills || '<span class="text-muted fst-italic">None</span>'}</div></td>
-                                <td class="text-end">
-                                    <button class="btn btn-xs btn-outline-danger" onclick="window.deleteAdminGroup('${group.id}')" title="Delete this group" ${!isRegistrationOpen ? 'disabled' : ''}>
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </td>
-                            </tr>
-                        `;
-                    }).join('') : '<tr><td colspan="6" class="text-center text-muted p-4">No group teams formed yet.</td></tr>'}
+                <tbody id="admin-groups-table-body">
+                    <!-- Injected dynamically via renderAdminGroupsTableBody -->
                 </tbody>
             </table>
         </div>
@@ -1551,7 +1531,6 @@ function renderSubTabGroups(isRegistrationOpen) {
 
         let students = state.students.filter(s => s.houseId === selectedHouseId);
 
-        // Filter eligible students based on event gender and category
         if (event) {
             students = students.filter(s => {
                 const catMatch = !event.category || event.category === 'General' || getStudentCategory(s) === event.category;
@@ -1593,8 +1572,126 @@ function renderSubTabGroups(isRegistrationOpen) {
             `<option value="${o.value}" ${o.value === previousCaptain || idx === 0 ? 'selected' : ''}>${o.textContent}</option>`
         ).join('');
     });
+
+    renderAdminGroupsTableBody(isRegistrationOpen);
 }
 
+// Generate the sort arrow icon
+function getSortIconMarkup(columnName) {
+    if (adminGroupSortColumn !== columnName) {
+        return `<i class="fas fa-sort text-muted ms-1" style="font-size: 0.72rem; opacity: 0.4;"></i>`;
+    }
+    return adminGroupSortDirection === 'asc' 
+        ? `<i class="fas fa-sort-up text-primary ms-1" style="font-size: 0.78rem;"></i>`
+        : `<i class="fas fa-sort-down text-primary ms-1" style="font-size: 0.78rem;"></i>`;
+}
+
+// Handler for header click
+window.handleAdminGroupSort = function(columnName) {
+    if (adminGroupSortColumn === columnName) {
+        adminGroupSortDirection = (adminGroupSortDirection === 'asc') ? 'desc' : 'asc';
+    } else {
+        adminGroupSortColumn = columnName;
+        adminGroupSortDirection = 'asc';
+    }
+
+    // Update all arrow icons in table header
+    ['name', 'house', 'category', 'event', 'members'].forEach(col => {
+        const span = document.getElementById(`sort-arrow-${col}`);
+        if (span) span.innerHTML = getSortIconMarkup(col);
+    });
+
+    const isRegistrationOpen = state.managingFest?.registrationOpen === true;
+    renderAdminGroupsTableBody(isRegistrationOpen);
+};
+
+// Render sorted table body rows
+function renderAdminGroupsTableBody(isRegistrationOpen) {
+    const tbody = document.getElementById('admin-groups-table-body');
+    if (!tbody) return;
+
+    const fest = state.managingFest;
+    const houses = state.festHouses;
+    let groups = [...state.festGroups.filter(g => g.festId === fest.id)];
+
+    if (!groups.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted p-4">No group teams formed yet.</td></tr>';
+        return;
+    }
+
+    // Sort algorithm based on active column and direction
+    groups.sort((a, b) => {
+        let valA = '';
+        let valB = '';
+
+        if (adminGroupSortColumn === 'name') {
+            valA = (a.name || '').toLowerCase();
+            valB = (b.name || '').toLowerCase();
+        } else if (adminGroupSortColumn === 'house') {
+            const hA = houses.find(h => h.id === a.houseId)?.name || '';
+            const hB = houses.find(h => h.id === b.houseId)?.name || '';
+            valA = hA.toLowerCase();
+            valB = hB.toLowerCase();
+        } else if (adminGroupSortColumn === 'category') {
+            valA = (a.category || '').toLowerCase();
+            valB = (b.category || '').toLowerCase();
+        } else if (adminGroupSortColumn === 'event') {
+            const evA = state.festEvents.find(e => e.id === a.eventId)?.name || '';
+            const evB = state.festEvents.find(e => e.id === b.eventId)?.name || '';
+            valA = evA.toLowerCase();
+            valB = evB.toLowerCase();
+        } else if (adminGroupSortColumn === 'members') {
+            const countA = a.members?.length || 0;
+            const countB = b.members?.length || 0;
+            return adminGroupSortDirection === 'asc' ? countA - countB : countB - countA;
+        }
+
+        const cmp = String(valA).localeCompare(String(valB), undefined, { numeric: true, sensitivity: 'base' });
+        return adminGroupSortDirection === 'asc' ? cmp : -cmp;
+    });
+
+    tbody.innerHTML = groups.map(group => {
+        const house = houses.find(h => h.id === group.houseId);
+        const event = state.festEvents.find(e => e.id === group.eventId);
+        const mCount = group.members?.length || 0;
+
+        const memberPills = (group.members || []).map(m => {
+            const st = state.students.find(s => s.id === m.studentId);
+            const name = st?.name || m.studentId;
+            const isCap = m.role === 'Captain';
+            return `
+                <span class="badge ${isCap ? 'bg-warning text-dark border border-warning' : 'bg-light text-dark border'} me-1 mb-1 p-1">
+                    ${isCap ? '<i class="fas fa-crown me-1 text-dark"></i>' : ''}${name}
+                </span>
+            `;
+        }).join('');
+
+        return `
+            <tr>
+                <td><strong class="text-primary">${group.name}</strong></td>
+                <td>
+                    ${house ? `<span class="badge bg-light text-dark border"><span class="color-dot-display me-1" style="background-color:${house.color || '#333'}"></span>${house.name}</span>` : '<span class="text-muted">N/A</span>'}
+                </td>
+                <td><span class="badge bg-secondary-subtle text-secondary">${group.category || event?.category || 'General'}</span></td>
+                <td>
+                    <strong>${event?.name || 'N/A'}</strong>
+                    <div class="text-muted" style="font-size: 0.7rem;">${event?.type === 'offStage' ? 'Off-Stage' : 'On-Stage'}</div>
+                </td>
+                <td>
+                    <div class="d-flex align-items-center gap-1 mb-1">
+                        <span class="badge bg-secondary flex-shrink-0" style="font-size: 0.68rem;">${mCount} Members</span>
+                    </div>
+                    <div class="d-flex flex-wrap">${memberPills || '<span class="text-muted fst-italic">None</span>'}</div>
+                </td>
+                <td class="text-end">
+                    <button class="btn btn-xs btn-outline-danger" onclick="window.deleteAdminGroup('${group.id}')" title="Delete this group" ${!isRegistrationOpen ? 'disabled' : ''}>
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
 window.saveAdminGroup = async function() {
     if (isAdminSavingGroup) return; // Prevent double-click submission
 
@@ -1831,38 +1928,63 @@ function renderSubTabParticipation() {
 
 function renderSubTabRegistrations(isRegistrationOpen) {
     const container = document.getElementById('subtab-registrations');
+    if (!container) return;
+
     const classes = state.classes;
     const houses = state.festHouses;
     const fest = state.managingFest;
 
-    // Maintain current sub-view state: 'students' or 'events'
-    let currentViewMode = 'students';
+    let currentViewMode = 'students'; // 'students' | 'events'
+    let currentStageFilter = 'all';   // 'all' | 'onStage' | 'offStage'
+
+    const maxOnSolo = fest.settings?.maxOnStageSoloEvents ?? 2;
+    const maxOffSolo = fest.settings?.maxOffStageSoloEvents ?? 1;
+    const maxOnGrp = fest.settings?.maxOnStageGroupEvents ?? 2;
+    const maxOffGrp = fest.settings?.maxOffStageGroupEvents ?? 1;
 
     container.innerHTML = `
-        <div class="row g-2 mb-3 align-items-center">
-            <div class="col-md-4">
-                <input type="text" id="admin-reg-search" class="form-control form-control-sm" placeholder="Search by name, adm no, or event...">
+        <div class="row g-2 mb-3 align-items-end">
+            <div class="col-12 col-md-4">
+                <label class="small fw-bold mb-1">Search</label>
+                <input type="text" id="admin-reg-search" class="form-control form-control-sm" placeholder="Search name, adm no, or event...">
             </div>
-            <div class="col-md-2" id="admin-class-filter-container">
+
+            <div class="col-6 col-md-2" id="admin-class-filter-container">
+                <label class="small fw-bold mb-1">Class</label>
                 <select id="admin-reg-class" class="form-select form-select-sm">
                     <option value="">All Classes</option>
                     ${classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
                 </select>
             </div>
-            <div class="col-md-3">
+
+            <div class="col-6 col-md-2">
+                <label class="small fw-bold mb-1">House</label>
                 <select id="admin-reg-house" class="form-select form-select-sm">
                     <option value="">All Houses</option>
                     ${houses.map(h => `<option value="${h.id}">${h.name}</option>`).join('')}
                 </select>
             </div>
-            <div class="col-md-3 d-flex gap-1 justify-content-end align-items-center">
-                <!-- Toggle View Mode (Student-wise vs Event-wise) -->
-                <div class="btn-group btn-group-sm w-100" id="reg-view-toggle-group" role="group">
+
+            <div class="col-12 col-md-4 d-flex gap-2 justify-content-end align-items-end">
+                <!-- Stage Scope Filter -->
+                <div class="btn-group btn-group-sm flex-grow-1 shadow-xs" role="group">
+                    <input type="radio" class="btn-check" name="adminStageFilter" id="stage-all" value="all" checked>
+                    <label class="btn btn-outline-dark" for="stage-all">All</label>
+
+                    <input type="radio" class="btn-check" name="adminStageFilter" id="stage-on" value="onStage">
+                    <label class="btn btn-outline-primary" for="stage-on">On</label>
+
+                    <input type="radio" class="btn-check" name="adminStageFilter" id="stage-off" value="offStage">
+                    <label class="btn btn-outline-success" for="stage-off">Off</label>
+                </div>
+
+                <!-- View Mode Toggle -->
+                <div class="btn-group btn-group-sm shadow-xs" role="group">
                     <input type="radio" class="btn-check" name="adminViewType" id="view-student-wise" value="students" checked>
                     <label class="btn btn-outline-primary" for="view-student-wise"><i class="fas fa-user me-1"></i>Students</label>
 
                     <input type="radio" class="btn-check" name="adminViewType" id="view-event-wise" value="events">
-                    <label class="btn btn-outline-primary" for="view-event-wise" id="view-event-wise-lbl" title="Select a house to view event-wise allocation"><i class="fas fa-calendar-check me-1"></i>Events</label>
+                    <label class="btn btn-outline-primary" for="view-event-wise"><i class="fas fa-calendar-check me-1"></i>Events</label>
                 </div>
             </div>
         </div>
@@ -1876,11 +1998,9 @@ function renderSubTabRegistrations(isRegistrationOpen) {
             </div>
         </div>
 
-        <div class="table-responsive border rounded bg-white" style="max-height: 520px; overflow-y: auto;">
+        <div class="table-responsive border rounded bg-white" style="max-height: 540px; overflow-y: auto;">
             <table class="table table-sm table-hover align-middle mb-0" id="admin-participants-table">
-                <thead class="table-light sticky-top shadow-sm" id="admin-table-head">
-                    <!-- Populated dynamically based on view -->
-                </thead>
+                <thead class="table-light sticky-top shadow-xs" id="admin-table-head"></thead>
                 <tbody id="admin-table-body"></tbody>
             </table>
         </div>
@@ -1895,13 +2015,15 @@ function renderSubTabRegistrations(isRegistrationOpen) {
     const legend = document.getElementById('event-mode-legend');
     const classContainer = document.getElementById('admin-class-filter-container');
 
+    // 1. STUDENT VIEW
     function renderStudentsView(term, selectedClass, selectedHouse) {
         tableHead.innerHTML = `
             <tr>
-                <th style="min-width: 200px;">Student Information</th>
-                <th style="min-width: 120px;">House</th>
-                <th style="min-width: 250px;">Enrolled Events</th>
-                <th class="text-end" style="width: 110px;">Manage</th>
+                <th style="min-width: 220px;">Student Information</th>
+                <th style="min-width: 110px;">House</th>
+                <th style="min-width: 140px;">Quota Usage</th>
+                <th style="min-width: 260px;">Enrolled Events</th>
+                <th class="text-end" style="width: 100px;">Manage</th>
             </tr>
         `;
         legend.classList.add('d-none');
@@ -1920,7 +2042,7 @@ function renderSubTabRegistrations(isRegistrationOpen) {
         totalCountBadge.textContent = `${students.length} Students`;
 
         if (students.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted p-4">No matching students found.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted p-4">No matching students found.</td></tr>`;
             return;
         }
 
@@ -1930,32 +2052,68 @@ function renderSubTabRegistrations(isRegistrationOpen) {
             const events = reg?.events || [];
             const house = houses.find(h => h.id === s.houseId);
 
-            const badges = events.map(id => {
-                const ev = state.festEvents.find(e => e.id === id);
-                return ev ? `<span class="badge bg-light text-dark border me-1 mb-1">${ev.name}</span>` : '';
+            // Calculate student's load
+            const soloEvents = events.map(id => state.festEvents.find(e => e.id === id)).filter(e => e && !e.isGroupEvent);
+            const studentGroups = state.festGroups.filter(g => g.festId === fest.id && g.members?.some(m => m.studentId === s.id));
+
+            const onSoloCount = soloEvents.filter(e => e.type !== 'offStage').length;
+            const offSoloCount = soloEvents.filter(e => e.type === 'offStage').length;
+            const onGrpCount = studentGroups.filter(g => state.festEvents.find(e => e.id === g.eventId)?.type !== 'offStage').length;
+            const offGrpCount = studentGroups.filter(g => state.festEvents.find(e => e.id === g.eventId)?.type === 'offStage').length;
+
+            // Filter event badges based on Stage filter
+            const visibleEvents = events.map(id => state.festEvents.find(e => e.id === id)).filter(e => {
+                if (!e) return false;
+                if (currentStageFilter === 'onStage') return e.type !== 'offStage';
+                if (currentStageFilter === 'offStage') return e.type === 'offStage';
+                return true;
+            });
+
+            const badges = visibleEvents.map(ev => {
+                const isOff = ev.type === 'offStage';
+                return `
+                    <span class="badge bg-white text-dark border me-1 mb-1 p-1 d-inline-flex align-items-center gap-1 shadow-xs" style="font-size: 0.73rem;">
+                        <i class="fas ${isOff ? 'fa-palette text-success' : 'fa-microphone-lines text-primary'}"></i>
+                        <span>${ev.name}</span>
+                        <button type="button" class="btn-close btn-close-xs admin-remove-event-btn ms-1" 
+                                data-student-id="${s.id}" data-event-id="${ev.id}" title="Remove from this event" style="font-size: 0.5rem;"></button>
+                    </span>
+                `;
             }).join('');
 
             return `
                 <tr>
                     <td class="py-2">
-                        <strong class="text-dark d-block">${s.name}</strong>
+                        <strong class="text-primary text-decoration-underline" role="button" onclick="window.showStudentEventProfileModal('${s.id}')" title="Click to view all events">
+                            ${s.name}
+                        </strong>
                         <div class="d-flex flex-wrap align-items-center gap-1 mt-1">
                             <span class="badge bg-secondary-subtle text-secondary py-0 px-1" style="font-size: 0.7rem;">${getStudentCategory(s)}</span>
                             <span class="text-muted small" style="font-size: 0.72rem;">Adm: ${s.admissionNumber || 'N/A'}</span>
-                            <span class="text-muted small" style="font-size: 0.72rem;">| ${getStudentClassName(s.classId, s.division)}</span>
+                            <span class="text-muted small" style="font-size: 0.72rem;">&bull; ${getStudentClassName(s.classId, s.division)}</span>
                         </div>
                     </td>
                     <td>
-                        ${house ? `<span class="badge bg-light text-dark border"><span class="color-dot-display me-1" style="background-color:${house.color}"></span>${house.name}</span>` : '<span class="text-muted small">None</span>'}
+                        ${house ? `<span class="badge bg-light text-dark border"><span class="color-dot-display me-1" style="background-color:${house.color || '#333'}"></span>${house.name}</span>` : '<span class="text-muted small">None</span>'}
+                    </td>
+                    <td>
+                        <div class="d-flex flex-column gap-1">
+                            <span class="badge ${onSoloCount >= maxOnSolo ? 'bg-danger text-white' : 'bg-light text-primary border'}" style="font-size: 0.65rem;">
+                                Solo On: ${onSoloCount}/${maxOnSolo}
+                            </span>
+                            <span class="badge ${offSoloCount >= maxOffSolo ? 'bg-danger text-white' : 'bg-light text-success border'}" style="font-size: 0.65rem;">
+                                Solo Off: ${offSoloCount}/${maxOffSolo}
+                            </span>
+                        </div>
                     </td>
                     <td>
                         <div class="d-flex flex-wrap align-items-center py-1">
-                            ${badges || '<small class="text-muted fst-italic">No events</small>'}
+                            ${badges || '<small class="text-muted fst-italic">No enrolled events</small>'}
                         </div>
                     </td>
                     <td class="text-end">
                         <button class="btn btn-outline-primary btn-sm py-1 px-2" onclick="window.openEventAllocationModal('${s.id}')" ${!isRegistrationOpen ? 'disabled' : ''}>
-                            <i class="fas fa-edit me-1"></i>Events (${events.length})
+                            <i class="fas fa-edit me-1"></i>Manage
                         </button>
                     </td>
                 </tr>
@@ -1963,9 +2121,10 @@ function renderSubTabRegistrations(isRegistrationOpen) {
         }).join('');
     }
 
+    // 2. EVENTS VIEW
     function renderEventsView(term, selectedHouse) {
         if (!selectedHouse) {
-            tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted p-4"><i class="fas fa-info-circle me-1"></i>Please select a specific House from the dropdown above to view and assign event-wise participants.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted p-4"><i class="fas fa-info-circle me-1"></i>Please select a specific House above to view and assign participants.</td></tr>`;
             totalCountBadge.textContent = `Select a house`;
             return;
         }
@@ -1973,16 +2132,20 @@ function renderSubTabRegistrations(isRegistrationOpen) {
         tableHead.innerHTML = `
             <tr>
                 <th style="min-width: 220px; width: 30%;">Event Details</th>
-                <th style="min-width: 100px; width: 15%;">House Limit</th>
-                <th style="min-width: 300px; width: 45%;">Registered Participants</th>
+                <th style="min-width: 110px; width: 15%;">House Limit</th>
+                <th style="min-width: 300px; width: 45%;">Registered Participants / Teams</th>
                 <th class="text-end" style="width: 10%;">Action</th>
             </tr>
         `;
         legend.classList.remove('d-none');
         classContainer.classList.add('d-none');
 
-        // Filter events for this fest
-        let events = state.festEvents.filter(e => e.festId === fest.id);
+        let events = state.festEvents.filter(e => e.festId === fest.id && e.cancelled !== true);
+        
+        // Stage Scope Filter
+        if (currentStageFilter === 'onStage') events = events.filter(e => e.type !== 'offStage');
+        if (currentStageFilter === 'offStage') events = events.filter(e => e.type === 'offStage');
+
         if (term) {
             events = events.filter(e => (e.name && e.name.toLowerCase().includes(term)) || (e.category && e.category.toLowerCase().includes(term)));
         }
@@ -1990,70 +2153,144 @@ function renderSubTabRegistrations(isRegistrationOpen) {
         totalCountBadge.textContent = `${events.length} Events`;
 
         if (events.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted p-4">No events found matching your search.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted p-4">No events found matching your criteria.</td></tr>`;
             return;
         }
 
-        tbody.innerHTML = events.map(ev => {
-            const limit = typeof eventHouseLimit === 'function' ? eventHouseLimit(fest, ev, 'solo') : (ev.maxPerHouse || 1);
-            
-            // Find registered students for this house and this event
-            const houseRegistrations = state.festRegistrations.filter(r => 
-                r.festId === fest.id && 
-                r.houseId === selectedHouse && 
-                r.events?.includes(ev.id)
-            );
+        const soloEvents = events.filter(e => !e.isGroupEvent);
+        const groupEvents = events.filter(e => e.isGroupEvent);
 
-            const count = houseRegistrations.length;
-            const isExceeded = count > limit;
-            const isFull = count >= limit && !isExceeded;
+        function renderEventRow(ev) {
+            const isGroup = ev.isGroupEvent;
+            const isOff = ev.type === 'offStage';
 
-            let badgeClass = 'bg-success-subtle text-success border-success-subtle';
-            if (isExceeded) badgeClass = 'bg-danger text-white border-danger';
-            else if (isFull) badgeClass = 'bg-warning-subtle text-warning-emphasis border-warning';
+            if (isGroup) {
+                // Group Logic
+                const houseTeams = state.festGroups.filter(g => g.festId === fest.id && g.houseId === selectedHouse && g.eventId === ev.id);
+                const teamLimit = eventHouseLimit(fest, ev, 'group');
+                const isExceeded = houseTeams.length > teamLimit;
+                const isFull = houseTeams.length >= teamLimit && !isExceeded;
 
-            const studentPills = houseRegistrations.map(r => {
-                const student = state.students.find(s => s.id === r.studentId);
-                const name = student?.name || r.studentName || 'Student';
-                const adm = student?.admissionNumber ? `(${student.admissionNumber})` : '';
+                let badgeClass = 'bg-success-subtle text-success border border-success-subtle';
+                if (isExceeded) badgeClass = 'bg-danger text-white';
+                else if (isFull) badgeClass = 'bg-warning-subtle text-warning-emphasis border border-warning';
+
+                const teamPills = houseTeams.map(g => {
+                    const captain = g.members?.find(m => m.role === 'Captain');
+                    const capStudent = state.students.find(s => s.id === captain?.studentId);
+                    return `
+                        <div class="border rounded p-1 px-2 mb-1 bg-white shadow-xs">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <strong class="text-primary" style="font-size: 0.78rem;">${g.name}</strong>
+                                <span class="badge bg-secondary" style="font-size: 0.65rem;">${g.members?.length || 0} Members</span>
+                            </div>
+                            <small class="text-muted" style="font-size: 0.68rem;">Captain: <strong>${capStudent?.name || 'Unassigned'}</strong></small>
+                        </div>
+                    `;
+                }).join('');
+
                 return `
-                    <span class="badge bg-light text-dark border me-1 mb-1 p-1 d-inline-flex align-items-center gap-1 shadow-sm" style="font-size: 0.75rem;">
-                        <i class="fas fa-user-check text-primary me-1" style="font-size: 0.68rem;"></i>${name} <small class="text-muted">${adm}</small>
-                    </span>
+                    <tr class="${isExceeded ? 'table-danger-subtle' : ''}">
+                        <td class="py-2">
+                            <strong class="text-dark d-block">${ev.name}</strong>
+                            <div class="small text-muted mt-1">
+                                <span class="badge bg-light text-secondary border py-0 px-1">${ev.category || 'General'}</span>
+                                <span class="badge bg-light text-dark border py-0 px-1">${isOff ? 'Off-Stage' : 'On-Stage'}</span>
+                                <span class="badge bg-info-subtle text-info border py-0 px-1">Group</span>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="badge ${badgeClass} px-2 py-1 fw-bold" style="font-size: 0.76rem;">
+                                ${houseTeams.length} / ${teamLimit} Teams
+                            </span>
+                        </td>
+                        <td>${teamPills || '<span class="text-muted small fst-italic">No group teams formed</span>'}</td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-outline-primary py-1 px-2 text-nowrap" 
+                                    onclick="document.querySelector('button[data-bs-target=\\'#subtab-groups\\']')?.click()">
+                                <i class="fas fa-users me-1"></i>Manage
+                            </button>
+                        </td>
+                    </tr>
                 `;
-            }).join('');
+            } else {
+                // Solo Logic
+                const limit = eventHouseLimit(fest, ev, 'solo');
+                const houseRegs = state.festRegistrations.filter(r => 
+                    r.festId === fest.id && r.houseId === selectedHouse && r.events?.includes(ev.id)
+                );
 
-            return `
-                <tr class="${isExceeded ? 'table-danger-subtle' : ''}">
-                    <td class="py-2">
-                        <strong class="text-dark d-block">${ev.name}</strong>
-                        <div class="d-flex align-items-center gap-1 mt-1">
-                            <span class="badge bg-secondary-subtle text-secondary py-0 px-1" style="font-size: 0.7rem;">${ev.category || 'General'}</span>
-                            <span class="badge bg-light text-dark border py-0 px-1" style="font-size: 0.7rem;">${ev.type === 'offStage' ? 'Off-Stage' : 'On-Stage'}</span>
-                            ${ev.gender && ev.gender !== 'Common' ? `<span class="badge bg-info-subtle text-info-emphasis py-0 px-1" style="font-size: 0.7rem;">${ev.gender}</span>` : ''}
-                        </div>
-                    </td>
-                    <td>
-                        <span class="badge ${badgeClass} border px-2 py-1 fw-bold" style="font-size: 0.78rem;">
-                            ${count} / ${limit} ${isExceeded ? '(Exceeded)' : isFull ? '(Full)' : ''}
+                const count = houseRegs.length;
+                const isExceeded = count > limit;
+                const isFull = count >= limit && !isExceeded;
+
+                let badgeClass = 'bg-success-subtle text-success border border-success-subtle';
+                if (isExceeded) badgeClass = 'bg-danger text-white';
+                else if (isFull) badgeClass = 'bg-warning-subtle text-warning-emphasis border border-warning';
+
+                const studentPills = houseRegs.map(r => {
+                    const student = state.students.find(s => s.id === r.studentId);
+                    const name = student?.name || r.studentName || 'Student';
+                    return `
+                        <span class="badge bg-white text-dark border me-1 mb-1 p-1 d-inline-flex align-items-center gap-1 shadow-xs" style="font-size: 0.75rem;">
+                            <strong class="text-primary text-decoration-underline" role="button" onclick="window.showStudentEventProfileModal('${r.studentId}')">${name}</strong>
+                            <button type="button" class="btn-close btn-close-xs admin-remove-event-btn ms-1" 
+                                    data-student-id="${r.studentId}" data-event-id="${ev.id}" title="Remove from event" style="font-size: 0.5rem;"></button>
                         </span>
-                    </td>
-                    <td>
-                        <div class="d-flex flex-wrap align-items-center py-1">
-                            ${studentPills || '<span class="text-muted small fst-italic">No students assigned yet</span>'}
-                        </div>
-                    </td>
-                    <td class="text-end">
-                        <button class="btn btn-sm ${isFull || isExceeded ? 'btn-outline-secondary' : 'btn-primary'} py-1 px-2 text-nowrap" 
-                                onclick="window.openEventStudentPickerModal('${ev.id}', '${selectedHouse}')" 
-                                ${!isRegistrationOpen ? 'disabled' : ''}
-                                title="Add/Assign students to this event">
-                            <i class="fas fa-user-plus me-1"></i>Assign
-                        </button>
+                    `;
+                }).join('');
+
+                return `
+                    <tr class="${isExceeded ? 'table-danger-subtle' : ''}">
+                        <td class="py-2">
+                            <strong class="text-dark d-block">${ev.name}</strong>
+                            <div class="small text-muted mt-1">
+                                <span class="badge bg-light text-secondary border py-0 px-1">${ev.category || 'General'}</span>
+                                <span class="badge bg-light text-dark border py-0 px-1">${isOff ? 'Off-Stage' : 'On-Stage'}</span>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="badge ${badgeClass} px-2 py-1 fw-bold" style="font-size: 0.76rem;">
+                                ${count} / ${limit} Entries
+                            </span>
+                        </td>
+                        <td>${studentPills || '<span class="text-muted small fst-italic">No students assigned yet</span>'}</td>
+                        <td class="text-end">
+                            <button class="btn btn-sm ${isFull || isExceeded ? 'btn-outline-secondary' : 'btn-primary'} py-1 px-2 text-nowrap" 
+                                    onclick="window.openEventStudentPickerModal('${ev.id}', '${selectedHouse}')" 
+                                    ${!isRegistrationOpen ? 'disabled' : ''}>
+                                <i class="fas fa-user-plus me-1"></i>Assign
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+
+        let html = '';
+        if (soloEvents.length) {
+            html += `
+                <tr class="table-primary border-bottom border-primary" style="--bs-table-bg: #eff6ff;">
+                    <td colspan="4" class="py-1 px-2 fw-bold text-primary" style="font-size: 0.8rem;">
+                        <i class="fas fa-user me-2"></i>SOLO EVENTS (${soloEvents.length})
                     </td>
                 </tr>
             `;
-        }).join('');
+            html += soloEvents.map(renderEventRow).join('');
+        }
+
+        if (groupEvents.length) {
+            html += `
+                <tr class="table-success border-bottom border-success" style="--bs-table-bg: #f0fdf4;">
+                    <td colspan="4" class="py-1 px-2 fw-bold text-success" style="font-size: 0.8rem;">
+                        <i class="fas fa-users me-2"></i>GROUP EVENTS (${groupEvents.length})
+                    </td>
+                </tr>
+            `;
+            html += groupEvents.map(renderEventRow).join('');
+        }
+
+        tbody.innerHTML = html;
     }
 
     function updateView() {
@@ -2068,12 +2305,48 @@ function renderSubTabRegistrations(isRegistrationOpen) {
         }
     }
 
-    // Event listeners
+    // Inline Click-to-Remove student registration
+    tbody.addEventListener('click', async (e) => {
+        const removeBtn = e.target.closest('.admin-remove-event-btn');
+        if (!removeBtn) return;
+
+        const studentId = removeBtn.dataset.studentId;
+        const eventId = removeBtn.dataset.eventId;
+        const regId = `${fest.id}_${studentId}`;
+        const reg = state.festRegistrations.find(r => r.id === regId);
+        if (!reg) return;
+
+        const ev = state.festEvents.find(e => e.id === eventId);
+        const st = state.students.find(s => s.id === studentId);
+
+        if (!confirm(`Remove ${st?.name || 'student'} from "${ev?.name || 'this event'}"?`)) return;
+
+        const updatedEvents = (reg.events || []).filter(id => id !== eventId);
+        try {
+            await saveScopedDoc('festRegistrations', regId, {
+                ...reg,
+                events: updatedEvents,
+                lastUpdated: serverTimestamp()
+            });
+            await loadAllYearData(true);
+            window.showAlert?.('Participant removed from event.', 'success');
+            updateView();
+        } catch (err) {
+            console.error(err);
+            window.showAlert?.('Failed to remove participant.', 'danger');
+        }
+    });
+
+    // Listeners
     searchInput.addEventListener('input', updateView);
     classFilter.addEventListener('change', updateView);
-    houseFilter.addEventListener('change', (e) => {
-        // If an admin switches house and is on event view, reload immediately
-        updateView();
+    houseFilter.addEventListener('change', updateView);
+
+    document.querySelectorAll('input[name="adminStageFilter"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            currentStageFilter = e.target.value;
+            updateView();
+        });
     });
 
     document.querySelectorAll('input[name="adminViewType"]').forEach(radio => {
@@ -2085,7 +2358,6 @@ function renderSubTabRegistrations(isRegistrationOpen) {
 
     updateView();
 }
-
 // --- 5. CHEST NUMBER ALLOCATION SUB-TAB ---
 
 function renderSubTabChestNumbers() {

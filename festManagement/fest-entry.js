@@ -476,15 +476,21 @@ window.openEventAllocationModal = function(studentId) {
     const houseId = state.loggedInHouseId || student?.houseId || null;
     const studentCat = getStudentCategory(student);
 
+    if (!student) return window.showAlert?.('Student record not found.', 'danger');
+
     const regId = `${fest.id}_${student.id}`;
     const reg = state.festRegistrations.find(r => r.id === regId);
-    const selected = new Set(reg?.events || []);
+    
+    // Initial set of events
+    const initialEvents = new Set(reg?.events || []);
 
+    // Limits
     const maxOnStage = fest.settings?.maxOnStageSoloEvents ?? 2;
     const maxOffStage = fest.settings?.maxOffStageSoloEvents ?? 1;
 
+    // Filter eligible events based on category, gender, and cancellation status
     const eligibleEvents = state.festEvents.filter(e => {
-        if (e.festId !== fest.id || e.isGroupEvent) return false;
+        if (e.festId !== fest.id || e.isGroupEvent || e.cancelled === true) return false;
         const matchesCategory = (e.category === 'General' || e.category === studentCat);
         const matchesGender = (!e.gender || e.gender === 'Common' || 
             (student.gender === 'M' && e.gender === 'Male') || 
@@ -496,30 +502,42 @@ window.openEventAllocationModal = function(studentId) {
     const offStage = eligibleEvents.filter(e => e.type === 'offStage');
 
     const modalBody = `
-        <div class="mb-2 p-1 bg-light rounded border">
-            <div class="d-flex justify-content-between align-items-center">
-                <span class="badge bg-info text-dark">Category: ${studentCat}</span>
-                <span class="small text-muted">Gender: <strong>${student.gender || 'Common'}</strong></span>
+        <div class="mb-2 p-2 bg-light rounded border">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <div>
+                    <strong class="text-dark fs-6">${student.name}</strong>
+                    <span class="text-muted small ms-1">(Adm: ${student.admissionNumber || 'N/A'})</span>
+                </div>
+                <div class="d-flex gap-1">
+                    <span class="badge bg-secondary-subtle text-secondary border">Cat: ${studentCat}</span>
+                    <span class="badge bg-light text-dark border">Gender: ${student.gender || 'Common'}</span>
+                </div>
             </div>
-            <p class="small text-muted mt-1 mb-0" style="font-size: 0.76rem;">
-                Max Allowed: On-Stage (<strong>${maxOnStage}</strong>), Off-Stage (<strong>${maxOffStage}</strong>).
-            </p>
+            <div class="d-flex flex-wrap gap-2 pt-1 border-top" style="font-size: 0.75rem;">
+                <span class="badge" id="tracker-onstage" style="background:#eef2ff; color:#4338ca; border:1px solid #c7d2fe;">
+                    <i class="fas fa-microphone-lines me-1"></i>On-Stage: <strong id="count-onstage">0</strong>/${maxOnStage}
+                </span>
+                <span class="badge" id="tracker-offstage" style="background:#ecfdf5; color:#047857; border:1px solid #a7f3d0;">
+                    <i class="fas fa-palette me-1"></i>Off-Stage: <strong id="count-offstage">0</strong>/${maxOffStage}
+                </span>
+            </div>
         </div>
+
         <div class="row g-2">
             <div class="col-12 col-md-6 modal-col-border">
                 <h6 class="fw-bold small mb-2 d-flex align-items-center gap-1" style="color: #4338ca;">
-                    <i class="fas fa-microphone-lines text-primary"></i> ON-STAGE EVENTS
+                    <i class="fas fa-microphone-lines text-primary"></i> ON-STAGE EVENTS (${onStage.length})
                 </h6>
-                <div class="d-flex flex-column gap-1" id="box-onstage" style="max-height: 220px; overflow-y: auto;">
-                    ${renderChecklist(onStage, selected, 'onStage', houseId, fest.id)}
+                <div class="d-flex flex-column gap-1" id="box-onstage" style="max-height: 250px; overflow-y: auto;">
+                    ${renderChecklist(onStage, initialEvents, 'onStage', houseId, fest.id, student.id)}
                 </div>
             </div>
             <div class="col-12 col-md-6">
                 <h6 class="fw-bold small mb-2 d-flex align-items-center gap-1" style="color: #047857;">
-                    <i class="fas fa-palette text-success"></i> OFF-STAGE EVENTS
+                    <i class="fas fa-palette text-success"></i> OFF-STAGE EVENTS (${offStage.length})
                 </h6>
-                <div class="d-flex flex-column gap-1" id="box-offstage" style="max-height: 220px; overflow-y: auto;">
-                    ${renderChecklist(offStage, selected, 'offStage', houseId, fest.id)}
+                <div class="d-flex flex-column gap-1" id="box-offstage" style="max-height: 250px; overflow-y: auto;">
+                    ${renderChecklist(offStage, initialEvents, 'offStage', houseId, fest.id, student.id)}
                 </div>
             </div>
         </div>
@@ -527,40 +545,116 @@ window.openEventAllocationModal = function(studentId) {
 
     const modalFooter = `
         <button class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Cancel</button>
-        <button class="btn btn-success btn-sm fw-bold px-3 btn-touch" id="modal-save-solo-btn">Save Selections</button>
+        <button class="btn btn-success btn-sm fw-bold px-3 btn-touch" id="modal-save-solo-btn">
+            <i class="fas fa-save me-1"></i>Save Selections
+        </button>
     `;
 
-    window.showGlobalModal(`Solo Registration: ${student.name}`, modalBody, modalFooter);
+    const modal = window.showGlobalModal(`Solo Registration: ${student.name}`, modalBody, modalFooter);
 
+    const saveBtn = document.getElementById('modal-save-solo-btn');
     const checkboxes = document.querySelectorAll('.ev-select-cb');
-    function applyLimits() {
-        const onCount = document.querySelectorAll('.ev-select-cb[data-type="onStage"]:checked').length;
-        const offCount = document.querySelectorAll('.ev-select-cb[data-type="offStage"]:checked').length;
+    const countOnEl = document.getElementById('count-onstage');
+    const countOffEl = document.getElementById('count-offstage');
+    const trackerOnEl = document.getElementById('tracker-onstage');
+    const trackerOffEl = document.getElementById('tracker-offstage');
 
+    // Live update calculations & sync accurate limits
+    function applyLimits() {
+        const onChecked = Array.from(document.querySelectorAll('.ev-select-cb[data-type="onStage"]:checked'));
+        const offChecked = Array.from(document.querySelectorAll('.ev-select-cb[data-type="offStage"]:checked'));
+
+        const onCount = onChecked.length;
+        const offCount = offChecked.length;
+
+        // 1. Update live counter badges
+        if (countOnEl) countOnEl.textContent = onCount;
+        if (countOffEl) countOffEl.textContent = offCount;
+
+        if (trackerOnEl) {
+            trackerOnEl.className = `badge ${onCount >= maxOnStage ? 'bg-danger text-white border-danger' : ''}`;
+            if (onCount < maxOnStage) trackerOnEl.style.cssText = "background:#eef2ff; color:#4338ca; border:1px solid #c7d2fe;";
+            else trackerOnEl.style.cssText = "";
+        }
+
+        if (trackerOffEl) {
+            trackerOffEl.className = `badge ${offCount >= maxOffStage ? 'bg-danger text-white border-danger' : ''}`;
+            if (offCount < maxOffStage) trackerOffEl.style.cssText = "background:#ecfdf5; color:#047857; border:1px solid #a7f3d0;";
+            else trackerOffEl.style.cssText = "";
+        }
+
+        // 2. Evaluate each checkbox against student limits and house event limits
         checkboxes.forEach(cb => {
             const isChecked = cb.checked;
             const type = cb.dataset.type;
+            const eventId = cb.value;
+            const event = state.festEvents.find(e => e.id === eventId);
+            const itemLabel = cb.closest('.solo-event-item');
+            const statusPill = itemLabel?.querySelector('.house-quota-pill');
+
+            // Quotas for house
+            const houseLimit = event ? eventHouseLimit(fest, event, 'solo') : 0;
+            // Existing count for house (excluding this student)
+            const otherStudentsHouseCount = houseEventSoloCount(fest.id, houseId, eventId, student.id);
+            const totalProjected = otherStudentsHouseCount + (isChecked ? 1 : 0);
+
+            const isHouseFull = otherStudentsHouseCount >= houseLimit;
+            const isStudentTypeFull = (type === 'onStage' && onCount >= maxOnStage) || 
+                                     (type === 'offStage' && offCount >= maxOffStage);
+
+            // Student limit disables other unselected items of the same type
+            // House quota disables unselected items if the house is full
             if (!isChecked) {
-                if (type === 'onStage' && onCount >= maxOnStage) cb.disabled = true;
-                else if (type === 'offStage' && offCount >= maxOffStage) cb.disabled = true;
-                else cb.disabled = false;
+                if (isStudentTypeFull || isHouseFull) {
+                    cb.disabled = true;
+                    itemLabel?.classList.add('opacity-75', 'bg-light');
+                } else {
+                    cb.disabled = false;
+                    itemLabel?.classList.remove('opacity-75', 'bg-light');
+                }
+            } else {
+                cb.disabled = false;
+                itemLabel?.classList.remove('opacity-75', 'bg-light');
             }
-            const event = state.festEvents.find(item => item.id === cb.value);
-            const existingCount = event ? houseEventSoloCount(fest.id, houseId, event.id, student.id) : 0;
-            const limit = event ? eventHouseLimit(fest, event, 'solo') : 0;
-            const item = cb.closest('label');
-            item?.classList.toggle('border-danger', existingCount + (cb.checked ? 1 : 0) > limit);
+
+            // Live badge color & text update inside the list item
+            if (statusPill && event) {
+                const isExceeded = totalProjected > houseLimit;
+                const isItemFull = totalProjected >= houseLimit && !isExceeded;
+
+                if (isExceeded) {
+                    statusPill.className = 'badge bg-danger text-white border-danger py-0 px-1 ms-1 house-quota-pill';
+                    statusPill.innerHTML = `<i class="fas fa-users me-1" style="font-size: 0.65rem;"></i>${totalProjected}/${houseLimit} Exceeded`;
+                } else if (isItemFull) {
+                    statusPill.className = 'badge bg-warning-subtle text-warning-emphasis border-warning py-0 px-1 ms-1 house-quota-pill';
+                    statusPill.innerHTML = `<i class="fas fa-users me-1" style="font-size: 0.65rem;"></i>${totalProjected}/${houseLimit} Full`;
+                } else {
+                    statusPill.className = 'badge bg-light text-secondary border py-0 px-1 ms-1 house-quota-pill';
+                    statusPill.innerHTML = `<i class="fas fa-users me-1" style="font-size: 0.65rem;"></i>${totalProjected}/${houseLimit}`;
+                }
+            }
         });
     }
 
     checkboxes.forEach(cb => cb.addEventListener('change', applyLimits));
     applyLimits();
 
-    document.getElementById('modal-save-solo-btn').addEventListener('click', async () => {
+    // Save with in-flight lock & backdrop cleanup
+    let isSaving = false;
+    saveBtn.addEventListener('click', async () => {
+        if (isSaving) return;
+
         const checkedEvents = Array.from(document.querySelectorAll('.ev-select-cb:checked')).map(cb => cb.value);
-        const exceeded = checkedEvents.map(id => state.festEvents.find(event => event.id === id)).filter(event => event && houseEventSoloCount(fest.id, houseId, event.id, student.id) + 1 > eventHouseLimit(fest, event, 'solo'));
-        if (exceeded.length) return window.showAlert(`House limit exceeded for: ${exceeded.map(event => event.name).join(', ')}`, 'danger');
-        
+
+        // Pre-flight check: house quota exceeded
+        const exceeded = checkedEvents.map(id => state.festEvents.find(event => event.id === id))
+            .filter(event => event && (houseEventSoloCount(fest.id, houseId, event.id, student.id) + 1) > eventHouseLimit(fest, event, 'solo'));
+
+        if (exceeded.length) {
+            return window.showAlert(`House limit exceeded for: ${exceeded.map(event => event.name).join(', ')}`, 'danger');
+        }
+
+        // Retain existing group events registered for this student
         const existingGroupEvents = (reg?.events || []).filter(id => {
             return state.festEvents.find(e => e.id === id)?.isGroupEvent;
         });
@@ -574,29 +668,51 @@ window.openEventAllocationModal = function(studentId) {
             studentName: student.name,
             houseId: houseId,
             events: finalEvents,
-            chestNo: reg?.chestNo || null
+            chestNo: reg?.chestNo || null,
+            lastUpdated: serverTimestamp()
         };
+
+        isSaving = true;
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>Saving...`;
 
         try {
             await saveScopedDoc('festRegistrations', regId, payload);
-            window.showAlert('Registration saved.', 'success');
-            const modal = bootstrap.Modal.getInstance(document.getElementById('global-modal'));
-            modal?.hide();
+            window.showAlert('Registration saved successfully.', 'success');
+            
+            // Clean backdrop cleanup
+            if (typeof safeCloseModal === 'function') {
+                safeCloseModal(document.getElementById('global-modal'));
+            } else {
+                modal?.hide();
+                setTimeout(() => {
+                    document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+                    document.body.classList.remove('modal-open');
+                }, 200);
+            }
+
             await loadAllYearData(true);
+
             if (isAdminSession && typeof window.renderFestManagement === 'function') {
                 window.renderFestManagement();
             } else {
                 const house = state.festHouses.find(h => h.id === houseId);
-                if (house) bootstrapHouseCaptainWorkspace(fest, house);
+                if (house && typeof bootstrapHouseCaptainWorkspace === 'function') {
+                    bootstrapHouseCaptainWorkspace(fest, house);
+                }
             }
         } catch (err) {
             console.error(err);
             window.showAlert('Failed to save registration.', 'danger');
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = `<i class="fas fa-save me-1"></i>Save Selections`;
+            isSaving = false;
         }
     });
 };
 
-function renderChecklist(eventList, selectedSet, type, houseId = null, festId = null) {
+// Updated renderChecklist to properly handle excluded current student
+function renderChecklist(eventList, selectedSet, type, houseId = null, festId = null, studentId = null) {
     if (!eventList || eventList.length === 0) {
         return `<div class="p-3 text-center text-muted small bg-light rounded border border-dashed">No eligible events found.</div>`;
     }
@@ -614,27 +730,29 @@ function renderChecklist(eventList, selectedSet, type, houseId = null, festId = 
         let hasLimitInfo = false;
 
         if (typeof houseEventSoloCount === 'function' && typeof eventHouseLimit === 'function' && currentHouseId && currentFest) {
-            registeredCount = houseEventSoloCount(currentFest.id, currentHouseId, e.id);
+            // Count registered house members excluding current student
+            registeredCount = houseEventSoloCount(currentFest.id, currentHouseId, e.id, studentId);
             limit = eventHouseLimit(currentFest, e, 'solo');
             hasLimitInfo = true;
         }
 
-        const isExceeded = hasLimitInfo && registeredCount > limit;
-        const isFull = hasLimitInfo && !isExceeded && registeredCount >= limit;
+        const projectedCount = registeredCount + (isChecked ? 1 : 0);
+        const isExceeded = hasLimitInfo && projectedCount > limit;
+        const isFull = hasLimitInfo && !isExceeded && projectedCount >= limit;
 
         let pillClass = 'bg-light text-secondary border';
-        let statusText = `${registeredCount}/${limit}`;
+        let statusText = `${projectedCount}/${limit}`;
 
         if (isExceeded) {
             pillClass = 'bg-danger text-white border-danger';
-            statusText = `${registeredCount}/${limit} Limit Exceeded`;
+            statusText = `${projectedCount}/${limit} Exceeded`;
         } else if (isFull) {
             pillClass = 'bg-warning-subtle text-warning-emphasis border-warning';
-            statusText = `${registeredCount}/${limit} Full`;
+            statusText = `${projectedCount}/${limit} Full`;
         }
 
         return `
-            <label class="list-group-item list-group-item-action d-flex align-items-center justify-content-between p-2 mb-1 rounded border ${isChecked ? (isOffStage ? 'border-success bg-success-subtle' : 'border-primary bg-primary-subtle') : 'bg-white'}" 
+            <label class="list-group-item list-group-item-action d-flex align-items-center justify-content-between p-2 mb-1 rounded border solo-event-item ${isChecked ? (isOffStage ? 'border-success bg-success-subtle' : 'border-primary bg-primary-subtle') : 'bg-white'}" 
                    for="cb-${e.id}" 
                    style="cursor: pointer; transition: all 0.15s ease;">
                 
@@ -654,7 +772,7 @@ function renderChecklist(eventList, selectedSet, type, houseId = null, festId = 
                         </span>
                         
                         ${hasLimitInfo ? `
-                            <span class="badge ${pillClass} py-0 px-1 ms-1 d-inline-flex align-items-center" style="font-size: 0.72rem;">
+                            <span class="badge ${pillClass} py-0 px-1 ms-1 d-inline-flex align-items-center house-quota-pill" style="font-size: 0.72rem;">
                                 <i class="fas fa-users me-1" style="font-size: 0.65rem;"></i>${statusText}
                             </span>
                         ` : ''}
@@ -672,7 +790,6 @@ function renderChecklist(eventList, selectedSet, type, houseId = null, festId = 
         `;
     }).join('');
 }
-
 // =========================================================================
 // --- 5. EVENT-WISE REGISTRATION TAB (WITH ON-STAGE/OFF-STAGE FILTER) ---
 // =========================================================================

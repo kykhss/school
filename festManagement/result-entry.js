@@ -1,5 +1,6 @@
 import { saveScopedDoc } from './firebase-config.js';
-import { state, getStudentClassName } from './app-state.js';
+import { state, getStudentClassName, getStudentCategory, eventHouseLimit } from './app-state.js';
+import { serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 // Special Event point scales
 function pointsFor(position, isGroup = false, name = '') {
@@ -43,7 +44,6 @@ function pointsFor(position, isGroup = false, name = '') {
     return 0;
 }
 
-// Determines if an event is an institutional house-level special event
 function isSpecialHouseEvent(event) {
     const name = String(event.name || '').trim().toUpperCase();
     return event.isSpecial || 
@@ -54,7 +54,6 @@ function isSpecialHouseEvent(event) {
 }
 
 function resultRows(fest, event) {
-    // 1. Special House Event Check (e.g. March Past, Discipline)
     if (isSpecialHouseEvent(event)) {
         return state.festHouses.map(h => ({
             id: `SPECIAL_${fest.id}_${h.id}_${event.id}`,
@@ -67,7 +66,6 @@ function resultRows(fest, event) {
         }));
     }
 
-    // 2. Standard Group Events
     if (event.isGroupEvent || event.type === 'group') {
         const groups = state.festGroups.filter(group => 
             group.festId === fest.id && 
@@ -86,7 +84,7 @@ function resultRows(fest, event) {
         }));
     }
 
-    // 3. Standard Solo Events
+    // Solo Registrations
     const registrations = state.festRegistrations.filter(registration => 
         registration.festId === fest.id && 
         !registration.isDeleted &&
@@ -129,7 +127,7 @@ window.renderResultEntryTab = function() {
                     <h5 class="section-header mb-1">
                         <i class="fas fa-square-poll-vertical me-2 text-success"></i>Admin Result Entry &amp; Scoring
                     </h5>
-                    <p class="small text-muted mb-0">Record scores to auto-rank winners, or select positions manually. Special events auto-load competing houses.</p>
+                    <p class="small text-muted mb-0">Record scores to auto-rank winners, or select positions manually. Add unregistered participants on-the-fly.</p>
                 </div>
                 <span id="result-entry-status" class="badge bg-secondary">No event selected</span>
             </div>
@@ -187,27 +185,33 @@ export function loadResultEvent(eventId) {
     const fest = state.managingFest;
     const event = state.festEvents.find(item => item.id === eventId);
     const table = document.getElementById('admin-result-table');
-    if (!event || !table) return window.showAlert('Select an event first.', 'warning');
+    if (!event || !table) return window.showAlert?.('Select an event first.', 'warning');
 
     const rows = resultRows(fest, event);
     const existing = state.festResults.find(result => result.festId === fest.id && result.eventId === event.id);
     const saved = new Map((existing?.results || []).map(item => [item.groupId || item.studentId, item]));
 
-    // Sort students/groups alphabetically based on name by default
+    // Alphabetical sort by default
     rows.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 
     const isSpecial = isSpecialHouseEvent(event);
+    const isGroup = Boolean(event.isGroupEvent || event.type === 'group');
 
     table.innerHTML = `
         <div class="d-flex flex-wrap justify-content-between align-items-center mb-2 p-2 bg-light rounded border">
             <div>
                 <strong class="text-dark fs-6">${event.name}</strong>
-                <span class="badge ${isSpecial ? 'bg-danger-subtle text-danger border border-danger' : (event.isGroupEvent ? 'bg-info-subtle text-info border' : 'bg-primary-subtle text-primary border')} ms-2">
-                    ${isSpecial ? 'Special House Event' : (event.isGroupEvent ? 'Group Event' : 'Solo')}
+                <span class="badge ${isSpecial ? 'bg-danger-subtle text-danger border border-danger' : (isGroup ? 'bg-info-subtle text-info border' : 'bg-primary-subtle text-primary border')} ms-2">
+                    ${isSpecial ? 'Special House Event' : (isGroup ? 'Group Event' : 'Solo')}
                 </span>
-                <span class="text-muted small ms-2">${event.category || 'General'} &bull; ${event.stage || 'Main Stage'}</span>
+                <span class="text-muted small ms-2">${event.category || 'General'} &bull; ${event.stage || 'Main Stage'} [${event.type === 'offStage' ? 'Off-Stage' : 'On-Stage'}]</span>
             </div>
             <div class="d-flex align-items-center gap-2">
+                ${!isSpecial && !isGroup ? `
+                    <button type="button" class="btn btn-sm btn-outline-dark" id="admin-add-participant-btn">
+                        <i class="fas fa-user-plus me-1"></i>Add Late Student
+                    </button>
+                ` : ''}
                 <button type="button" class="btn btn-sm btn-outline-primary" id="admin-auto-rank-btn" title="Re-rank positions based on marks">
                     <i class="fas fa-arrow-down-9-1 me-1"></i>Auto Rank Marks
                 </button>
@@ -238,7 +242,6 @@ export function loadResultEvent(eventId) {
                         const houseColor = house?.color || '#3b82f6';
                         const calculatedPts = savedItem?.points ?? pointsFor(pos, row.isGroup, event.name);
 
-                        // Highlight row styling for placed participants
                         const rowHighlight = pos === 1 ? 'table-warning border-start border-warning border-4' : 
                                             (pos === 2 ? 'table-secondary border-start border-secondary border-4' : 
                                             (pos === 3 ? 'table-danger-subtle border-start border-danger border-4' : 
@@ -280,7 +283,7 @@ export function loadResultEvent(eventId) {
                                 </td>
                             </tr>
                         `; 
-                    }).join('') || '<tr><td colspan="6" class="text-center text-muted p-4">No participants found.</td></tr>'}
+                    }).join('') || '<tr><td colspan="6" class="text-center text-muted p-4">No participants enrolled yet. Click "Add Late Student" to include participants.</td></tr>'}
                 </tbody>
             </table>
         </div>
@@ -297,16 +300,267 @@ export function loadResultEvent(eventId) {
     document.getElementById('admin-auto-rank-btn')?.addEventListener('click', () => autoRankByMarks(event));
     document.getElementById('admin-result-search')?.addEventListener('input', filterResultRows);
     document.getElementById('admin-result-save')?.addEventListener('click', () => saveAdminResults(fest, event, existing));
+    document.getElementById('admin-add-participant-btn')?.addEventListener('click', () => openAdHocStudentModal(event));
 }
 
-// Live position and point updates + row color highlights
+// =========================================================================
+// --- AD-HOC STUDENT REGISTRATION MODAL (WITH LIMIT AUDIT & SWAPPING) ---
+// =========================================================================
+
+function openAdHocStudentModal(event) {
+    const fest = state.managingFest;
+    const isOffStage = event.type === 'offStage';
+    const stageName = isOffStage ? 'Off-Stage' : 'On-Stage';
+
+    const maxOnStage = fest.settings?.maxOnStageSoloEvents ?? 2;
+    const maxOffStage = fest.settings?.maxOffStageSoloEvents ?? 1;
+    const currentStageMax = isOffStage ? maxOffStage : maxOnStage;
+
+    const modalBody = `
+        <div class="mb-2 p-2 bg-light rounded border">
+            <div class="small">
+                Target Event: <strong>${event.name}</strong> 
+                <span class="badge ${isOffStage ? 'bg-success' : 'bg-primary'} ms-1">${stageName}</span>
+                <span class="badge bg-secondary ms-1">${event.category || 'General'}</span>
+            </div>
+            <div class="text-muted small mt-1" style="font-size: 0.72rem;">
+                Max Allowed per Student: <strong>${currentStageMax} ${stageName} Solo Events</strong>.
+                If student reached quota, delete an event they didn't participate in below.
+            </div>
+        </div>
+
+        <input type="search" id="adhoc-student-search" class="form-control form-control-sm mb-2" placeholder="Search student name, admission no, or class...">
+
+        <div id="adhoc-student-results" class="border rounded p-2 bg-white" style="max-height: 380px; overflow-y: auto;">
+            <div class="text-center text-muted small py-4">Search for a student above to inspect registrations and add to this event.</div>
+        </div>
+    `;
+
+    const modalFooter = `
+        <button class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Close</button>
+    `;
+
+    window.showGlobalModal(`Add Late Participant: ${event.name}`, modalBody, modalFooter);
+
+    const searchInput = document.getElementById('adhoc-student-search');
+    const resultsContainer = document.getElementById('adhoc-student-results');
+
+    function renderSearchResults() {
+        const query = searchInput.value.trim().toLowerCase();
+        if (!query) {
+            resultsContainer.innerHTML = `<div class="text-center text-muted small py-4">Search for a student above to inspect registrations and add to this event.</div>`;
+            return;
+        }
+
+        // Filter eligible students
+        const matches = state.students.filter(student => {
+            const nameMatch = student.name && student.name.toLowerCase().includes(query);
+            const admMatch = String(student.admissionNumber || '').toLowerCase().includes(query);
+            const classMatch = getStudentClassName(student.classId, student.division).toLowerCase().includes(query);
+
+            if (!nameMatch && !admMatch && !classMatch) return false;
+
+            // Check Category & Gender Eligibility
+            const catMatch = event.category === 'General' || getStudentCategory(student) === event.category;
+            const genderMatch = !event.gender || event.gender === 'Common' ||
+                (event.gender === 'Male' && student.gender === 'M') ||
+                (event.gender === 'Female' && student.gender === 'F');
+
+            return catMatch && genderMatch;
+        });
+
+        if (!matches.length) {
+            resultsContainer.innerHTML = `<div class="text-center text-muted small py-4">No eligible students found matching "${query}".</div>`;
+            return;
+        }
+
+        resultsContainer.innerHTML = matches.map(student => {
+            const regId = `${fest.id}_${student.id}`;
+            const reg = state.festRegistrations.find(r => r.id === regId);
+            const enrolledEventIds = reg?.events || [];
+            const isAlreadyInEvent = enrolledEventIds.includes(event.id);
+            const house = state.festHouses.find(h => h.id === student.houseId);
+
+            // Audit enrolled solo events
+            const enrolledSoloEvents = enrolledEventIds.map(id => state.festEvents.find(e => e.id === id)).filter(e => e && !e.isGroupEvent);
+            const currentStageEnrolled = enrolledSoloEvents.filter(e => isOffStage ? (e.type === 'offStage') : (e.type !== 'offStage'));
+            const stageCount = currentStageEnrolled.length;
+            const isStageFull = stageCount >= currentStageMax;
+
+            // Check house limits
+            const currentHouseCount = state.festRegistrations.filter(r => r.festId === fest.id && r.houseId === student.houseId && r.events?.includes(event.id)).length;
+            const houseLimit = eventHouseLimit(fest, event, 'solo');
+            const isHouseFull = currentHouseCount >= houseLimit;
+
+            // Build detailed cards of their enrolled events showing results/placements
+            const enrolledListHtml = enrolledSoloEvents.map(e => {
+                const eOff = e.type === 'offStage';
+                const eResult = state.festResults.find(r => r.festId === fest.id && r.eventId === e.id);
+                const standing = eResult?.results?.find(s => s.studentId === student.id);
+
+                let resultBadge = '';
+                if (standing) {
+                    resultBadge = `<span class="badge bg-success-subtle text-success border border-success ms-1"><i class="fas fa-check-circle me-1"></i>Pos: ${standing.position} (${standing.points} pts)</span>`;
+                } else if (eResult) {
+                    resultBadge = `<span class="badge bg-secondary-subtle text-secondary ms-1">Evaluated (Unplaced)</span>`;
+                } else {
+                    resultBadge = `<span class="badge bg-warning-subtle text-warning-emphasis ms-1">No Result Yet</span>`;
+                }
+
+                // Can remove if it is NOT the active event being viewed
+                const canRemove = e.id !== event.id;
+
+                return `
+                    <div class="d-flex justify-content-between align-items-center bg-white border rounded p-1 px-2 mb-1 small shadow-xs">
+                        <div class="text-truncate me-1">
+                            <i class="fas ${eOff ? 'fa-palette text-success' : 'fa-microphone-lines text-primary'} me-1"></i>
+                            <strong>${e.name}</strong> 
+                            <span class="text-muted" style="font-size: 0.68rem;">[${eOff ? 'Off-Stage' : 'On-Stage'}]</span>
+                            ${resultBadge}
+                        </div>
+                        ${canRemove ? `
+                            <button type="button" class="btn btn-xs btn-outline-danger adhoc-remove-event-btn py-0 px-2 text-nowrap" 
+                                    data-student-id="${student.id}" data-event-id="${e.id}" data-has-score="${Boolean(standing)}" title="Remove student from this event to free quota">
+                                <i class="fas fa-trash me-1"></i>Remove
+                            </button>
+                        ` : ''}
+                    </div>
+                `;
+            }).join('');
+
+            return `
+                <div class="card p-2 mb-2 border shadow-xs bg-light">
+                    <div class="d-flex justify-content-between align-items-start mb-1">
+                        <div>
+                            <strong class="text-dark fs-6">${student.name}</strong>
+                            <div class="small text-muted">
+                                Adm: ${student.admissionNumber || 'N/A'} &bull; 
+                                ${getStudentClassName(student.classId, student.division)} &bull; 
+                                House: <span class="badge bg-white text-dark border">${house?.name || 'N/A'}</span>
+                            </div>
+                        </div>
+                        <div class="text-end">
+                            <span class="badge ${isStageFull ? 'bg-danger text-white' : 'bg-primary-subtle text-primary border'}" style="font-size: 0.7rem;">
+                                ${stageName} Quota: ${stageCount}/${currentStageMax}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="my-1">
+                        <div class="small fw-semibold text-muted mb-1" style="font-size: 0.72rem;">CURRENT SOLO ENROLLMENTS (${enrolledSoloEvents.length}):</div>
+                        ${enrolledListHtml || `<div class="small text-muted fst-italic">No solo events registered currently.</div>`}
+                    </div>
+
+                    <div class="mt-2 pt-1 border-top d-flex justify-content-between align-items-center">
+                        <span class="small text-muted" style="font-size: 0.7rem;">
+                            ${isAlreadyInEvent ? '<span class="text-success"><i class="fas fa-check me-1"></i>Already on this event roster</span>' : 
+                             (isHouseFull ? '<span class="text-danger"><i class="fas fa-ban me-1"></i>House entry limit reached</span>' : 
+                             (isStageFull ? '<span class="text-danger"><i class="fas fa-triangle-exclamation me-1"></i>Quota full. Remove an event above first.</span>' : '<span class="text-success">Eligible to add</span>'))}
+                        </span>
+
+                        <button type="button" class="btn btn-sm ${isAlreadyInEvent ? 'btn-secondary' : 'btn-success'} py-1 px-3 adhoc-enrol-btn fw-bold" 
+                                data-student-id="${student.id}" 
+                                ${isAlreadyInEvent || isStageFull || isHouseFull ? 'disabled' : ''}>
+                            <i class="fas fa-user-plus me-1"></i>${isAlreadyInEvent ? 'Already Enrolled' : 'Enrol & Add to Results'}
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    searchInput.addEventListener('input', renderSearchResults);
+
+    // Event Delegation: Remove an enrolled event to make room
+    resultsContainer.addEventListener('click', async e => {
+        const removeBtn = e.target.closest('.adhoc-remove-event-btn');
+        if (removeBtn) {
+            const studentId = removeBtn.dataset.studentId;
+            const eventId = removeBtn.dataset.eventId;
+            const hasScore = removeBtn.dataset.hasScore === 'true';
+
+            if (hasScore) {
+                if (!confirm('WARNING: This student already scored points in this event! Removing will invalidate those marks. Are you sure?')) {
+                    return;
+                }
+            } else {
+                if (!confirm('Remove this student from this event?')) return;
+            }
+
+            const regId = `${fest.id}_${studentId}`;
+            const reg = state.festRegistrations.find(r => r.id === regId);
+            if (!reg) return;
+
+            const updatedEvents = (reg.events || []).filter(id => id !== eventId);
+            try {
+                await saveScopedDoc('festRegistrations', regId, {
+                    ...reg,
+                    events: updatedEvents,
+                    lastUpdated: serverTimestamp()
+                });
+                reg.events = updatedEvents;
+                window.showAlert?.('Event removed. Quota slot released.', 'info');
+                renderSearchResults();
+            } catch (err) {
+                console.error(err);
+                window.showAlert?.('Failed to remove event.', 'danger');
+            }
+            return;
+        }
+
+        // Event Delegation: Enrol into the active event
+        const enrolBtn = e.target.closest('.adhoc-enrol-btn');
+        if (enrolBtn && !enrolBtn.disabled) {
+            const studentId = enrolBtn.dataset.studentId;
+            const student = state.students.find(s => s.id === studentId);
+            const regId = `${fest.id}_${studentId}`;
+            const reg = state.festRegistrations.find(r => r.id === regId);
+            const existingEvents = reg?.events || [];
+
+            enrolBtn.disabled = true;
+            enrolBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>Adding...`;
+
+            const mergedEvents = [...new Set([...existingEvents, event.id])];
+            const payload = {
+                id: regId,
+                festId: fest.id,
+                studentId: student.id,
+                studentName: student.name,
+                houseId: student.houseId || reg?.houseId || null,
+                events: mergedEvents,
+                chestNo: reg?.chestNo || null,
+                lastUpdated: serverTimestamp()
+            };
+
+            try {
+                await saveScopedDoc('festRegistrations', regId, payload);
+                if (reg) {
+                    reg.events = mergedEvents;
+                } else {
+                    state.festRegistrations.push(payload);
+                }
+
+                window.showAlert?.(`${student.name} added to ${event.name}!`, 'success');
+                renderSearchResults();
+
+                // Reload the active result sheet in the background so they appear in the table
+                loadResultEvent(event.id);
+            } catch (err) {
+                console.error(err);
+                window.showAlert?.('Failed to enrol student.', 'danger');
+                enrolBtn.disabled = false;
+                enrolBtn.innerHTML = `<i class="fas fa-user-plus me-1"></i>Enrol & Add to Results`;
+            }
+        }
+    });
+}
+
 function attachRowScoringEvents(event) {
     document.querySelectorAll('#admin-result-grid tbody tr').forEach(row => {
         const posSelect = row.querySelector('.result-position');
         const pointsCell = row.querySelector('.result-points');
         const scoreInput = row.querySelector('.result-score-input');
 
-        // 1. Manual Position Dropdown Change
         posSelect?.addEventListener('change', e => {
             const pos = Number(e.target.value);
             const isGroup = row.dataset.group === 'true';
@@ -315,14 +569,12 @@ function attachRowScoringEvents(event) {
             pointsCell.textContent = pts;
             pointsCell.className = `result-points text-center font-monospace fw-bold fs-6 ${pos > 0 ? 'text-success' : 'text-muted'}`;
 
-            // Update row color highlights
             row.className = `result-row ${pos === 1 ? 'table-warning border-start border-warning border-4' : 
                             (pos === 2 ? 'table-secondary border-start border-secondary border-4' : 
                             (pos === 3 ? 'table-danger-subtle border-start border-danger border-4' : 
                             (pos === 4 ? 'table-info border-start border-info border-3' : '')))}`;
         });
 
-        // 2. Score blur triggers auto rank check
         scoreInput?.addEventListener('blur', () => {
             if (scoreInput.value.trim() !== '') {
                 autoRankByMarks(event);
@@ -331,7 +583,6 @@ function attachRowScoringEvents(event) {
     });
 }
 
-// Auto-determine 1st, 2nd, 3rd, 4th positions based on entered marks
 function autoRankByMarks(event) {
     const rows = Array.from(document.querySelectorAll('#admin-result-grid tbody tr'));
     const scoredRows = rows.map(r => ({
@@ -344,10 +595,8 @@ function autoRankByMarks(event) {
         return window.showAlert?.('Please enter scores before auto-ranking.', 'info');
     }
 
-    // Sort scored items descending by score
     scoredRows.sort((a, b) => b.score - a.score);
 
-    // Assign positions (supports ties)
     let currentPos = 1;
     scoredRows.forEach((item, index) => {
         if (index > 0 && item.score < scoredRows[index - 1].score) {
@@ -366,7 +615,6 @@ function autoRankByMarks(event) {
             pointsCell.className = `result-points text-center font-monospace fw-bold fs-6 ${effectivePos > 0 ? 'text-success' : 'text-muted'}`;
         }
 
-        // Apply visual highlights
         item.row.className = `result-row ${effectivePos === 1 ? 'table-warning border-start border-warning border-4' : 
                             (effectivePos === 2 ? 'table-secondary border-start border-secondary border-4' : 
                             (effectivePos === 3 ? 'table-danger-subtle border-start border-danger border-4' : 
@@ -405,7 +653,7 @@ async function saveAdminResults(fest, event, existing) {
         rankedResults.push(item); 
     });
 
-    if (!rankedResults.length) return window.showAlert('Assign at least one winning position.', 'warning');
+    if (!rankedResults.length) return window.showAlert?.('Assign at least one winning position.', 'warning');
     if (existing && !confirm('This event already has results saved. Overwrite with these updated results?')) return;
 
     try {
@@ -429,11 +677,11 @@ async function saveAdminResults(fest, event, existing) {
         if (stored) Object.assign(stored, payload); 
         else state.festResults.push(payload);
 
-        window.showAlert('Results and points saved successfully.', 'success');
+        window.showAlert?.('Results and points saved successfully.', 'success');
         loadResultEvent(event.id);
     } catch (error) { 
         console.error(error); 
-        window.showAlert('Failed to save results.', 'danger'); 
+        window.showAlert?.('Failed to save results.', 'danger'); 
     }
 }
 
@@ -465,7 +713,7 @@ async function openResultScannerModal() {
     try {
         await ensureHtml5Qrcode();
     } catch (err) {
-        return window.showAlert('Camera scanner library could not be loaded.', 'danger');
+        return window.showAlert?.('Camera scanner library could not be loaded.', 'danger');
     }
 
     const modalBody = `
@@ -541,7 +789,7 @@ async function openResultScannerModal() {
 
                 evSelect.value = eventId;
                 loadResultEvent(eventId);
-                window.showAlert(`Loaded Event: ${eventId}`, 'success');
+                window.showAlert?.(`Loaded Event: ${eventId}`, 'success');
             }
         },
         () => {}
