@@ -66,17 +66,34 @@ window.renderFestReportsTab = function() {
     </div>
 </div>
             <!-- Card 2: Individual Championships (Kalathilakam / Kalaprathibha) -->
-            <div class="col-md-6">
-                <div class="ui-card h-100 d-flex flex-column">
-                    <h6 class="fw-bold mb-1"><i class="fas fa-medal text-info me-2"></i>Individual Championships</h6>
-                    <p class="small text-muted mb-3">Top scoring male and female participants across categories (Solo points only).</p>
-                    <div class="mt-auto text-end">
-                        <button class="btn btn-sm btn-primary" onclick="window.printIndividualChampionships()">
-                            <i class="fas fa-user-graduate me-1"></i>Print Champions Roster
-                        </button>
-                    </div>
-                </div>
-            </div>
+            <!-- Card 2: Individual Championships (Kalathilakam / Kalaprathibha) -->
+<div class="col-md-6">
+    <div class="ui-card h-100 d-flex flex-column">
+        <div class="d-flex justify-content-between align-items-start mb-1">
+            <h6 class="fw-bold mb-0">
+                <i class="fas fa-medal text-info me-2"></i>Individual Championships
+            </h6>
+            <span class="badge bg-secondary-subtle text-dark border" style="font-size: 0.68rem;">Solo Only</span>
+        </div>
+        <p class="small text-muted mb-2">Top scoring male and female participants across categories.</p>
+        
+        <!-- Stage Scope Filter Dropdown -->
+        <div class="mb-3">
+            <label class="small fw-bold mb-1" for="championship-stage-scope">Stage Filter Scope:</label>
+            <select id="championship-stage-scope" class="form-select form-select-sm">
+                <option value="all" selected>All Stages (On-Stage &amp; Off-Stage)</option>
+                <option value="onStage">On-Stage Events Only</option>
+                <option value="offStage">Off-Stage Events Only</option>
+            </select>
+        </div>
+
+        <div class="mt-auto text-end">
+            <button class="btn btn-sm btn-primary" onclick="window.printIndividualChampionships()">
+                <i class="fas fa-print me-1"></i>Print Champions Roster
+            </button>
+        </div>
+    </div>
+</div>
             <!-- Card: Participant-Wise Detailed Results -->
 <div class="col-md-6">
     <div class="ui-card h-100 d-flex flex-column">
@@ -766,18 +783,32 @@ window.printIndividualChampionships = function() {
     const fest = state.managingFest;
     if (!fest) return window.showAlert?.('Please select a fest first.', 'warning');
 
+    // Read selected stage filter: 'all' | 'onStage' | 'offStage'
+    const stageScope = document.getElementById('championship-stage-scope')?.value || 'all';
+
+    const stageLabel = stageScope === 'onStage' 
+        ? 'On-Stage Events Only' 
+        : (stageScope === 'offStage' ? 'Off-Stage Events Only' : 'Combined (All Stages)');
+
     const results = state.festResults.filter(r => r.festId === fest.id);
 
     // Track points per student:
-    // overall: total solo points
-    // race: points from events matching RACE / sprints
-    // jump: points from events matching JUMP
-    // throw: points from events matching THROW / shot put / discus / javelin
+    // overall: total points matching active filter
+    // onStagePts: points earned in on-stage solo events
+    // offStagePts: points earned in off-stage solo events (for Sargaprathibha)
+    // race, jump, throw: track & field disciplines
     const studentScoreMap = {};
 
     results.forEach(res => {
         const ev = state.festEvents.find(e => e.id === res.eventId);
-        if (!ev || ev.isGroupEvent) return; // Strict solo events
+        // Exclude missing, group, or cancelled events
+        if (!ev || ev.isGroupEvent || ev.type === 'group' || ev.cancelled === true) return;
+
+        const isOffStage = ev.type === 'offStage';
+
+        // Apply stage filter criteria
+        if (stageScope === 'onStage' && isOffStage) return;
+        if (stageScope === 'offStage' && !isOffStage) return;
 
         const evName = (ev.name || '').toUpperCase();
         const isRace = evName.includes('RACE') || evName.includes('RUN') || evName.includes('100M') || evName.includes('200M') || evName.includes('400M') || evName.includes('HURDLE');
@@ -790,6 +821,8 @@ window.printIndividualChampionships = function() {
                 if (!studentScoreMap[item.studentId]) {
                     studentScoreMap[item.studentId] = {
                         overall: 0,
+                        onStagePts: 0,
+                        offStagePts: 0,
                         race: 0,
                         jump: 0,
                         throw: 0
@@ -797,6 +830,12 @@ window.printIndividualChampionships = function() {
                 }
 
                 studentScoreMap[item.studentId].overall += pts;
+                if (isOffStage) {
+                    studentScoreMap[item.studentId].offStagePts += pts;
+                } else {
+                    studentScoreMap[item.studentId].onStagePts += pts;
+                }
+
                 if (isRace) studentScoreMap[item.studentId].race += pts;
                 if (isJump) studentScoreMap[item.studentId].jump += pts;
                 if (isThrow) studentScoreMap[item.studentId].throw += pts;
@@ -804,7 +843,7 @@ window.printIndividualChampionships = function() {
         });
     });
 
-    // Populate full student metadata
+    // Populate student metadata
     const parsedStudents = Object.entries(studentScoreMap).map(([studentId, scores]) => {
         const student = state.students.find(s => s.id === studentId);
         const registration = state.festRegistrations.find(r => r.studentId === studentId && r.festId === fest.id);
@@ -823,29 +862,36 @@ window.printIndividualChampionships = function() {
         };
     });
 
+    if (!parsedStudents.length) {
+        return window.showAlert?.(`No scored solo entries found for scope: ${stageLabel}`, 'info');
+    }
+
     // Helper to render ranking tables
-    function renderStandingsTable(title, list, scoreKey = 'overall', badgeColor = 'bg-primary') {
+    function renderStandingsTable(title, list, scoreKey = 'overall') {
         const sorted = [...list]
             .filter(item => item.scores[scoreKey] > 0)
             .sort((a, b) => b.scores[scoreKey] - a.scores[scoreKey]);
 
         if (sorted.length === 0) return '';
 
+        const showStageColumn = (stageScope === 'all' && scoreKey === 'overall');
+
         return `
-            <div style="page-break-inside: avoid; margin-bottom: 20px;">
+            <div style="page-break-inside: avoid; margin-bottom: 16px;">
                 <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #212529; padding-bottom: 3px; margin-bottom: 6px;">
-                    <h5 style="margin: 0; font-size: 11pt; font-weight: bold; color: #111;">${title}</h5>
-                    <span style="font-size: 7.5pt; color: #555;">Top ${Math.min(sorted.length, 5)} Contenders</span>
+                    <h5 style="margin: 0; font-size: 10.5pt; font-weight: bold; color: #111;">${title}</h5>
+                    <span style="font-size: 7.5pt; color: #555;">Top Contenders</span>
                 </div>
                 <table class="table table-bordered table-sm" style="width: 100%; border-collapse: collapse; font-size: 8.5pt;">
                     <thead class="table-light">
                         <tr>
-                            <th style="width: 7%; text-align: center;">Rank</th>
+                            <th style="width: 6%; text-align: center;">Rank</th>
                             <th style="width: 10%; text-align: center;">Chest</th>
-                            <th style="width: 33%;">Student Name</th>
-                            <th style="width: 15%; text-align: center;">Class</th>
-                            <th style="width: 20%;">House</th>
-                            <th style="width: 15%; text-align: center;">Points</th>
+                            <th style="${showStageColumn ? 'width: 30%;' : 'width: 36%;'}">Student Name</th>
+                            <th style="width: 14%; text-align: center;">Class</th>
+                            <th style="width: 18%;">House</th>
+                            ${showStageColumn ? '<th style="width: 12%; text-align: center; font-size: 7.5pt;">Stage Breakdown</th>' : ''}
+                            <th style="width: 10%; text-align: center;">Points</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -856,6 +902,12 @@ window.printIndividualChampionships = function() {
                                 <td><strong>${item.student?.name || 'Unknown'}</strong></td>
                                 <td class="text-center">${getStudentClassName(item.student?.classId, item.student?.division) || '-'}</td>
                                 <td>${item.house?.name || 'N/A'}</td>
+                                ${showStageColumn ? `
+                                    <td class="text-center" style="font-size: 7.5pt;">
+                                        <span style="color: #4338ca;">On: ${item.scores.onStagePts}</span> &bull; 
+                                        <span style="color: #047857;">Off: ${item.scores.offStagePts}</span>
+                                    </td>
+                                ` : ''}
                                 <td class="text-center fw-bold" style="font-size: 9.5pt;">${item.scores[scoreKey]}</td>
                             </tr>
                         `).join('')}
@@ -865,41 +917,85 @@ window.printIndividualChampionships = function() {
         `;
     }
 
-    // 1. Overall Kalaprathibha (Male) & Kalathilakam (Female)
     const overallBoys = parsedStudents.filter(s => s.gender === 'Male');
     const overallGirls = parsedStudents.filter(s => s.gender === 'Female');
 
     let contentHtml = `
-        <div style="text-align: center; margin-bottom: 18px;">
+        <div style="text-align: center; margin-bottom: 16px;">
             <h2 style="margin: 0; font-size: 16pt;">${fest.name}</h2>
-            <h4 style="margin: 3px 0; color: #495057; font-size: 11.5pt;">Individual Championship & Special Discipline Standings</h4>
-            <div style="font-size: 8pt; color: #6c757d;">Academic Year: ${systemContext.activeYearId || ''} &bull; Solo Event Standings</div>
-        </div>
-
-        <!-- SECTION 1: OVERALL CHAMPIONS (KALAPRATHIBHA & KALATHILAKAM) -->
-        <div style="background: #f8f9fa; border-left: 4px solid #0d6efd; padding: 4px 10px; margin-bottom: 12px; font-weight: bold; font-size: 9pt; text-transform: uppercase;">
-            Championship Titles (All Solo Events Combined)
-        </div>
-        ${renderStandingsTable('Kalaprathibha (Male Overall Champion)', overallBoys, 'overall')}
-        ${renderStandingsTable('Kalathilakam (Female Overall Champion)', overallGirls, 'overall')}
-
-        <!-- SECTION 2: SPECIAL ATHLETIC TITLES (RACE, JUMP, THROW) -->
-        <div style="background: #f8f9fa; border-left: 4px solid #dc3545; padding: 4px 10px; margin-top: 15px; margin-bottom: 12px; font-weight: bold; font-size: 9pt; text-transform: uppercase;">
-            Special Athletic Discipline Champions
-        </div>
-        <div style="display: grid; grid-template-columns: 1fr; gap: 4px;">
-            ${renderStandingsTable('Sprint & Track Champion (RACE Events)', parsedStudents, 'race')}
-            ${renderStandingsTable('Jump Champion (High, Long & Triple Jumps)', parsedStudents, 'jump')}
-            ${renderStandingsTable('Throw Champion (Shot Put, Discus & Javelin)', parsedStudents, 'throw')}
-        </div>
-
-        <!-- SECTION 3: CATEGORY & GENDER-WISE LEADERS -->
-        <div style="background: #f8f9fa; border-left: 4px solid #198754; padding: 4px 10px; margin-top: 15px; margin-bottom: 12px; font-weight: bold; font-size: 9pt; text-transform: uppercase;">
-            Category & Gender-Wise Individual Champions
+            <h4 style="margin: 3px 0; color: #495057; font-size: 11.5pt;">Individual Championship Standings</h4>
+            <div style="font-size: 8.5pt; color: #6c757d;">
+                <strong>Scope:</strong> ${stageLabel} &bull; <em>Strictly Solo Events</em> &bull; Academic Year: ${systemContext.activeYearId || ''}
+            </div>
         </div>
     `;
 
-    // Extract all unique categories present in the fest
+    // --- CASE 1: "ALL" OPTION SELECTED ---
+    if (stageScope === 'all') {
+        contentHtml += `
+            <!-- 1. ON-STAGE CHAMPIONS (KALAPRATHIBHA & KALATHILAKAM) -->
+            <div style="background: #f8f9fa; border-left: 4px solid #0d6efd; padding: 4px 10px; margin-bottom: 10px; font-weight: bold; font-size: 9pt; text-transform: uppercase;">
+                On-Stage Championship Titles (Performing Arts)
+            </div>
+            ${renderStandingsTable('Kalaprathibha (Male On-Stage Champion)', overallBoys, 'onStagePts')}
+            ${renderStandingsTable('Kalathilakam (Female On-Stage Champion)', overallGirls, 'onStagePts')}
+
+            <!-- 2. OFF-STAGE CHAMPIONS (SARGAPRATHIBHA) -->
+            <div style="background: #f8f9fa; border-left: 4px solid #047857; padding: 4px 10px; margin-top: 14px; margin-bottom: 10px; font-weight: bold; font-size: 9pt; text-transform: uppercase;">
+                Off-Stage Championship Titles (Literary &amp; Fine Arts)
+            </div>
+            ${renderStandingsTable('Sargaprathibha (Male Off-Stage Champion)', overallBoys, 'offStagePts')}
+            ${renderStandingsTable('Sargaprathibha (Female Off-Stage Champion)', overallGirls, 'offStagePts')}
+
+            <!-- 3. COMBINED OVERALL STANDINGS -->
+            <div style="background: #f8f9fa; border-left: 4px solid #6f42c1; padding: 4px 10px; margin-top: 14px; margin-bottom: 10px; font-weight: bold; font-size: 9pt; text-transform: uppercase;">
+                Overall Grand Champion (Combined On-Stage + Off-Stage)
+            </div>
+            ${renderStandingsTable('Overall Boys Champion (All Solo Events)', overallBoys, 'overall')}
+            ${renderStandingsTable('Overall Girls Champion (All Solo Events)', overallGirls, 'overall')}
+        `;
+    } 
+    // --- CASE 2: "OFF-STAGE ONLY" OPTION SELECTED ---
+    else if (stageScope === 'offStage') {
+        contentHtml += `
+            <div style="background: #f8f9fa; border-left: 4px solid #047857; padding: 4px 10px; margin-bottom: 10px; font-weight: bold; font-size: 9pt; text-transform: uppercase;">
+                Sargaprathibha Titles (Off-Stage / Literary &amp; Fine Arts)
+            </div>
+            ${renderStandingsTable('Sargaprathibha (Male Off-Stage Champion)', overallBoys, 'overall')}
+            ${renderStandingsTable('Sargaprathibha (Female Off-Stage Champion)', overallGirls, 'overall')}
+        `;
+    } 
+    // --- CASE 3: "ON-STAGE ONLY" OPTION SELECTED ---
+    else {
+        contentHtml += `
+            <div style="background: #f8f9fa; border-left: 4px solid #0d6efd; padding: 4px 10px; margin-bottom: 10px; font-weight: bold; font-size: 9pt; text-transform: uppercase;">
+                On-Stage Championship Titles (Performing Arts)
+            </div>
+            ${renderStandingsTable('Kalaprathibha (Male On-Stage Champion)', overallBoys, 'overall')}
+            ${renderStandingsTable('Kalathilakam (Female On-Stage Champion)', overallGirls, 'overall')}
+        `;
+    }
+
+    // SECTION: ATHLETIC DISCIPLINES (If applicable)
+    const hasAthletics = parsedStudents.some(s => s.scores.race > 0 || s.scores.jump > 0 || s.scores.throw > 0);
+    if (hasAthletics && stageScope !== 'offStage') {
+        contentHtml += `
+            <div style="background: #f8f9fa; border-left: 4px solid #dc3545; padding: 4px 10px; margin-top: 14px; margin-bottom: 10px; font-weight: bold; font-size: 9pt; text-transform: uppercase;">
+                Special Athletic Discipline Champions
+            </div>
+            ${renderStandingsTable('Track &amp; Sprint Champion (RACE Events)', parsedStudents, 'race')}
+            ${renderStandingsTable('Jump Champion (High, Long &amp; Triple Jumps)', parsedStudents, 'jump')}
+            ${renderStandingsTable('Throw Champion (Shot Put, Discus &amp; Javelin)', parsedStudents, 'throw')}
+        `;
+    }
+
+    // SECTION: CATEGORY & GENDER-WISE LEADERS
+    contentHtml += `
+        <div style="background: #f8f9fa; border-left: 4px solid #198754; padding: 4px 10px; margin-top: 14px; margin-bottom: 10px; font-weight: bold; font-size: 9pt; text-transform: uppercase;">
+            Category &amp; Gender-Wise Champions (${stageLabel})
+        </div>
+    `;
+
     const categories = [...new Set(parsedStudents.map(s => s.category).filter(Boolean))].sort();
 
     categories.forEach(cat => {
@@ -911,8 +1007,8 @@ window.printIndividualChampionships = function() {
 
         if (boysTable || girlsTable) {
             contentHtml += `
-                <div style="margin-top: 10px; page-break-inside: avoid;">
-                    <div style="font-size: 9pt; font-weight: bold; color: #495057; border-bottom: 1px dashed #adb5bd; padding-bottom: 2px; margin-bottom: 8px;">
+                <div style="margin-top: 8px; page-break-inside: avoid;">
+                    <div style="font-size: 9pt; font-weight: bold; color: #495057; border-bottom: 1px dashed #adb5bd; padding-bottom: 2px; margin-bottom: 6px;">
                         Category: ${cat}
                     </div>
                     ${boysTable}
@@ -923,7 +1019,7 @@ window.printIndividualChampionships = function() {
     });
 
     contentHtml += `
-        <div style="margin-top: 40px; display: flex; justify-content: space-between; font-size: 8.5pt; page-break-inside: avoid;">
+        <div style="margin-top: 35px; display: flex; justify-content: space-between; font-size: 8.5pt; page-break-inside: avoid;">
             <div>Tabulator Signature: _______________________</div>
             <div>Convener Signature: _______________________</div>
         </div>
@@ -931,11 +1027,10 @@ window.printIndividualChampionships = function() {
 
     window.printReport({
         contentHtml,
-        title: `Individual_Champions_${fest.name.replace(/\s+/g, '_')}`,
+        title: `Individual_Champions_${stageScope}_${fest.name.replace(/\s+/g, '_')}`,
         pageSize: 'A4 portrait'
     });
 };
-
 /**
  * Generates and prints compact chest-number cards for assigned participants.
  */
@@ -1274,23 +1369,45 @@ window.printEventScorecard = async function() {
 
     const pagesHtml = tokenDataList.map(({ event, shortToken, shortUrl, qrContainerId, index }) => {
         const isGroup = Boolean(event.isGroupEvent || event.type === 'group');
-        const participants = state.festRegistrations.filter(r => 
-            r.festId === fest.id && 
-            !r.isDeleted && 
-            Array.isArray(r.events) && 
-            r.events.includes(event.id)
-        );
+        const eventNameUpper = String(event.name || '').trim().toUpperCase();
+        const isSpecialEvent = event.isSpecial || 
+                               eventNameUpper.includes("MARCH PAST") || 
+                               eventNameUpper.includes("DISCIPLINE") || 
+                               eventNameUpper.includes("DECORATION");
 
         let rowsHtml = '';
 
-        if (isGroup) {
-            const groups = state.festGroups.filter(g =>
+        if (isSpecialEvent) {
+            // 1. Special Event: Show all competing houses as squads
+            const houseSquads = (state.festHouses || []).map(h => ({
+                code: h.id.slice(0, 2).toUpperCase(),
+                name: `${h.name} Squad`,
+                houseName: h.name,
+                captainName: 'House Captain'
+            })).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+
+            rowsHtml = houseSquads.map(g => `
+                <tr style="height: 40px;">
+                    <td class="text-center" style="font-weight: 700;">${g.code}</td>
+                    <td>
+                        <strong>${g.name}</strong>
+                        <div class="small text-muted" style="font-size: 7.5pt;">In-Charge: ${g.captainName}</div>
+                    </td>
+                    <td>${g.houseName}</td>
+                    <td style="width: 15%; text-align: center;"></td>
+                    <td style="width: 20%;"></td>
+                </tr>
+            `).join('');
+
+        } else if (isGroup) {
+            // 2. Standard Group Event: STRICTLY filter by g.eventId === event.id
+            const groups = (state.festGroups || []).filter(g =>
                 g.festId === fest.id &&
                 !g.isDeleted &&
-                (g.eventId === event.id || g.members?.some(m => participants.some(p => p.studentId === m.studentId)))
+                g.eventId === event.id
             );
 
-            // 1. Sort Group Teams Alphabetically by Group Name
+            // Sort group teams alphabetically by group name
             const sortedGroups = [...groups].sort((a, b) => 
                 (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
             );
@@ -1305,7 +1422,7 @@ window.printEventScorecard = async function() {
                         <td class="text-center" style="font-weight: 700;">${g.chestNo || g.code || '-'}</td>
                         <td>
                             <strong>${g.name}</strong>
-                            <div class="small text-muted" style="font-size: 7.5pt;">Captain: ${captainName}</div>
+                            <div class="small text-muted" style="font-size: 7.5pt;">Captain: ${captainName} (${g.members?.length || 0} members)</div>
                         </td>
                         <td>${house?.name || 'N/A'}</td>
                         <td style="width: 15%; text-align: center;"></td>
@@ -1313,8 +1430,17 @@ window.printEventScorecard = async function() {
                     </tr>
                 `;
             }).join('');
+
         } else {
-            // 2. Sort Solo Participants Alphabetically by Student Name
+            // 3. Solo Event: Filter participants enrolled specifically in this event
+            const participants = state.festRegistrations.filter(r => 
+                r.festId === fest.id && 
+                !r.isDeleted && 
+                Array.isArray(r.events) && 
+                r.events.includes(event.id)
+            );
+
+            // Sort solo participants alphabetically by student name
             const sortedParticipants = [...participants].sort((a, b) => {
                 const studentA = state.students.find(s => s.id === a.studentId);
                 const studentB = state.students.find(s => s.id === b.studentId);
@@ -1354,7 +1480,7 @@ window.printEventScorecard = async function() {
                             Venue / Stage: <strong>${event.stage || 'Main Stage'}</strong> &bull; 
                             Type: <strong>${event.type || 'N/A'}</strong> &bull; 
                             Category: <strong>${event.category || 'N/A'}</strong> &bull; 
-                            Mode: <strong>${isGroup ? 'Group' : 'Solo'}</strong>
+                            Mode: <strong>${isSpecialEvent ? 'Special Event' : (isGroup ? 'Group' : 'Solo')}</strong>
                         </small>
                     </div>
 
@@ -1370,8 +1496,8 @@ window.printEventScorecard = async function() {
                 <table class="table table-bordered table-sm" style="width: 100%; border-collapse: collapse; font-size: 8.5pt;">
                     <thead class="table-light">
                         <tr>
-                            ${isGroup 
-                                ? '<th style="width: 15%; text-align: center;">Group Code</th><th style="width: 35%;">Group / Captain</th><th>House</th>' 
+                            ${isGroup || isSpecialEvent
+                                ? '<th style="width: 15%; text-align: center;">Group Code</th><th style="width: 35%;">Group / Team Name</th><th>House</th>' 
                                 : '<th style="width: 15%; text-align: center;">Chest No</th><th style="width: 35%;">Participant Name</th><th>House</th>'
                             }
                             <th style="width: 15%; text-align: center;">Position</th>
@@ -1379,7 +1505,7 @@ window.printEventScorecard = async function() {
                         </tr>
                     </thead>
                     <tbody>
-                        ${rowsHtml || `<tr><td colspan="5" class="text-center py-4 text-muted">No enrolled participants.</td></tr>`}
+                        ${rowsHtml || `<tr><td colspan="5" class="text-center py-4 text-muted">No enrolled participants or groups for this event.</td></tr>`}
                     </tbody>
                 </table>
 
