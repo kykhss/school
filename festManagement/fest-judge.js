@@ -130,6 +130,12 @@ async function handleScanOrManualInput(rawInput, festId, yearId, secretCode = ''
 /**
  * Main Controller for #fest-judge route.
  */
+/**
+ * Main Controller for #fest-judge route.
+ */
+/**
+ * Main Controller for #fest-judge route.
+ */
 window.checkForJudgingMode = async function() {
     const hash = window.location.hash;
     if (!hash.startsWith('#fest-judge')) return false;
@@ -145,7 +151,7 @@ window.checkForJudgingMode = async function() {
     const festId = params.get('fest') || (typeof state !== 'undefined' ? state.managingFest?.id : '') || '';
     const yearId = params.get('year') || systemContext?.activeYearId || localStorage.getItem('activeYearId') || '';
     const secretCode = params.get('code') || '';
-    const judgeName = params.get('judgeName') || ''; // <-- 1. Extract judgeName from URL
+    const judgeName = params.get('judgeName') || '';
 
     if (!festId || !yearId) {
         document.body.innerHTML = `
@@ -165,7 +171,6 @@ window.checkForJudgingMode = async function() {
 
     // Fallback: Missing Event ID -> Open Scanner View
     if (!eventId) {
-        // ... (standard camera QR scanner view remains unchanged)
         return true;
     }
 
@@ -181,7 +186,15 @@ window.checkForJudgingMode = async function() {
         const festRef = doc(db, `academicYears/${yearId}/fests`, festId);
         const eventRef = doc(db, `academicYears/${yearId}/festEvents`, eventId);
         const housesRef = collection(db, `academicYears/${yearId}/festHouses`);
-        const groupsRef = collection(db, `academicYears/${yearId}/festGroups`);
+        
+        // Query ONLY groups registered specifically for this event
+        const groupsQuery = query(
+            collection(db, `academicYears/${yearId}/festGroups`),
+            where('festId', '==', festId),
+            where('eventId', '==', eventId)
+        );
+
+        // Query solo registrations for this event
         const regQuery = query(
             collection(db, `academicYears/${yearId}/festRegistrations`), 
             where('festId', '==', festId), 
@@ -192,7 +205,7 @@ window.checkForJudgingMode = async function() {
             getDoc(festRef),
             getDoc(eventRef),
             getDocs(housesRef),
-            getDocs(groupsRef),
+            getDocs(groupsQuery),
             getDocs(regQuery)
         ]);
 
@@ -213,10 +226,9 @@ window.checkForJudgingMode = async function() {
         const festData = { id: festSnap.id, ...festSnap.data() };
         const eventData = { id: eventSnap.id, ...eventSnap.data() };
         const houses = housesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        const groups = groupsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const groups = groupsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(g => !g.isDeleted);
         const participants = regSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(r => !r.isDeleted);
 
-        // Pass judgeName to renderJudgingSheet
         await renderJudgingSheet(festData, eventData, participants, houses, groups, secretCode, judgeName);
         return true;
 
@@ -225,6 +237,231 @@ window.checkForJudgingMode = async function() {
         return true;
     }
 };
+
+/**
+ * Renders submitted standings or displays the active scoring table.
+ */
+async function renderJudgingSheet(fest, event, participants, houses, groups, presetCode = '', presetJudgeName = '') {
+    const yearId = systemContext.activeYearId;
+    const resultDocId = `${fest.id}_${event.id}`;
+    
+    const resultSnap = await getDoc(doc(db, `academicYears/${yearId}/festResults`, resultDocId));
+
+    // 1. If result has already been finalized
+    if (resultSnap.exists()) {
+        const resultData = resultSnap.data();
+        const finalResults = resultData.results || [];
+        const uploadedAt = resultData.judgedAt?.toDate ? resultData.judgedAt.toDate().toLocaleString() : 'Recorded';
+
+        document.body.innerHTML = `
+            <div class="container py-5">
+                <div class="card shadow-sm border-0 mx-auto" style="max-width: 600px;">
+                    <div class="card-body p-4 text-center">
+                        <div class="text-success mb-3"><i class="fas fa-check-circle fa-3x"></i></div>
+                        <h4 class="fw-bold mb-1">Results Finalized</h4>
+                        <p class="text-muted small">${event.name} (${fest.name})</p>
+                        <div class="alert alert-success text-start py-2 mb-3">
+                            <div class="fw-bold"><i class="fas fa-cloud-arrow-up me-1"></i>Marks Uploaded</div>
+                            <div class="small">Judge: <strong>${resultData.judgeName || 'Recorded Judge'}</strong> (${resultData.judgedBy || 'N/A'})</div>
+                            <div class="small">Signature: ${resultData.judgeSignature || resultData.judgeName || 'Signed'}</div>
+                            <div class="small text-muted">Uploaded: ${uploadedAt}</div>
+                        </div>
+                        <hr>
+                        <div class="list-group list-group-flush text-start mb-3">
+                            ${finalResults.map(r => {
+                                const targetName = r.studentId 
+                                    ? participants.find(p => p.studentId === r.studentId)?.studentName 
+                                    : groups.find(g => g.id === r.groupId)?.name;
+                                return `
+                                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                                        <span><strong>Position ${r.position}:</strong>${targetName || 'Participant'}</span>
+                                        <span class="badge bg-primary rounded-pill">${r.points} pts</span>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                        <a href="#fest-judge?year=${yearId}&fest=${fest.id}" class="btn btn-outline-primary btn-sm">
+                            <i class="fas fa-qrcode me-1"></i>Scan Next Event
+                        </a>
+                    </div>
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    // 2. Identify Special House Programs (March Past, Discipline, etc.)
+    const eventNameUpper = String(event.name || '').trim().toUpperCase();
+    const isSpecialEvent = event.isSpecial || 
+                           eventNameUpper.includes("MARCH PAST") || 
+                           eventNameUpper.includes("DISCIPLINE") || 
+                           eventNameUpper.includes("DECORATION");
+
+    let displayRows = [];
+
+    if (isSpecialEvent) {
+        // Special events load all houses as squads
+        displayRows = houses.map(h => ({
+            id: `SPECIAL_${fest.id}_${h.id}_${event.id}`,
+            isGroup: true,
+            name: `${h.name} Squad`,
+            details: `House Program / Special Event`,
+            houseId: h.id,
+            chestNo: h.id.slice(0, 2).toUpperCase()
+        }));
+    } else if (event.isGroupEvent || event.type === 'group') {
+        // STRICT FILTER: Only groups belonging directly to THIS event.id
+        const eventGroups = (groups || []).filter(g => g.eventId === event.id);
+
+        displayRows = eventGroups.map(g => {
+            const captain = g.members?.find(m => m.role === 'Captain' || m.isCaptain);
+            const student = state?.students?.find(s => s.id === captain?.studentId);
+            const captainName = student?.name || 'Unassigned';
+
+            return {
+                id: g.id,
+                isGroup: true,
+                name: g.name,
+                details: `Captain: ${captainName} &bull; ${g.members?.length || 0} members`,
+                houseId: g.houseId,
+                chestNo: g.chestNo || g.code || '-'
+            };
+        });
+    } else {
+        // Solo events: Only participants with this event in their events array
+        displayRows = participants.map(p => ({
+            id: p.studentId,
+            isGroup: false,
+            name: p.studentName || 'Student',
+            details: `Adm: ${(state?.students?.find(s => s.id === p.studentId)?.admissionNumber) || 'N/A'}`,
+            houseId: p.houseId,
+            chestNo: p.chestNo || 'N/A'
+        }));
+    }
+
+    if (displayRows.length === 0) {
+        document.body.innerHTML = `
+            <div class="container py-5 text-center">
+                <div class="card shadow-sm border-0 mx-auto" style="max-width: 500px;">
+                    <div class="card-body p-4">
+                        <div class="alert alert-warning mb-3">No enrolled participants or teams found specifically for ${event.name}.</div>
+                        <a href="#fest-judge?year=${yearId}&fest=${fest.id}" class="btn btn-primary btn-sm">
+                            <i class="fas fa-arrow-left me-1"></i>Scan Another Event
+                        </a>
+                    </div>
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    // Alphabetical Sort by Name
+    displayRows.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+
+    const posOptions = `
+        <option value="0">-- Assign Rank --</option>
+        <option value="1">🥇 1st Place</option>
+        <option value="2">🥈 2nd Place</option>
+        <option value="3">🥉 3rd Place</option>
+        <option value="4">4th Place</option>
+    `;
+
+    const matchedJudge = (fest.judgeCodes || []).find(j => j.code === presetCode);
+    const displayJudgeName = presetJudgeName || matchedJudge?.name || '';
+
+    document.body.innerHTML = `
+        <div class="container py-4" style="max-width: 850px;">
+            <div class="card shadow-sm border-0 mb-3">
+                <div class="card-body p-3 d-flex justify-content-between align-items-center">
+                    <div>
+                        <h4 class="fw-bold mb-0 text-dark">${event.name}</h4>
+                        <p class="text-muted small mb-0">
+                            ${fest.name} &bull; Category: <strong>${event.category || 'General'}</strong> &bull; Stage: <strong>${event.stage || 'Main Stage'}</strong> &bull; Mode: <strong>${event.isGroupEvent ? 'Group' : 'Solo'}</strong>
+                        </p>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        ${displayJudgeName ? `
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle py-2 px-2" style="font-size: 0.78rem;">
+                                <i class="fas fa-user-tie me-1"></i>${displayJudgeName}
+                            </span>
+                        ` : ''}
+                        <a href="#fest-judge?year=${yearId}&fest=${fest.id}" class="btn btn-outline-secondary btn-sm" title="Scan Another Event">
+                            <i class="fas fa-camera me-1"></i>New Scan
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0" id="judging-table">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 15%; text-align: center;">${event.isGroupEvent ? 'Code' : 'Chest No'}</th>
+                                <th style="width: 40%;">${event.isGroupEvent ? 'Group Team' : 'Participant Name'}</th>
+                                <th style="width: 20%;">House</th>
+                                <th style="width: 25%; min-width: 150px;">Rank Standing</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${displayRows.map(row => {
+                                const house = houses.find(h => h.id === row.houseId);
+                                const houseColor = house?.color || '#3b82f6';
+
+                                return `
+                                    <tr data-id="${row.id}" data-is-group="${row.isGroup}" data-name="${row.name}">
+                                        <td class="text-center">
+                                            <span class="badge ${row.isGroup ? 'bg-secondary-subtle text-secondary' : 'bg-light text-dark border'} font-monospace" style="font-size: 0.78rem;">
+                                                ${row.chestNo}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div class="fw-bold text-dark">${row.name}</div>
+                                            <div class="small text-muted" style="font-size: 0.74rem;">${row.details}</div>
+                                        </td>
+                                        <td>
+                                            <span class="badge border py-1 px-2 shadow-xs" style="background: #fff; color: ${houseColor}; border-color:${houseColor} !important;">
+                                                ${house?.name || 'N/A'}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <select class="form-select form-select-sm rank-select">${posOptions}</select>
+                                        </td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Submission Footer Bar -->
+            <div class="card shadow-sm border-0 p-3 bg-light">
+                <div class="row g-2 align-items-center justify-content-between">
+                    <div class="col-12 col-md-auto">
+                        <span class="badge bg-warning text-dark"><i class="fas fa-clock me-1"></i>Pending Submission</span>
+                    </div>
+                    
+                    <div class="col-12 col-md-auto ms-auto d-flex flex-wrap align-items-center gap-2">
+                        <input type="text" id="judge-name-entry" class="form-control form-control-sm" 
+                               style="max-width: 170px;" placeholder="Judge Name" value="${displayJudgeName}">
+                        
+                        <input type="password" id="judge-secret-entry" class="form-control form-control-sm text-center font-monospace" 
+                               style="max-width: 110px;" placeholder="Security Code" value="${presetCode}">
+                        
+                        <button id="commit-scores-btn" class="btn btn-success btn-sm fw-bold px-3">
+                            <i class="fas fa-check-double me-1"></i>Finalize Results
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('commit-scores-btn')?.addEventListener('click', () => {
+        commitJudgingResults(fest, event, participants, houses, groups);
+    });
+}
 
 /**
  * Renders submitted standings or displays the active scoring table.
