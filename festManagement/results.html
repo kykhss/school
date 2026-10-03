@@ -86,6 +86,7 @@
             align-items: center;
             gap: 8px;
             box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+            cursor: pointer;
         }
 
         .school-icon-circle {
@@ -363,30 +364,30 @@
             left: 0;
             width: 100vw;
             height: 100vh;
-            background: rgba(15, 23, 42, 0.8);
+            background: rgba(15, 23, 42, 0.82);
             backdrop-filter: blur(8px);
             z-index: 9999;
             display: none;
             align-items: center;
             justify-content: center;
             opacity: 0;
-            transition: opacity 0.4s ease;
+            transition: opacity 0.35s ease;
         }
 
         #breaking-result-overlay.active {
             display: flex;
             opacity: 1;
-            animation: zoomInPopup 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            animation: zoomInPopup 0.42s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
 
         #breaking-result-overlay.closing {
-            animation: flyToLeaderboard 0.6s cubic-bezier(0.7, 0, 0.84, 0) forwards;
+            animation: flyToLeaderboard 0.55s cubic-bezier(0.7, 0, 0.84, 0) forwards;
         }
 
         @keyframes zoomInPopup {
             from {
                 opacity: 0;
-                transform: scale(0.85) translateY(20px);
+                transform: scale(0.85) translateY(24px);
             }
             to {
                 opacity: 1;
@@ -409,7 +410,7 @@
             background: #ffffff;
             border-radius: 16px;
             border: 2px solid #cbd5e1;
-            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.4);
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.45);
             width: 90%;
             max-width: 760px;
             padding: 24px;
@@ -432,11 +433,22 @@
             text-transform: uppercase;
             animation: pulse-banner 1.2s infinite;
         }
+
+        .queue-badge-chip {
+            background: #0f172a;
+            color: #f8fafc;
+            border: 1px solid #334155;
+            font-size: 0.72rem;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 12px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+        }
     </style>
 </head>
 <body>
 
-    <!-- Background Stay-Awake Video -->
+    <!-- Background Stay-Awake Video[cite: 1] -->
     <video id="screen-keeper-video" autoplay muted loop playsinline src="data:video/mp4;base64,AAAAHGZ0eXBtcDQyAAAAAG1wNDJpc29tYXZjMQAAAAhmcmVlAAAAL21kYXQAAAAAAAABGAEA4AAAABhhdWNmYXN0AAAAAAABAAAAAAABAAAAAA=="></video>
 
     <!-- Interactive Broadcast Popup Overlay -->
@@ -446,10 +458,10 @@
         </div>
     </div>
 
-    <!-- Global Broadcast Bar -->
+    <!-- Global Broadcast Bar[cite: 1] -->
     <header class="top-navbar">
         <div class="d-flex align-items-center gap-3">
-            <div class="school-brand-badge" id="wake-status-badge" title="Screen Stay-Awake active">
+            <div class="school-brand-badge" id="wake-status-badge" title="Screen Stay-Awake active (Click to test popup)">
                 <div class="school-icon-circle">
                     <i class="fas fa-graduation-cap"></i>
                 </div>
@@ -475,13 +487,13 @@
         </div>
     </header>
 
-    <!-- Main TV Viewport -->
+    <!-- Main TV Viewport[cite: 1] -->
     <main class="container-fluid p-2 flex-grow-1 d-flex flex-column gap-2" style="height: calc(100vh - 52px);">
         
-        <!-- Top Half: Leaderboard & Winner Spotlight (~38%) -->
+        <!-- Top Half: Leaderboard & Winner Spotlight (~38%)[cite: 1] -->
         <div class="row g-2" style="height: 38%;">
             
-            <!-- Top Left: Standings -->
+            <!-- Top Left: Standings[cite: 1] -->
             <div class="col-6 h-100">
                 <div class="tv-card">
                     <div class="tv-card-header">
@@ -489,7 +501,7 @@
                             <span class="fw-bold small text-dark"><i class="fas fa-trophy text-warning me-2"></i>HOUSE STANDINGS</span>
                             <small class="text-muted" style="font-size: 0.7rem;">(Solid: Solo | Striped: Group)</small>
                         </div>
-                        <span class="badge bg-primary" id="total-results-count">0 Events Evaluated</span>
+                        <span class="badge bg-primary" id="total-results-count">0 Confirmed Results</span>
                     </div>
                     <div id="house-rankings-container">
                         <div class="d-flex h-100 align-items-center justify-content-center text-muted small">
@@ -499,7 +511,7 @@
                 </div>
             </div>
 
-            <!-- Top Right: Winner Spotlight & Breaking News (5s) -->
+            <!-- Top Right: Winner Spotlight (5s)[cite: 1] -->
             <div class="col-6 h-100">
                 <div class="tv-card">
                     <div class="tv-card-header" id="spotlight-header">
@@ -508,7 +520,7 @@
                     </div>
                     <div class="p-3 flex-grow-1 d-flex flex-column justify-content-center" id="winner-spotlight-container">
                         <div class="text-center text-muted small">
-                            <i class="fas fa-spinner fa-spin me-2"></i>Waiting for results...
+                            <i class="fas fa-spinner fa-spin me-2"></i>Waiting for confirmed results...
                         </div>
                     </div>
                 </div>
@@ -516,7 +528,7 @@
 
         </div>
 
-        <!-- Bottom Half: Continuous Autoscrolling Matrix (~62%) -->
+        <!-- Bottom Half: Continuous Autoscrolling Matrix (~62%)[cite: 1] -->
         <div class="row g-2 flex-grow-1" style="height: 62%;">
             <div class="col-12 h-100">
                 <div class="tv-card">
@@ -590,24 +602,36 @@
         let events = [];
         let registrations = [];
         let groups = [];
-        let results = [];
+        let rawResults = [];
+        let confirmedResults = []; 
         let houseScoreMap = new Map();
 
         let spotlightIndex = 0;
         let categoryIndex = 0;
-        let availableCategories = [];
+        let availableCategories = ['ALL'];
         let categoryTimerSeconds = 20;
-        let priorityQueue = [];
         let activeUnsubscribers = [];
+        let isReady = false;
 
-        // Interactive Popup Queue
-        let popupQueue = [];
-        let isShowingPopup = false;
+        // Guaranteed FIFO Sequential Queue Engine
+        const popupQueue = [];
+        let isProcessingQueue = false;
+        const processedSignatures = new Set();
 
         // Auto-Scroll Settings
         let scrollRafId = null;
         let scrollSpeed = 0.65;
         let isScrollPaused = false;
+
+        // Confirmation Field Evaluator
+        function isResultConfirmed(r) {
+            if (!r) return false;
+            if (r.isConfirmed === true || r.confirmed === true) return true;
+            if (typeof r.isConfirmed === 'string' && r.isConfirmed.toLowerCase() === 'true') return true;
+            if (typeof r.confirmed === 'string' && r.confirmed.toLowerCase() === 'true') return true;
+            if (typeof r.status === 'string' && ['confirmed', 'published', 'final', 'completed'].includes(r.status.toLowerCase())) return true;
+            return false;
+        }
 
         function pointsFor(position, isGroup = false, name = '') {
             const isMarchPast = String(name || '').trim().toUpperCase() === "MARCH PAST";
@@ -620,16 +644,16 @@
             return table[tier][position] ?? 0;
         }
 
-        // Calculate points ONLY for events that have result entries published
-        function calculateEvaluatedPossiblePoints() {
-            const completedEventIds = new Set(
-                results.filter(r => (r.results || []).length > 0).map(r => r.eventId)
+        // Calculate points ONLY for events with confirmed results
+        function calculateConfirmedPossiblePoints() {
+            const confirmedEventIds = new Set(
+                confirmedResults.filter(r => (r.results || []).length > 0).map(r => r.eventId)
             );
 
-            if (completedEventIds.size === 0) return 1;
+            if (confirmedEventIds.size === 0) return 1;
 
             let totalPossible = 0;
-            completedEventIds.forEach(evId => {
+            confirmedEventIds.forEach(evId => {
                 const ev = events.find(e => e.id === evId);
                 const isMarchPast = String(ev?.name || '').trim().toUpperCase() === "MARCH PAST";
                 const isGroup = Boolean(ev?.isGroupEvent || ev?.type === 'group');
@@ -692,70 +716,94 @@
             }
         }
 
+        function checkAndRecompute() {
+            if (!houses.length || !events.length) return;
+            isReady = true;
+            if (!isProcessingQueue) {
+                recomputeAll();
+            }
+        }
+
         function bindRealtimeListeners() {
             activeUnsubscribers.forEach(unsub => unsub());
             activeUnsubscribers = [];
 
             const yearPath = `academicYears/${activeYearId}`;
 
+            // 1. Students
             activeUnsubscribers.push(onSnapshot(collection(db, `${yearPath}/students`), snap => {
                 students = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                recomputeAll();
+                if (isReady && !isProcessingQueue) recomputeAll();
             }));
 
+            // 2. Fest Houses
             activeUnsubscribers.push(onSnapshot(collection(db, `${yearPath}/festHouses`), snap => {
                 houses = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                recomputeAll();
+                checkAndRecompute();
             }));
 
+            // 3. Fest Events
             activeUnsubscribers.push(onSnapshot(collection(db, `${yearPath}/festEvents`), snap => {
                 events = snap.docs.map(d => ({ id: d.id, ...d.data() }))
                     .filter(e => !targetFestId || e.festId === targetFestId);
                 
-                availableCategories = [...new Set(events.map(e => e.category).filter(Boolean))];
-                if (!availableCategories.includes('ALL')) availableCategories.unshift('ALL');
-                recomputeAll();
+                const cats = [...new Set(events.map(e => (e.category || '').trim()).filter(Boolean))];
+                availableCategories = ['ALL', ...cats];
+                categoryIndex = 0;
+
+                checkAndRecompute();
             }));
 
+            // 4. Registrations
             activeUnsubscribers.push(onSnapshot(collection(db, `${yearPath}/festRegistrations`), snap => {
                 registrations = snap.docs.map(d => ({ id: d.id, ...d.data() }))
                     .filter(r => !r.isDeleted && (!targetFestId || r.festId === targetFestId));
-                recomputeAll();
+                if (isReady && !isProcessingQueue) recomputeAll();
             }));
 
+            // 5. Groups
             activeUnsubscribers.push(onSnapshot(collection(db, `${yearPath}/festGroups`), snap => {
                 groups = snap.docs.map(d => ({ id: d.id, ...d.data() }))
                     .filter(g => !g.isDeleted);
-                recomputeAll();
+                if (isReady && !isProcessingQueue) recomputeAll();
             }));
 
+            // 6. Confirmed Results with Sequential Live Popup Queue
             let isFirstLoad = true;
             activeUnsubscribers.push(onSnapshot(collection(db, `${yearPath}/festResults`), snap => {
                 const incoming = snap.docs.map(d => ({ id: d.id, ...d.data() }))
                     .filter(r => !targetFestId || r.festId === targetFestId);
 
+                rawResults = incoming;
+
                 if (!isFirstLoad) {
                     snap.docChanges().forEach(change => {
                         if (change.type === 'added' || change.type === 'modified') {
-                            const changedResult = { id: change.doc.id, ...change.doc.data() };
-                            
-                            // Check for confirmation flag
-                            const isConfirmed = changedResult.isConfirmed === true || 
-                                                String(changedResult.status || '').toLowerCase() === 'confirmed';
+                            const data = { id: change.doc.id, ...change.doc.data() };
+                            const confirmed = isResultConfirmed(data);
+                            const hasPlacements = Array.isArray(data.results) && data.results.length > 0;
+                            const sig = `${data.id}_${data.results?.length || 0}_${data.updatedAt?.seconds || ''}`;
 
-                            if (isConfirmed && (changedResult.results || []).length > 0) {
-                                queueConfirmedResult(changedResult);
-                            } else {
-                                priorityQueue.unshift(changedResult);
-                                cycleSpotlight();
+                            if (confirmed && hasPlacements) {
+                                if (!processedSignatures.has(sig)) {
+                                    processedSignatures.add(sig);
+                                    enqueueConfirmedResult(data);
+                                }
                             }
                         }
                     });
+                } else {
+                    // Populate already-confirmed results on initial page open without modal spam
+                    confirmedResults = rawResults.filter(r => isResultConfirmed(r));
+                    confirmedResults.forEach(r => {
+                        const sig = `${r.id}_${r.results?.length || 0}_${r.updatedAt?.seconds || ''}`;
+                        processedSignatures.add(sig);
+                    });
+                    isFirstLoad = false;
                 }
 
-                results = incoming;
-                isFirstLoad = false;
-                if (!isShowingPopup) {
+                if (!isProcessingQueue && isReady) {
+                    confirmedResults = rawResults.filter(r => isResultConfirmed(r));
                     recomputeAll();
                 }
             }));
@@ -792,16 +840,16 @@
             calculateHouseScores();
             renderHouseLeaderboard();
             renderCategoryMatrix();
-            const evaluatedCount = results.filter(r => (r.results || []).length > 0).length;
+            const evaluatedCount = confirmedResults.filter(r => (r.results || []).length > 0).length;
             const el = document.getElementById('total-results-count');
-            if (el) el.textContent = `${evaluatedCount} Events Evaluated`;
+            if (el) el.textContent = `${evaluatedCount} Confirmed Results`;
         }
 
         function calculateHouseScores() {
             houseScoreMap.clear();
             houses.forEach(h => houseScoreMap.set(h.id, { solo: 0, group: 0, total: 0 }));
 
-            results.forEach(res => {
+            confirmedResults.forEach(res => {
                 const ev = events.find(e => e.id === res.eventId);
                 const isGroup = Boolean(ev?.isGroupEvent || ev?.type === 'group');
                 const evName = ev?.name || '';
@@ -833,11 +881,11 @@
                 scores: houseScoreMap.get(h.id) || { solo: 0, group: 0, total: 0 }
             })).sort((a, b) => b.scores.total - a.scores.total);
 
-            const evaluatedPossiblePoints = calculateEvaluatedPossiblePoints();
+            const confirmedPossiblePoints = calculateConfirmedPossiblePoints();
 
             container.innerHTML = sorted.map((h, index) => {
-                const soloPct = Math.min(((h.scores.solo / evaluatedPossiblePoints) * 100), 100).toFixed(1);
-                const groupPct = Math.min(((h.scores.group / evaluatedPossiblePoints) * 100), 100).toFixed(1);
+                const soloPct = Math.min(((h.scores.solo / confirmedPossiblePoints) * 100), 100).toFixed(1);
+                const groupPct = Math.min(((h.scores.group / confirmedPossiblePoints) * 100), 100).toFixed(1);
 
                 const badgeClass = index === 0 ? 'bg-warning text-dark' : (index === 1 ? 'bg-secondary text-white' : 'bg-light text-dark border');
                 const rankText = index === 0 ? '<i class="fas fa-crown text-warning me-1"></i>1st' : `${index + 1}`;
@@ -856,12 +904,12 @@
                                 </small>
                                 <span class="fw-bold font-monospace text-dark">
                                     ${h.scores.total} 
-                                    <small class="text-secondary" style="font-size: 0.65rem;">/ ${evaluatedPossiblePoints} PTS</small>
+                                    <small class="text-secondary" style="font-size: 0.65rem;">/ ${confirmedPossiblePoints} PTS</small>
                                 </span>
                             </div>
                         </div>
 
-                        <div class="house-bar-bg" title="Evaluated points: ${evaluatedPossiblePoints}">
+                        <div class="house-bar-bg" title="Confirmed target points: ${confirmedPossiblePoints}">
                             <div class="house-bar-solo" style="width: ${soloPct}%; background-color: ${houseColor};" title="Solo Points: ${h.scores.solo} (${soloPct}%)">
                                 ${Number(soloPct) > 6 ? h.scores.solo : ''}
                             </div>
@@ -874,109 +922,131 @@
             }).join('');
         }
 
-        // Interactive Popup Logic
-        function queueConfirmedResult(resultData) {
+        // Sequential Queue Dispatcher
+        function enqueueConfirmedResult(resultData) {
             popupQueue.push(resultData);
-            if (!isShowingPopup) {
-                showNextPopup();
+            if (!isProcessingQueue) {
+                processNextInQueue();
             }
         }
 
-        function showNextPopup() {
+        async function processNextInQueue() {
             if (popupQueue.length === 0) {
-                isShowingPopup = false;
+                isProcessingQueue = false;
+                isScrollPaused = false;
                 return;
             }
 
-            isShowingPopup = true;
+            isProcessingQueue = true;
             isScrollPaused = true;
 
-            const resultItem = popupQueue.shift();
-            const event = events.find(e => e.id === resultItem.eventId);
-            const eventName = event?.name || resultItem.eventId || 'Event Results';
-            const category = event?.category || 'General';
-            const isGroup = Boolean(event?.isGroupEvent || event?.type === 'group');
+            const currentResult = popupQueue.shift();
+            
+            // Wait for modal animation to completely finish
+            await displayBreakingPopup(currentResult);
 
-            const overlay = document.getElementById('breaking-result-overlay');
-            const modalContent = document.getElementById('breaking-modal-content');
-            if (!overlay || !modalContent) return;
+            // Synchronously add this result to confirmed score tally
+            if (!confirmedResults.some(r => r.id === currentResult.id)) {
+                confirmedResults.push(currentResult);
+            }
+            recomputeAll();
+            triggerHouseBarsGlow();
 
-            const standings = (resultItem.results || []).sort((a, b) => a.position - b.position);
+            // Continue sequentially without skipping any item
+            setTimeout(() => {
+                processNextInQueue();
+            }, 400);
+        }
 
-            modalContent.innerHTML = `
-                <div class="mb-2">
-                    <span class="breaking-tag"><i class="fas fa-bolt"></i> RESULT CONFIRMED</span>
-                </div>
-                <h3 class="fw-bold text-dark mb-1">${eventName}</h3>
-                <p class="text-secondary small mb-3">
-                    <i class="fas ${getCategoryIcon(category)} me-1"></i>${category} &bull; ${isGroup ? 'Group Event' : 'Solo Event'}
-                </p>
+        function displayBreakingPopup(resultItem) {
+            return new Promise((resolve) => {
+                const event = events.find(e => e.id === resultItem.eventId);
+                const eventName = event?.name || resultItem.eventId || 'Event Results';
+                const category = event?.category || 'General';
+                const isGroup = Boolean(event?.isGroupEvent || event?.type === 'group');
 
-                <div class="row g-2 justify-content-center">
-                    ${[1, 2, 3].map(pos => {
-                        const item = standings.find(s => s.position === pos);
-                        let name = 'Not placed';
-                        let houseName = '---';
-                        let houseColor = '#64748b';
-                        let pts = 0;
+                const overlay = document.getElementById('breaking-result-overlay');
+                const modalContent = document.getElementById('breaking-modal-content');
+                if (!overlay || !modalContent) {
+                    resolve();
+                    return;
+                }
 
-                        if (item) {
-                            const resolvedHId = resolveStandingHouseId(item, resultItem.eventId);
-                            const h = houses.find(x => x.id === resolvedHId);
-                            houseName = h?.name || 'N/A';
-                            houseColor = h?.color || houseColor;
-                            pts = item.points || pointsFor(pos, isGroup, eventName);
+                const standings = (resultItem.results || []).sort((a, b) => a.position - b.position);
+                const remainingCount = popupQueue.length;
 
-                            if (item.groupId) {
-                                const grp = groups.find(g => g.id === item.groupId);
-                                name = grp?.name || 'Group';
-                            } else {
-                                const stu = students.find(s => s.id === item.studentId);
-                                const reg = registrations.find(r => r.studentId === item.studentId);
-                                name = stu?.name || reg?.studentName || 'Student';
+                modalContent.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="breaking-tag"><i class="fas fa-bolt"></i> RESULT CONFIRMED</span>
+                        ${remainingCount > 0 ? `<span class="queue-badge-chip"><i class="fas fa-layer-group me-1"></i>+${remainingCount} next in queue</span>` : ''}
+                    </div>
+                    <h3 class="fw-bold text-dark mb-1">${eventName}</h3>
+                    <p class="text-secondary small mb-3">
+                        <i class="fas ${getCategoryIcon(category)} me-1"></i>${category} &bull; ${isGroup ? 'Group Event' : 'Solo Event'}
+                    </p>
+
+                    <div class="row g-2 justify-content-center">
+                        ${[1, 2, 3].map(pos => {
+                            const item = standings.find(s => s.position === pos);
+                            let name = 'Not placed';
+                            let houseName = '---';
+                            let houseColor = '#64748b';
+                            let pts = 0;
+
+                            if (item) {
+                                const resolvedHId = resolveStandingHouseId(item, resultItem.eventId);
+                                const h = houses.find(x => x.id === resolvedHId);
+                                houseName = h?.name || 'N/A';
+                                houseColor = h?.color || houseColor;
+                                pts = item.points || pointsFor(pos, isGroup, eventName);
+
+                                if (item.groupId) {
+                                    const grp = groups.find(g => g.id === item.groupId);
+                                    name = grp?.name || 'Group';
+                                } else {
+                                    const stu = students.find(s => s.id === item.studentId);
+                                    const reg = registrations.find(r => r.studentId === item.studentId);
+                                    name = stu?.name || reg?.studentName || 'Student';
+                                }
                             }
-                        }
 
-                        const podiumClass = pos === 1 ? 'podium-1' : (pos === 2 ? 'podium-2' : 'podium-3');
-                        const badgeColor = pos === 1 ? 'bg-warning text-dark' : (pos === 2 ? 'bg-secondary text-white' : 'bg-light text-dark border');
-                        const rankText = pos === 1 ? '1ST PLACE' : (pos === 2 ? '2ND PLACE' : '3RD PLACE');
+                            const podiumClass = pos === 1 ? 'podium-1' : (pos === 2 ? 'podium-2' : 'podium-3');
+                            const badgeColor = pos === 1 ? 'bg-warning text-dark' : (pos === 2 ? 'bg-secondary text-white' : 'bg-light text-dark border');
+                            const rankText = pos === 1 ? '1ST PLACE' : (pos === 2 ? '2ND PLACE' : '3RD PLACE');
 
-                        return `
-                            <div class="col-4">
-                                <div class="winner-card ${podiumClass} p-3 shadow-sm h-100 bg-light">
-                                    <div class="d-flex justify-content-between align-items-center mb-1">
-                                        <span class="badge ${badgeColor}" style="font-size: 0.7rem;">${rankText}</span>
-                                        <span class="fw-bold font-monospace text-success">+${pts} PTS</span>
-                                    </div>
-                                    <h5 class="fw-bold text-dark text-truncate mt-2 mb-1" style="font-size: 1rem;">${name}</h5>
-                                    <div class="fw-bold" style="color: ${houseColor}; font-size: 0.85rem;">
-                                        <i class="fas fa-shield-halved me-1"></i>${houseName}
+                            return `
+                                <div class="col-4">
+                                    <div class="winner-card ${podiumClass} p-3 shadow-sm h-100 bg-light">
+                                        <div class="d-flex justify-content-between align-items-center mb-1">
+                                            <span class="badge ${badgeColor}" style="font-size: 0.7rem;">${rankText}</span>
+                                            <span class="fw-bold font-monospace text-success">+${pts} PTS</span>
+                                        </div>
+                                        <h5 class="fw-bold text-dark text-truncate mt-2 mb-1" style="font-size: 1rem;">${name}</h5>
+                                        <div class="fw-bold" style="color: ${houseColor}; font-size: 0.85rem;">
+                                            <i class="fas fa-shield-halved me-1"></i>${houseName}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        `;
-                    }).join('')}
-                </div>
-            `;
+                            `;
+                        }).join('')}
+                    </div>
+                `;
 
-            overlay.className = 'active';
+                overlay.style.display = 'flex';
+                overlay.className = 'active';
 
-            setTimeout(() => {
-                overlay.className = 'active closing';
+                const displayDuration = popupQueue.length > 1 ? 2600 : 3800;
 
                 setTimeout(() => {
-                    overlay.className = '';
-                    overlay.style.display = 'none';
-
-                    recomputeAll();
-                    triggerHouseBarsGlow();
-                    isScrollPaused = false;
+                    overlay.className = 'active closing';
 
                     setTimeout(() => {
-                        showNextPopup();
-                    }, 600);
-                }, 550);
-            }, 4500);
+                        overlay.className = '';
+                        overlay.style.display = 'none';
+                        resolve();
+                    }, 520);
+                }, displayDuration);
+            });
         }
 
         function triggerHouseBarsGlow() {
@@ -994,32 +1064,21 @@
             const counterEl = document.getElementById('spotlight-counter');
             if (!container) return;
 
-            let activeResult = null;
-            let isBreaking = false;
-
-            if (priorityQueue.length > 0) {
-                activeResult = priorityQueue.shift();
-                isBreaking = true;
-            } else if (results.length > 0) {
-                activeResult = results[spotlightIndex % results.length];
-                spotlightIndex++;
-            }
-
-            if (!activeResult) {
-                container.innerHTML = `<div class="text-center text-muted small">Awaiting published results...</div>`;
+            if (confirmedResults.length === 0) {
+                container.innerHTML = `<div class="text-center text-muted small">Awaiting confirmed results...</div>`;
+                if (counterEl) counterEl.textContent = '0 / 0';
                 return;
             }
 
+            const activeResult = confirmedResults[spotlightIndex % confirmedResults.length];
+            spotlightIndex++;
+
             const event = events.find(e => e.id === activeResult.eventId);
-            const total = results.length;
+            const total = confirmedResults.length;
             const currentNum = (spotlightIndex % total) || total;
 
-            if (isBreaking) {
-                titleEl.innerHTML = `<span class="badge breaking-banner px-2 py-1"><i class="fas fa-bolt me-1"></i>NEW RESULT SUBMITTED</span>`;
-            } else {
-                titleEl.innerHTML = `<i class="fas fa-medal text-primary me-2"></i>WINNER SPOTLIGHT`;
-                counterEl.textContent = `${currentNum} / ${total}`;
-            }
+            titleEl.innerHTML = `<i class="fas fa-medal text-primary me-2"></i>WINNER SPOTLIGHT`;
+            counterEl.textContent = `${currentNum} / ${total}`;
 
             const standings = (activeResult.results || []).sort((a, b) => a.position - b.position);
 
@@ -1122,12 +1181,14 @@
             const tableHead = document.getElementById('matrix-header-row');
             const tableBody = document.getElementById('matrix-body-rows');
             const pill = document.getElementById('current-category-pill');
-            if (!tableHead || !tableBody || !houses.length) return;
+            if (!tableHead || !tableBody || !houses.length || !events.length) return;
+
+            if (!availableCategories.length) availableCategories = ['ALL'];
 
             const activeCat = availableCategories[categoryIndex % availableCategories.length] || 'ALL';
-            pill.textContent = activeCat === 'ALL' ? 'ALL CATEGORIES' : activeCat;
+            if (pill) pill.textContent = activeCat === 'ALL' ? 'ALL CATEGORIES' : activeCat;
 
-            const filteredEvents = events.filter(e => activeCat === 'ALL' || e.category === activeCat);
+            const filteredEvents = events.filter(e => activeCat === 'ALL' || (e.category || '').trim().toUpperCase() === activeCat.toUpperCase());
 
             if (!filteredEvents.length) {
                 tableHead.innerHTML = `<th class="house-fixed-col text-start ps-3 align-middle text-dark">HOUSE \\ EVENT</th>`;
@@ -1140,7 +1201,7 @@
             tableHead.innerHTML = `
                 <th class="house-fixed-col text-start ps-3 align-middle text-dark">HOUSE \\ EVENT</th>
                 ${filteredEvents.map(event => {
-                    const res = results.find(r => r.eventId === event.id);
+                    const res = confirmedResults.find(r => r.eventId === event.id);
                     const isDone = Boolean(res && (res.results || []).length > 0);
                     return `
                         <th class="event-header-cell">
@@ -1172,7 +1233,7 @@
                         </td>
 
                         ${filteredEvents.map(event => {
-                            const res = results.find(r => r.eventId === event.id);
+                            const res = confirmedResults.find(r => r.eventId === event.id);
                             if (!res || !res.results?.length) {
                                 return `<td class="event-data-cell text-muted" style="opacity: 0.25; font-size: 0.75rem;">-</td>`;
                             }
@@ -1215,11 +1276,11 @@
         }
 
         setInterval(() => {
-            if (!isShowingPopup) cycleSpotlight();
+            if (!isProcessingQueue) cycleSpotlight();
         }, 5000);
 
         setInterval(() => {
-            if (!isShowingPopup) {
+            if (!isProcessingQueue) {
                 categoryTimerSeconds--;
                 const timerEl = document.getElementById('category-timer');
                 if (timerEl) timerEl.textContent = categoryTimerSeconds;
@@ -1235,12 +1296,31 @@
         const matrixContainer = document.getElementById('matrix-container');
         if (matrixContainer) {
             matrixContainer.addEventListener('mouseenter', () => { isScrollPaused = true; });
-            matrixContainer.addEventListener('mouseleave', () => { isScrollPaused = false; });
+            matrixContainer.addEventListener('mouseleave', () => { if (!isProcessingQueue) isScrollPaused = false; });
         }
 
         window.addEventListener('resize', () => {
             renderHouseLeaderboard();
             renderCategoryMatrix();
+        });
+
+        // Debug simulator: Click "LIVE BROADCAST" badge to trigger a test queue sequence
+        document.getElementById('wake-status-badge')?.addEventListener('click', () => {
+            const testEvent = events[0] || { id: 'test_event', name: 'DEMO EVENT', category: 'SENIOR', isGroupEvent: false };
+            const hIds = houses.map(h => h.id);
+
+            const mockResult = {
+                id: 'mock_' + Date.now(),
+                eventId: testEvent.id,
+                isConfirmed: true,
+                results: [
+                    { position: 1, studentId: students[0]?.id || '', houseId: hIds[0] || '', points: 5 },
+                    { position: 2, studentId: students[1]?.id || '', houseId: hIds[1] || '', points: 3 },
+                    { position: 3, studentId: students[2]?.id || '', houseId: hIds[2] || '', points: 1 }
+                ]
+            };
+
+            enqueueConfirmedResult(mockResult);
         });
 
         window.addEventListener('DOMContentLoaded', async () => {
