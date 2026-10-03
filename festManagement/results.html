@@ -147,6 +147,7 @@
             display: flex;
             box-shadow: inset 0 2px 4px rgba(0,0,0,0.12);
             border: 1px solid #cbd5e1;
+            transition: transform 0.3s ease, filter 0.3s ease;
         }
 
         .house-bar-solo {
@@ -179,6 +180,16 @@
             font-weight: bold;
             text-shadow: 0 1px 2px rgba(0,0,0,0.7);
             border-left: 2px solid #ffffff;
+        }
+
+        .house-bar-highlight {
+            animation: barGlow 1.2s ease-out;
+        }
+
+        @keyframes barGlow {
+            0% { filter: brightness(1); }
+            50% { filter: brightness(1.6) drop-shadow(0 0 10px rgba(245, 158, 11, 0.9)); transform: scaleY(1.15); }
+            100% { filter: brightness(1); transform: scaleY(1); }
         }
 
         /* Top-Right: Event Winner Carousel */
@@ -344,11 +355,96 @@
             from { opacity: 0; transform: translateY(4px); }
             to { opacity: 1; transform: translateY(0); }
         }
+
+        /* Interactive Breaking Result Overlay */
+        #breaking-result-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(8px);
+            z-index: 9999;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        #breaking-result-overlay.active {
+            display: flex;
+            opacity: 1;
+            animation: zoomInPopup 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        #breaking-result-overlay.closing {
+            animation: flyToLeaderboard 0.6s cubic-bezier(0.7, 0, 0.84, 0) forwards;
+        }
+
+        @keyframes zoomInPopup {
+            from {
+                opacity: 0;
+                transform: scale(0.85) translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        @keyframes flyToLeaderboard {
+            0% {
+                opacity: 1;
+                transform: scale(1) translate(0, 0);
+            }
+            100% {
+                opacity: 0;
+                transform: scale(0.2) translate(-55vw, -40vh);
+            }
+        }
+
+        .breaking-modal-box {
+            background: #ffffff;
+            border-radius: 16px;
+            border: 2px solid #cbd5e1;
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.4);
+            width: 90%;
+            max-width: 760px;
+            padding: 24px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .breaking-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: linear-gradient(90deg, #ef4444, #f97316);
+            color: #ffffff;
+            font-weight: 800;
+            font-size: 0.85rem;
+            padding: 4px 14px;
+            border-radius: 20px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            animation: pulse-banner 1.2s infinite;
+        }
     </style>
 </head>
 <body>
 
+    <!-- Background Stay-Awake Video -->
     <video id="screen-keeper-video" autoplay muted loop playsinline src="data:video/mp4;base64,AAAAHGZ0eXBtcDQyAAAAAG1wNDJpc29tYXZjMQAAAAhmcmVlAAAAL21kYXQAAAAAAAABGAEA4AAAABhhdWNmYXN0AAAAAAABAAAAAAABAAAAAA=="></video>
+
+    <!-- Interactive Broadcast Popup Overlay -->
+    <div id="breaking-result-overlay">
+        <div class="breaking-modal-box" id="breaking-modal-content">
+            <!-- Dynamically populated -->
+        </div>
+    </div>
 
     <!-- Global Broadcast Bar -->
     <header class="top-navbar">
@@ -504,6 +600,11 @@
         let priorityQueue = [];
         let activeUnsubscribers = [];
 
+        // Interactive Popup Queue
+        let popupQueue = [];
+        let isShowingPopup = false;
+
+        // Auto-Scroll Settings
         let scrollRafId = null;
         let scrollSpeed = 0.65;
         let isScrollPaused = false;
@@ -534,11 +635,11 @@
                 const isGroup = Boolean(ev?.isGroupEvent || ev?.type === 'group');
 
                 if (isMarchPast) {
-                    totalPossible += (20 + 15 + 10 + 5); // 50 pts
+                    totalPossible += (20 + 15 + 10 + 5);
                 } else if (isGroup) {
-                    totalPossible += (15 + 10 + 5);      // 30 pts
+                    totalPossible += (15 + 10 + 5);
                 } else {
-                    totalPossible += (5 + 3 + 1);        // 9 pts
+                    totalPossible += (5 + 3 + 1);
                 }
             });
 
@@ -636,15 +737,27 @@
                 if (!isFirstLoad) {
                     snap.docChanges().forEach(change => {
                         if (change.type === 'added' || change.type === 'modified') {
-                            priorityQueue.unshift({ id: change.doc.id, ...change.doc.data() });
-                            cycleSpotlight();
+                            const changedResult = { id: change.doc.id, ...change.doc.data() };
+                            
+                            // Check for confirmation flag
+                            const isConfirmed = changedResult.isConfirmed === true || 
+                                                String(changedResult.status || '').toLowerCase() === 'confirmed';
+
+                            if (isConfirmed && (changedResult.results || []).length > 0) {
+                                queueConfirmedResult(changedResult);
+                            } else {
+                                priorityQueue.unshift(changedResult);
+                                cycleSpotlight();
+                            }
                         }
                     });
                 }
 
                 results = incoming;
                 isFirstLoad = false;
-                recomputeAll();
+                if (!isShowingPopup) {
+                    recomputeAll();
+                }
             }));
         }
 
@@ -711,7 +824,6 @@
             });
         }
 
-        // House leaderboard bars proportional ONLY to evaluated events
         function renderHouseLeaderboard() {
             const container = document.getElementById('house-rankings-container');
             if (!container || !houses.length) return;
@@ -760,6 +872,120 @@
                     </div>
                 `;
             }).join('');
+        }
+
+        // Interactive Popup Logic
+        function queueConfirmedResult(resultData) {
+            popupQueue.push(resultData);
+            if (!isShowingPopup) {
+                showNextPopup();
+            }
+        }
+
+        function showNextPopup() {
+            if (popupQueue.length === 0) {
+                isShowingPopup = false;
+                return;
+            }
+
+            isShowingPopup = true;
+            isScrollPaused = true;
+
+            const resultItem = popupQueue.shift();
+            const event = events.find(e => e.id === resultItem.eventId);
+            const eventName = event?.name || resultItem.eventId || 'Event Results';
+            const category = event?.category || 'General';
+            const isGroup = Boolean(event?.isGroupEvent || event?.type === 'group');
+
+            const overlay = document.getElementById('breaking-result-overlay');
+            const modalContent = document.getElementById('breaking-modal-content');
+            if (!overlay || !modalContent) return;
+
+            const standings = (resultItem.results || []).sort((a, b) => a.position - b.position);
+
+            modalContent.innerHTML = `
+                <div class="mb-2">
+                    <span class="breaking-tag"><i class="fas fa-bolt"></i> RESULT CONFIRMED</span>
+                </div>
+                <h3 class="fw-bold text-dark mb-1">${eventName}</h3>
+                <p class="text-secondary small mb-3">
+                    <i class="fas ${getCategoryIcon(category)} me-1"></i>${category} &bull; ${isGroup ? 'Group Event' : 'Solo Event'}
+                </p>
+
+                <div class="row g-2 justify-content-center">
+                    ${[1, 2, 3].map(pos => {
+                        const item = standings.find(s => s.position === pos);
+                        let name = 'Not placed';
+                        let houseName = '---';
+                        let houseColor = '#64748b';
+                        let pts = 0;
+
+                        if (item) {
+                            const resolvedHId = resolveStandingHouseId(item, resultItem.eventId);
+                            const h = houses.find(x => x.id === resolvedHId);
+                            houseName = h?.name || 'N/A';
+                            houseColor = h?.color || houseColor;
+                            pts = item.points || pointsFor(pos, isGroup, eventName);
+
+                            if (item.groupId) {
+                                const grp = groups.find(g => g.id === item.groupId);
+                                name = grp?.name || 'Group';
+                            } else {
+                                const stu = students.find(s => s.id === item.studentId);
+                                const reg = registrations.find(r => r.studentId === item.studentId);
+                                name = stu?.name || reg?.studentName || 'Student';
+                            }
+                        }
+
+                        const podiumClass = pos === 1 ? 'podium-1' : (pos === 2 ? 'podium-2' : 'podium-3');
+                        const badgeColor = pos === 1 ? 'bg-warning text-dark' : (pos === 2 ? 'bg-secondary text-white' : 'bg-light text-dark border');
+                        const rankText = pos === 1 ? '1ST PLACE' : (pos === 2 ? '2ND PLACE' : '3RD PLACE');
+
+                        return `
+                            <div class="col-4">
+                                <div class="winner-card ${podiumClass} p-3 shadow-sm h-100 bg-light">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <span class="badge ${badgeColor}" style="font-size: 0.7rem;">${rankText}</span>
+                                        <span class="fw-bold font-monospace text-success">+${pts} PTS</span>
+                                    </div>
+                                    <h5 class="fw-bold text-dark text-truncate mt-2 mb-1" style="font-size: 1rem;">${name}</h5>
+                                    <div class="fw-bold" style="color: ${houseColor}; font-size: 0.85rem;">
+                                        <i class="fas fa-shield-halved me-1"></i>${houseName}
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+
+            overlay.className = 'active';
+
+            setTimeout(() => {
+                overlay.className = 'active closing';
+
+                setTimeout(() => {
+                    overlay.className = '';
+                    overlay.style.display = 'none';
+
+                    recomputeAll();
+                    triggerHouseBarsGlow();
+                    isScrollPaused = false;
+
+                    setTimeout(() => {
+                        showNextPopup();
+                    }, 600);
+                }, 550);
+            }, 4500);
+        }
+
+        function triggerHouseBarsGlow() {
+            const bars = document.querySelectorAll('.house-bar-bg');
+            bars.forEach(bar => {
+                bar.classList.remove('house-bar-highlight');
+                void bar.offsetWidth;
+                bar.classList.add('house-bar-highlight');
+            });
         }
 
         function cycleSpotlight() {
@@ -989,18 +1215,20 @@
         }
 
         setInterval(() => {
-            cycleSpotlight();
+            if (!isShowingPopup) cycleSpotlight();
         }, 5000);
 
         setInterval(() => {
-            categoryTimerSeconds--;
-            const timerEl = document.getElementById('category-timer');
-            if (timerEl) timerEl.textContent = categoryTimerSeconds;
+            if (!isShowingPopup) {
+                categoryTimerSeconds--;
+                const timerEl = document.getElementById('category-timer');
+                if (timerEl) timerEl.textContent = categoryTimerSeconds;
 
-            if (categoryTimerSeconds <= 0) {
-                categoryTimerSeconds = 20;
-                categoryIndex++;
-                renderCategoryMatrix();
+                if (categoryTimerSeconds <= 0) {
+                    categoryTimerSeconds = 20;
+                    categoryIndex++;
+                    renderCategoryMatrix();
+                }
             }
         }, 1000);
 
