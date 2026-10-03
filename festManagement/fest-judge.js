@@ -129,11 +129,7 @@ async function handleScanOrManualInput(rawInput, festId, yearId, secretCode = ''
 
 /**
  * Main Controller for #fest-judge route.
- */
-/**
- * Main Controller for #fest-judge route.
- */
-/**
+ *//**
  * Main Controller for #fest-judge route.
  */
 window.checkForJudgingMode = async function() {
@@ -248,47 +244,61 @@ async function renderJudgingSheet(fest, event, participants, houses, groups, pre
     const resultSnap = await getDoc(doc(db, `academicYears/${yearId}/festResults`, resultDocId));
 
     // 1. If result has already been finalized
-    if (resultSnap.exists()) {
-        const resultData = resultSnap.data();
-        const finalResults = resultData.results || [];
-        const uploadedAt = resultData.judgedAt?.toDate ? resultData.judgedAt.toDate().toLocaleString() : 'Recorded';
+if (resultSnap.exists()) {
+    const resultData = resultSnap.data();
+    const finalResults = resultData.results || [];
+    const uploadedAt = resultData.judgedAt?.toDate ? resultData.judgedAt.toDate().toLocaleString() : 'Recorded';
 
-        document.body.innerHTML = `
-            <div class="container py-5">
-                <div class="card shadow-sm border-0 mx-auto" style="max-width: 600px;">
-                    <div class="card-body p-4 text-center">
-                        <div class="text-success mb-3"><i class="fas fa-check-circle fa-3x"></i></div>
-                        <h4 class="fw-bold mb-1">Results Finalized</h4>
-                        <p class="text-muted small">${event.name} (${fest.name})</p>
-                        <div class="alert alert-success text-start py-2 mb-3">
-                            <div class="fw-bold"><i class="fas fa-cloud-arrow-up me-1"></i>Marks Uploaded</div>
-                            <div class="small">Judge: <strong>${resultData.judgeName || 'Recorded Judge'}</strong> (${resultData.judgedBy || 'N/A'})</div>
-                            <div class="small">Signature: ${resultData.judgeSignature || resultData.judgeName || 'Signed'}</div>
-                            <div class="small text-muted">Uploaded: ${uploadedAt}</div>
-                        </div>
-                        <hr>
-                        <div class="list-group list-group-flush text-start mb-3">
-                            ${finalResults.map(r => {
-                                const targetName = r.studentId 
-                                    ? participants.find(p => p.studentId === r.studentId)?.studentName 
-                                    : groups.find(g => g.id === r.groupId)?.name;
-                                return `
-                                    <div class="list-group-item d-flex justify-content-between align-items-center">
-                                        <span><strong>Position ${r.position}:</strong>${targetName || 'Participant'}</span>
-                                        <span class="badge bg-primary rounded-pill">${r.points} pts</span>
-                                    </div>
-                                `;
-                            }).join('')}
-                        </div>
-                        <a href="#fest-judge?year=${yearId}&fest=${fest.id}" class="btn btn-outline-primary btn-sm">
-                            <i class="fas fa-qrcode me-1"></i>Scan Next Event
-                        </a>
+    document.body.innerHTML = `
+        <div class="container py-5">
+            <div class="card shadow-sm border-0 mx-auto" style="max-width: 600px;">
+                <div class="card-body p-4 text-center">
+                    <div class="text-success mb-3"><i class="fas fa-check-circle fa-3x"></i></div>
+                    <h4 class="fw-bold mb-1">Results Finalized</h4>
+                    <p class="text-muted small">${event.name} (${fest.name})</p>
+                    <div class="alert alert-success text-start py-2 mb-3">
+                        <div class="fw-bold"><i class="fas fa-cloud-arrow-up me-1"></i>Marks Uploaded</div>
+                        <div class="small">Judge: <strong>${resultData.judgeName || 'Recorded Judge'}</strong> (${resultData.judgedBy || 'N/A'})</div>
+                        <div class="small">Signature: ${resultData.judgeSignature || resultData.judgeName || 'Signed'}</div>
+                        <div class="small text-muted">Uploaded: ${uploadedAt}</div>
                     </div>
+                    <hr>
+                    <div class="list-group list-group-flush text-start mb-3">
+                        ${finalResults.map(r => {
+                            const targetName = r.studentId 
+                                ? participants.find(p => p.studentId === r.studentId)?.studentName 
+                                : groups.find(g => g.id === r.groupId)?.name;
+                            return `
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><strong>Position ${r.position}:</strong>${targetName || 'Participant'}</span>
+                                    <span class="badge bg-primary rounded-pill">${r.points} pts</span>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                    
+                    <!-- Trigger Scanner Directly -->
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="btn-scan-next-event">
+                        <i class="fas fa-qrcode me-1"></i>Scan Next Event
+                    </button>
                 </div>
             </div>
-        `;
-        return;
-    }
+        </div>
+    `;
+
+    // Wire click trigger directly to modal scanner
+    document.getElementById('btn-scan-next-event')?.addEventListener('click', () => {
+        if (typeof window.openQrScannerModal === 'function') {
+            window.openQrScannerModal();
+        } else if (typeof window.openResultScannerModal === 'function') {
+            window.openResultScannerModal();
+        } else {
+            window.location.hash = `#fest-judge?year=${yearId}&fest=${fest.id}`;
+        }
+    });
+
+    return;
+}
 
     // 2. Identify Special House Programs (March Past, Discipline, etc.)
     const eventNameUpper = String(event.name || '').trim().toUpperCase();
@@ -399,228 +409,6 @@ async function renderJudgingSheet(fest, event, participants, houses, groups, pre
                             <tr>
                                 <th style="width: 15%; text-align: center;">${event.isGroupEvent ? 'Code' : 'Chest No'}</th>
                                 <th style="width: 40%;">${event.isGroupEvent ? 'Group Team' : 'Participant Name'}</th>
-                                <th style="width: 20%;">House</th>
-                                <th style="width: 25%; min-width: 150px;">Rank Standing</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${displayRows.map(row => {
-                                const house = houses.find(h => h.id === row.houseId);
-                                const houseColor = house?.color || '#3b82f6';
-
-                                return `
-                                    <tr data-id="${row.id}" data-is-group="${row.isGroup}" data-name="${row.name}">
-                                        <td class="text-center">
-                                            <span class="badge ${row.isGroup ? 'bg-secondary-subtle text-secondary' : 'bg-light text-dark border'} font-monospace" style="font-size: 0.78rem;">
-                                                ${row.chestNo}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <div class="fw-bold text-dark">${row.name}</div>
-                                            <div class="small text-muted" style="font-size: 0.74rem;">${row.details}</div>
-                                        </td>
-                                        <td>
-                                            <span class="badge border py-1 px-2 shadow-xs" style="background: #fff; color: ${houseColor}; border-color:${houseColor} !important;">
-                                                ${house?.name || 'N/A'}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <select class="form-select form-select-sm rank-select">${posOptions}</select>
-                                        </td>
-                                    </tr>
-                                `;
-                            }).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Submission Footer Bar -->
-            <div class="card shadow-sm border-0 p-3 bg-light">
-                <div class="row g-2 align-items-center justify-content-between">
-                    <div class="col-12 col-md-auto">
-                        <span class="badge bg-warning text-dark"><i class="fas fa-clock me-1"></i>Pending Submission</span>
-                    </div>
-                    
-                    <div class="col-12 col-md-auto ms-auto d-flex flex-wrap align-items-center gap-2">
-                        <input type="text" id="judge-name-entry" class="form-control form-control-sm" 
-                               style="max-width: 170px;" placeholder="Judge Name" value="${displayJudgeName}">
-                        
-                        <input type="password" id="judge-secret-entry" class="form-control form-control-sm text-center font-monospace" 
-                               style="max-width: 110px;" placeholder="Security Code" value="${presetCode}">
-                        
-                        <button id="commit-scores-btn" class="btn btn-success btn-sm fw-bold px-3">
-                            <i class="fas fa-check-double me-1"></i>Finalize Results
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-
-    document.getElementById('commit-scores-btn')?.addEventListener('click', () => {
-        commitJudgingResults(fest, event, participants, houses, groups);
-    });
-}
-
-/**
- * Renders submitted standings or displays the active scoring table.
- */
-async function renderJudgingSheet(fest, event, participants, houses, groups, presetCode = '', presetJudgeName = '') {
-    const yearId = systemContext.activeYearId;
-    const resultDocId = `${fest.id}_${event.id}`;
-    
-    const resultSnap = await getDoc(doc(db, `academicYears/${yearId}/festResults`, resultDocId));
-
-    // 1. If result has already been finalized
-    if (resultSnap.exists()) {
-        const resultData = resultSnap.data();
-        const finalResults = resultData.results || [];
-        const uploadedAt = resultData.judgedAt?.toDate ? resultData.judgedAt.toDate().toLocaleString() : 'Recorded';
-
-        document.body.innerHTML = `
-            <div class="container py-5">
-                <div class="card shadow-sm border-0 mx-auto" style="max-width: 600px;">
-                    <div class="card-body p-4 text-center">
-                        <div class="text-success mb-3"><i class="fas fa-check-circle fa-3x"></i></div>
-                        <h4 class="fw-bold mb-1">Results Finalized</h4>
-                        <p class="text-muted small">${event.name} (${fest.name})</p>
-                        <div class="alert alert-success text-start py-2 mb-3">
-                            <div class="fw-bold"><i class="fas fa-cloud-arrow-up me-1"></i>Marks Uploaded</div>
-                            <div class="small">Judge: <strong>${resultData.judgeName || 'Recorded Judge'}</strong> (${resultData.judgedBy || 'N/A'})</div>
-                            <div class="small">Signature: ${resultData.judgeSignature || resultData.judgeName || 'Signed'}</div>
-                            <div class="small text-muted">Uploaded: ${uploadedAt}</div>
-                        </div>
-                        <hr>
-                        <div class="list-group list-group-flush text-start mb-3">
-                            ${finalResults.map(r => {
-                                const targetName = r.studentId 
-                                    ? participants.find(p => p.studentId === r.studentId)?.studentName 
-                                    : groups.find(g => g.id === r.groupId)?.name;
-                                return `
-                                    <div class="list-group-item d-flex justify-content-between align-items-center">
-                                        <span><strong>Position ${r.position}:</strong>${targetName || 'Participant'}</span>
-                                        <span class="badge bg-primary rounded-pill">${r.points} pts</span>
-                                    </div>
-                                `;
-                            }).join('')}
-                        </div>
-                        <a href="#fest-judge?year=${yearId}&fest=${fest.id}" class="btn btn-outline-primary btn-sm">
-                            <i class="fas fa-qrcode me-1"></i>Scan Next Event
-                        </a>
-                    </div>
-                </div>
-            </div>
-        `;
-        return;
-    }
-
-    // 2. Identify Special House Programs (March Past, Discipline, etc.)
-    const eventNameUpper = String(event.name || '').trim().toUpperCase();
-    const isSpecialEvent = event.isSpecial || 
-                           eventNameUpper.includes("MARCH PAST") || 
-                           eventNameUpper.includes("DISCIPLINE") || 
-                           eventNameUpper.includes("DECORATION");
-
-    let displayRows = [];
-
-    if (isSpecialEvent) {
-        // Special events load all houses as participating squads
-        displayRows = houses.map(h => ({
-            id: `SPECIAL_${fest.id}_${h.id}_${event.id}`,
-            isGroup: true,
-            name: `${h.name} Squad`,
-            details: `House Program / Special Event`,
-            houseId: h.id,
-            chestNo: 'House'
-        }));
-    } else if (event.isGroupEvent || event.type === 'group') {
-        const participatingGroupIds = [...new Set(
-            participants.map(p => groups.find(g => g.members?.some(m => m.studentId === p.studentId))?.id).filter(Boolean)
-        )];
-        displayRows = participatingGroupIds.map(id => {
-            const grp = groups.find(g => g.id === id);
-            return grp ? {
-                id: grp.id,
-                isGroup: true,
-                name: grp.name,
-                details: `Group (${grp.members?.length || 0} members)`,
-                houseId: grp.houseId,
-                chestNo: grp.chestNo || grp.code || 'Group'
-            } : null;
-        }).filter(Boolean);
-    } else {
-        displayRows = participants.map(p => ({
-            id: p.studentId,
-            isGroup: false,
-            name: p.studentName || 'Student',
-            details: `Chest: <strong>${p.chestNo || 'N/A'}</strong>`,
-            houseId: p.houseId,
-            chestNo: p.chestNo || 'N/A'
-        }));
-    }
-
-    if (displayRows.length === 0) {
-        document.body.innerHTML = `
-            <div class="container py-5 text-center">
-                <div class="card shadow-sm border-0 mx-auto" style="max-width: 500px;">
-                    <div class="card-body p-4">
-                        <div class="alert alert-warning mb-3">No enrolled participants or groups found for ${event.name}.</div>
-                        <a href="#fest-judge?year=${yearId}&fest=${fest.id}" class="btn btn-primary btn-sm">
-                            <i class="fas fa-arrow-left me-1"></i>Scan Another Event
-                        </a>
-                    </div>
-                </div>
-            </div>
-        `;
-        return;
-    }
-
-    // 3. Alphabetical Sort by Name
-    displayRows.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
-
-    const posOptions = `
-        <option value="0">-- Assign Rank --</option>
-        <option value="1">🥇 1st Place</option>
-        <option value="2">🥈 2nd Place</option>
-        <option value="3">🥉 3rd Place</option>
-        <option value="4">4th Place</option>
-    `;
-
-    // Resolve judge name from parameters or matching judge code
-    const matchedJudge = (fest.judgeCodes || []).find(j => j.code === presetCode);
-    const displayJudgeName = presetJudgeName || matchedJudge?.name || '';
-
-    document.body.innerHTML = `
-        <div class="container py-4" style="max-width: 850px;">
-            <div class="card shadow-sm border-0 mb-3">
-                <div class="card-body p-3 d-flex justify-content-between align-items-center">
-                    <div>
-                        <h4 class="fw-bold mb-0 text-dark">${event.name}</h4>
-                        <p class="text-muted small mb-0">
-                            ${fest.name} &bull; Category: <strong>${event.category || 'General'}</strong> &bull; Stage: <strong>${event.stage || 'Main Stage'}</strong>
-                        </p>
-                    </div>
-                    <div class="d-flex align-items-center gap-2">
-                        ${displayJudgeName ? `
-                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle py-2 px-2" style="font-size: 0.78rem;">
-                                <i class="fas fa-user-tie me-1"></i>${displayJudgeName}
-                            </span>
-                        ` : ''}
-                        <a href="#fest-judge?year=${yearId}&fest=${fest.id}" class="btn btn-outline-secondary btn-sm" title="Scan Another Event">
-                            <i class="fas fa-camera me-1"></i>New Scan
-                        </a>
-                    </div>
-                </div>
-            </div>
-
-            <div class="card shadow-sm border-0 mb-4">
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0" id="judging-table">
-                        <thead class="table-light">
-                            <tr>
-                                <th style="width: 15%; text-align: center;">Chest / Code</th>
-                                <th style="width: 40%;">Participant / Team Name</th>
                                 <th style="width: 20%;">House</th>
                                 <th style="width: 25%; min-width: 150px;">Rank Standing</th>
                             </tr>
