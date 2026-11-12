@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MUHAMMED IQBAL C - Curriculum Vitae</title>
+    <title>MUHAMMED IQBAL C - Interactive Resume & CV Builder</title>
     <!-- Bootstrap 5.3 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Font Awesome Icons -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <!-- Google Fonts: Inter & Outfit -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
     
@@ -18,28 +18,31 @@
             --primary-border: #bfdbfe;
             --text-dark: #1e293b;
             --text-muted: #475569;
-            --accent-bg: #f8fafc;
-            --sidebar-bg: #f1f5f9;
+            --sidebar-bg: #f8fafc;
+            --edit-outline: rgba(30, 58, 138, 0.35);
         }
 
-        /* Color Theme Options */
+        /* Accent Themes */
         body[data-theme="emerald"] {
             --primary-color: #065f46;
             --primary-light: #ecfdf5;
             --primary-border: #a7f3d0;
             --sidebar-bg: #f0fdf4;
+            --edit-outline: rgba(6, 95, 70, 0.35);
+        }
+        body[data-theme="royal"] {
+            --primary-color: #2563eb;
+            --primary-light: #eff6ff;
+            --primary-border: #93c5fd;
+            --sidebar-bg: #f8fafc;
+            --edit-outline: rgba(37, 99, 235, 0.35);
         }
         body[data-theme="slate"] {
             --primary-color: #334155;
             --primary-light: #f8fafc;
             --primary-border: #cbd5e1;
             --sidebar-bg: #f1f5f9;
-        }
-        body[data-theme="burgundy"] {
-            --primary-color: #831843;
-            --primary-light: #fdf2f8;
-            --primary-border: #fbcfe8;
-            --sidebar-bg: #fff1f2;
+            --edit-outline: rgba(51, 65, 85, 0.35);
         }
 
         body {
@@ -55,15 +58,15 @@
             font-family: 'Outfit', sans-serif;
         }
 
-        /* Top Action Bar (Non-printable) */
+        /* Action Topbar (Screen only) */
         .action-bar {
-            background: rgba(15, 23, 42, 0.95);
+            background: rgba(15, 23, 42, 0.96);
             backdrop-filter: blur(8px);
             color: #ffffff;
             position: sticky;
             top: 0;
-            z-index: 1000;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            z-index: 1050;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
 
@@ -83,8 +86,8 @@
         /* Header Styling */
         .cv-header {
             border-bottom: 2px solid var(--primary-color);
-            padding-bottom: 14px;
-            margin-bottom: 16px;
+            padding-bottom: 12px;
+            margin-bottom: 14px;
         }
 
         .candidate-name {
@@ -181,9 +184,15 @@
             margin-bottom: 10px;
             display: flex;
             align-items: center;
+            justify-content: space-between;
         }
 
-        .section-title i {
+        .section-title-text {
+            display: flex;
+            align-items: center;
+        }
+
+        .section-title-text i {
             margin-right: 6px;
             font-size: 13px;
         }
@@ -202,11 +211,14 @@
             font-size: 11.5px;
             color: var(--text-dark);
             margin-bottom: 14px;
+            position: relative;
         }
 
         /* Experience Item */
         .exp-item {
             margin-bottom: 12px;
+            position: relative;
+            padding-right: 24px;
         }
 
         .exp-title {
@@ -230,13 +242,24 @@
         .exp-bullets li {
             margin-bottom: 3px;
             color: var(--text-muted);
+            position: relative;
+        }
+
+        .bullet-item-container {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+        }
+
+        .bullet-text {
+            flex-grow: 1;
         }
 
         /* Custom Table */
         .edu-table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
         }
 
         .edu-table th {
@@ -269,6 +292,7 @@
 
         .skill-group {
             margin-bottom: 10px;
+            position: relative;
         }
 
         .skill-group-title {
@@ -278,15 +302,12 @@
             margin-bottom: 4px;
             display: flex;
             align-items: center;
-        }
-
-        .skill-group-title i {
-            margin-right: 5px;
-            font-size: 11px;
+            justify-content: space-between;
         }
 
         .skill-badge {
-            display: inline-block;
+            display: inline-flex;
+            align-items: center;
             background-color: #ffffff;
             color: var(--text-dark);
             border: 1px solid #cbd5e1;
@@ -296,6 +317,19 @@
             margin-right: 3px;
             margin-bottom: 4px;
             font-weight: 500;
+            position: relative;
+        }
+
+        .skill-badge .btn-del-badge {
+            display: none;
+            margin-left: 4px;
+            cursor: pointer;
+            color: #ef4444;
+            font-size: 10px;
+        }
+
+        body.edit-mode-active .skill-badge:hover .btn-del-badge {
+            display: inline-block;
         }
 
         /* Personal Details Table */
@@ -330,6 +364,68 @@
             min-width: 130px;
         }
 
+        /* ==================== EDIT MODE STYLES ==================== */
+        body.edit-mode-active [contenteditable="true"] {
+            outline: 1px dashed var(--edit-outline);
+            outline-offset: 2px;
+            border-radius: 2px;
+            transition: all 0.15s ease;
+        }
+
+        body.edit-mode-active [contenteditable="true"]:hover {
+            outline: 1.5px dashed var(--primary-color);
+            background-color: rgba(239, 246, 255, 0.4);
+        }
+
+        body.edit-mode-active [contenteditable="true"]:focus {
+            outline: 2px solid var(--primary-color);
+            background-color: #ffffff;
+            box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.1);
+        }
+
+        /* Controls & Action Buttons */
+        .edit-controls {
+            display: none;
+        }
+
+        body.edit-mode-active .edit-controls {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .btn-action-sm {
+            padding: 1px 6px;
+            font-size: 10.5px;
+            border-radius: 4px;
+            line-height: 1.2;
+        }
+
+        .btn-delete-item {
+            color: #dc2626;
+            background: transparent;
+            border: none;
+            padding: 0 4px;
+            font-size: 12px;
+            opacity: 0.6;
+            transition: opacity 0.2s;
+            cursor: pointer;
+        }
+
+        .btn-delete-item:hover {
+            opacity: 1;
+            color: #991b1b;
+        }
+
+        .saved-toast {
+            font-size: 11px;
+            transition: opacity 0.3s;
+            opacity: 0;
+        }
+        .saved-toast.show {
+            opacity: 1;
+        }
+
         /* ==================== MEDIA PRINT RULES ==================== */
         @page {
             size: A4 portrait;
@@ -346,8 +442,14 @@
                 print-color-adjust: exact !important;
             }
 
-            .action-bar, .photo-overlay, .no-print {
+            .no-print, .action-bar, .photo-overlay, .edit-controls, .btn-del-badge, .action-col {
                 display: none !important;
+            }
+
+            body.edit-mode-active [contenteditable="true"] {
+                outline: none !important;
+                background: transparent !important;
+                box-shadow: none !important;
             }
 
             .cv-page {
@@ -378,76 +480,97 @@
         }
     </style>
 </head>
-<body>
+<body class="edit-mode-active">
 
-    <!-- TOP ACTION BAR (Hidden in Print) -->
+    <!-- TOP ACTION BAR (Non-printable) -->
     <header class="action-bar py-2 px-3 no-print">
         <div class="container-fluid d-flex flex-wrap align-items-center justify-content-between gap-2">
-            <div class="d-flex align-items-center gap-2">
-                <i class="fa-solid fa-file-invoice text-warning fs-4 me-1"></i>
-                <div>
-                    <h6 class="mb-0 fw-bold text-white font-heading" style="line-height: 1.1;">Muhammed Iqbal C — Resume</h6>
-                    <small class="text-light opacity-75" style="font-size: 11px;">Single Page A4 Ready Layout</small>
+            <div class="d-flex align-items-center gap-3">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-file-earmark-person-fill text-warning fs-4"></i>
+                    <div>
+                        <h6 class="mb-0 fw-bold text-white font-heading" style="line-height: 1.1;">Muhammed Iqbal C — CV Builder</h6>
+                        <small class="text-light opacity-75" style="font-size: 11px;">Interactive A4 Live Editor</small>
+                    </div>
                 </div>
+
+                <!-- Saved Indicator -->
+                <span id="savedIndicator" class="saved-toast badge bg-success bg-opacity-75 text-white">
+                    <i class="bi bi-check-circle-fill me-1"></i> Changes Saved
+                </span>
             </div>
 
             <!-- Controls -->
             <div class="d-flex align-items-center flex-wrap gap-2">
-                <!-- Theme Switcher -->
+                
+                <!-- Edit Mode Toggle -->
+                <div class="form-check form-switch text-white me-2 mb-0 d-flex align-items-center gap-2 bg-white bg-opacity-10 px-2 py-1 rounded">
+                    <input class="form-check-input" type="checkbox" role="switch" id="editModeToggle" checked onchange="toggleEditMode(this.checked)">
+                    <label class="form-check-label text-white font-sans small fw-semibold cursor-pointer mb-0" for="editModeToggle">
+                        <i class="bi bi-pencil-square me-1"></i> Edit Mode
+                    </label>
+                </div>
+
+                <!-- Theme Switcher Dropdown -->
                 <div class="dropdown me-1">
                     <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                        <i class="fa-solid fa-palette me-1"></i> Accent Theme
+                        <i class="bi bi-palette me-1"></i> Theme
                     </button>
-                    <ul class="dropdown-menu dropdown-menu-end">
-                        <li><a class="dropdown-item" href="#" onclick="setTheme('navy')"><i class="fa-solid fa-circle text-primary me-2"></i>Deep Navy (Default)</a></li>
-                        <li><a class="dropdown-item" href="#" onclick="setTheme('emerald')"><i class="fa-solid fa-circle text-success me-2"></i>Emerald Green</a></li>
-                        <li><a class="dropdown-item" href="#" onclick="setTheme('slate')"><i class="fa-solid fa-circle text-secondary me-2"></i>Slate Deep</a></li>
-                        <li><a class="dropdown-item" href="#" onclick="setTheme('burgundy')"><i class="fa-solid fa-circle me-2" style="color:#831843;"></i>Deep Burgundy</a></li>
+                    <ul class="dropdown-menu dropdown-menu-end shadow">
+                        <li><a class="dropdown-item" href="#" onclick="setTheme('navy')"><i class="bi bi-circle-fill text-primary me-2"></i>Deep Navy</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="setTheme('emerald')"><i class="bi bi-circle-fill me-2" style="color: #065f46;"></i>Emerald Green</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="setTheme('royal')"><i class="bi bi-circle-fill text-primary me-2"></i>Royal Blue</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="setTheme('slate')"><i class="bi bi-circle-fill me-2" style="color: #334155;"></i>Slate Dark</a></li>
                     </ul>
                 </div>
 
                 <!-- Photo Upload Trigger -->
                 <button class="btn btn-outline-light btn-sm" onclick="document.getElementById('photoInput').click()">
-                    <i class="fa-solid fa-camera me-1"></i> Change Photo
+                    <i class="bi bi-camera me-1"></i> Upload Photo
                 </button>
                 <input type="file" id="photoInput" accept="image/*" class="d-none" onchange="loadPhoto(event)">
 
-                <!-- Print Tip Modal Launch -->
+                <!-- Reset Button -->
+                <button class="btn btn-outline-danger btn-sm text-white" onclick="confirmReset()" title="Reset CV data to defaults">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i> Reset
+                </button>
+
+                <!-- PDF Tips Modal Launcher -->
                 <button class="btn btn-outline-info btn-sm text-white" data-bs-toggle="modal" data-bs-target="#printTipModal">
-                    <i class="fa-solid fa-circle-info me-1"></i> PDF Tips
+                    <i class="bi bi-info-circle me-1"></i> PDF Tips
                 </button>
 
                 <!-- Download PDF Button -->
                 <button class="btn btn-primary btn-sm fw-semibold shadow-sm px-3" onclick="triggerPrint()">
-                    <i class="fa-solid fa-download me-1.5"></i> Download PDF / Print
+                    <i class="bi bi-download me-1.5"></i> Download PDF / Print
                 </button>
             </div>
         </div>
     </header>
 
-    <!-- MAIN CV DOCUMENT (A4 PAGE CONTAINER) -->
-    <main class="cv-page">
+    <!-- MAIN CV DOCUMENT (A4 CONTAINER) -->
+    <main class="cv-page" id="cvContent">
         <!-- HEADER SECTION -->
         <header class="cv-header d-flex justify-content-between align-items-start gap-3">
             <div class="flex-grow-1">
-                <h1 class="candidate-name mb-1">MUHAMMED IQBAL C</h1>
-                <div class="candidate-title">
+                <h1 class="candidate-name mb-1" contenteditable="true" data-key="name">MUHAMMED IQBAL C</h1>
+                <div class="candidate-title" contenteditable="true" data-key="title">
                     High School Educator (Mathematics, IT & AI) | STEM & Web Application Developer | Technical & CCTV Specialist
                 </div>
                 
                 <div class="contact-info">
                     <span class="contact-item">
-                        <i class="fa-solid fa-location-dot"></i>
-                        Chalampatt (H), Kurumbathoor (PO), Tirur, Malappuram, Kerala 676101
+                        <i class="bi bi-geo-alt-fill"></i>
+                        <span contenteditable="true" data-key="address">Chalampatt (H), Kurumbathoor (PO), Tirur, Malappuram, Kerala 676101</span>
                     </span>
                     <br>
                     <span class="contact-item">
-                        <i class="fa-solid fa-phone"></i>
-                        <a href="tel:+919995880672" class="text-decoration-none text-dark">+91 99958 80672</a>
+                        <i class="bi bi-telephone-fill"></i>
+                        <span contenteditable="true" data-key="phone">+91 99958 80672</span>
                     </span>
                     <span class="contact-item">
-                        <i class="fa-solid fa-envelope"></i>
-                        <a href="mailto:cmiqbalc@email.com" class="text-decoration-none text-dark">cmiqbalc@email.com</a>
+                        <i class="bi bi-envelope-fill"></i>
+                        <span contenteditable="true" data-key="email">cmiqbalc@email.com</span>
                     </span>
                 </div>
             </div>
@@ -456,103 +579,87 @@
             <div class="photo-box flex-shrink-0" id="photoContainer" onclick="document.getElementById('photoInput').click()" title="Click to upload or update photo">
                 <img id="passportImg" src="https://placehold.co/120x150/e2e8f0/475569?text=Upload+Photo" alt="Muhammed Iqbal C Photo">
                 <div class="photo-overlay">
-                    <i class="fa-solid fa-camera mb-1 fs-6"></i>
+                    <i class="bi bi-camera mb-1 fs-6"></i>
                     <span>Click to Upload Photo</span>
                 </div>
             </div>
         </header>
 
-        <!-- OBJECTIVE STATEMENT -->
+        <!-- CAREER OBJECTIVE STATEMENT -->
         <section class="objective-text">
-            <strong>Career Objective:</strong> M.Com graduate (University of Calicut) with PMKVY-certified training in CCTV installation and maintenance and 3 years' experience teaching Mathematics, IT, and AI at high school level. Seeking a teaching or technical role where I can combine subject knowledge, hands-on skills, and clear communication to deliver outstanding results.
+            <strong>Career Objective:</strong> 
+            <span contenteditable="true" data-key="objective">
+                M.Com graduate (University of Calicut) with PMKVY-certified training in CCTV installation and maintenance and 3 years' experience teaching Mathematics, IT, and AI at high school level. Seeking a teaching or technical role where I can combine subject knowledge, hands-on skills, and clear communication to deliver outstanding results.
+            </span>
         </section>
 
         <!-- TWO COLUMN BALANCED BODY -->
         <div class="row g-3">
+            
             <!-- LEFT MAIN COLUMN -->
             <div class="col-7">
                 
                 <!-- WORK EXPERIENCE -->
                 <section class="mb-3">
-                    <h2 class="section-title">
-                        <i class="fa-solid fa-briefcase"></i> Work Experience
-                    </h2>
-                    <div class="exp-item">
-                        <div class="d-flex justify-content-between align-items-baseline">
-                            <span class="exp-title">High School Teacher — Mathematics, IT & AI</span>
-                            <span class="badge bg-secondary text-wrap" style="font-size: 9.5px;">3 Years Experience</span>
+                    <div class="section-title">
+                        <span class="section-title-text">
+                            <i class="bi bi-briefcase-fill"></i> Work Experience
+                        </span>
+                        <div class="edit-controls">
+                            <button class="btn btn-primary btn-action-sm" onclick="addExperience()">
+                                <i class="bi bi-plus-lg"></i> Add Experience
+                            </button>
                         </div>
-                        <div class="exp-company">High School Education Department | Kerala</div>
-                        <ul class="exp-bullets">
-                            <li>Taught Mathematics, Information Technology, and introductory AI to high school students with focused curriculum delivery.</li>
-                            <li>Prepared comprehensive lesson plans, practice worksheets, student assessments, and practical computer-lab sessions.</li>
-                            <li>Introduced foundational coding and hands-on AI activities to build students' digital competencies and problem-solving skills.</li>
-                            <li>Explained complex technical and mathematical concepts in simple, accessible terms for students of mixed abilities.</li>
-                        </ul>
+                    </div>
+
+                    <div id="experienceList">
+                        <!-- Experience Items Rendered Dynamically -->
                     </div>
                 </section>
 
                 <!-- EDUCATION -->
                 <section class="mb-3">
-                    <h2 class="section-title">
-                        <i class="fa-solid fa-graduation-cap"></i> Education
-                    </h2>
+                    <div class="section-title">
+                        <span class="section-title-text">
+                            <i class="bi bi-mortarboard-fill"></i> Education
+                        </span>
+                        <div class="edit-controls">
+                            <button class="btn btn-primary btn-action-sm" onclick="addEducationRow()">
+                                <i class="bi bi-plus-lg"></i> Add Row
+                            </button>
+                        </div>
+                    </div>
+                    
                     <table class="edu-table">
                         <thead>
                             <tr>
                                 <th>Qualification</th>
                                 <th>Institution / University</th>
                                 <th class="text-center">Year</th>
-                                <th class="text-center">Marks</th>
+                                <th class="text-center">Result</th>
+                                <th class="action-col no-print text-center" style="width: 25px;"></th>
                             </tr>
                         </thead>
-                        <tbody>
-                            <tr>
-                                <td><strong>M.Com</strong></td>
-                                <td>CPA Global Studies / Univ. of Calicut</td>
-                                <td class="text-center">2020</td>
-                                <td class="text-center"><strong>68%</strong></td>
-                            </tr>
-                            <tr>
-                                <td><strong>B.Com</strong> (Co-op)</td>
-                                <td>Guide College Puthanathani / Calicut Univ.</td>
-                                <td class="text-center">2013</td>
-                                <td class="text-center"><strong>72%</strong></td>
-                            </tr>
-                            <tr>
-                                <td><strong>Plus Two</strong> (VHSE)</td>
-                                <td>GVHSS Kalpakanchery</td>
-                                <td class="text-center">2012</td>
-                                <td class="text-center"><strong>80%</strong></td>
-                            </tr>
-                            <tr>
-                                <td><strong>SSLC</strong></td>
-                                <td>CHS Cherural</td>
-                                <td class="text-center">2010</td>
-                                <td class="text-center"><strong>85%</strong></td>
-                            </tr>
+                        <tbody id="educationList">
+                            <!-- Education Rows Rendered Dynamically -->
                         </tbody>
                     </table>
                 </section>
 
                 <!-- CERTIFICATIONS -->
                 <section class="mb-2">
-                    <h2 class="section-title">
-                        <i class="fa-solid fa-certificate"></i> Certifications
-                    </h2>
-                    <ul class="list-unstyled mb-0">
-                        <li class="d-flex align-items-start mb-1.5">
-                            <i class="fa-solid fa-circle-check text-primary me-2 mt-1" style="font-size: 11px;"></i>
-                            <div>
-                                <strong>CCTV Installation & Maintenance</strong> — PMKVY (Pradhan Mantri Kaushal Vikas Yojana)
-                            </div>
-                        </li>
-                        <li class="d-flex align-items-start">
-                            <i class="fa-solid fa-circle-check text-primary me-2 mt-1" style="font-size: 11px;"></i>
-                            <div>
-                                <strong>DIFA</strong> (Diploma in Industrial Financial Accounting) — GTEC
-                            </div>
-                        </li>
+                    <div class="section-title">
+                        <span class="section-title-text">
+                            <i class="bi bi-patch-check-fill"></i> Certifications
+                        </span>
+                        <div class="edit-controls">
+                            <button class="btn btn-primary btn-action-sm" onclick="addCertification()">
+                                <i class="bi bi-plus-lg"></i> Add Certification
+                            </button>
+                        </div>
+                    </div>
+                    <ul class="list-unstyled mb-0" id="certificationList">
+                        <!-- Certifications Rendered Dynamically -->
                     </ul>
                 </section>
 
@@ -564,105 +671,54 @@
                     
                     <!-- SKILLS & COMPETENCIES -->
                     <section class="mb-3">
-                        <h2 class="section-title">
-                            <i class="fa-solid fa-gears"></i> Skills & Competencies
-                        </h2>
-
-                        <!-- Teaching Skills -->
-                        <div class="skill-group">
-                            <div class="skill-group-title">
-                                <i class="fa-solid fa-chalkboard-user"></i> Teaching & Pedagogy
-                            </div>
-                            <div>
-                                <span class="skill-badge">Lesson Planning</span>
-                                <span class="skill-badge">Classroom Mgmt</span>
-                                <span class="skill-badge">Student Assessment</span>
-                                <span class="skill-badge">Simplified Concept Delivery</span>
+                        <div class="section-title">
+                            <span class="section-title-text">
+                                <i class="bi bi-gear-wide-connected"></i> Skills & Competencies
+                            </span>
+                            <div class="edit-controls">
+                                <button class="btn btn-primary btn-action-sm" onclick="addSkillCategory()">
+                                    <i class="bi bi-plus-lg"></i> Add Category
+                                </button>
                             </div>
                         </div>
 
-                        <!-- Technical Skills -->
-                        <div class="skill-group">
-                            <div class="skill-group-title">
-                                <i class="fa-solid fa-video"></i> CCTV & Hardware
-                            </div>
-                            <div>
-                                <span class="skill-badge">IP & Analog CCTV</span>
-                                <span class="skill-badge">DVR / NVR Setup</span>
-                                <span class="skill-badge">Cabling & Networking</span>
-                                <span class="skill-badge">Hardware Troubleshooting</span>
-                                <span class="skill-badge">Basic Electronics</span>
-                            </div>
-                        </div>
-
-                        <!-- Computer & Web -->
-                        <div class="skill-group">
-                            <div class="skill-group-title">
-                                <i class="fa-solid fa-laptop-code"></i> Computer, Web & AI
-                            </div>
-                            <div>
-                                <span class="skill-badge">MS Office Suite</span>
-                                <span class="skill-badge">HTML5 & CSS3</span>
-                                <span class="skill-badge">Bootstrap 5.3</span>
-                                <span class="skill-badge">Basic Python</span>
-                                <span class="skill-badge">AI Tools & STEM Labs</span>
-                                <span class="skill-badge">Internet & Email</span>
-                            </div>
-                        </div>
-
-                        <!-- Commerce Skills -->
-                        <div class="skill-group mb-0">
-                            <div class="skill-group-title">
-                                <i class="fa-solid fa-calculator"></i> Commerce & Admin
-                            </div>
-                            <div>
-                                <span class="skill-badge">Accounting Basics</span>
-                                <span class="skill-badge">GST Fundamentals</span>
-                                <span class="skill-badge">Data Entry & Analysis</span>
-                            </div>
+                        <div id="skillsContainer">
+                            <!-- Skill groups rendered dynamically -->
                         </div>
                     </section>
 
                     <!-- LANGUAGES -->
                     <section class="mb-3">
-                        <h2 class="section-title">
-                            <i class="fa-solid fa-language"></i> Languages
-                        </h2>
-                        <div class="d-flex flex-column gap-1">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <span><strong>Malayalam</strong></span>
-                                <span class="text-muted" style="font-size: 10.5px;">Native / Mother Tongue</span>
+                        <div class="section-title">
+                            <span class="section-title-text">
+                                <i class="bi bi-translate"></i> Languages
+                            </span>
+                            <div class="edit-controls">
+                                <button class="btn btn-primary btn-action-sm" onclick="addLanguage()">
+                                    <i class="bi bi-plus-lg"></i> Add Language
+                                </button>
                             </div>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <span><strong>English</strong></span>
-                                <span class="text-muted" style="font-size: 10.5px;">Fluent / Professional</span>
-                            </div>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <span><strong>Hindi</strong></span>
-                                <span class="text-muted" style="font-size: 10.5px;">Working Proficiency</span>
-                            </div>
+                        </div>
+                        <div class="d-flex flex-column gap-1" id="languageList">
+                            <!-- Languages Rendered Dynamically -->
                         </div>
                     </section>
 
                     <!-- PERSONAL DETAILS -->
                     <section>
-                        <h2 class="section-title">
-                            <i class="fa-solid fa-user"></i> Personal Details
-                        </h2>
+                        <div class="section-title">
+                            <span class="section-title-text">
+                                <i class="bi bi-person-lines-fill"></i> Personal Details
+                            </span>
+                            <div class="edit-controls">
+                                <button class="btn btn-primary btn-action-sm" onclick="addPersonalDetail()">
+                                    <i class="bi bi-plus-lg"></i> Add Detail
+                                </button>
+                            </div>
+                        </div>
                         <table class="personal-info-table w-100">
-                            <tbody>
-                                <tr>
-                                    <td class="label">Date of Birth:</td>
-                                    <td>11 August 1996</td>
-                                </tr>
-                                <tr>
-                                    <td class="label">Nationality:</td>
-                                    <td>Indian</td>
-                                </tr>
-                                <tr>
-                                    <td class="label">Address:</td>
-                                    <td>Chalampatt (H), Kurumbathoor (PO), Tirur, Malappuram, Kerala 676101</td>
-                                </tr>
+                            <tbody id="personalDetailsList">
+                                <!-- Personal details rendered dynamically -->
                             </tbody>
                         </table>
                     </section>
@@ -673,17 +729,17 @@
 
         <!-- DECLARATION BLOCK -->
         <footer class="declaration-block">
-            <p class="declaration-text">
+            <p class="declaration-text" contenteditable="true" data-key="declarationText">
                 "I hereby declare that the information provided above is true and correct to the best of my knowledge and belief."
             </p>
             <div class="d-flex justify-content-between align-items-end pt-2">
                 <div>
-                    <div><strong>Place:</strong> Tirur</div>
-                    <div><strong>Date:</strong> <span class="sig-line d-inline-block text-center ms-1"></span></div>
+                    <div><strong>Place:</strong> <span contenteditable="true" data-key="declarationPlace">Tirur</span></div>
+                    <div><strong>Date:</strong> <span contenteditable="true" data-key="declarationDate" class="sig-line d-inline-block text-center ms-1"></span></div>
                 </div>
                 <div class="text-end">
                     <div class="sig-line mb-1"></div>
-                    <div><strong>Signature</strong> (Muhammed Iqbal C)</div>
+                    <div><strong>Signature</strong> (<span contenteditable="true" data-key="declarationName">Muhammed Iqbal C</span>)</div>
                 </div>
             </div>
         </footer>
@@ -695,7 +751,7 @@
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header bg-primary text-white">
-                    <h5 class="modal-title font-heading fs-6"><i class="fa-solid fa-circle-info me-2"></i>Best Results for Saving as PDF</h5>
+                    <h5 class="modal-title font-heading fs-6"><i class="bi bi-info-circle me-2"></i>Best Results for Saving as PDF</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body font-sans fs-6">
@@ -706,13 +762,13 @@
                         <li class="mb-0">Set <strong>Margins: None</strong> or <strong>Default</strong> for perfect 1-page fitting.</li>
                     </ol>
                     <div class="alert alert-light border mb-0 text-muted" style="font-size: 12px;">
-                        <i class="fa-solid fa-lightbulb me-1 text-warning"></i> Tip: You can click the passport image box at top right to upload your actual photo before printing!
+                        <i class="bi bi-lightbulb me-1 text-warning"></i> Tip: Turn off Edit Mode before printing if you want to preview the exact clean layout!
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
                     <button type="button" class="btn btn-primary btn-sm" onclick="triggerPrint()" data-bs-dismiss="modal">
-                        <i class="fa-solid fa-print me-1"></i> Print / Save PDF Now
+                        <i class="bi bi-printer me-1"></i> Print / Save PDF Now
                     </button>
                 </div>
             </div>
@@ -722,33 +778,488 @@
     <!-- Bootstrap 5.3 JS Bundle -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
-    <!-- JS Logic -->
+    <!-- JS Logic & State Storage -->
     <script>
-        // Photo Preview Loader
+        // Initial Default CV Data Schema
+        const defaultCVData = {
+            theme: 'navy',
+            photo: 'https://placehold.co/120x150/e2e8f0/475569?text=Upload+Photo',
+            name: 'MUHAMMED IQBAL C',
+            title: 'High School Educator (Mathematics, IT & AI) | STEM & Web Application Developer | Technical & CCTV Specialist',
+            address: 'Chalampatt (H), Kurumbathoor (PO), Tirur, Malappuram, Kerala 676101',
+            phone: '+91 99958 80672',
+            email: 'cmiqbalc@email.com',
+            objective: 'M.Com graduate (University of Calicut) with PMKVY-certified training in CCTV installation and maintenance and 3 years\' experience teaching Mathematics, IT, and AI at high school level. Seeking a teaching or technical role where I can combine subject knowledge, hands-on skills, and clear communication to deliver outstanding results.',
+            experiences: [
+                {
+                    id: 'exp-1',
+                    role: 'High School Teacher — Mathematics, IT & AI',
+                    duration: '3 Years Experience',
+                    company: 'High School Education Department | Kerala',
+                    bullets: [
+                        'Taught Mathematics, Information Technology, and introductory AI to high school students with focused curriculum delivery.',
+                        'Prepared comprehensive lesson plans, practice worksheets, student assessments, and practical computer-lab sessions.',
+                        'Introduced foundational coding and hands-on AI activities to build students\' digital competencies and problem-solving skills.',
+                        'Explained complex technical and mathematical concepts in simple, accessible terms for students of mixed abilities.'
+                    ]
+                }
+            ],
+            education: [
+                { qual: 'M.Com', inst: 'CPA Global Studies / Univ. of Calicut', year: '2020', mark: '68%' },
+                { qual: 'B.Com (Co-op)', inst: 'Guide College Puthanathani / Calicut Univ.', year: '2013', mark: '72%' },
+                { qual: 'Plus Two (VHSE)', inst: 'GVHSS Kalpakanchery', year: '2012', mark: '80%' },
+                { qual: 'SSLC', inst: 'CHS Cherural', year: '2010', mark: '85%' }
+            ],
+            certifications: [
+                'CCTV Installation & Maintenance — PMKVY (Pradhan Mantri Kaushal Vikas Yojana)',
+                'DIFA (Diploma in Industrial Financial Accounting) — GTEC'
+            ],
+            skills: [
+                {
+                    icon: 'bi-chalkboard-teacher',
+                    category: 'Teaching & Pedagogy',
+                    badges: ['Lesson Planning', 'Classroom Mgmt', 'Student Assessment', 'Simplified Concept Delivery']
+                },
+                {
+                    icon: 'bi-camera-video-fill',
+                    category: 'CCTV & Hardware',
+                    badges: ['IP & Analog CCTV', 'DVR / NVR Setup', 'Cabling & Networking', 'Hardware Troubleshooting', 'Basic Electronics']
+                },
+                {
+                    icon: 'bi-laptop-fill',
+                    category: 'Computer, Web & AI',
+                    badges: ['MS Office Suite', 'HTML5 & CSS3', 'Bootstrap 5.3', 'Basic Python', 'AI Tools & STEM Labs', 'Internet & Email']
+                },
+                {
+                    icon: 'bi-calculator-fill',
+                    category: 'Commerce & Admin',
+                    badges: ['Accounting Basics', 'GST Fundamentals', 'Data Entry & Analysis']
+                }
+            ],
+            languages: [
+                { name: 'Malayalam', level: 'Native / Mother Tongue' },
+                { name: 'English', level: 'Fluent / Professional' },
+                { name: 'Hindi', level: 'Working Proficiency' }
+            ],
+            personalDetails: [
+                { label: 'Date of Birth:', value: '11 August 1996' },
+                { label: 'Nationality:', value: 'Indian' },
+                { label: 'Address:', value: 'Chalampatt (H), Kurumbathoor (PO), Tirur, Malappuram, Kerala 676101' }
+            ],
+            declarationText: '"I hereby declare that the information provided above is true and correct to the best of my knowledge and belief."',
+            declarationPlace: 'Tirur',
+            declarationDate: '',
+            declarationName: 'Muhammed Iqbal C'
+        };
+
+        let cvData = {};
+        let saveTimeout = null;
+
+        // Load Data from localStorage or fallback to default
+        function initCV() {
+            const saved = localStorage.getItem('iqbal_cv_data');
+            if (saved) {
+                try {
+                    cvData = JSON.parse(saved);
+                } catch (e) {
+                    cvData = JSON.parse(JSON.stringify(defaultCVData));
+                }
+            } else {
+                cvData = JSON.parse(JSON.stringify(defaultCVData));
+            }
+            renderCV();
+            setTheme(cvData.theme || 'navy');
+            setupInputListeners();
+        }
+
+        // Save data to localStorage
+        function saveCV() {
+            localStorage.setItem('iqbal_cv_data', JSON.stringify(cvData));
+            showSavedIndicator();
+        }
+
+        function triggerAutoSave() {
+            clearTimeout(saveTimeout);
+            saveTimeout = setTimeout(saveCV, 400);
+        }
+
+        function showSavedIndicator() {
+            const ind = document.getElementById('savedIndicator');
+            ind.classList.add('show');
+            setTimeout(() => ind.classList.remove('show'), 1500);
+        }
+
+        // Render functions
+        function renderCV() {
+            // Basic fields
+            document.querySelector('[data-key="name"]').innerText = cvData.name || '';
+            document.querySelector('[data-key="title"]').innerText = cvData.title || '';
+            document.querySelector('[data-key="address"]').innerText = cvData.address || '';
+            document.querySelector('[data-key="phone"]').innerText = cvData.phone || '';
+            document.querySelector('[data-key="email"]').innerText = cvData.email || '';
+            document.querySelector('[data-key="objective"]').innerText = cvData.objective || '';
+            document.querySelector('[data-key="declarationText"]').innerText = cvData.declarationText || '';
+            document.querySelector('[data-key="declarationPlace"]').innerText = cvData.declarationPlace || '';
+            document.querySelector('[data-key="declarationDate"]').innerText = cvData.declarationDate || '';
+            document.querySelector('[data-key="declarationName"]').innerText = cvData.declarationName || '';
+
+            if (cvData.photo) {
+                document.getElementById('passportImg').src = cvData.photo;
+            }
+
+            renderExperiences();
+            renderEducation();
+            renderCertifications();
+            renderSkills();
+            renderLanguages();
+            renderPersonalDetails();
+        }
+
+        function renderExperiences() {
+            const container = document.getElementById('experienceList');
+            container.innerHTML = '';
+            (cvData.experiences || []).forEach((exp, idx) => {
+                const div = document.createElement('div');
+                div.className = 'exp-item';
+                div.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-baseline">
+                        <span class="exp-title" contenteditable="true" oninput="updateExpField(${idx}, 'role', this.innerText)">${exp.role}</span>
+                        <div class="d-flex align-items-center gap-1">
+                            <span class="badge bg-secondary text-wrap" style="font-size: 9.5px;" contenteditable="true" oninput="updateExpField(${idx}, 'duration', this.innerText)">${exp.duration}</span>
+                            <button class="btn-delete-item edit-controls no-print" onclick="deleteExperience(${idx})" title="Delete Job Section"><i class="bi bi-trash"></i></button>
+                        </div>
+                    </div>
+                    <div class="exp-company" contenteditable="true" oninput="updateExpField(${idx}, 'company', this.innerText)">${exp.company}</div>
+                    <ul class="exp-bullets">
+                        ${(exp.bullets || []).map((b, bIdx) => `
+                            <li>
+                                <div class="bullet-item-container">
+                                    <span class="bullet-text" contenteditable="true" oninput="updateExpBullet(${idx}, ${bIdx}, this.innerText)">${b}</span>
+                                    <button class="btn-delete-item edit-controls no-print" onclick="deleteExpBullet(${idx}, ${bIdx})" title="Delete Bullet"><i class="bi bi-x-circle"></i></button>
+                                </div>
+                            </li>
+                        `).join('')}
+                    </ul>
+                    <div class="edit-controls no-print mt-1">
+                        <button class="btn btn-outline-primary btn-action-sm" onclick="addExpBullet(${idx})">
+                            <i class="bi bi-plus"></i> Add Bullet Point
+                        </button>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function renderEducation() {
+            const container = document.getElementById('educationList');
+            container.innerHTML = '';
+            (cvData.education || []).forEach((edu, idx) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td contenteditable="true" oninput="updateEdu(${idx}, 'qual', this.innerText)"><strong>${edu.qual}</strong></td>
+                    <td contenteditable="true" oninput="updateEdu(${idx}, 'inst', this.innerText)">${edu.inst}</td>
+                    <td class="text-center" contenteditable="true" oninput="updateEdu(${idx}, 'year', this.innerText)">${edu.year}</td>
+                    <td class="text-center" contenteditable="true" oninput="updateEdu(${idx}, 'mark', this.innerText)"><strong>${edu.mark}</strong></td>
+                    <td class="action-col no-print text-center">
+                        <button class="btn-delete-item edit-controls" onclick="deleteEdu(${idx})" title="Delete Row"><i class="bi bi-trash"></i></button>
+                    </td>
+                `;
+                container.appendChild(tr);
+            });
+        }
+
+        function renderCertifications() {
+            const container = document.getElementById('certificationList');
+            container.innerHTML = '';
+            (cvData.certifications || []).forEach((cert, idx) => {
+                const li = document.createElement('li');
+                li.className = 'd-flex align-items-start justify-content-between mb-1.5';
+                li.innerHTML = `
+                    <div class="d-flex align-items-start flex-grow-1">
+                        <i class="bi bi-check-circle-fill text-primary me-2 mt-1" style="font-size: 11px;"></i>
+                        <span contenteditable="true" oninput="updateCert(${idx}, this.innerText)">${cert}</span>
+                    </div>
+                    <button class="btn-delete-item edit-controls no-print ms-2" onclick="deleteCert(${idx})" title="Delete Certification"><i class="bi bi-trash"></i></button>
+                `;
+                container.appendChild(li);
+            });
+        }
+
+        function renderSkills() {
+            const container = document.getElementById('skillsContainer');
+            container.innerHTML = '';
+            (cvData.skills || []).forEach((sg, gIdx) => {
+                const div = document.createElement('div');
+                div.className = 'skill-group';
+                div.innerHTML = `
+                    <div class="skill-group-title">
+                        <span>
+                            <i class="bi ${sg.icon || 'bi-gear-fill'}"></i> 
+                            <span contenteditable="true" oninput="updateSkillCategory(${gIdx}, this.innerText)">${sg.category}</span>
+                        </span>
+                        <div class="edit-controls no-print">
+                            <button class="btn btn-outline-primary btn-action-sm me-1" onclick="addSkillBadge(${gIdx})" title="Add Skill Pill"><i class="bi bi-plus"></i> Skill</button>
+                            <button class="btn-delete-item" onclick="deleteSkillCategory(${gIdx})" title="Delete Group"><i class="bi bi-trash"></i></button>
+                        </div>
+                    </div>
+                    <div>
+                        ${(sg.badges || []).map((badge, bIdx) => `
+                            <span class="skill-badge">
+                                <span contenteditable="true" oninput="updateSkillBadge(${gIdx}, ${bIdx}, this.innerText)">${badge}</span>
+                                <i class="bi bi-x btn-del-badge no-print" onclick="deleteSkillBadge(${gIdx}, ${bIdx})" title="Remove Tag"></i>
+                            </span>
+                        `).join('')}
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function renderLanguages() {
+            const container = document.getElementById('languageList');
+            container.innerHTML = '';
+            (cvData.languages || []).forEach((lang, idx) => {
+                const div = document.createElement('div');
+                div.className = 'd-flex justify-content-between align-items-center position-relative';
+                div.innerHTML = `
+                    <span><strong contenteditable="true" oninput="updateLang(${idx}, 'name', this.innerText)">${lang.name}</strong></span>
+                    <div class="d-flex align-items-center gap-1">
+                        <span class="text-muted" style="font-size: 10.5px;" contenteditable="true" oninput="updateLang(${idx}, 'level', this.innerText)">${lang.level}</span>
+                        <button class="btn-delete-item edit-controls no-print" onclick="deleteLang(${idx})" title="Remove Language"><i class="bi bi-x-circle"></i></button>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function renderPersonalDetails() {
+            const container = document.getElementById('personalDetailsList');
+            container.innerHTML = '';
+            (cvData.personalDetails || []).forEach((pd, idx) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="label" contenteditable="true" oninput="updatePersonalDetail(${idx}, 'label', this.innerText)">${pd.label}</td>
+                    <td contenteditable="true" oninput="updatePersonalDetail(${idx}, 'value', this.innerText)">${pd.value}</td>
+                    <td class="action-col no-print text-center" style="width: 20px;">
+                        <button class="btn-delete-item edit-controls" onclick="deletePersonalDetail(${idx})" title="Delete Row"><i class="bi bi-trash"></i></button>
+                    </td>
+                `;
+                container.appendChild(tr);
+            });
+        }
+
+        // Event listeners for static contenteditable elements
+        function setupInputListeners() {
+            document.querySelectorAll('[data-key]').forEach(el => {
+                el.addEventListener('input', (e) => {
+                    const key = e.target.getAttribute('data-key');
+                    cvData[key] = e.target.innerText;
+                    triggerAutoSave();
+                });
+            });
+        }
+
+        // Data Update Helpers
+        function updateExpField(idx, field, val) {
+            cvData.experiences[idx][field] = val;
+            triggerAutoSave();
+        }
+
+        function updateExpBullet(expIdx, bIdx, val) {
+            cvData.experiences[expIdx].bullets[bIdx] = val;
+            triggerAutoSave();
+        }
+
+        function addExpBullet(expIdx) {
+            cvData.experiences[expIdx].bullets.push('New responsibility or key achievement...');
+            renderExperiences();
+            saveCV();
+        }
+
+        function deleteExpBullet(expIdx, bIdx) {
+            cvData.experiences[expIdx].bullets.splice(bIdx, 1);
+            renderExperiences();
+            saveCV();
+        }
+
+        function addExperience() {
+            cvData.experiences.push({
+                id: 'exp-' + Date.now(),
+                role: 'New Job Role Title',
+                duration: 'Year - Year',
+                company: 'Company / Organization Name',
+                bullets: ['Key achievement or responsibility description.']
+            });
+            renderExperiences();
+            saveCV();
+        }
+
+        function deleteExperience(idx) {
+            cvData.experiences.splice(idx, 1);
+            renderExperiences();
+            saveCV();
+        }
+
+        function updateEdu(idx, field, val) {
+            cvData.education[idx][field] = val;
+            triggerAutoSave();
+        }
+
+        function addEducationRow() {
+            cvData.education.push({ qual: 'New Qualification', inst: 'University / Institute', year: '202X', mark: 'Grade' });
+            renderEducation();
+            saveCV();
+        }
+
+        function deleteEdu(idx) {
+            cvData.education.splice(idx, 1);
+            renderEducation();
+            saveCV();
+        }
+
+        function updateCert(idx, val) {
+            cvData.certifications[idx] = val;
+            triggerAutoSave();
+        }
+
+        function addCertification() {
+            cvData.certifications.push('New Professional Certification — Issuing Organization');
+            renderCertifications();
+            saveCV();
+        }
+
+        function deleteCert(idx) {
+            cvData.certifications.splice(idx, 1);
+            renderCertifications();
+            saveCV();
+        }
+
+        function updateSkillCategory(gIdx, val) {
+            cvData.skills[gIdx].category = val;
+            triggerAutoSave();
+        }
+
+        function updateSkillBadge(gIdx, bIdx, val) {
+            cvData.skills[gIdx].badges[bIdx] = val;
+            triggerAutoSave();
+        }
+
+        function addSkillBadge(gIdx) {
+            cvData.skills[gIdx].badges.push('New Skill');
+            renderSkills();
+            saveCV();
+        }
+
+        function deleteSkillBadge(gIdx, bIdx) {
+            cvData.skills[gIdx].badges.splice(bIdx, 1);
+            renderSkills();
+            saveCV();
+        }
+
+        function addSkillCategory() {
+            cvData.skills.push({
+                icon: 'bi-star-fill',
+                category: 'New Skill Category',
+                badges: ['Skill Item 1', 'Skill Item 2']
+            });
+            renderSkills();
+            saveCV();
+        }
+
+        function deleteSkillCategory(gIdx) {
+            cvData.skills.splice(gIdx, 1);
+            renderSkills();
+            saveCV();
+        }
+
+        function updateLang(idx, field, val) {
+            cvData.languages[idx][field] = val;
+            triggerAutoSave();
+        }
+
+        function addLanguage() {
+            cvData.languages.push({ name: 'Language Name', level: 'Proficiency Level' });
+            renderLanguages();
+            saveCV();
+        }
+
+        function deleteLang(idx) {
+            cvData.languages.splice(idx, 1);
+            renderLanguages();
+            saveCV();
+        }
+
+        function updatePersonalDetail(idx, field, val) {
+            cvData.personalDetails[idx][field] = val;
+            triggerAutoSave();
+        }
+
+        function addPersonalDetail() {
+            cvData.personalDetails.push({ label: 'Label:', value: 'Value' });
+            renderPersonalDetails();
+            saveCV();
+        }
+
+        function deletePersonalDetail(idx) {
+            cvData.personalDetails.splice(idx, 1);
+            renderPersonalDetails();
+            saveCV();
+        }
+
+        // Toggle Edit Mode
+        function toggleEditMode(enabled) {
+            if (enabled) {
+                document.body.classList.add('edit-mode-active');
+            } else {
+                document.body.classList.remove('edit-mode-active');
+            }
+        }
+
+        // Photo Preview & Save Loader
         function loadPhoto(event) {
             const reader = new FileReader();
             reader.onload = function() {
                 const img = document.getElementById('passportImg');
                 img.src = reader.result;
+                cvData.photo = reader.result;
+                saveCV();
             };
-            if (event.target.files[0]) {
+            if (event.target.files && event.target.files[0]) {
                 reader.readAsDataURL(event.target.files[0]);
             }
         }
 
         // Theme Switcher Logic
         function setTheme(theme) {
+            cvData.theme = theme;
             if (theme === 'navy') {
                 document.body.removeAttribute('data-theme');
             } else {
                 document.body.setAttribute('data-theme', theme);
             }
+            saveCV();
         }
 
-        // Print Handler
+        // Reset to Default Data
+        function confirmReset() {
+            if (confirm("Are you sure you want to reset all edits back to default original data?")) {
+                localStorage.removeItem('iqbal_cv_data');
+                cvData = JSON.parse(JSON.stringify(defaultCVData));
+                renderCV();
+                setTheme('navy');
+                showSavedIndicator();
+            }
+        }
+
+        // Trigger Print Handler
         function triggerPrint() {
             window.print();
         }
+
+        // Run Initialization on Load
+        window.onload = function() {
+            initCV();
+        };
     </script>
 </body>
 </html>
