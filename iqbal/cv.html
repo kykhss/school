@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MUHAMMED IQBAL C - Curriculum Vitae</title>
+    <!-- Bootstrap 5.3 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
+    <!-- Google Fonts: Inter & Outfit -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary-color: #1e3a8a; /* Deep Navy */
+            --primary-light: #eff6ff;
+            --primary-border: #bfdbfe;
+            --text-dark: #1e293b;
+            --text-muted: #475569;
+            --accent-bg: #f8fafc;
+            --sidebar-bg: #f1f5f9;
+        }
+
+        /* Color Theme Options */
+        body[data-theme="emerald"] {
+            --primary-color: #065f46;
+            --primary-light: #ecfdf5;
+            --primary-border: #a7f3d0;
+            --sidebar-bg: #f0fdf4;
+        }
+        body[data-theme="slate"] {
+            --primary-color: #334155;
+            --primary-light: #f8fafc;
+            --primary-border: #cbd5e1;
+            --sidebar-bg: #f1f5f9;
+        }
+        body[data-theme="burgundy"] {
+            --primary-color: #831843;
+            --primary-light: #fdf2f8;
+            --primary-border: #fbcfe8;
+            --sidebar-bg: #fff1f2;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #e2e8f0;
+            color: var(--text-dark);
+            margin: 0;
+            padding: 0;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        h1, h2, h3, h4, .font-heading {
+            font-family: 'Outfit', sans-serif;
+        }
+
+        /* Top Action Bar (Non-printable) */
+        .action-bar {
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(8px);
+            color: #ffffff;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* A4 Page Layout Container */
+        .cv-page {
+            width: 210mm;
+            min-height: 297mm;
+            background: #ffffff;
+            margin: 24px auto;
+            padding: 24px 28px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+            border-radius: 4px;
+            position: relative;
+            box-sizing: border-box;
+        }
+
+        /* Header Styling */
+        .cv-header {
+            border-bottom: 2px solid var(--primary-color);
+            padding-bottom: 14px;
+            margin-bottom: 16px;
+        }
+
+        .candidate-name {
+            color: var(--primary-color);
+            font-size: 26px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .candidate-title {
+            font-size: 13.5px;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-top: 2px;
+            line-height: 1.4;
+        }
+
+        .contact-info {
+            font-size: 11.5px;
+            color: var(--text-dark);
+            margin-top: 8px;
+        }
+
+        .contact-item {
+            display: inline-flex;
+            align-items: center;
+            margin-right: 14px;
+            margin-bottom: 4px;
+        }
+
+        .contact-item i {
+            color: var(--primary-color);
+            margin-right: 5px;
+            font-size: 12px;
+        }
+
+        /* Photo Upload Container */
+        .photo-box {
+            width: 105px;
+            height: 125px;
+            border: 2px dashed var(--primary-border);
+            border-radius: 6px;
+            background-color: var(--primary-light);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .photo-box:hover {
+            border-color: var(--primary-color);
+            transform: scale(1.02);
+        }
+
+        .photo-box img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .photo-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(30, 58, 138, 0.75);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            font-size: 10px;
+            text-align: center;
+            padding: 4px;
+        }
+
+        .photo-box:hover .photo-overlay {
+            opacity: 1;
+        }
+
+        /* Section Title Styling */
+        .section-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--primary-color);
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            border-bottom: 1.5px solid var(--primary-color);
+            padding-bottom: 3px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+        }
+
+        .section-title i {
+            margin-right: 6px;
+            font-size: 13px;
+        }
+
+        /* Typography & Components */
+        p, li, td, th {
+            font-size: 11.5px;
+            line-height: 1.45;
+        }
+
+        .objective-text {
+            background-color: var(--primary-light);
+            border-left: 3px solid var(--primary-color);
+            padding: 8px 12px;
+            border-radius: 0 4px 4px 0;
+            font-size: 11.5px;
+            color: var(--text-dark);
+            margin-bottom: 14px;
+        }
+
+        /* Experience Item */
+        .exp-item {
+            margin-bottom: 12px;
+        }
+
+        .exp-title {
+            font-weight: 700;
+            font-size: 12.5px;
+            color: var(--text-dark);
+        }
+
+        .exp-company {
+            font-weight: 600;
+            color: var(--primary-color);
+            font-size: 11.5px;
+        }
+
+        .exp-bullets {
+            padding-left: 16px;
+            margin-top: 5px;
+            margin-bottom: 0;
+        }
+
+        .exp-bullets li {
+            margin-bottom: 3px;
+            color: var(--text-muted);
+        }
+
+        /* Custom Table */
+        .edu-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 12px;
+        }
+
+        .edu-table th {
+            background-color: var(--primary-color);
+            color: white;
+            font-weight: 600;
+            padding: 5px 8px;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+
+        .edu-table td {
+            padding: 5px 8px;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 11px;
+        }
+
+        .edu-table tr:nth-child(even) {
+            background-color: #f8fafc;
+        }
+
+        /* Sidebar Styling */
+        .sidebar-card {
+            background-color: var(--sidebar-bg);
+            border-radius: 6px;
+            padding: 12px;
+            height: 100%;
+            border: 1px solid #e2e8f0;
+        }
+
+        .skill-group {
+            margin-bottom: 10px;
+        }
+
+        .skill-group-title {
+            font-weight: 700;
+            font-size: 11.5px;
+            color: var(--primary-color);
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+        }
+
+        .skill-group-title i {
+            margin-right: 5px;
+            font-size: 11px;
+        }
+
+        .skill-badge {
+            display: inline-block;
+            background-color: #ffffff;
+            color: var(--text-dark);
+            border: 1px solid #cbd5e1;
+            padding: 2px 7px;
+            border-radius: 12px;
+            font-size: 10.5px;
+            margin-right: 3px;
+            margin-bottom: 4px;
+            font-weight: 500;
+        }
+
+        /* Personal Details Table */
+        .personal-info-table td {
+            padding: 3px 0;
+            font-size: 11px;
+            vertical-align: top;
+        }
+        .personal-info-table td.label {
+            font-weight: 600;
+            color: var(--text-muted);
+            width: 38%;
+        }
+
+        /* Declaration Block */
+        .declaration-block {
+            margin-top: 16px;
+            padding-top: 10px;
+            border-top: 1px dashed #cbd5e1;
+        }
+
+        .declaration-text {
+            font-size: 10.5px;
+            font-style: italic;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+
+        .sig-line {
+            border-bottom: 1px solid #94a3b8;
+            display: inline-block;
+            min-width: 130px;
+        }
+
+        /* ==================== MEDIA PRINT RULES ==================== */
+        @page {
+            size: A4 portrait;
+            margin: 8mm 10mm 8mm 10mm;
+        }
+
+        @media print {
+            html, body {
+                background: #ffffff !important;
+                color: #000000 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            .action-bar, .photo-overlay, .no-print {
+                display: none !important;
+            }
+
+            .cv-page {
+                width: 100% !important;
+                max-width: 100% !important;
+                min-height: auto !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                box-shadow: none !important;
+                border: none !important;
+                border-radius: 0 !important;
+            }
+
+            .sidebar-card {
+                background-color: #f8fafc !important;
+                border: 1px solid #e2e8f0 !important;
+            }
+
+            .photo-box {
+                border-style: solid !important;
+                border-color: #cbd5e1 !important;
+            }
+
+            a {
+                text-decoration: none !important;
+                color: inherit !important;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- TOP ACTION BAR (Hidden in Print) -->
+    <header class="action-bar py-2 px-3 no-print">
+        <div class="container-fluid d-flex flex-wrap align-items-center justify-content-between gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <i class="fa-solid fa-file-invoice text-warning fs-4 me-1"></i>
+                <div>
+                    <h6 class="mb-0 fw-bold text-white font-heading" style="line-height: 1.1;">Muhammed Iqbal C — Resume</h6>
+                    <small class="text-light opacity-75" style="font-size: 11px;">Single Page A4 Ready Layout</small>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="d-flex align-items-center flex-wrap gap-2">
+                <!-- Theme Switcher -->
+                <div class="dropdown me-1">
+                    <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        <i class="fa-solid fa-palette me-1"></i> Accent Theme
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="#" onclick="setTheme('navy')"><i class="fa-solid fa-circle text-primary me-2"></i>Deep Navy (Default)</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="setTheme('emerald')"><i class="fa-solid fa-circle text-success me-2"></i>Emerald Green</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="setTheme('slate')"><i class="fa-solid fa-circle text-secondary me-2"></i>Slate Deep</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="setTheme('burgundy')"><i class="fa-solid fa-circle me-2" style="color:#831843;"></i>Deep Burgundy</a></li>
+                    </ul>
+                </div>
+
+                <!-- Photo Upload Trigger -->
+                <button class="btn btn-outline-light btn-sm" onclick="document.getElementById('photoInput').click()">
+                    <i class="fa-solid fa-camera me-1"></i> Change Photo
+                </button>
+                <input type="file" id="photoInput" accept="image/*" class="d-none" onchange="loadPhoto(event)">
+
+                <!-- Print Tip Modal Launch -->
+                <button class="btn btn-outline-info btn-sm text-white" data-bs-toggle="modal" data-bs-target="#printTipModal">
+                    <i class="fa-solid fa-circle-info me-1"></i> PDF Tips
+                </button>
+
+                <!-- Download PDF Button -->
+                <button class="btn btn-primary btn-sm fw-semibold shadow-sm px-3" onclick="triggerPrint()">
+                    <i class="fa-solid fa-download me-1.5"></i> Download PDF / Print
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN CV DOCUMENT (A4 PAGE CONTAINER) -->
+    <main class="cv-page">
+        <!-- HEADER SECTION -->
+        <header class="cv-header d-flex justify-content-between align-items-start gap-3">
+            <div class="flex-grow-1">
+                <h1 class="candidate-name mb-1">MUHAMMED IQBAL C</h1>
+                <div class="candidate-title">
+                    High School Educator (Mathematics, IT & AI) | STEM & Web Application Developer | Technical & CCTV Specialist
+                </div>
+                
+                <div class="contact-info">
+                    <span class="contact-item">
+                        <i class="fa-solid fa-location-dot"></i>
+                        Chalampatt (H), Kurumbathoor (PO), Tirur, Malappuram, Kerala 676101
+                    </span>
+                    <br>
+                    <span class="contact-item">
+                        <i class="fa-solid fa-phone"></i>
+                        <a href="tel:+919995880672" class="text-decoration-none text-dark">+91 99958 80672</a>
+                    </span>
+                    <span class="contact-item">
+                        <i class="fa-solid fa-envelope"></i>
+                        <a href="mailto:cmiqbalc@email.com" class="text-decoration-none text-dark">cmiqbalc@email.com</a>
+                    </span>
+                </div>
+            </div>
+
+            <!-- PASSPORT PHOTO BOX -->
+            <div class="photo-box flex-shrink-0" id="photoContainer" onclick="document.getElementById('photoInput').click()" title="Click to upload or update photo">
+                <img id="passportImg" src="https://placehold.co/120x150/e2e8f0/475569?text=Upload+Photo" alt="Muhammed Iqbal C Photo">
+                <div class="photo-overlay">
+                    <i class="fa-solid fa-camera mb-1 fs-6"></i>
+                    <span>Click to Upload Photo</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- OBJECTIVE STATEMENT -->
+        <section class="objective-text">
+            <strong>Career Objective:</strong> M.Com graduate (University of Calicut) with PMKVY-certified training in CCTV installation and maintenance and 3 years' experience teaching Mathematics, IT, and AI at high school level. Seeking a teaching or technical role where I can combine subject knowledge, hands-on skills, and clear communication to deliver outstanding results.
+        </section>
+
+        <!-- TWO COLUMN BALANCED BODY -->
+        <div class="row g-3">
+            <!-- LEFT MAIN COLUMN -->
+            <div class="col-7">
+                
+                <!-- WORK EXPERIENCE -->
+                <section class="mb-3">
+                    <h2 class="section-title">
+                        <i class="fa-solid fa-briefcase"></i> Work Experience
+                    </h2>
+                    <div class="exp-item">
+                        <div class="d-flex justify-content-between align-items-baseline">
+                            <span class="exp-title">High School Teacher — Mathematics, IT & AI</span>
+                            <span class="badge bg-secondary text-wrap" style="font-size: 9.5px;">3 Years Experience</span>
+                        </div>
+                        <div class="exp-company">High School Education Department | Kerala</div>
+                        <ul class="exp-bullets">
+                            <li>Taught Mathematics, Information Technology, and introductory AI to high school students with focused curriculum delivery.</li>
+                            <li>Prepared comprehensive lesson plans, practice worksheets, student assessments, and practical computer-lab sessions.</li>
+                            <li>Introduced foundational coding and hands-on AI activities to build students' digital competencies and problem-solving skills.</li>
+                            <li>Explained complex technical and mathematical concepts in simple, accessible terms for students of mixed abilities.</li>
+                        </ul>
+                    </div>
+                </section>
+
+                <!-- EDUCATION -->
+                <section class="mb-3">
+                    <h2 class="section-title">
+                        <i class="fa-solid fa-graduation-cap"></i> Education
+                    </h2>
+                    <table class="edu-table">
+                        <thead>
+                            <tr>
+                                <th>Qualification</th>
+                                <th>Institution / University</th>
+                                <th class="text-center">Year</th>
+                                <th class="text-center">Marks</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>M.Com</strong></td>
+                                <td>CPA Global Studies / Univ. of Calicut</td>
+                                <td class="text-center">2020</td>
+                                <td class="text-center"><strong>68%</strong></td>
+                            </tr>
+                            <tr>
+                                <td><strong>B.Com</strong> (Co-op)</td>
+                                <td>Guide College Puthanathani / Calicut Univ.</td>
+                                <td class="text-center">2013</td>
+                                <td class="text-center"><strong>72%</strong></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Plus Two</strong> (VHSE)</td>
+                                <td>GVHSS Kalpakanchery</td>
+                                <td class="text-center">2012</td>
+                                <td class="text-center"><strong>80%</strong></td>
+                            </tr>
+                            <tr>
+                                <td><strong>SSLC</strong></td>
+                                <td>CHS Cherural</td>
+                                <td class="text-center">2010</td>
+                                <td class="text-center"><strong>85%</strong></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <!-- CERTIFICATIONS -->
+                <section class="mb-2">
+                    <h2 class="section-title">
+                        <i class="fa-solid fa-certificate"></i> Certifications
+                    </h2>
+                    <ul class="list-unstyled mb-0">
+                        <li class="d-flex align-items-start mb-1.5">
+                            <i class="fa-solid fa-circle-check text-primary me-2 mt-1" style="font-size: 11px;"></i>
+                            <div>
+                                <strong>CCTV Installation & Maintenance</strong> — PMKVY (Pradhan Mantri Kaushal Vikas Yojana)
+                            </div>
+                        </li>
+                        <li class="d-flex align-items-start">
+                            <i class="fa-solid fa-circle-check text-primary me-2 mt-1" style="font-size: 11px;"></i>
+                            <div>
+                                <strong>DIFA</strong> (Diploma in Industrial Financial Accounting) — GTEC
+                            </div>
+                        </li>
+                    </ul>
+                </section>
+
+            </div>
+
+            <!-- RIGHT SIDEBAR COLUMN -->
+            <div class="col-5">
+                <div class="sidebar-card">
+                    
+                    <!-- SKILLS & COMPETENCIES -->
+                    <section class="mb-3">
+                        <h2 class="section-title">
+                            <i class="fa-solid fa-gears"></i> Skills & Competencies
+                        </h2>
+
+                        <!-- Teaching Skills -->
+                        <div class="skill-group">
+                            <div class="skill-group-title">
+                                <i class="fa-solid fa-chalkboard-user"></i> Teaching & Pedagogy
+                            </div>
+                            <div>
+                                <span class="skill-badge">Lesson Planning</span>
+                                <span class="skill-badge">Classroom Mgmt</span>
+                                <span class="skill-badge">Student Assessment</span>
+                                <span class="skill-badge">Simplified Concept Delivery</span>
+                            </div>
+                        </div>
+
+                        <!-- Technical Skills -->
+                        <div class="skill-group">
+                            <div class="skill-group-title">
+                                <i class="fa-solid fa-video"></i> CCTV & Hardware
+                            </div>
+                            <div>
+                                <span class="skill-badge">IP & Analog CCTV</span>
+                                <span class="skill-badge">DVR / NVR Setup</span>
+                                <span class="skill-badge">Cabling & Networking</span>
+                                <span class="skill-badge">Hardware Troubleshooting</span>
+                                <span class="skill-badge">Basic Electronics</span>
+                            </div>
+                        </div>
+
+                        <!-- Computer & Web -->
+                        <div class="skill-group">
+                            <div class="skill-group-title">
+                                <i class="fa-solid fa-laptop-code"></i> Computer, Web & AI
+                            </div>
+                            <div>
+                                <span class="skill-badge">MS Office Suite</span>
+                                <span class="skill-badge">HTML5 & CSS3</span>
+                                <span class="skill-badge">Bootstrap 5.3</span>
+                                <span class="skill-badge">Basic Python</span>
+                                <span class="skill-badge">AI Tools & STEM Labs</span>
+                                <span class="skill-badge">Internet & Email</span>
+                            </div>
+                        </div>
+
+                        <!-- Commerce Skills -->
+                        <div class="skill-group mb-0">
+                            <div class="skill-group-title">
+                                <i class="fa-solid fa-calculator"></i> Commerce & Admin
+                            </div>
+                            <div>
+                                <span class="skill-badge">Accounting Basics</span>
+                                <span class="skill-badge">GST Fundamentals</span>
+                                <span class="skill-badge">Data Entry & Analysis</span>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- LANGUAGES -->
+                    <section class="mb-3">
+                        <h2 class="section-title">
+                            <i class="fa-solid fa-language"></i> Languages
+                        </h2>
+                        <div class="d-flex flex-column gap-1">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span><strong>Malayalam</strong></span>
+                                <span class="text-muted" style="font-size: 10.5px;">Native / Mother Tongue</span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span><strong>English</strong></span>
+                                <span class="text-muted" style="font-size: 10.5px;">Fluent / Professional</span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span><strong>Hindi</strong></span>
+                                <span class="text-muted" style="font-size: 10.5px;">Working Proficiency</span>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- PERSONAL DETAILS -->
+                    <section>
+                        <h2 class="section-title">
+                            <i class="fa-solid fa-user"></i> Personal Details
+                        </h2>
+                        <table class="personal-info-table w-100">
+                            <tbody>
+                                <tr>
+                                    <td class="label">Date of Birth:</td>
+                                    <td>11 August 1996</td>
+                                </tr>
+                                <tr>
+                                    <td class="label">Nationality:</td>
+                                    <td>Indian</td>
+                                </tr>
+                                <tr>
+                                    <td class="label">Address:</td>
+                                    <td>Chalampatt (H), Kurumbathoor (PO), Tirur, Malappuram, Kerala 676101</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </section>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- DECLARATION BLOCK -->
+        <footer class="declaration-block">
+            <p class="declaration-text">
+                "I hereby declare that the information provided above is true and correct to the best of my knowledge and belief."
+            </p>
+            <div class="d-flex justify-content-between align-items-end pt-2">
+                <div>
+                    <div><strong>Place:</strong> Tirur</div>
+                    <div><strong>Date:</strong> <span class="sig-line d-inline-block text-center ms-1"></span></div>
+                </div>
+                <div class="text-end">
+                    <div class="sig-line mb-1"></div>
+                    <div><strong>Signature</strong> (Muhammed Iqbal C)</div>
+                </div>
+            </div>
+        </footer>
+
+    </main>
+
+    <!-- PRINT HELPER MODAL -->
+    <div class="modal fade no-print" id="printTipModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title font-heading fs-6"><i class="fa-solid fa-circle-info me-2"></i>Best Results for Saving as PDF</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body font-sans fs-6">
+                    <ol class="mb-3 ps-3">
+                        <li class="mb-2">In the print dialogue, select <strong>Destination: Save as PDF</strong>.</li>
+                        <li class="mb-2">Set <strong>Paper size: A4</strong>.</li>
+                        <li class="mb-2">Check <strong>Background graphics</strong> (under More Settings) so header underlines and styled badges display properly.</li>
+                        <li class="mb-0">Set <strong>Margins: None</strong> or <strong>Default</strong> for perfect 1-page fitting.</li>
+                    </ol>
+                    <div class="alert alert-light border mb-0 text-muted" style="font-size: 12px;">
+                        <i class="fa-solid fa-lightbulb me-1 text-warning"></i> Tip: You can click the passport image box at top right to upload your actual photo before printing!
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="triggerPrint()" data-bs-dismiss="modal">
+                        <i class="fa-solid fa-print me-1"></i> Print / Save PDF Now
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5.3 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- JS Logic -->
+    <script>
+        // Photo Preview Loader
+        function loadPhoto(event) {
+            const reader = new FileReader();
+            reader.onload = function() {
+                const img = document.getElementById('passportImg');
+                img.src = reader.result;
+            };
+            if (event.target.files[0]) {
+                reader.readAsDataURL(event.target.files[0]);
+            }
+        }
+
+        // Theme Switcher Logic
+        function setTheme(theme) {
+            if (theme === 'navy') {
+                document.body.removeAttribute('data-theme');
+            } else {
+                document.body.setAttribute('data-theme', theme);
+            }
+        }
+
+        // Print Handler
+        function triggerPrint() {
+            window.print();
+        }
+    </script>
+</body>
+</html>
