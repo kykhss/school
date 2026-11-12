@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Muhammed Iqbal C | STEM Educator & Full-Stack Tech Specialist</title>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  
+  <!-- Bootstrap 5.3 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  
+  <!-- Bootstrap Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+
+  <style>
+    :root {
+      --primary-accent: #2563eb;
+      --secondary-accent: #06b6d4;
+      --emerald-accent: #10b981;
+      --gradient-brand: linear-gradient(135deg, #2563eb 0%, #06b6d4 100%);
+      --gradient-dark: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      --card-bg-dark: rgba(30, 41, 59, 0.7);
+      --font-main: 'Plus Jakarta Sans', sans-serif;
+      --font-code: 'Fira Code', monospace;
+    }
+
+    body {
+      font-family: var(--font-main);
+      overflow-x: hidden;
+      scroll-behavior: smooth;
+    }
+
+    /* Gradient Text & Badges */
+    .text-gradient {
+      background: var(--gradient-brand);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .bg-gradient-brand {
+      background: var(--gradient-brand) !important;
+    }
+
+    .glass-card {
+      background: var(--card-bg-dark);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    [data-bs-theme="light"] .glass-card {
+      background: rgba(255, 255, 255, 0.85);
+      border: 1px solid rgba(0, 0, 0, 0.08);
+    }
+
+    .glass-card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(37, 99, 235, 0.4);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+    }
+
+    /* Navbar styling */
+    .custom-nav {
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    [data-bs-theme="light"] .custom-nav {
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    }
+
+    .nav-link {
+      font-weight: 500;
+      position: relative;
+    }
+
+    .nav-link.active::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 10%;
+      width: 80%;
+      height: 2px;
+      background: var(--gradient-brand);
+      border-radius: 2px;
+    }
+
+    /* Hero Section */
+    .hero-avatar-frame {
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      padding: 4px;
+      background: var(--gradient-brand);
+      box-shadow: 0 0 35px rgba(6, 182, 212, 0.35);
+    }
+
+    .hero-avatar-inner {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      overflow: hidden;
+      background-color: #0f172a;
+    }
+
+    .hero-avatar-inner img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .stat-badge {
+      padding: 16px 20px;
+      border-radius: 16px;
+    }
+
+    /* Filter Buttons */
+    .filter-btn {
+      border-radius: 30px;
+      padding: 8px 20px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: transparent;
+      transition: all 0.25s ease;
+    }
+
+    [data-bs-theme="light"] .filter-btn {
+      border-color: rgba(0, 0, 0, 0.15);
+    }
+
+    .filter-btn.active, .filter-btn:hover {
+      background: var(--gradient-brand);
+      color: #fff !important;
+      border-color: transparent;
+      box-shadow: 0 4px 15px rgba(37, 99, 235, 0.35);
+    }
+
+    /* Timeline */
+    .timeline-container {
+      position: relative;
+      padding-left: 24px;
+    }
+
+    .timeline-container::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 8px;
+      bottom: 8px;
+      width: 3px;
+      background: rgba(37, 99, 235, 0.3);
+      border-radius: 3px;
+    }
+
+    .timeline-item {
+      position: relative;
+      margin-bottom: 24px;
+    }
+
+    .timeline-item::before {
+      content: '';
+      position: absolute;
+      left: -30px;
+      top: 4px;
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      background: var(--primary-accent);
+      border: 3px solid var(--bs-body-bg);
+      box-shadow: 0 0 10px rgba(37, 99, 235, 0.8);
+    }
+
+    /* Skill badges */
+    .tech-tag {
+      font-size: 0.8rem;
+      font-family: var(--font-code);
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: rgba(37, 99, 235, 0.12);
+      color: var(--secondary-accent);
+      border: 1px solid rgba(6, 182, 212, 0.2);
+    }
+
+    /* Custom Toast / Confirmation box */
+    .form-success-banner {
+      display: none;
+      animation: fadeIn 0.4s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ========================================================= -->
+  <!-- NAVBAR -->
+  <!-- ========================================================= -->
+  <nav class="navbar navbar-expand-lg sticky-top custom-nav py-3">
+    <div class="container">
+      <a class="navbar-brand d-flex align-items-center gap-2 font-bold" href="#">
+        <span class="badge bg-gradient-brand text-white fs-6 px-2 py-1 rounded-3">MI</span>
+        <span class="fw-bold tracking-tight">Muhammed Iqbal C</span>
+      </a>
+      
+      <div class="d-flex align-items-center gap-2 order-lg-3">
+        <!-- Dark/Light Theme Toggle -->
+        <button class="btn btn-outline-secondary rounded-circle btn-sm p-2" id="themeToggle" title="Toggle Light/Dark Theme">
+          <i class="bi bi-sun-fill d-none" id="sunIcon"></i>
+          <i class="bi bi-moon-stars-fill" id="moonIcon"></i>
+        </button>
+        <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+      </div>
+
+      <div class="collapse navbar-collapse justify-content-center order-lg-2" id="navbarNav">
+        <ul class="navbar-nav gap-lg-3">
+          <li class="nav-item"><a class="nav-link active" href="#about">About</a></li>
+          <li class="nav-item"><a class="nav-link" href="#projects">Projects</a></li>
+          <li class="nav-item"><a class="nav-link" href="#experience">Experience & Education</a></li>
+          <li class="nav-item"><a class="nav-link" href="#skills">Skills</a></li>
+          <li class="nav-item"><a class="nav-link" href="#contact">Contact</a></li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ========================================================= -->
+  <!-- HERO SECTION -->
+  <!-- ========================================================= -->
+  <section id="about" class="py-5 my-lg-4">
+    <div class="container">
+      <div class="row align-items-center gy-5">
+        <div class="col-lg-7">
+          <div class="d-inline-flex align-items-center gap-2 px-3 py-1.5 rounded-pill bg-primary bg-opacity-10 border border-primary border-opacity-25 text-primary mb-3">
+            <span class="spinner-grow spinner-grow-sm text-success" role="status"></span>
+            <span class="fw-semibold small">Available for Teaching, EdTech &amp; Technical Roles</span>
+          </div>
+          
+          <h1 class="display-4 fw-800 tracking-tight mb-3">
+            Bridging <span class="text-gradient">STEM Education</span> &amp; Hands-on <span class="text-gradient">Tech Innovation</span>
+          </h1>
+          
+          <p class="lead text-secondary mb-4" style="font-size: 1.15rem; line-height: 1.6;">
+            <strong>M.Com graduate</strong> (University of Calicut) &amp; <strong>PMKVY-certified technician</strong> with 3+ years of high school teaching experience in Mathematics, IT, Robotics, and AI. I build full-stack educational web apps, design hands-on STEM curriculums, and manage complex school hardware infrastructure.
+          </p>
+
+          <div class="d-flex flex-wrap gap-3 mb-5">
+            <a href="#projects" class="btn btn-primary bg-gradient-brand border-0 btn-lg px-4 rounded-pill fw-semibold shadow-sm">
+              <i class="bi bi-grid-3x3-gap-fill me-2"></i>Explore Projects
+            </a>
+            <a href="#contact" class="btn btn-outline-secondary btn-lg px-4 rounded-pill fw-semibold">
+              <i class="bi bi-envelope-fill me-2"></i>Get In Touch
+            </a>
+            <button class="btn btn-dark btn-lg px-4 rounded-pill fw-semibold border" data-bs-toggle="modal" data-bs-target="#cvModal">
+              <i class="bi bi-file-earmark-person-fill me-2 text-info"></i>Quick CV Summary
+            </button>
+          </div>
+
+          <!-- Quick Stats -->
+          <div class="row g-3">
+            <div class="col-sm-4">
+              <div class="glass-card stat-badge text-center">
+                <h3 class="fw-bold mb-0 text-gradient">3+ Years</h3>
+                <small class="text-secondary fw-semibold">High School Teaching</small>
+              </div>
+            </div>
+            <div class="col-sm-4">
+              <div class="glass-card stat-badge text-center">
+                <h3 class="fw-bold mb-0 text-gradient">30 Sessions</h3>
+                <small class="text-secondary fw-semibold">AI &amp; Robotics Lab Setup</small>
+              </div>
+            </div>
+            <div class="col-sm-4">
+              <div class="glass-card stat-badge text-center">
+                <h3 class="fw-bold mb-0 text-gradient">6+ Systems</h3>
+                <small class="text-secondary fw-semibold">Custom Web Apps Built</small>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Avatar & Visual Card -->
+        <div class="col-lg-5 text-center">
+          <div class="position-relative d-inline-block">
+            <div class="hero-avatar-frame mx-auto mb-4">
+              <div class="hero-avatar-inner">
+                <img src="input_file_0.png" alt="Muhammed Iqbal C Photo" onerror="this.src='https://placehold.co/300x300/1e293b/06b6d4?text=Iqbal+C'">
+              </div>
+            </div>
+            <div class="glass-card p-4 text-start rounded-4 shadow-lg border border-opacity-25">
+              <div class="d-flex align-items-center gap-3 mb-3">
+                <div class="p-2 bg-primary bg-opacity-20 text-primary rounded-3">
+                  <i class="bi bi-award-fill fs-3"></i>
+                </div>
+                <div>
+                  <h6 class="mb-0 fw-bold">Certified Technician &amp; Educator</h6>
+                  <small class="text-secondary">PMKVY &amp; University of Calicut</small>
+                </div>
+              </div>
+              <hr class="my-2 text-secondary opacity-25">
+              <div class="small text-secondary d-flex flex-column gap-2 mt-2">
+                <div><i class="bi bi-geo-alt-fill text-danger me-2"></i>Tirur, Malappuram, Kerala</div>
+                <div><i class="bi bi-mortarboard-fill text-warning me-2"></i>M.Com &amp; B.Com Co-operation</div>
+                <div><i class="bi bi-tools text-info me-2"></i>CCTV (IP/Analog) &amp; Web Hardware</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================= -->
+  <!-- FEATURED PROJECTS SECTION -->
+  <!-- ========================================================= -->
+  <section id="projects" class="py-5 bg-body-tertiary">
+    <div class="container">
+      <div class="text-center max-w-700 mx-auto mb-5">
+        <h2 class="fw-bold display-6 mb-2">Featured <span class="text-gradient">Projects &amp; Innovation</span></h2>
+        <p class="text-secondary">Explore web tools, classroom software, and technical infrastructure systems I have designed and deployed.</p>
+        
+        <!-- Filter Controls -->
+        <div class="d-flex flex-wrap justify-content-center gap-2 mt-4">
+          <button class="filter-btn active" data-filter="all">All Projects</button>
+          <button class="filter-btn" data-filter="edtech">Educational Web Apps</button>
+          <button class="filter-btn" data-filter="ai">AI &amp; Robotics Lab</button>
+          <button class="filter-btn" data-filter="hardware">Business &amp; Hardware</button>
+        </div>
+      </div>
+
+      <div class="row g-4" id="projectGrid">
+        
+        <!-- Project 1 -->
+        <div class="col-md-6 col-lg-4 project-card" data-category="ai">
+          <div class="card h-100 glass-card border-0 rounded-4 overflow-hidden">
+            <div class="card-body p-4 d-flex flex-column">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="badge bg-primary bg-opacity-20 text-primary border border-primary border-opacity-25">AI &amp; Robotics</span>
+                <i class="bi bi-cpu-fill fs-4 text-info"></i>
+              </div>
+              <h5 class="fw-bold mb-2">Arduino AI Lab Studio &amp; 30-Session Curriculum</h5>
+              <p class="card-text text-secondary small flex-grow-1">
+                Single-page browser studio utilizing the Web Serial API for direct communication with physical Arduino Uno boards via custom interpreter firmware. Includes a 30-session school curriculum &amp; PictoBlox integration.
+              </p>
+              <div class="d-flex flex-wrap gap-1 mb-3">
+                <span class="tech-tag">Web Serial API</span>
+                <span class="tech-tag">Arduino Uno</span>
+                <span class="tech-tag">PictoBlox</span>
+                <span class="tech-tag">Bootstrap 5.3</span>
+              </div>
+              <button class="btn btn-outline-primary btn-sm w-100 rounded-pill fw-semibold" data-bs-toggle="modal" data-bs-target="#modalProj1">
+                View Case Study <i class="bi bi-arrow-right ms-1"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Project 2 -->
+        <div class="col-md-6 col-lg-4 project-card" data-category="edtech">
+          <div class="card h-100 glass-card border-0 rounded-4 overflow-hidden">
+            <div class="card-body p-4 d-flex flex-column">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="badge bg-success bg-opacity-20 text-success border border-success border-opacity-25">Educational Web App</span>
+                <i class="bi bi-trophy-fill fs-4 text-warning"></i>
+              </div>
+              <h5 class="fw-bold mb-2">School Arts &amp; Sports Festival Management</h5>
+              <p class="card-text text-secondary small flex-grow-1">
+                End-to-end event management web system featuring automated printable chest number layouts, mobile judging scorecards, and live house scoreboards backed by Google Apps Script and Firebase.
+              </p>
+              <div class="d-flex flex-wrap gap-1 mb-3">
+                <span class="tech-tag">Google Apps Script</span>
+                <span class="tech-tag">Firebase</span>
+                <span class="tech-tag">JavaScript</span>
+                <span class="tech-tag">Google Sheets</span>
+              </div>
+              <button class="btn btn-outline-primary btn-sm w-100 rounded-pill fw-semibold" data-bs-toggle="modal" data-bs-target="#modalProj2">
+                View Case Study <i class="bi bi-arrow-right ms-1"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Project 3 -->
+        <div class="col-md-6 col-lg-4 project-card" data-category="hardware">
+          <div class="card h-100 glass-card border-0 rounded-4 overflow-hidden">
+            <div class="card-body p-4 d-flex flex-column">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="badge bg-info bg-opacity-20 text-info border border-info border-opacity-25">Business &amp; Finance</span>
+                <i class="bi bi-receipt-cutoff fs-4 text-primary"></i>
+              </div>
+              <h5 class="fw-bold mb-2">Interior Fit-Out Cost &amp; Receipt Tracker</h5>
+              <p class="card-text text-secondary small flex-grow-1">
+                Mobile-optimized web dashboard supporting 40+ work categories, photo receipt upload capabilities, expense analytics, and real-time owner-accountant balance tracking.
+              </p>
+              <div class="d-flex flex-wrap gap-1 mb-3">
+                <span class="tech-tag">Bootstrap 5.3</span>
+                <span class="tech-tag">Google Apps Script</span>
+                <span class="tech-tag">Drive API</span>
+                <span class="tech-tag">Chart.js</span>
+              </div>
+              <button class="btn btn-outline-primary btn-sm w-100 rounded-pill fw-semibold" data-bs-toggle="modal" data-bs-target="#modalProj3">
+                View Case Study <i class="bi bi-arrow-right ms-1"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Project 4 -->
+        <div class="col-md-6 col-lg-4 project-card" data-category="edtech">
+          <div class="card h-100 glass-card border-0 rounded-4 overflow-hidden">
+            <div class="card-body p-4 d-flex flex-column">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="badge bg-success bg-opacity-20 text-success border border-success border-opacity-25">Educational Web App</span>
+                <i class="bi bi-controller fs-4 text-success"></i>
+              </div>
+              <h5 class="fw-bold mb-2">Interactive Classroom Skill Games &amp; Apps</h5>
+              <p class="card-text text-secondary small flex-grow-1">
+                Suite of engaging digital tools including "Super Star Introductions" (Grade 2 showcase app), Balloon Pop Typing Game, and Mouse Skills Trainer to accelerate primary digital literacy.
+              </p>
+              <div class="d-flex flex-wrap gap-1 mb-3">
+                <span class="tech-tag">HTML5 Canvas</span>
+                <span class="tech-tag">JavaScript</span>
+                <span class="tech-tag">CSS Animations</span>
+                <span class="tech-tag">Web Audio</span>
+              </div>
+              <button class="btn btn-outline-primary btn-sm w-100 rounded-pill fw-semibold" data-bs-toggle="modal" data-bs-target="#modalProj4">
+                View Case Study <i class="bi bi-arrow-right ms-1"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Project 5 -->
+        <div class="col-md-6 col-lg-4 project-card" data-category="hardware">
+          <div class="card h-100 glass-card border-0 rounded-4 overflow-hidden">
+            <div class="card-body p-4 d-flex flex-column">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="badge bg-warning bg-opacity-20 text-warning border border-warning border-opacity-25">Hardware &amp; Network</span>
+                <i class="bi bi-pc-display-horizontal fs-4 text-danger"></i>
+              </div>
+              <h5 class="fw-bold mb-2">Multi-PC Computer Lab &amp; Veyon Master Network</h5>
+              <p class="card-text text-secondary small flex-grow-1">
+                Configured full school computer lab network featuring ethernet switching, internet connection sharing, and Veyon Master administration for centralized screen broadcast and batch execution.
+              </p>
+              <div class="d-flex flex-wrap gap-1 mb-3">
+                <span class="tech-tag">Veyon Master</span>
+                <span class="tech-tag">Windows Networking</span>
+                <span class="tech-tag">Ethernet Switching</span>
+                <span class="tech-tag">DHCP/IP Setup</span>
+              </div>
+              <button class="btn btn-outline-primary btn-sm w-100 rounded-pill fw-semibold" data-bs-toggle="modal" data-bs-target="#modalProj5">
+                View Case Study <i class="bi bi-arrow-right ms-1"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Project 6 -->
+        <div class="col-md-6 col-lg-4 project-card" data-category="hardware">
+          <div class="card h-100 glass-card border-0 rounded-4 overflow-hidden">
+            <div class="card-body p-4 d-flex flex-column">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="badge bg-warning bg-opacity-20 text-warning border border-warning border-opacity-25">Hardware &amp; Network</span>
+                <i class="bi bi-webcam-fill fs-4 text-info"></i>
+              </div>
+              <h5 class="fw-bold mb-2">CCTV Surveillance &amp; Hardware Diagnostics</h5>
+              <p class="card-text text-secondary small flex-grow-1">
+                PMKVY-certified IP and Analog CCTV camera installation, NVR/DVR remote access setup, cabling, and component-level projector/microcontroller hardware troubleshooting.
+              </p>
+              <div class="d-flex flex-wrap gap-1 mb-3">
+                <span class="tech-tag">PMKVY Certified</span>
+                <span class="tech-tag">IP &amp; Analog CCTV</span>
+                <span class="tech-tag">DVR/NVR Config</span>
+                <span class="tech-tag">Electronics Repair</span>
+              </div>
+              <button class="btn btn-outline-primary btn-sm w-100 rounded-pill fw-semibold" data-bs-toggle="modal" data-bs-target="#modalProj6">
+                View Case Study <i class="bi bi-arrow-right ms-1"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================= -->
+  <!-- EXPERIENCE & EDUCATION SECTION -->
+  <!-- ========================================================= -->
+  <section id="experience" class="py-5">
+    <div class="container">
+      <div class="row gy-5">
+        
+        <!-- EXPERIENCE -->
+        <div class="col-lg-6">
+          <div class="d-flex align-items-center gap-3 mb-4">
+            <div class="p-2 bg-primary bg-opacity-20 text-primary rounded-3">
+              <i class="bi bi-briefcase-fill fs-4"></i>
+            </div>
+            <h3 class="fw-bold mb-0">Teaching &amp; Practical Experience</h3>
+          </div>
+
+          <div class="timeline-container">
+            <div class="timeline-item glass-card p-4 rounded-4">
+              <div class="d-flex justify-content-between align-items-start mb-2">
+                <div>
+                  <h5 class="fw-bold mb-1">High School Teacher (Maths, IT &amp; AI)</h5>
+                  <div class="text-secondary small font-monospace"><i class="bi bi-building me-1"></i>High School, Kerala</div>
+                </div>
+                <span class="badge bg-primary bg-opacity-20 text-primary border border-primary border-opacity-25">3 Years</span>
+              </div>
+              <ul class="small text-secondary mb-0 ps-3 mt-3">
+                <li class="mb-2">Taught Mathematics, Information Technology, and introductory AI to high school students.</li>
+                <li class="mb-2">Prepared comprehensive lesson plans, worksheets, regular assessments, and interactive computer-lab sessions.</li>
+                <li class="mb-2">Introduced basic block coding, Python snippets, and AI activities to build students' digital and logical skills.</li>
+                <li>Simplified technical and mathematical concepts for students of mixed learning capabilities.</li>
+              </ul>
+            </div>
+
+            <div class="timeline-item glass-card p-4 rounded-4">
+              <div class="d-flex justify-content-between align-items-start mb-2">
+                <div>
+                  <h5 class="fw-bold mb-1">Technical &amp; STEM Lab Consultant</h5>
+                  <div class="text-secondary small font-monospace"><i class="bi bi-tools me-1"></i>School &amp; Institutional Labs</div>
+                </div>
+                <span class="badge bg-secondary bg-opacity-20 text-secondary border border-secondary border-opacity-25">Ongoing</span>
+              </div>
+              <ul class="small text-secondary mb-0 ps-3 mt-3">
+                <li class="mb-2">Executed PMKVY-standard CCTV surveillance installation and DVR/NVR networking across school premises.</li>
+                <li>Set up Veyon Master software across computer labs for synchronized teaching and remote control.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- EDUCATION & CERTIFICATIONS -->
+        <div class="col-lg-6">
+          <div class="d-flex align-items-center gap-3 mb-4">
+            <div class="p-2 bg-success bg-opacity-20 text-success rounded-3">
+              <i class="bi bi-mortarboard-fill fs-4"></i>
+            </div>
+            <h3 class="fw-bold mb-0">Education &amp; Certifications</h3>
+          </div>
+
+          <div class="d-flex flex-column gap-3">
+            
+            <div class="glass-card p-3.5 p-4 rounded-4">
+              <div class="d-flex justify-content-between align-items-center">
+                <div>
+                  <h6 class="fw-bold mb-1">Master of Commerce (M.Com)</h6>
+                  <div class="small text-secondary">CPA Global Studies / University of Calicut</div>
+                </div>
+                <div class="text-end">
+                  <span class="badge bg-success bg-opacity-20 text-success fw-bold fs-6">68%</span>
+                  <div class="small text-secondary mt-1">2020</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="glass-card p-3.5 p-4 rounded-4">
+              <div class="d-flex justify-content-between align-items-center">
+                <div>
+                  <h6 class="fw-bold mb-1">Bachelor of Commerce (B.Com Co-operation)</h6>
+                  <div class="small text-secondary">Guide College Puthanathani / University of Calicut</div>
+                </div>
+                <div class="text-end">
+                  <span class="badge bg-success bg-opacity-20 text-success fw-bold fs-6">72%</span>
+                  <div class="small text-secondary mt-1">2013</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="glass-card p-3.5 p-4 rounded-4">
+              <div class="d-flex justify-content-between align-items-center">
+                <div>
+                  <h6 class="fw-bold mb-1">Higher Secondary (Plus Two VHSE)</h6>
+                  <div class="small text-secondary">GVHSS Kalpakanchery</div>
+                </div>
+                <div class="text-end">
+                  <span class="badge bg-info bg-opacity-20 text-info fw-bold fs-6">80%</span>
+                  <div class="small text-secondary mt-1">2012</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="glass-card p-3.5 p-4 rounded-4">
+              <div class="d-flex justify-content-between align-items-center">
+                <div>
+                  <h6 class="fw-bold mb-1">SSLC</h6>
+                  <div class="small text-secondary">CHS Cherural</div>
+                </div>
+                <div class="text-end">
+                  <span class="badge bg-info bg-opacity-20 text-info fw-bold fs-6">85%</span>
+                  <div class="small text-secondary mt-1">2010</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Certifications Box -->
+            <div class="glass-card p-4 rounded-4 border-start border-4 border-info">
+              <h6 class="fw-bold text-gradient mb-3"><i class="bi bi-shield-check me-2"></i>Professional Certifications</h6>
+              <div class="row g-2">
+                <div class="col-sm-6">
+                  <div class="p-2 rounded bg-body-tertiary border">
+                    <strong class="d-block small text-body">CCTV Installation &amp; Maintenance</strong>
+                    <span class="small text-secondary">Issued by PMKVY</span>
+                  </div>
+                </div>
+                <div class="col-sm-6">
+                  <div class="p-2 rounded bg-body-tertiary border">
+                    <strong class="d-block small text-body">DIFA (Financial Accounting)</strong>
+                    <span class="small text-secondary">Issued by GTEC</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================= -->
+  <!-- SKILLS SECTION -->
+  <!-- ========================================================= -->
+  <section id="skills" class="py-5 bg-body-tertiary">
+    <div class="container">
+      <div class="text-center max-w-700 mx-auto mb-5">
+        <h2 class="fw-bold display-6 mb-2">Technical &amp; Pedagogical <span class="text-gradient">Toolkit</span></h2>
+        <p class="text-secondary">A balanced mix of high school teaching expertise, web development skills, and practical hardware maintenance.</p>
+      </div>
+
+      <div class="row g-4">
+        
+        <!-- Category 1 -->
+        <div class="col-md-6 col-lg-3">
+          <div class="glass-card p-4 rounded-4 h-100">
+            <div class="p-3 bg-primary bg-opacity-10 text-primary rounded-3 d-inline-block mb-3">
+              <i class="bi bi-journal-bookmark-fill fs-3"></i>
+            </div>
+            <h5 class="fw-bold mb-3">STEM &amp; Teaching</h5>
+            <ul class="list-unstyled small text-secondary d-flex flex-column gap-2 mb-0">
+              <li><i class="bi bi-check2-circle text-primary me-2"></i>Lesson Planning &amp; Pedagogy</li>
+              <li><i class="bi bi-check2-circle text-primary me-2"></i>Arduino Uno &amp; Robotics Labs</li>
+              <li><i class="bi bi-check2-circle text-primary me-2"></i>PictoBlox &amp; Scratch AI</li>
+              <li><i class="bi bi-check2-circle text-primary me-2"></i>Classroom &amp; Lab Management</li>
+              <li><i class="bi bi-check2-circle text-primary me-2"></i>Differentiated Instruction</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Category 2 -->
+        <div class="col-md-6 col-lg-3">
+          <div class="glass-card p-4 rounded-4 h-100">
+            <div class="p-3 bg-info bg-opacity-10 text-info rounded-3 d-inline-block mb-3">
+              <i class="bi bi-code-slash fs-3"></i>
+            </div>
+            <h5 class="fw-bold mb-3">Web &amp; Cloud Apps</h5>
+            <ul class="list-unstyled small text-secondary d-flex flex-column gap-2 mb-0">
+              <li><i class="bi bi-check2-circle text-info me-2"></i>HTML5, CSS3, Bootstrap 5.3</li>
+              <li><i class="bi bi-check2-circle text-info me-2"></i>JavaScript (ES6+)</li>
+              <li><i class="bi bi-check2-circle text-info me-2"></i>Web Serial API Integration</li>
+              <li><i class="bi bi-check2-circle text-info me-2"></i>Google Apps Script &amp; Drive API</li>
+              <li><i class="bi bi-check2-circle text-info me-2"></i>Firebase / Firestore Basics</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Category 3 -->
+        <div class="col-md-6 col-lg-3">
+          <div class="glass-card p-4 rounded-4 h-100">
+            <div class="p-3 bg-warning bg-opacity-10 text-warning rounded-3 d-inline-block mb-3">
+              <i class="bi bi-router-fill fs-3"></i>
+            </div>
+            <h5 class="fw-bold mb-3">Hardware &amp; IT Admin</h5>
+            <ul class="list-unstyled small text-secondary d-flex flex-column gap-2 mb-0">
+              <li><i class="bi bi-check2-circle text-warning me-2"></i>CCTV (IP &amp; Analog) Setup</li>
+              <li><i class="bi bi-check2-circle text-warning me-2"></i>DVR / NVR Configuration</li>
+              <li><i class="bi bi-check2-circle text-warning me-2"></i>Veyon Master Lab Control</li>
+              <li><i class="bi bi-check2-circle text-warning me-2"></i>Windows LAN &amp; Network Sharing</li>
+              <li><i class="bi bi-check2-circle text-warning me-2"></i>Projector &amp; Hardware Diagnostics</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Category 4 -->
+        <div class="col-md-6 col-lg-3">
+          <div class="glass-card p-4 rounded-4 h-100">
+            <div class="p-3 bg-success bg-opacity-10 text-success rounded-3 d-inline-block mb-3">
+              <i class="bi bi-calculator-fill fs-3"></i>
+            </div>
+            <h5 class="fw-bold mb-3">Commerce &amp; Languages</h5>
+            <ul class="list-unstyled small text-secondary d-flex flex-column gap-2 mb-0">
+              <li><i class="bi bi-check2-circle text-success me-2"></i>Financial Accounting &amp; GST</li>
+              <li><i class="bi bi-check2-circle text-success me-2"></i>MS Office &amp; Data Entry</li>
+              <li><i class="bi bi-check2-circle text-success me-2"></i>Malayalam (Native)</li>
+              <li><i class="bi bi-check2-circle text-success me-2"></i>English (Fluent)</li>
+              <li><i class="bi bi-check2-circle text-success me-2"></i>Hindi (Working)</li>
+            </ul>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================= -->
+  <!-- CONTACT SECTION -->
+  <!-- ========================================================= -->
+  <section id="contact" class="py-5">
+    <div class="container">
+      <div class="row gy-5 align-items-center">
+        
+        <div class="col-lg-5">
+          <h2 class="fw-bold display-6 mb-3">Let's Connect &amp; <span class="text-gradient">Collaborate</span></h2>
+          <p class="text-secondary mb-4">
+            Whether you are looking for an experienced STEM/AI teacher, an educational web app developer, or a hardware specialist to configure school infrastructure, feel free to reach out directly.
+          </p>
+
+          <div class="d-flex flex-column gap-3">
+            
+            <a href="mailto:cmiqbalc@email.com" class="glass-card p-3 rounded-4 text-decoration-none text-body d-flex align-items-center gap-3">
+              <div class="p-3 bg-primary bg-opacity-20 text-primary rounded-3">
+                <i class="bi bi-envelope-at-fill fs-4"></i>
+              </div>
+              <div>
+                <small class="text-secondary fw-semibold d-block">Direct Email</small>
+                <strong class="fs-6">cmiqbalc@email.com</strong>
+              </div>
+            </a>
+
+            <a href="tel:+919995880672" class="glass-card p-3 rounded-4 text-decoration-none text-body d-flex align-items-center gap-3">
+              <div class="p-3 bg-success bg-opacity-20 text-success rounded-3">
+                <i class="bi bi-telephone-fill fs-4"></i>
+              </div>
+              <div>
+                <small class="text-secondary fw-semibold d-block">Phone / WhatsApp</small>
+                <strong class="fs-6">+91 99958 80672</strong>
+              </div>
+            </a>
+
+            <div class="glass-card p-3 rounded-4 d-flex align-items-center gap-3">
+              <div class="p-3 bg-danger bg-opacity-20 text-danger rounded-3">
+                <i class="bi bi-geo-alt-fill fs-4"></i>
+              </div>
+              <div>
+                <small class="text-secondary fw-semibold d-block">Location</small>
+                <strong class="fs-6">Chalampatt (H), Kurumbathoor (PO), Tirur, Kerala 676101</strong>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Contact Form -->
+        <div class="col-lg-7">
+          <div class="glass-card p-4 p-md-5 rounded-4 border">
+            <h4 class="fw-bold mb-4">Send a Message</h4>
+            
+            <div id="contactSuccessBanner" class="alert alert-success border-0 bg-success bg-opacity-20 text-success form-success-banner mb-4" role="alert">
+              <i class="bi bi-check-circle-fill me-2"></i> Thank you! Your message has been generated and ready for direct dispatch.
+            </div>
+
+            <form id="contactForm">
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label small fw-semibold">Your Name</label>
+                  <input type="text" class="form-control rounded-3" placeholder="e.g. Rahul Nair" required>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label small fw-semibold">Email Address</label>
+                  <input type="email" class="form-control rounded-3" placeholder="name@example.com" required>
+                </div>
+                <div class="col-12">
+                  <label class="form-label small fw-semibold">Subject / Role Type</label>
+                  <input type="text" class="form-control rounded-3" placeholder="e.g. Teaching Opportunity / Web App Request" required>
+                </div>
+                <div class="col-12">
+                  <label class="form-label small fw-semibold">Message</label>
+                  <textarea class="form-control rounded-3" rows="4" placeholder="Briefly describe your inquiry..." required></textarea>
+                </div>
+                <div class="col-12">
+                  <button type="submit" class="btn btn-primary bg-gradient-brand border-0 w-100 py-3 rounded-3 fw-bold">
+                    <i class="bi bi-send-fill me-2"></i> Send Message
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================= -->
+  <!-- FOOTER -->
+  <!-- ========================================================= -->
+  <footer class="py-4 border-top">
+    <div class="container d-flex flex-column flex-sm-row align-items-center justify-content-between gap-3">
+      <div class="small text-secondary">
+        &copy; 2026 <strong>Muhammed Iqbal C</strong>. STEM Educator &amp; Tech Specialist.
+      </div>
+      <div class="d-flex gap-3 text-secondary small">
+        <a href="#about" class="text-reset text-decoration-none">About</a>
+        <a href="#projects" class="text-reset text-decoration-none">Projects</a>
+        <a href="#skills" class="text-reset text-decoration-none">Skills</a>
+        <a href="#contact" class="text-reset text-decoration-none">Contact</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ========================================================= -->
+  <!-- MODALS (CASE STUDIES & CV SUMMARY) -->
+  <!-- ========================================================= -->
+
+  <!-- CV Modal -->
+  <div class="modal fade" id="cvModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content glass-card border">
+        <div class="modal-header border-bottom">
+          <h5 class="modal-header-title fw-bold m-0"><i class="bi bi-file-earmark-person-fill text-info me-2"></i>Curriculum Vitae Overview</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-4">
+          <div class="d-flex align-items-center gap-3 mb-4">
+            <img src="input_file_0.png" class="rounded-circle" width="60" height="60" alt="Iqbal" onerror="this.src='https://placehold.co/100x100/1e293b/06b6d4?text=MI'">
+            <div>
+              <h5 class="fw-bold mb-0">Muhammed Iqbal C</h5>
+              <div class="small text-secondary">M.Com | PMKVY Certified | STEM Teacher (3+ Yrs)</div>
+            </div>
+          </div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <h6 class="fw-bold text-primary">Academic Background</h6>
+              <ul class="small text-secondary ps-3">
+                <li>M.Com (University of Calicut) — 68%</li>
+                <li>B.Com Co-operation (University of Calicut) — 72%</li>
+                <li>Higher Secondary Plus Two (VHSE) — 80%</li>
+                <li>SSLC — 85%</li>
+              </ul>
+            </div>
+            <div class="col-md-6">
+              <h6 class="fw-bold text-primary">Core Expertise</h6>
+              <ul class="small text-secondary ps-3">
+                <li>Teaching Maths, IT &amp; AI (High School)</li>
+                <li>Web Apps (Bootstrap, Apps Script, Firebase)</li>
+                <li>CCTV IP/Analog Setup (PMKVY Certified)</li>
+                <li>Computer Lab Networking &amp; Hardware Diagnostics</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer border-top">
+          <button type="button" class="btn btn-secondary rounded-pill btn-sm" data-bs-dismiss="modal">Close</button>
+          <a href="mailto:cmiqbalc@email.com?subject=CV Request - Muhammed Iqbal C" class="btn btn-primary bg-gradient-brand border-0 rounded-pill btn-sm fw-bold">
+            <i class="bi bi-download me-1"></i> Request Full Document
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Project 1 Modal -->
+  <div class="modal fade" id="modalProj1" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content glass-card border">
+        <div class="modal-header border-bottom">
+          <h5 class="fw-bold m-0 text-gradient">Case Study: Arduino AI Lab Studio &amp; 30-Session Curriculum</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-4">
+          <div class="mb-3">
+            <span class="badge bg-primary me-2">AI &amp; Robotics</span>
+            <span class="badge bg-secondary">School Curriculum</span>
+          </div>
+          <h6 class="fw-bold text-body">Problem</h6>
+          <p class="small text-secondary">High school students lacked simple, accessible software to connect hardware sensors and Arduino boards directly to browser-based AI models without installing complex desktop IDEs.</p>
+          
+          <h6 class="fw-bold text-body">Solution</h6>
+          <p class="small text-secondary">Built a single-page web studio utilizing the Web Serial API and Bootstrap 5.3 to directly communicate with physical Arduino boards via custom interpreter firmware. Developed a structured 30-session lab curriculum integrated with PictoBlox for AI/computer vision models.</p>
+          
+          <h6 class="fw-bold text-body">Key Outcomes</h6>
+          <ul class="small text-secondary">
+            <li>Successfully deployed across school lab PCs using zero-install web browsers.</li>
+            <li>Allowed high school students to build facial recognition and voice-controlled physical hardware projects.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Project 2 Modal -->
+  <div class="modal fade" id="modalProj2" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content glass-card border">
+        <div class="modal-header border-bottom">
+          <h5 class="fw-bold m-0 text-gradient">Case Study: School Arts &amp; Sports Festival Management</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-4">
+          <h6 class="fw-bold text-body">Problem</h6>
+          <p class="small text-secondary">Manual tabulation of marks during school sports and cultural events created delays and scoring errors across house teams.</p>
+          
+          <h6 class="fw-bold text-body">Solution</h6>
+          <p class="small text-secondary">Engineered a custom web application powered by Google Apps Script and Firebase for automated printable chest numbers, mobile score entry for judges, and live house scoreboards.</p>
+          
+          <h6 class="fw-bold text-body">Key Outcomes</h6>
+          <ul class="small text-secondary">
+            <li>Reduced result declaration time by 80%.</li>
+            <li>Provided real-time public leaderboard updates to students and staff.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Project 3 Modal -->
+  <div class="modal fade" id="modalProj3" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content glass-card border">
+        <div class="modal-header border-bottom">
+          <h5 class="fw-bold m-0 text-gradient">Case Study: Interior Fit-Out Cost &amp; Receipt Tracker</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-4">
+          <h6 class="fw-bold text-body">Problem</h6>
+          <p class="small text-secondary">Difficulty tracking paper receipts, labor payouts, and multi-category vendor expenses across 40+ fit-out categories in real time.</p>
+          
+          <h6 class="fw-bold text-body">Solution</h6>
+          <p class="small text-secondary">Designed a mobile-responsive web dashboard connecting to Google Apps Script and Google Drive API for quick bill photo uploads, categorization, and automatic balance calculation.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Project 4 Modal -->
+  <div class="modal fade" id="modalProj4" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content glass-card border">
+        <div class="modal-header border-bottom">
+          <h5 class="fw-bold m-0 text-gradient">Case Study: Interactive Classroom Skill Games</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-4">
+          <h6 class="fw-bold text-body">Solution &amp; Impact</h6>
+          <p class="small text-secondary">Developed gamified learning tools including "Super Star Introductions" (Grade 2 showcase app), Balloon Pop Typing Game, and Mouse Skills Trainer using HTML5 Canvas and JavaScript to enhance foundational computer skills in primary students.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Project 5 Modal -->
+  <div class="modal fade" id="modalProj5" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content glass-card border">
+        <div class="modal-header border-bottom">
+          <h5 class="fw-bold m-0 text-gradient">Case Study: Multi-PC Computer Lab &amp; Veyon Setup</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-4">
+          <h6 class="fw-bold text-body">Execution</h6>
+          <p class="small text-secondary">Configured Ethernet switches, static IP pools, Windows Internet Connection Sharing, and Veyon Master classroom monitoring across lab workstations, enabling teacher screen broadcasting and remote student assistance.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Project 6 Modal -->
+  <div class="modal fade" id="modalProj6" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content glass-card border">
+        <div class="modal-header border-bottom">
+          <h5 class="fw-bold m-0 text-gradient">Case Study: CCTV Surveillance &amp; Hardware Diagnostics</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-4">
+          <h6 class="fw-bold text-body">Technical Scope</h6>
+          <p class="small text-secondary">PMKVY-certified installation of IP and analog cameras, DVR/NVR network configuration for remote smartphone viewing, alongside optical/focus assembly maintenance for school projectors.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Bootstrap 5.3 JS Bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Custom JavaScript -->
+  <script>
+    // Theme Toggle Functionality
+    const themeToggle = document.getElementById('themeToggle');
+    const sunIcon = document.getElementById('sunIcon');
+    const moonIcon = document.getElementById('moonIcon');
+    const htmlEl = document.documentElement;
+
+    themeToggle.addEventListener('click', () => {
+      const currentTheme = htmlEl.getAttribute('data-bs-theme');
+      const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+      htmlEl.setAttribute('data-bs-theme', newTheme);
+      
+      if (newTheme === 'light') {
+        sunIcon.classList.remove('d-none');
+        moonIcon.classList.add('d-none');
+      } else {
+        sunIcon.classList.add('d-none');
+        moonIcon.classList.remove('d-none');
+      }
+    });
+
+    // Category Filter Functionality
+    const filterBtns = document.querySelectorAll('.filter-btn');
+    const projectCards = document.querySelectorAll('.project-card');
+
+    filterBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        // Active class toggle
+        filterBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        const filterValue = btn.getAttribute('data-filter');
+
+        projectCards.forEach(card => {
+          if (filterValue === 'all' || card.getAttribute('data-category') === filterValue) {
+            card.style.display = 'block';
+          } else {
+            card.style.display = 'none';
+          }
+        });
+      });
+    });
+
+    // Contact Form Submission Handler
+    const contactForm = document.getElementById('contactForm');
+    const successBanner = document.getElementById('contactSuccessBanner');
+
+    contactForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      successBanner.style.display = 'block';
+      contactForm.reset();
+      
+      setTimeout(() => {
+        successBanner.style.display = 'none';
+      }, 5000);
+    });
+  </script>
+</body>
+</html>
