@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shameema Nasari K - Curriculum Vitae</title>
+  
+  <!-- Bootstrap 5.3 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Font Awesome 6 Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+  <!-- Google Fonts: Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+
+  <style>
+    /* Dynamic Theme Variables */
+    :root {
+      --primary-color: #1e3a8a;       /* Navy Blue default */
+      --primary-light: #eff6ff;
+      --primary-border: #bfdbfe;
+      --accent-color: #2563eb;
+      --text-dark: #0f172a;
+      --text-muted: #475569;
+      --bg-page: #f8fafc;
+      --sidebar-bg: #f1f5f9;
+      --card-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+    }
+
+    /* Color Theme Profiles */
+    [data-theme="navy"] {
+      --primary-color: #1e3a8a;
+      --primary-light: #eff6ff;
+      --primary-border: #bfdbfe;
+      --accent-color: #2563eb;
+      --sidebar-bg: #f1f5f9;
+    }
+    [data-theme="teal"] {
+      --primary-color: #0f766e;
+      --primary-light: #f0fdf4;
+      --primary-border: #99f6e4;
+      --accent-color: #0d9488;
+      --sidebar-bg: #f0fdfa;
+    }
+    [data-theme="emerald"] {
+      --primary-color: #15803d;
+      --primary-light: #f0fdf4;
+      --primary-border: #bbf7d0;
+      --accent-color: #16a34a;
+      --sidebar-bg: #f4fbf7;
+    }
+    [data-theme="burgundy"] {
+      --primary-color: #881337;
+      --primary-light: #fff1f2;
+      --primary-border: #fecdd3;
+      --accent-color: #e11d48;
+      --sidebar-bg: #fff5f5;
+    }
+
+    /* General Styling */
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #e2e8f0;
+      color: var(--text-dark);
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Top Control Navbar */
+    .control-toolbar {
+      background: #ffffff;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      border-bottom: 1px solid #cbd5e1;
+    }
+
+    /* Screen Container for A4 Page */
+    .page-container {
+      display: flex;
+      justify-content: center;
+      padding: 30px 15px;
+      overflow-x: auto;
+    }
+
+    /* Exact A4 Sheet Specifications */
+    .a4-page {
+      width: 210mm;
+      height: 297mm;
+      min-height: 297mm;
+      max-height: 297mm;
+      background: #ffffff;
+      box-shadow: var(--card-shadow);
+      border-radius: 4px;
+      position: relative;
+      box-sizing: border-box;
+      padding: 0;
+      margin: 0 auto;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    /* Header Styling */
+    .cv-header {
+      background: linear-gradient(135deg, var(--primary-light) 0%, #ffffff 100%);
+      border-bottom: 3px solid var(--primary-color);
+      padding: 24px 28px 18px 28px;
+    }
+
+    .candidate-name {
+      color: var(--primary-color);
+      font-weight: 800;
+      font-size: 24px;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      line-height: 1.1;
+      margin-bottom: 6px;
+    }
+
+    .candidate-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--accent-color);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      background: rgba(255, 255, 255, 0.9);
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 4px;
+      border-left: 3px solid var(--primary-color);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .contact-item {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 4px;
+    }
+
+    .contact-item i {
+      color: var(--primary-color);
+      width: 14px;
+      text-align: center;
+    }
+
+    /* Photo Upload Box */
+    .photo-frame {
+      width: 35mm;
+      height: 45mm;
+      border: 2px dashed var(--primary-border);
+      border-radius: 6px;
+      background: #ffffff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+
+    .photo-frame:hover {
+      border-color: var(--primary-color);
+      background: var(--primary-light);
+    }
+
+    .photo-frame img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: none;
+    }
+
+    .photo-placeholder-text {
+      font-size: 10px;
+      color: var(--text-muted);
+      padding: 6px;
+      line-height: 1.2;
+    }
+
+    /* Main Grid Layout (Asymmetric 2-Column) */
+    .cv-body {
+      display: flex;
+      flex: 1;
+      height: calc(297mm - 145mm); /* Balanced vertical height */
+    }
+
+    .cv-sidebar {
+      width: 33%;
+      background: var(--sidebar-bg);
+      border-right: 1px solid #e2e8f0;
+      padding: 20px 18px;
+    }
+
+    .cv-main {
+      width: 67%;
+      padding: 20px 24px;
+    }
+
+    /* Section Headers */
+    .section-header {
+      font-size: 12.5px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--primary-color);
+      border-bottom: 2px solid var(--primary-border);
+      padding-bottom: 4px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-header i {
+      font-size: 12px;
+    }
+
+    /* Text & Lists Styling */
+    p.objective-text {
+      font-size: 11.5px;
+      line-height: 1.5;
+      color: #334155;
+      text-align: justify;
+      margin-bottom: 14px;
+    }
+
+    .experience-card, .education-card {
+      margin-bottom: 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px dashed #cbd5e1;
+    }
+
+    .experience-card:last-child, .education-card:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+      margin-bottom: 0;
+    }
+
+    .job-title {
+      font-size: 12.5px;
+      font-weight: 700;
+      color: #1e293b;
+    }
+
+    .job-meta {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--accent-color);
+      margin-bottom: 4px;
+    }
+
+    .cv-list {
+      padding-left: 16px;
+      margin-bottom: 0;
+    }
+
+    .cv-list li {
+      font-size: 11px;
+      line-height: 1.45;
+      color: #334155;
+      margin-bottom: 3px;
+    }
+
+    /* Sidebar Badge & Tag Elements */
+    .badge-eligibility {
+      background: #ffffff;
+      border: 1px solid var(--primary-border);
+      border-left: 3px solid var(--primary-color);
+      border-radius: 4px;
+      padding: 6px 10px;
+      margin-bottom: 8px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+    }
+
+    .badge-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: #1e293b;
+      display: block;
+    }
+
+    .badge-status {
+      font-size: 10px;
+      font-weight: 700;
+      color: #16a34a;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    .skill-tag {
+      display: block;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      padding: 5px 8px;
+      font-size: 10.5px;
+      font-weight: 500;
+      color: #334155;
+      margin-bottom: 6px;
+      line-height: 1.3;
+    }
+
+    .personal-detail-item {
+      font-size: 11px;
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 3px;
+    }
+
+    .personal-detail-label {
+      font-weight: 600;
+      color: #64748b;
+    }
+
+    .personal-detail-val {
+      font-weight: 700;
+      color: #1e293b;
+    }
+
+    /* Footer / Declaration Section */
+    .cv-footer {
+      background: #ffffff;
+      border-top: 1px solid #e2e8f0;
+      padding: 14px 28px 18px 28px;
+    }
+
+    .declaration-text {
+      font-size: 10.5px;
+      font-style: italic;
+      color: #475569;
+      margin-bottom: 12px;
+    }
+
+    .signature-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      font-size: 11px;
+      color: #1e293b;
+    }
+
+    .sig-line {
+      border-top: 1px solid #475569;
+      width: 140px;
+      margin-bottom: 3px;
+    }
+
+    /* Editable Field Highlighting */
+    .editable {
+      outline: none;
+      transition: background 0.2s ease, box-shadow 0.2s ease;
+      border-radius: 2px;
+      padding: 1px 3px;
+    }
+
+    body.edit-mode-active .editable {
+      background-color: rgba(254, 240, 138, 0.4); /* Subtle yellow edit highlight */
+      border: 1px dashed #ca8a04;
+      cursor: text;
+    }
+
+    body.edit-mode-active .editable:focus {
+      background-color: #fef08a;
+      box-shadow: 0 0 0 2px #eab308;
+    }
+
+    /* High-Precision Print & PDF Settings */
+    @media print {
+      @page {
+        size: A4 portrait;
+        margin: 0mm;
+      }
+
+      html, body {
+        width: 210mm;
+        height: 297mm;
+        background: #ffffff !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
+      .control-toolbar, .no-print {
+        display: none !important;
+      }
+
+      .page-container {
+        padding: 0 !important;
+        margin: 0 !important;
+        display: block !important;
+      }
+
+      .a4-page {
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        width: 210mm !important;
+        height: 297mm !important;
+        min-height: 297mm !important;
+        max-height: 297mm !important;
+        page-break-after: avoid !important;
+        page-break-inside: avoid !important;
+      }
+
+      body.edit-mode-active .editable {
+        background-color: transparent !important;
+        border: none !important;
+      }
+
+      .photo-frame {
+        border-style: solid !important;
+      }
+
+      .photo-placeholder-text {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+<body data-theme="navy">
+
+  <!-- Top Control Toolbar (Hidden in Print) -->
+  <header class="control-toolbar py-2 px-3 no-print">
+    <div class="container-fluid d-flex flex-wrap align-items-center justify-content-between gap-2">
+      <!-- Title / Status -->
+      <div class="d-flex align-items-center gap-2">
+        <i class="fa-solid fa-file-user text-primary fs-4"></i>
+        <div>
+          <h6 class="mb-0 fw-bold" style="font-size: 14px;">Shameema Nasari K — CV Builder</h6>
+          <small class="text-muted" style="font-size: 11px;">Interactive A4 Print & PDF Exporter</small>
+        </div>
+      </div>
+
+      <!-- Controls -->
+      <div class="d-flex flex-wrap align-items-center gap-2">
+        <!-- Edit Mode Toggle -->
+        <button id="toggleEditBtn" class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1">
+          <i class="fa-solid fa-pen-to-square"></i>
+          <span id="editBtnText">Enable Edit Mode</span>
+        </button>
+
+        <!-- Accent Theme Picker -->
+        <div class="dropdown">
+          <button class="btn btn-sm btn-outline-dark dropdown-toggle d-flex align-items-center gap-1" type="button" data-bs-toggle="dropdown">
+            <i class="fa-solid fa-palette"></i> Theme Color
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+            <li><a class="dropdown-menu-item dropdown-item d-flex align-items-center gap-2" href="#" onclick="setTheme('navy')"><span class="rounded-circle" style="width:12px;height:12px;background:#1e3a8a;"></span> Navy Blue</a></li>
+            <li><a class="dropdown-menu-item dropdown-item d-flex align-items-center gap-2" href="#" onclick="setTheme('teal')"><span class="rounded-circle" style="width:12px;height:12px;background:#0f766e;"></span> Teal Slate</a></li>
+            <li><a class="dropdown-menu-item dropdown-item d-flex align-items-center gap-2" href="#" onclick="setTheme('emerald')"><span class="rounded-circle" style="width:12px;height:12px;background:#15803d;"></span> Emerald Green</a></li>
+            <li><a class="dropdown-menu-item dropdown-item d-flex align-items-center gap-2" href="#" onclick="setTheme('burgundy')"><span class="rounded-circle" style="width:12px;height:12px;background:#881337;"></span> Burgundy</a></li>
+          </ul>
+        </div>
+
+        <!-- Upload Photo Trigger -->
+        <button class="btn btn-sm btn-outline-primary d-flex align-items-center gap-1" onclick="document.getElementById('photoInput').click()">
+          <i class="fa-solid fa-camera"></i> Upload Photo
+        </button>
+        <input type="file" id="photoInput" accept="image/*" class="d-none" onchange="loadPhoto(event)">
+
+        <!-- Download HTML Document -->
+        <button class="btn btn-sm btn-outline-success d-flex align-items-center gap-1" onclick="downloadHTML()">
+          <i class="fa-solid fa-code"></i> Save HTML
+        </button>
+
+        <!-- Download PDF / Print -->
+        <button class="btn btn-sm btn-primary d-flex align-items-center gap-1 fw-semibold" onclick="printCV()">
+          <i class="fa-solid fa-file-pdf"></i> Download PDF
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Canvas Container -->
+  <main class="page-container">
+    <!-- A4 Printable Sheet -->
+    <article class="a4-page" id="cvContent">
+      
+      <!-- Top Header Banner -->
+      <section class="cv-header d-flex justify-content-between align-items-center">
+        <!-- Candidate Overview -->
+        <div style="max-width: 75%;">
+          <h1 class="candidate-name editable" contenteditable="false" spellcheck="false">SHAMEEMA NASARI K</h1>
+          <div class="candidate-title mb-3 editable" contenteditable="false" spellcheck="false">Primary School Teacher (LP / UP)</div>
+          
+          <div class="contact-details">
+            <div class="contact-item">
+              <i class="fa-solid fa-location-dot"></i>
+              <span class="editable" contenteditable="false" spellcheck="false">Kodasseri House, Karinirappu, Randarthani</span>
+            </div>
+            <div class="contact-item">
+              <i class="fa-solid fa-phone"></i>
+              <span class="editable" contenteditable="false" spellcheck="false">+91 98765 43210</span>
+            </div>
+            <div class="contact-item">
+              <i class="fa-solid fa-envelope"></i>
+              <span class="editable" contenteditable="false" spellcheck="false">shameema.nasari@email.com</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Passport Photo Slot -->
+        <div class="photo-frame" onclick="document.getElementById('photoInput').click()" title="Click to upload passport photo">
+          <img id="passportImg" alt="Passport Photo">
+          <div id="photoPrompt" class="photo-placeholder-text">
+            <i class="fa-solid fa-user-plus fs-5 text-secondary mb-1"></i><br>
+            <span>Click to upload Photo</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Asymmetric Two-Column Body -->
+      <div class="cv-body">
+        
+        <!-- Left Sidebar (33% Width) -->
+        <aside class="cv-sidebar">
+          
+          <!-- Teacher Eligibility Section -->
+          <div class="mb-4">
+            <div class="section-header">
+              <i class="fa-solid fa-certificate"></i>
+              <span>Teacher Eligibility</span>
+            </div>
+            
+            <div class="badge-eligibility">
+              <span class="badge-title editable" contenteditable="false">KTET Category I</span>
+              <span class="text-muted d-block" style="font-size:10px;">Lower Primary (LP)</span>
+              <span class="badge-status editable" contenteditable="false"><i class="fa-solid fa-circle-check"></i> Qualified</span>
+            </div>
+
+            <div class="badge-eligibility">
+              <span class="badge-title editable" contenteditable="false">KTET Category II</span>
+              <span class="text-muted d-block" style="font-size:10px;">Upper Primary (UP)</span>
+              <span class="badge-status editable" contenteditable="false"><i class="fa-solid fa-circle-check"></i> Qualified</span>
+            </div>
+          </div>
+
+          <!-- Key Skills Section -->
+          <div class="mb-4">
+            <div class="section-header">
+              <i class="fa-solid fa-lightbulb"></i>
+              <span>Key Skills</span>
+            </div>
+            <div class="skill-tag editable" contenteditable="false">• Lesson Planning & Activity-Based Teaching</div>
+            <div class="skill-tag editable" contenteditable="false">• Classroom Management & Student Engagement</div>
+            <div class="skill-tag editable" contenteditable="false">• Strong Science Subject Knowledge (Zoology)</div>
+            <div class="skill-tag editable" contenteditable="false">• Effective Communication (Malayalam & English)</div>
+            <div class="skill-tag editable" contenteditable="false">• Basic Computer Proficiency (MS Word, Internet)</div>
+          </div>
+
+          <!-- Personal Details Section -->
+          <div>
+            <div class="section-header">
+              <i class="fa-solid fa-user"></i>
+              <span>Personal Details</span>
+            </div>
+            
+            <div class="personal-detail-item">
+              <span class="personal-detail-label">Date of Birth:</span>
+              <span class="personal-detail-val editable" contenteditable="false">15/05/1996</span>
+            </div>
+            <div class="personal-detail-item">
+              <span class="personal-detail-label">Gender:</span>
+              <span class="personal-detail-val editable" contenteditable="false">Female</span>
+            </div>
+            <div class="personal-detail-item">
+              <span class="personal-detail-label">Nationality:</span>
+              <span class="personal-detail-val editable" contenteditable="false">Indian</span>
+            </div>
+            <div class="personal-detail-item" style="border-bottom:none;">
+              <span class="personal-detail-label">Languages:</span>
+              <span class="personal-detail-val editable" contenteditable="false">Malayalam, English</span>
+            </div>
+          </div>
+
+        </aside>
+
+        <!-- Right Main Content Area (67% Width) -->
+        <section class="cv-main">
+          
+          <!-- Career Objective -->
+          <div class="mb-4">
+            <div class="section-header">
+              <i class="fa-solid fa-bullseye"></i>
+              <span>Career Objective</span>
+            </div>
+            <p class="objective-text editable" contenteditable="false" spellcheck="false">
+              Dedicated and qualified primary school teacher with a B.Sc. in Zoology, D.El.Ed., and KTET Category I and II eligibility, seeking an LP/UP teacher position. Experienced in teaching Upper Primary students, with a caring, patient, and student-centred approach to learning.
+            </p>
+          </div>
+
+          <!-- Work Experience -->
+          <div class="mb-4">
+            <div class="section-header">
+              <i class="fa-solid fa-briefcase"></i>
+              <span>Work Experience</span>
+            </div>
+            
+            <div class="experience-card">
+              <div class="d-flex justify-content-between align-items-start">
+                <div class="job-title editable" contenteditable="false">Teacher, Upper Primary (UP)</div>
+                <span class="badge bg-light text-dark border font-monospace" style="font-size:10px;">1 Year</span>
+              </div>
+              <div class="job-meta editable" contenteditable="false">St. Joseph Higher Secondary School, Malappuram | 2023 – 2024</div>
+              <ul class="cv-list">
+                <li class="editable" contenteditable="false">Taught core Science and General subjects to Upper Primary students and prepared structured lesson plans.</li>
+                <li class="editable" contenteditable="false">Maintained classroom discipline and fostered an interactive, positive learning environment.</li>
+                <li class="editable" contenteditable="false">Assessed student academic progress, conducted periodic tests, and regularly communicated with parents.</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Educational Qualifications -->
+          <div>
+            <div class="section-header">
+              <i class="fa-solid fa-graduation-cap"></i>
+              <span>Educational Qualifications</span>
+            </div>
+
+            <!-- D.El.Ed -->
+            <div class="education-card">
+              <div class="d-flex justify-content-between">
+                <div class="job-title editable" contenteditable="false">D.El.Ed. (Diploma in Elementary Education)</div>
+                <span class="job-meta editable" contenteditable="false">2021 – 2023</span>
+              </div>
+              <div class="text-muted editable" style="font-size:11px;" contenteditable="false">Government Teacher Training Institute (TTI), Kerala</div>
+            </div>
+
+            <!-- B.Sc Zoology -->
+            <div class="education-card">
+              <div class="d-flex justify-content-between">
+                <div class="job-title editable" contenteditable="false">B.Sc. Zoology</div>
+                <span class="job-meta editable" contenteditable="false">2017 – 2020</span>
+              </div>
+              <div class="text-muted editable" style="font-size:11px;" contenteditable="false">Calicut University, Kerala</div>
+            </div>
+
+            <!-- Higher Secondary / SSLC -->
+            <div class="education-card">
+              <div class="d-flex justify-content-between">
+                <div class="job-title editable" contenteditable="false">Higher Secondary (Plus Two) & SSLC</div>
+                <span class="job-meta editable" contenteditable="false">2015 & 2017</span>
+              </div>
+              <div class="text-muted editable" style="font-size:11px;" contenteditable="false">Board of Higher Secondary Education, Kerala</div>
+            </div>
+          </div>
+
+        </section>
+      </div>
+
+      <!-- Footer / Declaration Block -->
+      <footer class="cv-footer">
+        <div class="section-header mb-2" style="font-size: 11px;">
+          <i class="fa-solid fa-signature"></i>
+          <span>Declaration</span>
+        </div>
+        <p class="declaration-text editable" contenteditable="false" spellcheck="false">
+          I hereby declare that the above information is true and correct to the best of my knowledge and belief.
+        </p>
+
+        <div class="signature-row mt-3">
+          <div>
+            <div><strong>Place:</strong> <span class="editable" contenteditable="false">Randarthani</span></div>
+            <div><strong>Date:</strong> <span class="editable" contenteditable="false">12/11/2026</span></div>
+          </div>
+          <div class="text-center">
+            <div class="sig-line"></div>
+            <strong class="editable" contenteditable="false">Shameema Nasari K</strong>
+          </div>
+        </div>
+      </footer>
+
+    </article>
+  </main>
+
+  <!-- Bootstrap 5.3 JS Bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Interactive Logic -->
+  <script>
+    let isEditMode = false;
+
+    // Toggle Edit Mode for all text fields
+    document.getElementById('toggleEditBtn').addEventListener('click', function() {
+      isEditMode = !isEditMode;
+      const editables = document.querySelectorAll('.editable');
+      const btnText = document.getElementById('editBtnText');
+
+      if (isEditMode) {
+        document.body.classList.add('edit-mode-active');
+        editables.forEach(el => el.setAttribute('contenteditable', 'true'));
+        btnText.textContent = 'Disable Edit Mode';
+        this.classList.replace('btn-outline-secondary', 'btn-warning');
+      } else {
+        document.body.classList.remove('edit-mode-active');
+        editables.forEach(el => el.setAttribute('contenteditable', 'false'));
+        btnText.textContent = 'Enable Edit Mode';
+        this.classList.replace('btn-warning', 'btn-outline-secondary');
+      }
+    });
+
+    // Theme Switcher Function
+    function setTheme(themeName) {
+      document.body.setAttribute('data-theme', themeName);
+    }
+
+    // Load Passport Photo from device
+    function loadPhoto(event) {
+      const file = event.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          const img = document.getElementById('passportImg');
+          const prompt = document.getElementById('photoPrompt');
+          img.src = e.target.result;
+          img.style.display = 'block';
+          prompt.style.display = 'none';
+        }
+        reader.readAsDataURL(file);
+      }
+    }
+
+    // Trigger Print & PDF Save
+    function printCV() {
+      // Temporarily disable edit highlights before print
+      const wasEdit = isEditMode;
+      if (wasEdit) {
+        document.body.classList.remove('edit-mode-active');
+      }
+      
+      window.print();
+
+      if (wasEdit) {
+        document.body.classList.add('edit-mode-active');
+      }
+    }
+
+    // Download standalone HTML with modified fields
+    function downloadHTML() {
+      const htmlContent = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
+      const blob = new Blob([htmlContent], { type: 'text/html' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'Shameema_Nasari_CV.html';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+  </script>
+</body>
+</html>
