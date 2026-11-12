@@ -636,7 +636,6 @@
                                 <th>Qualification</th>
                                 <th>Institution / University</th>
                                 <th class="text-center">Year</th>
-                                <th class="text-center">Result</th>
                                 <th class="action-col no-print text-center" style="width: 25px;"></th>
                             </tr>
                         </thead>
@@ -783,7 +782,7 @@
         // Initial Default CV Data Schema
         const defaultCVData = {
             theme: 'navy',
-            photo: 'https://placehold.co/120x150/e2e8f0/475569?text=Upload+Photo',
+            photo: 'iq.jpeg',
             name: 'MUHAMMED IQBAL C',
             title: 'High School Educator (Mathematics, IT & AI) | STEM & Web Application Developer | Technical & CCTV Specialist',
             address: 'Chalampatt (H), Kurumbathoor (PO), Tirur, Malappuram, Kerala 676101',
@@ -959,7 +958,6 @@
                     <td contenteditable="true" oninput="updateEdu(${idx}, 'qual', this.innerText)"><strong>${edu.qual}</strong></td>
                     <td contenteditable="true" oninput="updateEdu(${idx}, 'inst', this.innerText)">${edu.inst}</td>
                     <td class="text-center" contenteditable="true" oninput="updateEdu(${idx}, 'year', this.innerText)">${edu.year}</td>
-                    <td class="text-center" contenteditable="true" oninput="updateEdu(${idx}, 'mark', this.innerText)"><strong>${edu.mark}</strong></td>
                     <td class="action-col no-print text-center">
                         <button class="btn-delete-item edit-controls" onclick="deleteEdu(${idx})" title="Delete Row"><i class="bi bi-trash"></i></button>
                     </td>
